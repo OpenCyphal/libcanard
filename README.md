@@ -1,4 +1,5 @@
 # Libcanard
+[![Build Status](https://travis-ci.org/UAVCAN/libcanard.svg?branch=master)](https://travis-ci.org/UAVCAN/libcanard)
 
 Minimal implementation of the UAVCAN protocol stack in C for resource constrained applications.
 
