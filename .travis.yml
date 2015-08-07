@@ -1,0 +1,25 @@
+language: cpp
+compiler:
+    - clang
+    - gcc
+
+env:
+    - CFLAGS="-Werror" CXXFLAGS="-Werror"
+
+before_install:
+    - sudo apt-get update -y
+    - sudo apt-get install -y libgtest-dev
+    - pushd /usr/src/gtest
+    - sudo cmake CMakeLists.txt
+    - sudo make
+    - sudo cp *.a /usr/lib
+    - popd
+
+before_script:
+    - mkdir build/
+    - cd build/
+    - cmake ../tests
+
+script:
+    - make
+    - ./run_tests
