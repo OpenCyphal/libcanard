@@ -18,7 +18,7 @@ class MemoryAllocatorTestGroup: public ::testing::Test {
 
 TEST_F(MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly)
 {
-    /* Check that the memory list is constructed correctly. */
+    // Check that the memory list is constructed correctly.
     ASSERT_EQ(&buffer[0], allocator.free_list);
     ASSERT_EQ(&buffer[1], allocator.free_list->next);
     ASSERT_EQ(&buffer[2], allocator.free_list->next->next);
