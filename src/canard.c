@@ -1,4 +1,5 @@
 #include "canard.h"
+#include "canard_internals.h"
 
 void canardInitPoolAllocator(CanardPoolAllocator *allocator, CanardPoolAllocatorBlock *buf, unsigned int buf_len)
 {

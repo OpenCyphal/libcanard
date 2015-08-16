@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "canard.h"
+#include "canard_internals.h"
 
 #define AVAILABLE_BLOCKS 3
 
@@ -15,7 +16,6 @@ class MemoryAllocatorTestGroup: public ::testing::Test {
     }
 
 };
-
 TEST_F(MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly)
 {
     // Check that the memory list is constructed correctly.

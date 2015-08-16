@@ -9,6 +9,10 @@ include_directories(../src)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -Wall -Wextra")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
 
+# Expose internal API for unit testing
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCANARD_INTERNAL=''")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCANARD_INTERNAL=''")
+
 file(GLOB_RECURSE tests_src "*.cpp")
 file(GLOB_RECURSE canard_src "../src/*.c")
 
