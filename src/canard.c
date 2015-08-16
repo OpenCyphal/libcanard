@@ -1,7 +1,7 @@
 #include "canard.h"
 #include "canard_internals.h"
 
-void canardInitPoolAllocator(CanardPoolAllocator* allocator, CanardPoolAllocatorBlock* buf, unsigned int buf_len)
+CANARD_INTERNAL void canardInitPoolAllocator(CanardPoolAllocator* allocator, CanardPoolAllocatorBlock* buf, unsigned int buf_len)
 {
     unsigned int current_index = 0;
     CanardPoolAllocatorBlock** current_block = &(allocator->free_list);
@@ -14,7 +14,7 @@ void canardInitPoolAllocator(CanardPoolAllocator* allocator, CanardPoolAllocator
     *current_block = NULL;
 }
 
-void* canardAllocateBlock(CanardPoolAllocator* allocator)
+CANARD_INTERNAL void* canardAllocateBlock(CanardPoolAllocator* allocator)
 {
     /* Check if there are any blocks available in the free list. */
     if (allocator->free_list == NULL)
@@ -29,7 +29,7 @@ void* canardAllocateBlock(CanardPoolAllocator* allocator)
     return result;
 }
 
-void canardFreeBlock(CanardPoolAllocator* allocator, void* p)
+CANARD_INTERNAL void canardFreeBlock(CanardPoolAllocator* allocator, void* p)
 {
     CanardPoolAllocatorBlock* block = (CanardPoolAllocatorBlock*)p;
 
