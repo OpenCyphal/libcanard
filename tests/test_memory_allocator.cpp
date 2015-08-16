@@ -51,3 +51,13 @@ TEST_F(MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft)
     ASSERT_EQ(NULL, block);
 }
 
+TEST_F(MemoryAllocatorTestGroup, CanFreeBlock)
+{
+    void *block = canardAllocateBlock(&allocator);
+
+    canardFreeBlock(&allocator, block);
+
+    // Check that the block was added back to the beginning
+    ASSERT_EQ(&buffer[0], allocator.free_list);
+    ASSERT_EQ(&buffer[1], allocator.free_list->next);
+}

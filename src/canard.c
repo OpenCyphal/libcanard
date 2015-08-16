@@ -27,3 +27,11 @@ void *canardAllocateBlock(CanardPoolAllocator *allocator)
 
     return result;
 }
+
+void canardFreeBlock(CanardPoolAllocator *allocator, void *p)
+{
+    CanardPoolAllocatorBlock *block = (CanardPoolAllocatorBlock *)p;
+
+    block->next = allocator->free_list;
+    allocator->free_list = block;
+}

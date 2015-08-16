@@ -31,6 +31,9 @@ void canardInitPoolAllocator(CanardPoolAllocator *allocator, CanardPoolAllocator
 /** Allocates a block from the given pool allocator. */
 void *canardAllocateBlock(CanardPoolAllocator *allocator);
 
+/** Frees a memory block previously returned by canardAllocateBlock. */
+void canardFreeBlock(CanardPoolAllocator *allocator, void *p);
+
 #ifdef __cplusplus
 }
 #endif
