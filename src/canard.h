@@ -28,6 +28,9 @@ typedef struct {
  */
 void canardInitPoolAllocator(CanardPoolAllocator *allocator, CanardPoolAllocatorBlock *buf, unsigned int buf_len);
 
+/** Allocates a block from the given pool allocator. */
+void *canardAllocateBlock(CanardPoolAllocator *allocator);
+
 #ifdef __cplusplus
 }
 #endif

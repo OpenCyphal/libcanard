@@ -11,3 +11,19 @@ void canardInitPoolAllocator(CanardPoolAllocator *allocator, CanardPoolAllocator
     }
     *current_block = NULL;
 }
+
+void *canardAllocateBlock(CanardPoolAllocator *allocator)
+{
+    void *result;
+
+    /* Check if there are any blocks available in the free list. */
+    if (allocator->free_list == NULL) {
+        return NULL;
+    }
+
+    /* Take first available block and prepares next block for use. */
+    result = allocator->free_list;
+    allocator->free_list = allocator->free_list->next;
+
+    return result;
+}
