@@ -9,4 +9,5 @@ void canardInitPoolAllocator(CanardPoolAllocator *allocator, CanardPoolAllocator
         current_block = &((*current_block)->next);
         current_index ++;
     }
+    *current_block = NULL;
 }
