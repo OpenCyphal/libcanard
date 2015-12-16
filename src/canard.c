@@ -259,7 +259,6 @@ CANARD_INTERNAL void canardPushTxQueue(CanardInstance* ins, CanardTxQueueItem* i
       }
     }
   }
-  //canardPrintQueue(ins);
 }
 
 /**
@@ -362,14 +361,8 @@ CANARD_INTERNAL uint8_t canardTransferType(uint32_t id) {
 CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, const CanardCANFrame* frame, uint32_t transfer_descriptor) {
   CanardRxState* states = ins->rx_states;
 
-  //printf("%p  %p\n", states, ins->rx_states);
-  // printf("\nlooking for: %" PRIu32 "\n", transfer_descriptor);
-
   if (states==NULL) {           //initialize CanardRxStates
-    // printf("its null\n");
     states = canardCreateRxState(&ins->allocator, transfer_descriptor);
-    // printf("states [0]: %p ", states);
-    // printf("%" PRIu32 "\n", states->dtid_tt_snid_dnid);
     ins->rx_states = states;
     return states;
   }
@@ -402,7 +395,6 @@ CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t
   CanardRxState* states = ins->rx_states;
   static int i = 1;
   if(states->next == NULL) {
-    // printf("appended first state\n");
     states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
     return states->next;
   }
@@ -411,7 +403,6 @@ CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t
     states = states->next;
   }
   i++;
-  // printf("appended %ith state", i);
   states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
   return states->next;
 }
