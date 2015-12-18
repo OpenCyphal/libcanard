@@ -242,6 +242,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     .priority = priority,
     .source_node_id = source_node_id };
 
+    //crc validation goes here!
+
     ins->on_reception(ins,&rxtransfer);
 
     canardPrepareForNextTransfer(rxstate);
