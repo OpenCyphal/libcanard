@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2015 Michael Sierra <sierramichael.a@gmail.com>
+ */
+
 #ifndef CANARD_H
 #define CANARD_H
 
@@ -16,10 +20,12 @@ extern "C" {
 
 /** The size of a memory block in bytes. */
 #define CANARD_MEM_BLOCK_SIZE 32
-
 #define CANARD_AVAILABLE_BLOCKS 32
 
+#define TRANSFER_TIMEOUT_USEC 2000000
+
 #define CANARD_CAN_FRAME_MAX_DATA_LEN 8
+#define TRANSFER_ID_BIT_LEN 5
 
 #define CANARD_BROADCAST_NODE_ID    0
 #define CANARD_MIN_NODE_ID          1
@@ -42,6 +48,7 @@ extern "C" {
 
 #define IS_START_OF_TRANSFER(x) (((x) >> 7) & 0X1)
 #define IS_END_OF_TRANSFER(x) (((x) >> 6) & 0X1)
+#define TOGGLE_BIT(x) (((x) >> 5) & 0X1)
 
 #define CANARD_RX_PAYLOAD_HEAD_SIZE (CANARD_MEM_BLOCK_SIZE - sizeof(CanardRxState))
 #define CANARD_BUFFER_BLOCK_DATA_SIZE (CANARD_MEM_BLOCK_SIZE - sizeof(CanardBufferBlock))
@@ -100,8 +107,8 @@ struct CanardRxState
 
   uint64_t timestamp_usec;
 
-  uint32_t dtid_tt_snid_dnid;
-  // const uint32_t dtid_tt_snid_dnid;
+  //uint32_t dtid_tt_snid_dnid;
+  const uint32_t dtid_tt_snid_dnid;
 
   uint16_t payload_crc;
   uint16_t payload_len : 10;
@@ -167,6 +174,7 @@ struct CanardRxTransfer
     CanardBufferBlock* payload_middle; ///< May be NULL if the buffer was not needed. Always NULL for single-frame transfers.
     const uint8_t*           payload_tail;   ///< Last bytes of multi-frame transfers. Always NULL for single-frame transfers.
     uint16_t payload_len;
+    uint8_t middle_len;
 
     /**
      * These fields identify the transfer for the application logic.
@@ -181,10 +189,11 @@ struct CanardRxTransfer
 void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
-void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec);
 int canardBroadcast(CanardInstance* ins, uint16_t data_type_id, uint8_t* inout_transfer_id, uint8_t priority, const uint8_t* payload, uint16_t payload_len);
 const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
 void canardPopTxQueue(CanardInstance* ins);
+void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec);
+void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t timeout_usec, uint64_t current_time_usec);
 uint64_t canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer);
 
 #ifdef __cplusplus
