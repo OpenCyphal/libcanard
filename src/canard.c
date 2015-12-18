@@ -2,7 +2,6 @@
  * Copyright (C) 2015 Michael Sierra <sierramichael.a@gmail.com>
  */
 
-
 #include "canard.h"
 #include "canard_internals.h"
 
@@ -178,8 +177,6 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
   const bool first_frame = IS_START_OF_TRANSFER(tail_byte);
   const bool not_previous_tid = computeForwardDistance(rxstate->transfer_id, TRANSFER_ID_FROM_TAIL_BYTE(tail_byte)) > 1;
 
-  //printf("tid: %u\n",TRANSFER_ID_FROM_TAIL_BYTE(tail_byte));
-  //printf("tid: %u\n",rxstate->transfer_id);
   bool need_restart = 
         (not_initialized) ||
         // (tid_timed_out) ||
@@ -223,13 +220,11 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
   if (TOGGLE_BIT(tail_byte) != rxstate->next_toggle)
   {
-    printf("Invalid toggle, returning.");
     return;
   }
 
   if (TRANSFER_ID_FROM_TAIL_BYTE(tail_byte) != rxstate->transfer_id)
   {
-    printf("Invalid transfer id, returning.");
     return;
   }
 
@@ -281,7 +276,6 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t timeout_usec, uin
   {
     if ((current_time_usec - state->timestamp_usec)>timeout_usec)
     {
-      //printf("cleaning up %u\n",state->dtid_tt_snid_dnid);
       if (state==ins->rx_states)
       {
         canardReleaseStatePayload(ins, state);
@@ -311,17 +305,13 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t timeout_usec, uin
 uint64_t canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
 {
   CanardBufferBlock *temp = transfer->payload_middle;
-  //canardPrintBlocks(transfer->payload_middle);
-  static uint64_t i = 0;
   while (transfer->payload_middle != NULL)
   {
     temp = transfer->payload_middle->next;
     canardFreeBlock(&ins->allocator, transfer->payload_middle);
     transfer->payload_middle = temp;
-  }
-  printf("%lu\n",i);
-  i++;
-  transfer->payload_middle = NULL;
+  }  transfer->payload_middle = NULL;
+
   transfer->payload_head = NULL;
   transfer->payload_tail = NULL;
   transfer->payload_len = 0;
@@ -479,8 +469,6 @@ CANARD_INTERNAL bool priorityHigherThan(uint32_t rhs, uint32_t id)
 CANARD_INTERNAL void canardPrepareForNextTransfer(CanardRxState* state)
 {
   state->buffer_blocks = NULL;  //payload should be empty anyway
-  //printf("bufferblocks: %p\n",state->buffer_blocks);
-  //canardPrintBlocks(state->buffer_blocks);
   state->transfer_id += 1;
   if (state->transfer_id >= 32)
   {
@@ -616,16 +604,11 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
   uint8_t data_index = 0;
   uint8_t i;
 
-  // printf("buffer block size: %lu\n", CANARD_BUFFER_BLOCK_DATA_SIZE);
-  // printf("payload size: %u\n", state->payload_len);
-  //printf("difference: %i\n",(int)CANARD_RX_PAYLOAD_HEAD_SIZE - (int)state->payload_len);
   // if head is not full, add data to head
   if ((int)CANARD_RX_PAYLOAD_HEAD_SIZE - (int)state->payload_len > 0) {
-    //printf("uh oh, we're here");
     for (i=state->payload_len; i<CANARD_RX_PAYLOAD_HEAD_SIZE && data_index<data_len; i++, data_index++) 
     {
       state->buffer_head[i] = data[data_index];
-      // printf("put %u at head, %u\n", data[data_index], i);
     }
     if (data_index >= data_len-1) {
       state->payload_len += data_len;
@@ -635,12 +618,6 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
 
   uint8_t num_buffer_blocks = (((state->payload_len + data_len) - CANARD_RX_PAYLOAD_HEAD_SIZE) / CANARD_BUFFER_BLOCK_DATA_SIZE)+1;
   uint8_t index_at_nth_block = (((state->payload_len) - CANARD_RX_PAYLOAD_HEAD_SIZE) % CANARD_BUFFER_BLOCK_DATA_SIZE);
-
-  // printf("buffer block size%lu \n",CANARD_BUFFER_BLOCK_DATA_SIZE);
-  // printf("payload size: %u\n", state->payload_len+ data_len);
-  // printf("num_buffer_blocks: %u\n", num_buffer_blocks);
-  // printf("index_at_nth_block: %u\n", index_at_nth_block);
-
 
   //get to current block
   CanardBufferBlock* block;
@@ -674,8 +651,6 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
     for (i=index_at_nth_block; i<CANARD_BUFFER_BLOCK_DATA_SIZE && data_index<data_len; i++, data_index++)
     {
       block->data[i] = data[data_index];
-      //printf("put %u at block, %u\n", data[data_index], i);
-      // printf("placed: %u at %i index of %p block \n", data[data_index], i, block);
     }
     if (data_index < data_len)
     {
@@ -737,21 +712,4 @@ CANARD_INTERNAL void canardFreeBlock(CanardPoolAllocator* allocator, void* p)
 
     block->next = allocator->free_list;
     allocator->free_list = block;
-}
-
-
-void canardPrintBlocks(CanardBufferBlock* nblock) {
-  CanardBufferBlock* block = nblock;
-  if (block == NULL) {
-    printf("empty\n");
-  }
-  else {
-    while(block != NULL) {
-      printf("{(current: %p), ", block);
-      printf("(next: %p), ", block->next);
-      //printf("(id: %02X) ", queue->frame.id);
-      block = block->next;
-    }
-  }
-  printf("\n");
 }
