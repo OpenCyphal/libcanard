@@ -189,7 +189,10 @@ struct CanardRxTransfer
 void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
-int canardBroadcast(CanardInstance* ins, uint16_t data_type_id, uint8_t* inout_transfer_id, uint8_t priority, const uint8_t* payload, uint16_t payload_len);
+int canardBroadcast(CanardInstance* ins, uint16_t data_type_id, uint8_t* inout_transfer_id, 
+                              uint8_t priority, const void* payload, uint16_t payload_len);
+int canardRequestOrRespond(CanardInstance* ins, uint8_t destination_node_id, uint16_t data_type_id, uint8_t* inout_transfer_id, 
+                              uint8_t priority, CanardRequestResponse kind, const void* payload, uint16_t payload_len);
 const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
 void canardPopTxQueue(CanardInstance* ins);
 void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec);
