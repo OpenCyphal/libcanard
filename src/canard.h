@@ -174,7 +174,7 @@ struct CanardRxTransfer
     CanardBufferBlock* payload_middle; ///< May be NULL if the buffer was not needed. Always NULL for single-frame transfers.
     const uint8_t*           payload_tail;   ///< Last bytes of multi-frame transfers. Always NULL for single-frame transfers.
     uint16_t payload_len;
-    uint8_t middle_len;
+    uint16_t middle_len;
 
     /**
      * These fields identify the transfer for the application logic.
