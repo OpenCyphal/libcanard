@@ -467,10 +467,8 @@ CANARD_INTERNAL void canardPushTxQueue(CanardInstance* ins, CanardTxQueueItem* i
  */
 CANARD_INTERNAL CanardTxQueueItem *canardCreateTxItem(CanardPoolAllocator* allocator)
 {
-  CanardTxQueueItem init = {0};
   CanardTxQueueItem* item = (CanardTxQueueItem*)canardAllocateBlock(allocator);
-
-  memcpy(item, &init, sizeof *item);
+  memset(item, 0, sizeof *item);
 
   return item;
 }
