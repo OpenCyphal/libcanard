@@ -592,7 +592,7 @@ CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, uint3
   }
   else
   {
-    return canardAppendRxState(ins, transfer_descriptor);
+    return canardPrependRxState(ins, transfer_descriptor);
   }
 }
 
@@ -615,10 +615,9 @@ CANARD_INTERNAL CanardRxState *canardFindRxState(CanardRxState* state, uint32_t 
 /**
  * appends rx state to the canard instance rx_states
  */
-CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t transfer_descriptor)
+/*CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t transfer_descriptor)
 {
   CanardRxState* states = ins->rx_states;
-  static int i = 1;
   if(states->next == NULL)
   {
     states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
@@ -629,7 +628,6 @@ CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t
   {
     states = states->next;
   }
-  i++;
   states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
   return states->next;
 }
