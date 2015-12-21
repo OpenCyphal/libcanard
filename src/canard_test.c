@@ -398,7 +398,7 @@ void *sendThread(void* canard_instance) {
         }
         if ((get_monotonic_usec() - last_clean) > CLEANUP_STALE_TRANSFERS)
         {
-            canardCleanupStaleTransfers(canard_instance, CLEANUP_STALE_TRANSFERS, get_monotonic_usec());
+            canardCleanupStaleTransfers(canard_instance, get_monotonic_usec());
             last_clean = get_monotonic_usec();
         }
         const CanardCANFrame *transmit_frame = canardPeekTxQueue(canard_instance);

@@ -257,13 +257,13 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
  * Traverses the list of transfers and removes those that were last updated more than 
  * timeout_usec microseconds ago
  */
-void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t timeout_usec, uint64_t current_time_usec)
+void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec)
 {
 
   CanardRxState *prev = ins->rx_states, *state = ins->rx_states;
   while(state != NULL)
   {
-    if ((current_time_usec - state->timestamp_usec)>timeout_usec)
+    if ((current_time_usec - state->timestamp_usec)>TRANSFER_TIMEOUT_USEC) // two seconds
     {
       if (state==ins->rx_states)
       {
