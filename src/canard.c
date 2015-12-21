@@ -158,7 +158,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
   
   CanardRxState* rxstate;
   unsigned char tail_byte = frame->data[frame->data_len-1];
-  rxstate = canardRxStateTraversal(ins, frame, transfer_descriptor);
+  rxstate = canardRxStateTraversal(ins, transfer_descriptor);
 
   // // Resolving the state flags:
   const bool not_initialized = (rxstate->timestamp_usec == 0) ? true : false;
@@ -576,7 +576,7 @@ CANARD_INTERNAL uint8_t canardTransferType(uint32_t id)
  * Traverses the list of CanardRxState's and returns a pointer to the CanardRxState 
  * with either the Id or a new one at the end
  */
-CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, const CanardCANFrame* frame, uint32_t transfer_descriptor)
+CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, uint32_t transfer_descriptor)
 {
   CanardRxState* states = ins->rx_states;
 

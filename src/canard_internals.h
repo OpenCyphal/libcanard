@@ -13,7 +13,7 @@ extern "C" {
 #endif
 
 
-CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, const CanardCANFrame* frame, uint32_t transfer_descriptor);
+CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, uint32_t transfer_descriptor);
 CANARD_INTERNAL CanardRxState *canardCreateRxState(CanardPoolAllocator* allocator, uint32_t transfer_descriptor);
 CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t transfer_descriptor);
 CANARD_INTERNAL CanardRxState *canardFindRxState(CanardRxState* state, uint32_t transfer_descriptor);
