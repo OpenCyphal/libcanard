@@ -635,6 +635,17 @@ CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t
   states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
   return states->next;
 }
+*/
+/**
+ * prepends rx state to the canard instance rx_states
+ */
+CANARD_INTERNAL CanardRxState *canardPrependRxState(CanardInstance* ins, uint32_t transfer_descriptor)
+{
+  CanardRxState* state = canardCreateRxState(&ins->allocator, transfer_descriptor);
+  state->next = ins->rx_states;
+  ins->rx_states = state;
+  return state;
+}
 
 CANARD_INTERNAL CanardRxState *canardCreateRxState(CanardPoolAllocator* allocator, uint32_t transfer_descriptor)
 {
