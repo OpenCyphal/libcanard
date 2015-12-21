@@ -22,33 +22,11 @@ extern "C" {
 #define CANARD_MEM_BLOCK_SIZE 32
 #define CANARD_AVAILABLE_BLOCKS 32
 
-#define TRANSFER_TIMEOUT_USEC 2000000
-
 #define CANARD_CAN_FRAME_MAX_DATA_LEN 8
-#define TRANSFER_ID_BIT_LEN 5
 
 #define CANARD_BROADCAST_NODE_ID    0
 #define CANARD_MIN_NODE_ID          1
 #define CANARD_MAX_NODE_ID          127
-
-#define CANARD_EXT_ID_MASK       0x1FFFFFFFU
-#define CANARD_CAN_FRAME_EFF    (1U << 31)  //extended frame format
-#define CANARD_CAN_FRAME_RTR    (1U << 30)  //remote transmission
-#define CANARD_CAN_FRAME_ERR    (1U << 29)  //error frame
-
-#define CANARD_SOURCE_ID_FROM_ID(x) (x) & (0X7F)
-#define CANARD_SERVICE_NOT_MSG_FROM_ID(x)   (((x) >> 7)  & 0X1)
-#define CANARD_REQUEST_NOT_RESPONSE_FROM_ID(x) (((x) >> 15) & 0X1)
-#define CANARD_DEST_ID_FROM_ID(x)   (((x) >> 8)  & 0X7F)
-#define CANARD_PRIORITY_FROM_ID(x)  (((x) >> 24) & 0X1F)
-#define CANARD_MSG_TYPE_FROM_ID(x)  (((x) >> 8)  & 0XFFFF)
-#define CANARD_SRV_TYPE_FROM_ID(x)  (((x) >> 16)  & 0XFF)
-
-#define TRANSFER_ID_FROM_TAIL_BYTE(x) ((x) & 0X1F)
-
-#define IS_START_OF_TRANSFER(x) (((x) >> 7) & 0X1)
-#define IS_END_OF_TRANSFER(x) (((x) >> 6) & 0X1)
-#define TOGGLE_BIT(x) (((x) >> 5) & 0X1)
 
 #define CANARD_RX_PAYLOAD_HEAD_SIZE (CANARD_MEM_BLOCK_SIZE - sizeof(CanardRxState))
 #define CANARD_BUFFER_BLOCK_DATA_SIZE (CANARD_MEM_BLOCK_SIZE - sizeof(CanardBufferBlock))
