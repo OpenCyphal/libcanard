@@ -6,6 +6,6 @@ Minimal implementation of the UAVCAN protocol stack in C for resource constraine
 
 ## Library development
 
-Temporary link to the design document: https://docs.google.com/document/d/1mmL0MJ7gF3yogZPsXIpDp-cw-WDDLz7EyO7BoTem_wI
+The library design document can be found in [DESIGN.md](DESIGN.md)
 
 Contributors, please follow the [Zubax Style Guide](https://github.com/Zubax/zubax_style_guide).
