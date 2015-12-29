@@ -95,7 +95,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('-d', '--dsdl', action='append',
                         dest='src_directories',
+                        required=True,
                         help='Folder containing DSDL files.')
+
+    parser.add_argument('--header', type=argparse.FileType('w'),
+                        help='Generate the header file for libcanard.')
 
     return parser.parse_args()
 
@@ -108,10 +112,11 @@ def main():
 
     types = list(solve_types_dependency(types))
 
-    print(template.render(types=types,
-                          uavcan_type_to_c=type_uavcan_to_c,
-                          normalized_name=normalized_name,
-                          ))
+    if args.header:
+        args.header.write(template.render(types=types,
+                              uavcan_type_to_c=type_uavcan_to_c,
+                              normalized_name=normalized_name,
+                              ))
 
 if __name__=='__main__':
     main()
