@@ -9,15 +9,24 @@ import uavcan
 from jinja2 import Environment, FileSystemLoader
 JINJA_ENV = Environment(loader=FileSystemLoader(['.']))
 
-def depends_on(dependencies, package):
-    result = set()
-    for key, packages in dependencies.items():
-        if package in packages:
-            result.add(key)
-
-    return result
 
 def topological_sort(dependencies):
+    """
+    Performs a topological sort of the given dependency graph.
+
+    The dependency graph is given as a dictionary mapping each key to a list of
+    its dependencies.
+
+    Raises ValueError on a cyclic dependency graph.
+    """
+    def depends_on(dependencies, package):
+        result = set()
+        for key, packages in dependencies.items():
+            if package in packages:
+                result.add(key)
+
+        return result
+
     # Set of all node with no dependencies
     S = {k for k, v in dependencies.items() if not v}
 
@@ -31,7 +40,16 @@ def topological_sort(dependencies):
             if not dependencies[m]:
                 S.add(m)
 
+    # If there are still nodes with dependencies at this stage it means the
+    # graph is cyclic.
+    if any(dep for dep in dependencies.values()):
+        raise ValueError("Cyclic dependency graph.")
+
 def solve_types_dependency(types):
+    """
+    Given a list of UAVCAN types return them in an order where every type comes
+    before types using it.
+    """
     name_to_types = dict()
     for t in types:
         name_to_types[t.full_name] = t
