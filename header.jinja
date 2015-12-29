@@ -8,4 +8,9 @@
     {% endfor %}
 };
 {% endfor %}
+
+{% for t in types %}
+void serialize_{{ normalized_name(t) }}(uint8_t *buffer, {{ uavcan_type_to_c(t) }} value);
+void deserialize_{{ normalized_name(t) }}({{ uavcan_type_to_c(t) }} *out, uint8_t *buffer);
+{% endfor %}
 #endif

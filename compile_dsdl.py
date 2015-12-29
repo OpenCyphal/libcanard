@@ -49,10 +49,16 @@ def solve_types_dependency(types):
 
     return []
 
+def normalized_name(uavcan_type):
+    """
+    Returns the C name for the given uavcan name.
+    """
+    return uavcan_type.full_name.replace('.', '_').lower()
+
 def type_uavcan_to_c(uavcan_type):
 
     if uavcan_type.category is uavcan_type.CATEGORY_COMPOUND:
-        return "struct {}".format(uavcan_type.full_name.replace('.', '_').lower())
+        return "struct {}".format(normalized_name(uavcan_type))
 
     if uavcan_type.category is not uavcan.dsdl.Type.CATEGORY_PRIMITIVE:
         raise ValueError("Cannot convert non primitive type to C")
@@ -100,9 +106,12 @@ def main():
 
     template = JINJA_ENV.get_template('header.jinja')
 
-    types = solve_types_dependency(types)
+    types = list(solve_types_dependency(types))
 
-    print(template.render(types=types, uavcan_type_to_c=type_uavcan_to_c))
+    print(template.render(types=types,
+                          uavcan_type_to_c=type_uavcan_to_c,
+                          normalized_name=normalized_name,
+                          ))
 
 if __name__=='__main__':
     main()
