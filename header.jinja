@@ -1,0 +1,11 @@
+#ifndef _CANARD_SERIALIZE_
+#define _CANARD_SERIALIZE_
+
+{% for t in types %}
+{{ uavcan_type_to_c(t) }} {
+    {% for f in t.fields -%}
+    {{ uavcan_type_to_c(f.type) }} {{ f.name }};
+    {% endfor %}
+};
+{% endfor %}
+#endif

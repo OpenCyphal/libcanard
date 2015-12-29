@@ -1,24 +1,59 @@
 #!/usr/bin/env python
 """
-Generates serialization functions for libcanard from UAVCAN DSDL files.
+Solves the DSDL type hierarchy.
 """
+
 import argparse
 import uavcan
 
-INDENT = " " * 4
+from jinja2 import Environment, FileSystemLoader
+JINJA_ENV = Environment(loader=FileSystemLoader(['.']))
 
-def parse_args():
-    """
-    Parse commandline args.
-    """
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--dsdl', action='append',
-                        dest='src_directories',
-                        help='Folder containing DSDL files.')
+def depends_on(dependencies, package):
+    result = set()
+    for key, packages in dependencies.items():
+        if package in packages:
+            result.add(key)
 
-    return parser.parse_args()
+    return result
+
+def topological_sort(dependencies):
+    # Set of all node with no dependencies
+    S = {k for k, v in dependencies.items() if not v}
+
+    while S:
+        current = S.pop()
+        yield current
+
+        for m in depends_on(dependencies, current):
+            dependencies[m].remove(current)
+
+            if not dependencies[m]:
+                S.add(m)
+
+def solve_types_dependency(types):
+    name_to_types = dict()
+    for t in types:
+        name_to_types[t.full_name] = t
+
+    dependencies = dict()
+    for t in types:
+        dependencies[t.full_name] = set()
+
+        for f in t.fields:
+            if f.type.category == f.type.CATEGORY_COMPOUND:
+                dependencies[t.full_name].add(f.type.full_name)
+
+    for t in topological_sort(dependencies):
+        yield name_to_types[t]
+
+    return []
 
 def type_uavcan_to_c(uavcan_type):
+
+    if uavcan_type.category is uavcan_type.CATEGORY_COMPOUND:
+        return "struct {}".format(uavcan_type.full_name.replace('.', '_').lower())
+
     if uavcan_type.category is not uavcan.dsdl.Type.CATEGORY_PRIMITIVE:
         raise ValueError("Cannot convert non primitive type to C")
 
@@ -34,53 +69,27 @@ def type_uavcan_to_c(uavcan_type):
     raise ValueError("Unhandled type kind {}".format(uavcan_type.kind))
 
 
-def render_field(field, indent=0):
-    result = ""
-    if field.type.category is uavcan.dsdl.Type.CATEGORY_COMPOUND:
-        result += INDENT * indent + "struct (\n"
-
-        for f in field.type.fields:
-            result += render_field(f, indent+1)
-
-        result += INDENT * indent + ") {}\n".format(field.name)
-
-    elif field.type.category is uavcan.dsdl.Type.CATEGORY_PRIMITIVE:
-        result += INDENT * indent + type_uavcan_to_c(field.type) + " " + field.name + "\n"
-
-    return result
-
-
-
-def render_type(uavcan_type):
+def parse_args():
     """
-    Renders the given type as the appropriate C type.
+    Parse commandline args.
     """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('-d', '--dsdl', action='append',
+                        dest='src_directories',
+                        help='Folder containing DSDL files.')
 
-    result = ""
-
-    c_name = uavcan_type.full_name.replace('.', '_')
-
-    if uavcan_type.category is uavcan.dsdl.Type.CATEGORY_COMPOUND:
-        result += "struct {} (\n".format(c_name)
-
-        for f in uavcan_type.fields:
-            result += render_field(f, 1)
-
-        result += ")\n"
-
-    return result
-
-
+    return parser.parse_args()
 
 def main():
     args = parse_args()
 
     types = uavcan.dsdl.parse_namespaces(args.src_directories)
 
-    for t in types:
-        print(render_type(t))
+    template = JINJA_ENV.get_template('header.jinja')
 
+    types = solve_types_dependency(types)
+
+    print(template.render(types=types, uavcan_type_to_c=type_uavcan_to_c))
 
 if __name__=='__main__':
     main()
-
