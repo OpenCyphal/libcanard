@@ -58,13 +58,26 @@ def type_uavcan_to_c(uavcan_type):
         raise ValueError("Cannot convert non primitive type to C")
 
     if uavcan_type.kind is uavcan_type.KIND_FLOAT:
-        return "float"
+        if uavcan_type.bitlen <= 32:
+            return "float"
+        else:
+            return "double"
     elif uavcan_type.kind is uavcan_type.KIND_BOOLEAN:
         return "bool"
     elif uavcan_type.kind is uavcan_type.KIND_SIGNED_INT:
-        return "int32_t"
+        if uavcan_type.bitlen <= 8:
+            return "int8_t"
+        elif uavcan_type.bitlen <= 16:
+            return "int16_t"
+        else:
+            return "int64_t"
     elif uavcan_type.kind is uavcan_type.KIND_UNSIGNED_INT:
-        return "uint32_t"
+        if uavcan_type.bitlen <= 8:
+            return "uint8_t"
+        elif uavcan_type.bitlen <= 16:
+            return "uint16_t"
+        else:
+            return "uint64_t"
 
     raise ValueError("Unhandled type kind {}".format(uavcan_type.kind))
 
