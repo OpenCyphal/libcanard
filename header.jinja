@@ -1,6 +1,9 @@
 #ifndef _CANARD_SERIALIZE_
 #define _CANARD_SERIALIZE_
 
+#include <stdint.h>
+#include <stdbool.h>
+
 {% for t in types %}
 {{ uavcan_type_to_c(t) }} {
     {% for f in t.fields -%}
