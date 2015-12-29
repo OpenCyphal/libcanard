@@ -75,6 +75,8 @@ def type_uavcan_to_c(uavcan_type):
             return "int8_t"
         elif uavcan_type.bitlen <= 16:
             return "int16_t"
+        elif uavcan_type.bitlen <= 32:
+            return "int32_t"
         else:
             return "int64_t"
     elif uavcan_type.kind is uavcan_type.KIND_UNSIGNED_INT:
@@ -82,6 +84,8 @@ def type_uavcan_to_c(uavcan_type):
             return "uint8_t"
         elif uavcan_type.bitlen <= 16:
             return "uint16_t"
+        elif uavcan_type.bitlen <= 32:
+            return "uint32_t"
         else:
             return "uint64_t"
 
