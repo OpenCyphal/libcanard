@@ -4,7 +4,11 @@
 {% for t in types %}
 {{ uavcan_type_to_c(t) }} {
     {% for f in t.fields -%}
+    {%- if f.type.category == f.type.CATEGORY_ARRAY -%}
+    {{ uavcan_type_to_c(f.type.value_type) }} {{ f.name }}[{{ f.type.max_size }}];
+    {%- else -%}
     {{ uavcan_type_to_c(f.type) }} {{ f.name }};
+    {%- endif %}
     {% endfor %}
 };
 {% endfor %}
