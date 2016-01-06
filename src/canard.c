@@ -613,26 +613,6 @@ CANARD_INTERNAL CanardRxState *canardFindRxState(CanardRxState* state, uint32_t 
 }
 
 /**
- * appends rx state to the canard instance rx_states
- */
-/*CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t transfer_descriptor)
-{
-  CanardRxState* states = ins->rx_states;
-  if(states->next == NULL)
-  {
-    states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
-    return states->next;
-  }
-
-  while(states->next != NULL)
-  {
-    states = states->next;
-  }
-  states->next = canardCreateRxState(&ins->allocator, transfer_descriptor);
-  return states->next;
-}
-*/
-/**
  * prepends rx state to the canard instance rx_states
  */
 CANARD_INTERNAL CanardRxState *canardPrependRxState(CanardInstance* ins, uint32_t transfer_descriptor)

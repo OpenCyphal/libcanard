@@ -37,7 +37,6 @@ extern "C" {
 
 CANARD_INTERNAL CanardRxState *canardRxStateTraversal(CanardInstance* ins, uint32_t transfer_descriptor);
 CANARD_INTERNAL CanardRxState *canardCreateRxState(CanardPoolAllocator* allocator, uint32_t transfer_descriptor);
-// CANARD_INTERNAL CanardRxState *canardAppendRxState(CanardInstance* ins, uint32_t transfer_descriptor);
 CANARD_INTERNAL CanardRxState *canardPrependRxState(CanardInstance* ins, uint32_t transfer_descriptor);
 CANARD_INTERNAL CanardRxState *canardFindRxState(CanardRxState* state, uint32_t transfer_descriptor);
 CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, CanardRxState* state, const uint8_t* data, uint8_t data_len);
