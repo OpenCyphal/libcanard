@@ -26,7 +26,6 @@
 #define CANARD_INTERNALS_H
 
 #include <unistd.h>
-//#include "canard.h"
 
 #ifdef __cplusplus
 extern "C" {
