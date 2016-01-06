@@ -75,7 +75,10 @@ typedef struct CanardRxTransfer CanardRxTransfer;
 typedef struct CanardRxState CanardRxState;
 typedef struct CanardTxQueueItem CanardTxQueueItem;
 
-typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins, uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id);
+typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins, 
+                                                uint16_t data_type_id, 
+                                                CanardTransferType transfer_type, 
+                                                uint8_t source_node_id);
 typedef void (*canardOnTransferReception)(CanardInstance* ins, CanardRxTransfer* transfer);
 
 /** A memory block used in the memory block allocator. */
