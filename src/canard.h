@@ -75,10 +75,20 @@ typedef struct CanardRxTransfer CanardRxTransfer;
 typedef struct CanardRxState CanardRxState;
 typedef struct CanardTxQueueItem CanardTxQueueItem;
 
+/**
+ * The library calls this function to determine whether the transfer should be received.
+ */
 typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins, 
                                                 uint16_t data_type_id, 
                                                 CanardTransferType transfer_type, 
                                                 uint8_t source_node_id);
+
+/**
+ * This function will be invoked by the library every time a transfer is successfully received.
+ * If the application needs to send another transfer from this callback, it is recommended
+ * to call canardReleaseRxTransferPayload() first, so that the memory that was used for the block
+ * buffer can be released and re-used by the TX queue.
+ */
 typedef void (*canardOnTransferReception)(CanardInstance* ins, CanardRxTransfer* transfer);
 
 /** A memory block used in the memory block allocator. */
