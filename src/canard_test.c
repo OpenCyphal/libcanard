@@ -272,26 +272,33 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
             printf("request\n");
         case CanardTransferTypeBroadcast:
             printf("broadcast\n");
+    } 
     }
     printf("payload len: %u \n", transfer->payload_len);
+    unsigned char payload[transfer->payload_len];
     if (transfer->payload_len > 7)
     {
     CanardBufferBlock* block = transfer->payload_middle;
     // printf("sizeof payload head: %lu\n",sizeof(transfer->payload_head));
     // printf("sizeof payload tail: %lu\n",sizeof(transfer->payload_tail));
-    int i, index;
+    int i, index = 0;
 
-    for (i=0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++)
+    if(CANARD_RX_PAYLOAD_HEAD_SIZE > 0)
     {
-        printf("%u ",transfer->payload_head[i]);
+        for (i=0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++)
+        {
+            printf("%02X ",transfer->payload_head[i]);
+            payload[i] = transfer->payload_head[i];
+        }
+        index = i;
     }
-
     //canardPrintBlocks(block);
 
-    for (index=i+1, i=0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len); i++, index++)
+    for (i=0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len); i++, index++)
     {
         //printf("index: %i\n",i);
-        printf("%u ",block->data[i]);
+        printf("%02X ",block->data[i]);
+        payload[index] = block->data[i];
         if(i==CANARD_BUFFER_BLOCK_DATA_SIZE-1)
         {
             i = -1;
@@ -301,9 +308,10 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
 
     //printf("tail:\n");
     int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
-    for (i=0; i<(tail_len);i++)
+    for (i=0; i<(tail_len);i++, index++)
     {
-        printf("%u ",transfer->payload_tail[i]);
+        printf("%02X ",transfer->payload_tail[i]);
+        payload[index] = transfer->payload_tail[i];
     }
     printf("\n");
     
@@ -314,11 +322,18 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
         for (i = 0; i<transfer->payload_len; i++)
         {
             printf("%02X ", transfer->payload_head[i]);
+            payload[i] = transfer->payload_head[i];
         }
         printf("\n");
     }
     canardReleaseRxTransferPayload(ins, transfer);
     //do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
+
+    int i;
+    for (i=0;i<sizeof(payload);i++) {
+        printf("%02X ", payload[i]);
+    }
+    printf("\n");
 }
 
 // returns true with a probability of probability 
