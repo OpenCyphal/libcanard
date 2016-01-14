@@ -497,6 +497,9 @@ CANARD_INTERNAL void canardPushTxQueue(CanardInstance* ins, CanardTxQueueItem* i
 CANARD_INTERNAL CanardTxQueueItem *canardCreateTxItem(CanardPoolAllocator* allocator)
 {
   CanardTxQueueItem* item = (CanardTxQueueItem*)canardAllocateBlock(allocator);
+  if (item == NULL) {
+    return NULL;
+  }
   memset(item, 0, sizeof *item);
 
   return item;
@@ -657,6 +660,9 @@ CANARD_INTERNAL CanardRxState *canardCreateRxState(CanardPoolAllocator* allocato
   CanardRxState init = {.next = NULL, .buffer_blocks = NULL, .dtid_tt_snid_dnid = transfer_descriptor};
   CanardRxState* state = (CanardRxState *)canardAllocateBlock(allocator);
 
+  if (state == NULL) {
+    return NULL;
+  }
   memcpy(state, &init, sizeof *state);
 
   return state;
@@ -739,6 +745,9 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
 CANARD_INTERNAL CanardBufferBlock *canardCreateBufferBlock(CanardPoolAllocator* allocator)
 {
   CanardBufferBlock* block = (CanardBufferBlock *)canardAllocateBlock(allocator);
+  if (block == NULL) {
+    return NULL;
+  }
   block->next = NULL;
   return block;
 }
