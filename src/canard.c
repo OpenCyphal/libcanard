@@ -94,9 +94,6 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
     {
       //anonymous transfer, random discriminator
     }
-  if (canardGetLocalNodeID(ins) == 0 && payload_len > 7)
-  {
-    return -1;
   }
   if (priority > 31)
   {
