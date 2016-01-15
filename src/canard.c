@@ -45,7 +45,6 @@ struct CanardTxQueueItem
  * Local node ID will be set to zero, i.e. the node will be anonymous.
  */
 void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept)
-void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception)
 {
   out_ins->node_id = CANARD_BROADCAST_NODE_ID;
   out_ins->on_reception = on_reception;
@@ -112,11 +111,7 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
     
     if (payload_len > 7)
     {
-      uint8_t i, shift_val;
-      for (i=0, shift_val=56; i<8; i++, shift_val-=8)
-      {
-        crc = crc_add_byte(crc, (uint8_t)(data_type_signature >> shift_val));
-      }
+      crc = crc_add_signature(crc, data_type_signature);
       crc = crc_add(crc, payload, payload_len);
     }
   }
@@ -162,11 +157,7 @@ int canardRequestOrRespond(CanardInstance* ins,
 
   if (payload_len > 7)
   {
-    uint8_t i, shift_val;
-    for (i=0, shift_val=56; i<8; i++, shift_val-=8)
-    {
-      crc = crc_add_byte(crc, (uint8_t)(data_type_signature >> shift_val));
-    }
+    crc = crc_add_signature(crc, data_type_signature);
     crc = crc_add(crc, payload, payload_len);
   }
 
@@ -786,29 +777,39 @@ CANARD_INTERNAL CanardBufferBlock *canardCreateBufferBlock(CanardPoolAllocator* 
  */
 CANARD_INTERNAL uint16_t crc_add_byte(uint16_t crc_val, uint8_t byte)
 {
-    crc_val ^= (uint16_t)((uint16_t)(byte) << 8);
-    int j;
-    for (j=0; j<8; j++)
-    {
-        if (crc_val & 0x8000U)
-        {
-            crc_val = (uint16_t)((uint16_t)(crc_val << 1) ^ 0x1021U);
-        }
-        else
-        {
-            crc_val = (uint16_t)(crc_val << 1);
-        }
-    }
-    return crc_val;
+  crc_val ^= (uint16_t)((uint16_t)(byte) << 8);
+  int j;
+  for (j=0; j<8; j++)
+  {
+      if (crc_val & 0x8000U)
+      {
+          crc_val = (uint16_t)((uint16_t)(crc_val << 1) ^ 0x1021U);
+      }
+      else
+      {
+          crc_val = (uint16_t)(crc_val << 1);
+      }
+  }
+  return crc_val;
+}
+
+CANARD_INTERNAL uint16_t crc_add_signature(uint16_t crc_val, uint64_t data_type_signature)
+{
+  uint8_t i, shift_val;
+  for (i=0, shift_val=56; i<8; i++, shift_val-=8)
+  {
+    crc_val = crc_add_byte(crc_val, (uint8_t)(data_type_signature >> shift_val));
+  }
+  return crc_val;
 }
 
 CANARD_INTERNAL uint16_t crc_add(uint16_t crc_val, const uint8_t* bytes, uint16_t len)
 {
-    while (len--)
-    {
-        crc_val = crc_add_byte(crc_val,*bytes++);
-    }
-    return crc_val;
+  while (len--)
+  {
+      crc_val = crc_add_byte(crc_val,*bytes++);
+  }
+  return crc_val;
 }
 
 /**
