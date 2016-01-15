@@ -477,7 +477,6 @@ int main(int argc, char** argv)
     canardInit(&canard_instance, on_reception, should_accept);
     canardSetLocalNodeID(&canard_instance,uavcan_node_id);
     printf("Initialized.\n");
-    printf("size: %lu\n",sizeof(CanardRxState));
 
     /*
      * Main loop

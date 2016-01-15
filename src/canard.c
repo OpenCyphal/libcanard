@@ -311,6 +311,9 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     if (rxstate->calculated_crc == rxstate->payload_crc)
     {
       ins->on_reception(ins,&rxtransfer);
+    } else
+    {
+      canardReleaseRxTransferPayload(ins, &rxtransfer);
     }
     canardPrepareForNextTransfer(rxstate);
     return;
