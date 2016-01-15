@@ -105,7 +105,6 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
       can_id = ((uint32_t)priority << 24) | (uint32_t)(discriminator << 9) |
         ((uint32_t)(data_type_id & 0xFF) << 8) | (uint32_t)canardGetLocalNodeID(ins);
     }
-  }
   } else
   {
     can_id = ((uint32_t)priority << 24) | ((uint32_t)data_type_id << 8) | (uint32_t)canardGetLocalNodeID(ins);
@@ -233,7 +232,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     rxstate->transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte);
     rxstate->next_toggle = 0;
     canardReleaseStatePayload(ins, rxstate);
-    if (!IS_START_OF_TRANSFER(tail_byte))
+    if (!IS_START_OF_TRANSFER(tail_byte)) //missed the first frame
     {
       rxstate->transfer_id += 1;
       if (rxstate->transfer_id >= 32)
@@ -412,7 +411,6 @@ CANARD_INTERNAL void tidIncrement(uint8_t* transfer_id)
 
 CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint8_t* transfer_id, 
                                         uint16_t crc, const uint8_t* payload, uint16_t payload_len)
-CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint8_t* transfer_id, const uint8_t* payload, uint16_t payload_len)
 {
   //single frame transfer
   if (payload_len < CANARD_CAN_FRAME_MAX_DATA_LEN)

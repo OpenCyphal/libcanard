@@ -280,9 +280,7 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
             printf("request\n");
         case CanardTransferTypeBroadcast:
             printf("broadcast\n");
-    } 
     }
-    printf("payload len: %u \n", transfer->payload_len);
     unsigned char payload[transfer->payload_len];
     if (transfer->payload_len > 7)
     {
@@ -295,17 +293,13 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     {
         for (i=0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++)
         {
-            printf("%02X ",transfer->payload_head[i]);
             payload[i] = transfer->payload_head[i];
         }
         index = i;
     }
-    //canardPrintBlocks(block);
 
     for (i=0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len); i++, index++)
     {
-        //printf("index: %i\n",i);
-        printf("%02X ",block->data[i]);
         payload[index] = block->data[i];
         if(i==CANARD_BUFFER_BLOCK_DATA_SIZE-1)
         {
@@ -318,10 +312,8 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
     for (i=0; i<(tail_len);i++, index++)
     {
-        printf("%02X ",transfer->payload_tail[i]);
         payload[index] = transfer->payload_tail[i];
     }
-    printf("\n");
     
     }
     else
@@ -329,10 +321,8 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
         uint8_t i;
         for (i = 0; i<transfer->payload_len; i++)
         {
-            printf("%02X ", transfer->payload_head[i]);
             payload[i] = transfer->payload_head[i];
         }
-        printf("\n");
     }
     canardReleaseRxTransferPayload(ins, transfer);
     //do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
@@ -430,7 +420,7 @@ void *sendThread(void* canard_instance) {
             if (drop)
             {
                 printf("dropping ");
-                printframe(transmit_frame);
+                // printframe(transmit_frame);
                 //can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
             }
             else
