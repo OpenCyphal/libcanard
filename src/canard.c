@@ -750,6 +750,36 @@ CANARD_INTERNAL CanardBufferBlock *canardCreateBufferBlock(CanardPoolAllocator* 
 }
 
 /**
+ * CRC functions
+ */
+CANARD_INTERNAL uint16_t crc_add_byte(uint16_t crc_val, uint8_t byte)
+{
+    crc_val ^= (uint16_t)((uint16_t)(byte) << 8);
+    int j;
+    for (j=0; j<8; j++)
+    {
+        if (crc_val & 0x8000U)
+        {
+            crc_val = (uint16_t)((uint16_t)(crc_val << 1) ^ 0x1021U);
+        }
+        else
+        {
+            crc_val = (uint16_t)(crc_val << 1);
+        }
+    }
+    return crc_val;
+}
+
+CANARD_INTERNAL uint16_t crc_add(uint16_t crc_val, const uint8_t* bytes, uint16_t len)
+{
+    while (len--)
+    {
+        crc_val = crc_add_byte(crc_val,*bytes++);
+    }
+    return crc_val;
+}
+
+/**
  *  Pool Allocator functions
  */
 
