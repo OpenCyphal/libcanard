@@ -44,14 +44,15 @@ struct CanardTxQueueItem
  * Initializes the library state.
  * Local node ID will be set to zero, i.e. the node will be anonymous.
  */
-void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept)
+void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
+                  canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept)
 {
   out_ins->node_id = CANARD_BROADCAST_NODE_ID;
   out_ins->on_reception = on_reception;
   out_ins->should_accept = should_accept;
   out_ins->rx_states = NULL;
   out_ins->tx_queue = NULL;
-  canardInitPoolAllocator(&out_ins->allocator, out_ins->buffer, CANARD_AVAILABLE_BLOCKS);
+  canardInitPoolAllocator(&out_ins->allocator, mem_arena, mem_arena_size/CANARD_MEM_BLOCK_SIZE);
 }
 
 /**

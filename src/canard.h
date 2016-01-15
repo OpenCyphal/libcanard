@@ -39,7 +39,6 @@ extern "C" {
 
 /** The size of a memory block in bytes. */
 #define CANARD_MEM_BLOCK_SIZE 32
-#define CANARD_AVAILABLE_BLOCKS 32
 
 #define CANARD_CAN_FRAME_MAX_DATA_LEN 8
 
@@ -146,7 +145,6 @@ struct CanardInstance
   canardOnTransferReception on_reception;        					// function we call after rx transfer is complete
 
   CanardPoolAllocator allocator;									// pool allocator
-  CanardPoolAllocatorBlock buffer[CANARD_AVAILABLE_BLOCKS];			// pool blocks
 
   CanardRxState* rx_states;
   CanardTxQueueItem* tx_queue;
@@ -198,7 +196,8 @@ struct CanardRxTransfer
     uint8_t source_node_id;                 ///< 1 to 127, or 0 if the source is anonymous
 };
 
-void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept);
+void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
+                  canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
 int canardBroadcast(CanardInstance* ins, uint64_t data_type_signature,uint16_t data_type_id, uint8_t* inout_transfer_id, 

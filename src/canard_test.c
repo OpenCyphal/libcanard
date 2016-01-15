@@ -25,10 +25,12 @@
 #include <pthread.h>
 
 #define CLEANUP_STALE_TRANSFERS 2000000
+#define CANARD_AVAILABLE_BLOCKS 32
+
 
 #define TIME_TO_SEND_NODE_STATUS 101000000
 #define TIME_TO_SEND_AIRSPEED 51000000000
-#define TIME_TO_SEND_MULTI 1000000
+#define TIME_TO_SEND_MULTI 100000
 #define TIME_TO_SEND_REQUEST 1000000000
 static int can_socket = -1;
 
@@ -473,8 +475,8 @@ int main(int argc, char** argv)
     //  */
     // enum node_health health = HEALTH_OK;
     static CanardInstance canard_instance;
-        
-    canardInit(&canard_instance, on_reception, should_accept);
+    CanardPoolAllocatorBlock buffer[32];           // pool blocks
+    canardInit(&canard_instance, buffer, sizeof(buffer), on_reception, should_accept);
     canardSetLocalNodeID(&canard_instance,uavcan_node_id);
     printf("Initialized.\n");
 
