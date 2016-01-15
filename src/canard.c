@@ -75,13 +75,21 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
  * If the node is in passive mode, only single frame transfers will be allowed.
  */
  int canardBroadcast(CanardInstance* ins,
+                      uint64_t data_type_signature,
                       uint16_t data_type_id,
                       uint8_t* inout_transfer_id,
                       uint8_t priority,
                       const void* payload,
                       uint16_t payload_len)
  {
+  uint32_t can_id;
+  uint16_t crc = 0xFFFFU;
+
   if (payload == NULL)
+  {
+      return -1;
+  }
+  if (priority > 31)
   {
       return -1;
   }
@@ -95,14 +103,22 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
       //anonymous transfer, random discriminator
     }
   }
-  if (priority > 31)
+  } else
   {
-      return -1;
+    can_id = ((uint32_t)priority << 24) | ((uint32_t)data_type_id << 8) | (uint32_t)canardGetLocalNodeID(ins);
+    
+    if (payload_len > 7)
+    {
+      uint8_t i, shift_val;
+      for (i=0, shift_val=56; i<8; i++, shift_val-=8)
+      {
+        crc = crc_add_byte(crc, (uint8_t)(data_type_signature >> shift_val));
+      }
+      crc = crc_add(crc, payload, payload_len);
+    }
   }
 
-  const uint32_t can_id = ((uint32_t)priority << 24) | ((uint32_t)data_type_id << 8) | (uint32_t)canardGetLocalNodeID(ins);
-  
-  canardEnqueueData(ins, can_id, inout_transfer_id, payload, payload_len);
+  canardEnqueueData(ins, can_id, inout_transfer_id, crc, payload, payload_len);
 
   tidIncrement(inout_transfer_id);
 
@@ -115,6 +131,7 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
  */
 int canardRequestOrRespond(CanardInstance* ins,
                             uint8_t destination_node_id,
+                            uint64_t data_type_signature,
                             uint16_t data_type_id,
                             uint8_t* inout_transfer_id,
                             uint8_t priority,
@@ -138,8 +155,19 @@ int canardRequestOrRespond(CanardInstance* ins,
   const uint32_t can_id = ((uint32_t)priority << 24) | ((uint32_t)data_type_id << 16) | 
                             ((uint32_t)kind << 15) | ((uint32_t)destination_node_id << 8) | 
                               (1 << 7) | (uint32_t)canardGetLocalNodeID(ins);
+  uint16_t crc = 0xFFFFU;
 
-  canardEnqueueData(ins, can_id, inout_transfer_id, payload, payload_len);
+  if (payload_len > 7)
+  {
+    uint8_t i, shift_val;
+    for (i=0, shift_val=56; i<8; i++, shift_val-=8)
+    {
+      crc = crc_add_byte(crc, (uint8_t)(data_type_signature >> shift_val));
+    }
+    crc = crc_add(crc, payload, payload_len);
+  }
+
+  canardEnqueueData(ins, can_id, inout_transfer_id, crc, payload, payload_len);
 
   tidIncrement(inout_transfer_id);
 
@@ -379,6 +407,8 @@ CANARD_INTERNAL void tidIncrement(uint8_t* transfer_id)
   }
 }
 
+CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint8_t* transfer_id, 
+                                        uint16_t crc, const uint8_t* payload, uint16_t payload_len)
 CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint8_t* transfer_id, const uint8_t* payload, uint16_t payload_len)
 {
   //single frame transfer
@@ -418,8 +448,8 @@ CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint
 
       if (data_index == 0)
       {
-        queue_item->frame.data[0] = 0xFF;
-        queue_item->frame.data[1] = 0XDD;
+        queue_item->frame.data[0] = (uint8_t)(crc >> 8);
+        queue_item->frame.data[1] = (uint8_t)(crc);
         i = 2;
       } else {
         i = 0;
