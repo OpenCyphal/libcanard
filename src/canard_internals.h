@@ -73,7 +73,8 @@ CANARD_INTERNAL void canardPrepareForNextTransfer(CanardRxState* state);
 CANARD_INTERNAL int computeForwardDistance(uint8_t a, uint8_t b);
 CANARD_INTERNAL void tidIncrement(uint8_t* transfer_id);
 CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins, CanardRxState* rxstate);
-CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint8_t* transfer_id, const uint8_t* payload, uint16_t payload_len);
+CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint8_t* transfer_id, uint16_t crc, 
+										const uint8_t* payload, uint16_t payload_len);
 CANARD_INTERNAL uint16_t crc_add_byte(uint16_t crc_val, uint8_t byte);
 CANARD_INTERNAL uint16_t crc_add(uint16_t crc_val, const uint8_t* bytes, uint16_t len);
 

@@ -146,7 +146,9 @@ int publish_node_status(CanardInstance* ins, enum node_health health, enum node_
 
     static const uint16_t data_type_id = 341;
     static uint8_t transfer_id;
-    return canardBroadcast(ins, data_type_id, &transfer_id, PRIORITY_LOW, payload, sizeof(payload));
+    uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
+    return canardBroadcast(ins, data_type_signature, 
+        data_type_id, &transfer_id, PRIORITY_LOW, payload, sizeof(payload));
 }
 /*
  * Float16 support
@@ -207,7 +209,9 @@ int publish_true_airspeed(CanardInstance* ins, float mean, float variance)
 
     static const uint16_t data_type_id = 1020;
     static uint8_t transfer_id;
-    return canardBroadcast(ins, data_type_id, &transfer_id, PRIORITY_MEDIUM, payload, sizeof(payload));
+    uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
+    return canardBroadcast(ins, data_type_signature, 
+        data_type_id, &transfer_id, PRIORITY_MEDIUM, payload, sizeof(payload));
 }
 
 /// Standard data type: uavcan.equipment.multi
@@ -222,7 +226,9 @@ int publish_multi(CanardInstance* ins)
     }
     static const uint16_t data_type_id = 420;
     static uint8_t transfer_id;
-    return canardBroadcast(ins, data_type_id, &transfer_id, PRIORITY_HIGH, payload, sizeof(payload));
+    uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
+    return canardBroadcast(ins, data_type_signature, 
+        data_type_id, &transfer_id, PRIORITY_HIGH, payload, sizeof(payload));
 }
 
 int publish_request(CanardInstance* ins)
@@ -237,7 +243,9 @@ int publish_request(CanardInstance* ins)
     uint8_t dest_id = 33;
     static const uint16_t data_type_id = 15;
     static uint8_t transfer_id;
-    return canardRequestOrRespond(ins, dest_id, data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, sizeof(payload));
+    uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
+    return canardRequestOrRespond(ins, dest_id, data_type_signature, 
+        data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, sizeof(payload));
 }
 
 int compute_true_airspeed(float* out_airspeed, float* out_variance)
