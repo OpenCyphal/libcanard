@@ -272,12 +272,12 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
   if (TOGGLE_BIT(tail_byte) != rxstate->next_toggle)
   {
-    return;
+    return;  //wrong toggle
   }
 
   if (TRANSFER_ID_FROM_TAIL_BYTE(tail_byte) != rxstate->transfer_id)
   {
-    return;
+    return;  //unexpected tid
   }
 
   if (IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))
@@ -458,6 +458,7 @@ CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint
 
       if (data_index == 0)
       {
+        //add crc
         queue_item->frame.data[0] = (uint8_t)(crc >> 8);
         queue_item->frame.data[1] = (uint8_t)(crc);
         i = 2;
@@ -469,7 +470,7 @@ CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint
       {
         queue_item->frame.data[i] = payload[data_index];
       }
-
+      //tail byte
       sot_eot = (data_index==payload_len) ? 0x40 : sot_eot;
 
       queue_item->frame.data[i] = sot_eot | (toggle << 5) | (*transfer_id & 31);
@@ -498,7 +499,7 @@ CANARD_INTERNAL void canardPushTxQueue(CanardInstance* ins, CanardTxQueueItem* i
   CanardTxQueueItem* previous = ins->tx_queue;
   while (queue != NULL)
   {
-    if (priorityHigherThan(queue->frame.id, item->frame.id))
+    if (priorityHigherThan(queue->frame.id, item->frame.id)) //lower number wins
     {
       if (queue == ins->tx_queue)
       {
@@ -736,6 +737,7 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
   CanardBufferBlock* block;
   uint8_t nth_block = 1;
   
+  //buffer blocks uninitialized
   if (state->buffer_blocks == NULL)
   {
     state->buffer_blocks = canardCreateBufferBlock(allocator);
@@ -744,6 +746,7 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
   }
   else
   {
+    //get to block
     block = state->buffer_blocks;
     while (block->next != NULL)
     {
