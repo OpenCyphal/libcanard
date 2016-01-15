@@ -334,8 +334,15 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     printf("\n");
 }
 
+bool should_accept(const CanardInstance* ins, uint64_t* out_data_type_signature,
+                    uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id)
+{
+    return true;
+}
+
 // returns true with a probability of probability 
-bool random_drop(double probability) {
+bool random_drop(double probability)
+{
     return rand() <  probability * ((double)RAND_MAX + 1.0);
 }
 
@@ -466,7 +473,7 @@ int main(int argc, char** argv)
     // enum node_health health = HEALTH_OK;
     static CanardInstance canard_instance;
         
-    canardInit(&canard_instance, on_reception);
+    canardInit(&canard_instance, on_reception, should_accept);
     canardSetLocalNodeID(&canard_instance,uavcan_node_id);
     printf("Initialized.\n");
 

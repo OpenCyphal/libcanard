@@ -44,6 +44,7 @@ struct CanardTxQueueItem
  * Initializes the library state.
  * Local node ID will be set to zero, i.e. the node will be anonymous.
  */
+void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept)
 void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception)
 {
   out_ins->node_id = CANARD_BROADCAST_NODE_ID;

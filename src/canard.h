@@ -78,7 +78,8 @@ typedef struct CanardTxQueueItem CanardTxQueueItem;
 /**
  * The library calls this function to determine whether the transfer should be received.
  */
-typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins, 
+typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins,
+                                                uint64_t* out_data_type_signature,
                                                 uint16_t data_type_id, 
                                                 CanardTransferType transfer_type, 
                                                 uint8_t source_node_id);
@@ -196,7 +197,7 @@ struct CanardRxTransfer
     uint8_t source_node_id;                 ///< 1 to 127, or 0 if the source is anonymous
 };
 
-void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception);
+void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
 int canardBroadcast(CanardInstance* ins, uint64_t data_type_signature,uint16_t data_type_id, uint8_t* inout_transfer_id, 
