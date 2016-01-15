@@ -475,7 +475,7 @@ int main(int argc, char** argv)
     //  */
     // enum node_health health = HEALTH_OK;
     static CanardInstance canard_instance;
-    CanardPoolAllocatorBlock buffer[32];           // pool blocks
+    static CanardPoolAllocatorBlock buffer[32];           // pool blocks
     canardInit(&canard_instance, buffer, sizeof(buffer), on_reception, should_accept);
     canardSetLocalNodeID(&canard_instance,uavcan_node_id);
     printf("Initialized.\n");
