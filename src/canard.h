@@ -38,7 +38,7 @@ extern "C" {
 #include <stdbool.h>
 
 /** The size of a memory block in bytes. */
-#define CANARD_MEM_BLOCK_SIZE 40  //size must be at least 40 on 64 bit machines
+#define CANARD_MEM_BLOCK_SIZE 32
 #define CANARD_AVAILABLE_BLOCKS 32
 
 #define CANARD_CAN_FRAME_MAX_DATA_LEN 8
