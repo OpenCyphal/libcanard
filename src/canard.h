@@ -38,7 +38,7 @@ extern "C" {
 #include <stdbool.h>
 
 /** The size of a memory block in bytes. */
-#define CANARD_MEM_BLOCK_SIZE 32
+#define CANARD_MEM_BLOCK_SIZE 40  //size must be at least 40 on 64 bit machines
 #define CANARD_AVAILABLE_BLOCKS 32
 
 #define CANARD_CAN_FRAME_MAX_DATA_LEN 8
@@ -122,6 +122,7 @@ struct CanardRxState
   const uint32_t dtid_tt_snid_dnid;
 
   uint16_t payload_crc;
+  uint16_t calculated_crc;
   uint16_t payload_len : 10;
   uint16_t transfer_id : 5;
   uint16_t next_toggle : 1;

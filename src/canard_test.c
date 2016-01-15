@@ -26,10 +26,10 @@
 
 #define CLEANUP_STALE_TRANSFERS 2000000
 
-#define TIME_TO_SEND_NODE_STATUS 101000
-#define TIME_TO_SEND_AIRSPEED 510000
-#define TIME_TO_SEND_MULTI 200000
-#define TIME_TO_SEND_REQUEST 100000
+#define TIME_TO_SEND_NODE_STATUS 101000000
+#define TIME_TO_SEND_AIRSPEED 51000000000
+#define TIME_TO_SEND_MULTI 1000000
+#define TIME_TO_SEND_REQUEST 1000000000
 static int can_socket = -1;
 
 int can_init(const char* can_iface_name)
@@ -336,7 +336,8 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
 
 bool should_accept(const CanardInstance* ins, uint64_t* out_data_type_signature,
                     uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id)
-{
+{   
+    *out_data_type_signature = 0x8899AABBCCDDEEFF;
     return true;
 }
 
@@ -426,7 +427,7 @@ void *sendThread(void* canard_instance) {
         {
             if (drop)
             {
-                printf("dropping ");
+                printf("dropping\n");
                 // printframe(transmit_frame);
                 //can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
             }
@@ -476,7 +477,7 @@ int main(int argc, char** argv)
     canardInit(&canard_instance, on_reception, should_accept);
     canardSetLocalNodeID(&canard_instance,uavcan_node_id);
     printf("Initialized.\n");
-
+    printf("size: %lu\n",sizeof(CanardRxState));
 
     /*
      * Main loop

@@ -48,6 +48,7 @@ void canardInit(CanardInstance* out_ins, canardOnTransferReception on_reception,
 {
   out_ins->node_id = CANARD_BROADCAST_NODE_ID;
   out_ins->on_reception = on_reception;
+  out_ins->should_accept = should_accept;
   out_ins->rx_states = NULL;
   out_ins->tx_queue = NULL;
   canardInitPoolAllocator(&out_ins->allocator, out_ins->buffer, CANARD_AVAILABLE_BLOCKS);
@@ -202,13 +203,29 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
   uint8_t source_node_id = CANARD_SOURCE_ID_FROM_ID(frame->id);
   uint8_t destination_node_id = (transfer_type == CanardTransferTypeBroadcast) ? 0 : CANARD_DEST_ID_FROM_ID(frame->id);
   uint16_t data_type_id = canardDataType(frame->id);
-  uint32_t transfer_descriptor = CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id,transfer_type,source_node_id,destination_node_id);
+  uint32_t transfer_descriptor = CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, source_node_id, destination_node_id);
   
   CanardRxState* rxstate;
   unsigned char tail_byte = frame->data[frame->data_len-1];
-  rxstate = canardRxStateTraversal(ins, transfer_descriptor);
 
-  // // Resolving the state flags:
+  if (IS_START_OF_TRANSFER(tail_byte))
+  {
+    uint64_t data_type_signature;
+
+    if(ins->should_accept(ins, &data_type_signature, data_type_id, transfer_type, source_node_id))
+    {
+      rxstate = canardRxStateTraversal(ins, transfer_descriptor);
+      rxstate->calculated_crc = crc_add_signature(0xFFFFU, data_type_signature);
+    }
+  } else if (!IS_START_OF_TRANSFER(tail_byte))
+  {
+    rxstate = canardFindRxState(ins->rx_states, transfer_descriptor);
+    if (rxstate == NULL) {
+      return;
+    }
+  }
+
+  // Resolving the state flags:
   const bool not_initialized = (rxstate->timestamp_usec == 0) ? true : false;
   // const bool tid_timed_out = (rxstate->timestamp_usec - timestamp_usec) > TRANSFER_TIMEOUT_USEC;
   const bool first_frame = IS_START_OF_TRANSFER(tail_byte);
@@ -268,13 +285,13 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     //take off the crc and store the payload
     rxstate->timestamp_usec = timestamp_usec;
     canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data+2, frame->data_len-3);
-
+    rxstate->payload_crc = ((uint16_t)frame->data[0] << 8) | ((uint16_t)frame->data[1]);
+    rxstate->calculated_crc = crc_add(rxstate->calculated_crc, frame->data+2, frame->data_len-3);
   }
   else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))
   {
-
     canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data, frame->data_len-1);
-
+    rxstate->calculated_crc = crc_add(rxstate->calculated_crc, frame->data, frame->data_len-1);
   }
   else
   { 
@@ -289,13 +306,13 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     .transfer_type = transfer_type,
     .priority = priority,
     .source_node_id = source_node_id };
-
+    rxstate->calculated_crc = crc_add(rxstate->calculated_crc, frame->data, frame->data_len-1);
     //crc validation goes here!
-
-    ins->on_reception(ins,&rxtransfer);
-
+    if (rxstate->calculated_crc == rxstate->payload_crc)
+    {
+      ins->on_reception(ins,&rxtransfer);
+    }
     canardPrepareForNextTransfer(rxstate);
-
     return;
   }
   rxstate->next_toggle ^= 1;
@@ -795,8 +812,8 @@ CANARD_INTERNAL uint16_t crc_add_byte(uint16_t crc_val, uint8_t byte)
 
 CANARD_INTERNAL uint16_t crc_add_signature(uint16_t crc_val, uint64_t data_type_signature)
 {
-  uint8_t i, shift_val;
-  for (i=0, shift_val=56; i<8; i++, shift_val-=8)
+  int shift_val;
+  for (shift_val=56; shift_val>0; shift_val-=8)
   {
     crc_val = crc_add_byte(crc_val, (uint8_t)(data_type_signature >> shift_val));
   }
