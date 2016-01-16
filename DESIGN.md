@@ -211,7 +211,7 @@ The following list provides a high-level description of the major use cases:
 * *Frame reception*.
     On a reception of a frame, the application passes it to the library via a dedicated API function.
     Upon reception of a frame, the library detects its transfer parameters, such as data type ID, transfer type and source node ID.
-    The library then requests the application via a function pointer on whether the transfer should be received.
+    If this is the first frame of a transfer, the library then requests the application via a function pointer on whether the transfer should be received.
     If the application reports that the transfer is not of interest, the frame will be ignored.
     Otherwise, the library finds the receiver state instance for the transfer (or creates one if it couldn’t be found), then updates it according to the rules defined in the specification.
     If the newly received frame was accepted and it was the last frame of the transfer, the library will invoke the appropriate callback (via a function pointer) so that the application can execute the associated business logic.
@@ -332,7 +332,11 @@ struct CanardInstance;
  * Initializes the library state.
  * Local node ID will be set to zero, i.e. the node will be anonymous.
  */
-void canardInit(CanardInstance* out_ins);
+void canardInit(CanardInstance* out_ins,
+                void* mem_arena,
+                size_t mem_arena_size,
+                CanardOnTransferReception on_reception,
+                CanardShouldAcceptTransfer should_accept);
 
 /**
  * Assigns a new node ID value to the current node.
@@ -402,11 +406,11 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
  * the transfer should be received.
  * If the application returns true, the pointer out_data_type_signature must be written with the data type signature.
  */
-typedef bool (*CanardShouldAcceptTransferPtr)(const CanardInstance* ins,
-                                              uint64_t* out_data_type_signature,
-                                              uint16_t data_type_id,
-                                              CanardTransferType transfer_type,
-                                              uint8_t source_node_id);
+typedef bool (*CanardShouldAcceptTransfer)(const CanardInstance* ins,
+                                           uint64_t* out_data_type_signature,
+                                           uint16_t data_type_id,
+                                           CanardTransferType transfer_type,
+                                           uint8_t source_node_id);
 
 /**
  * This function will be invoked by the library every time a transfer is successfully received.
