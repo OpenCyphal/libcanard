@@ -221,10 +221,12 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
   } else if (!IS_START_OF_TRANSFER(tail_byte))
   {
     rxstate = canardFindRxState(ins->rx_states, transfer_descriptor);
-    if (rxstate == NULL) {
-      return;
-    }
   }
+
+  if (rxstate == NULL) {
+    return;
+  }
+
 
   // Resolving the state flags:
   const bool not_initialized = (rxstate->timestamp_usec == 0) ? true : false;
