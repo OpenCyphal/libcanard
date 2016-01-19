@@ -1,24 +1,28 @@
+sudo: false
 language: cpp
 compiler:
     - clang
     - gcc
 
+addons:
+  apt:
+    packages:
+    - libgtest-dev
+
 env:
     - CFLAGS="-Werror" CXXFLAGS="-Werror"
 
 before_install:
-    - sudo apt-get update -y
-    - sudo apt-get install -y libgtest-dev
-    - pushd /usr/src/gtest
-    - sudo cmake CMakeLists.txt
-    - sudo make
-    - sudo cp *.a /usr/lib
+    - mkdir gtest-build
+    - mkdir build/
+    - pushd gtest-build
+    - cmake /usr/src/gtest
+    - make
     - popd
 
 before_script:
-    - mkdir build/
     - cd build/
-    - cmake ../tests
+    - CMAKE_LIBRARY_PATH=../gtest-build/ cmake ../tests
 
 script:
     - make
