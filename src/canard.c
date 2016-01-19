@@ -45,7 +45,7 @@ struct CanardTxQueueItem
  * Local node ID will be set to zero, i.e. the node will be anonymous.
  */
 void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
-                  canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept)
+                  CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept)
 {
   out_ins->node_id = CANARD_BROADCAST_NODE_ID;
   out_ins->on_reception = on_reception;
@@ -103,7 +103,7 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
     } else 
     {
       //anonymous transfer, random discriminator
-      uint16_t discriminator = (crc_add(0xFFFFU, payload, payload_len)) & 0x7FFEU;
+      uint16_t discriminator = (crcAdd(0xFFFFU, payload, payload_len)) & 0x7FFEU;
       can_id = ((uint32_t)priority << 24) | (uint32_t)(discriminator << 9) |
         ((uint32_t)(data_type_id & 0xFF) << 8) | (uint32_t)canardGetLocalNodeID(ins);
     }
@@ -113,8 +113,8 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
     
     if (payload_len > 7)
     {
-      crc = crc_add_signature(crc, data_type_signature);
-      crc = crc_add(crc, payload, payload_len);
+      crc = crcAddSignature(crc, data_type_signature);
+      crc = crcAdd(crc, payload, payload_len);
     }
   }
 
@@ -159,8 +159,8 @@ int canardRequestOrRespond(CanardInstance* ins,
 
   if (payload_len > 7)
   {
-    crc = crc_add_signature(crc, data_type_signature);
-    crc = crc_add(crc, payload, payload_len);
+    crc = crcAddSignature(crc, data_type_signature);
+    crc = crcAdd(crc, payload, payload_len);
   }
 
   canardEnqueueData(ins, can_id, inout_transfer_id, crc, payload, payload_len);
@@ -206,7 +206,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
   uint16_t data_type_id = canardDataType(frame->id);
   uint32_t transfer_descriptor = CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, source_node_id, destination_node_id);
   
-  CanardRxState* rxstate;
+  CanardRxState* rxstate = NULL;
   unsigned char tail_byte = frame->data[frame->data_len-1];
 
   if (IS_START_OF_TRANSFER(tail_byte))
@@ -216,9 +216,9 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     if(ins->should_accept(ins, &data_type_signature, data_type_id, transfer_type, source_node_id))
     {
       rxstate = canardRxStateTraversal(ins, transfer_descriptor);
-      rxstate->calculated_crc = crc_add_signature(0xFFFFU, data_type_signature);
+      rxstate->calculated_crc = crcAddSignature(0xFFFFU, data_type_signature);
     }
-  } else if (!IS_START_OF_TRANSFER(tail_byte))
+  } else
   {
     rxstate = canardFindRxState(ins->rx_states, transfer_descriptor);
   }
@@ -230,13 +230,13 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
   // Resolving the state flags:
   const bool not_initialized = (rxstate->timestamp_usec == 0) ? true : false;
-  // const bool tid_timed_out = (rxstate->timestamp_usec - timestamp_usec) > TRANSFER_TIMEOUT_USEC;
+  const bool tid_timed_out = (rxstate->timestamp_usec - timestamp_usec) > TRANSFER_TIMEOUT_USEC;
   const bool first_frame = IS_START_OF_TRANSFER(tail_byte);
   const bool not_previous_tid = computeForwardDistance(rxstate->transfer_id, TRANSFER_ID_FROM_TAIL_BYTE(tail_byte)) > 1;
 
   bool need_restart = 
         (not_initialized) ||
-        // (tid_timed_out) ||
+        (tid_timed_out) ||
         (first_frame && not_previous_tid);
 
   if (need_restart)
@@ -289,12 +289,12 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     rxstate->timestamp_usec = timestamp_usec;
     canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data+2, frame->data_len-3);
     rxstate->payload_crc = ((uint16_t)frame->data[0] << 8) | ((uint16_t)frame->data[1]);
-    rxstate->calculated_crc = crc_add(rxstate->calculated_crc, frame->data+2, frame->data_len-3);
+    rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data+2, frame->data_len-3);
   }
   else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))
   {
     canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data, frame->data_len-1);
-    rxstate->calculated_crc = crc_add(rxstate->calculated_crc, frame->data, frame->data_len-1);
+    rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data, frame->data_len-1);
   }
   else
   { 
@@ -309,7 +309,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     .transfer_type = transfer_type,
     .priority = priority,
     .source_node_id = source_node_id };
-    rxstate->calculated_crc = crc_add(rxstate->calculated_crc, frame->data, frame->data_len-1);
+    rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data, frame->data_len-1);
     //crc validation goes here!
     if (rxstate->calculated_crc == rxstate->payload_crc)
     {
@@ -801,7 +801,7 @@ CANARD_INTERNAL CanardBufferBlock *canardCreateBufferBlock(CanardPoolAllocator* 
 /**
  * CRC functions
  */
-CANARD_INTERNAL uint16_t crc_add_byte(uint16_t crc_val, uint8_t byte)
+CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val, uint8_t byte)
 {
   crc_val ^= (uint16_t)((uint16_t)(byte) << 8);
   int j;
@@ -819,21 +819,21 @@ CANARD_INTERNAL uint16_t crc_add_byte(uint16_t crc_val, uint8_t byte)
   return crc_val;
 }
 
-CANARD_INTERNAL uint16_t crc_add_signature(uint16_t crc_val, uint64_t data_type_signature)
+CANARD_INTERNAL uint16_t crcAddSignature(uint16_t crc_val, uint64_t data_type_signature)
 {
   int shift_val;
   for (shift_val=56; shift_val>0; shift_val-=8)
   {
-    crc_val = crc_add_byte(crc_val, (uint8_t)(data_type_signature >> shift_val));
+    crc_val = crcAddByte(crc_val, (uint8_t)(data_type_signature >> shift_val));
   }
   return crc_val;
 }
 
-CANARD_INTERNAL uint16_t crc_add(uint16_t crc_val, const uint8_t* bytes, uint16_t len)
+CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val, const uint8_t* bytes, uint16_t len)
 {
   while (len--)
   {
-      crc_val = crc_add_byte(crc_val,*bytes++);
+      crc_val = crcAddByte(crc_val,*bytes++);
   }
   return crc_val;
 }

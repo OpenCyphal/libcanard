@@ -77,7 +77,7 @@ typedef struct CanardTxQueueItem CanardTxQueueItem;
 /**
  * The library calls this function to determine whether the transfer should be received.
  */
-typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins,
+typedef bool (*CanardShouldAcceptTransfer)(const CanardInstance* ins,
                                                 uint64_t* out_data_type_signature,
                                                 uint16_t data_type_id, 
                                                 CanardTransferType transfer_type, 
@@ -89,7 +89,7 @@ typedef bool (*canardShouldAcceptTransferPtr)(const CanardInstance* ins,
  * to call canardReleaseRxTransferPayload() first, so that the memory that was used for the block
  * buffer can be released and re-used by the TX queue.
  */
-typedef void (*canardOnTransferReception)(CanardInstance* ins, CanardRxTransfer* transfer);
+typedef void (*CanardOnTransferReception)(CanardInstance* ins, CanardRxTransfer* transfer);
 
 /** A memory block used in the memory block allocator. */
 typedef union CanardPoolAllocatorBlock_u
@@ -141,8 +141,8 @@ struct CanardInstance
 {
   uint8_t node_id;  // local node
 
-  canardShouldAcceptTransferPtr should_accept; 						// function to decide whether we want this transfer
-  canardOnTransferReception on_reception;        					// function we call after rx transfer is complete
+  CanardShouldAcceptTransfer should_accept; 						// function to decide whether we want this transfer
+  CanardOnTransferReception on_reception;        					// function we call after rx transfer is complete
 
   CanardPoolAllocator allocator;									// pool allocator
 
@@ -197,7 +197,7 @@ struct CanardRxTransfer
 };
 
 void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
-                  canardOnTransferReception on_reception, canardShouldAcceptTransferPtr should_accept);
+                  CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
 int canardBroadcast(CanardInstance* ins, uint64_t data_type_signature,uint16_t data_type_id, uint8_t* inout_transfer_id, 
