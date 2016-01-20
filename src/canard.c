@@ -721,8 +721,8 @@ CANARD_INTERNAL CanardRxState *canardCreateRxState(CanardPoolAllocator* allocato
  */
 CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, CanardRxState* state, const uint8_t* data, uint8_t data_len)
 {
-  uint8_t data_index = 0;
-  uint8_t i;
+  uint16_t data_index = 0;
+  uint16_t i;
 
   // if head is not full, add data to head
   if ((int)CANARD_RX_PAYLOAD_HEAD_SIZE - (int)state->payload_len > 0) {
