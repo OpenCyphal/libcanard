@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2016 UAVCAN Team
+ *
+ * Distributed under the MIT License, available in the file LICENSE.
+ *
+ * Author: Michael Sierra <sierramichael.a@gmail.com>
+ *
+ */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -30,8 +39,8 @@
 
 #define TIME_TO_SEND_NODE_STATUS 101000000
 #define TIME_TO_SEND_AIRSPEED 51000000000
-#define TIME_TO_SEND_MULTI 100000
-#define TIME_TO_SEND_REQUEST 1000000000
+#define TIME_TO_SEND_MULTI 1000000
+#define TIME_TO_SEND_REQUEST 1000000
 static int can_socket = -1;
 
 int can_init(const char* can_iface_name)
@@ -45,6 +54,7 @@ int can_init(const char* can_iface_name)
 
     // Resolve the iface index
     struct ifreq ifr;
+
     (void)memset(&ifr, 0, sizeof(ifr));
     (void)strncpy(ifr.ifr_name, can_iface_name, IFNAMSIZ);
     const int ioctl_result = ioctl(sock, SIOCGIFINDEX, &ifr);
@@ -55,6 +65,7 @@ int can_init(const char* can_iface_name)
 
     // Assign the iface
     struct sockaddr_can addr;
+
     (void)memset(&addr, 0, sizeof(addr));
     addr.can_family  = AF_CAN;
     addr.can_ifindex = ifr.ifr_ifindex;
@@ -69,6 +80,7 @@ int can_init(const char* can_iface_name)
     can_socket = sock;
     return 0;
 }
+
 static uint8_t uavcan_node_id;
 
 int can_send(uint32_t extended_can_id, const uint8_t* frame_data, uint8_t frame_data_len)
@@ -79,6 +91,7 @@ int can_send(uint32_t extended_can_id, const uint8_t* frame_data, uint8_t frame_
     }
 
     struct can_frame frame;
+
     frame.can_id  = extended_can_id | CAN_EFF_FLAG;
     frame.can_dlc = frame_data_len;
     memcpy(frame.data, frame_data, frame_data_len);
@@ -89,6 +102,7 @@ int can_send(uint32_t extended_can_id, const uint8_t* frame_data, uint8_t frame_
 uint64_t get_monotonic_usec(void)
 {
     struct timespec ts;
+
     if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
     {
         return 0;
@@ -96,14 +110,14 @@ uint64_t get_monotonic_usec(void)
     return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000UL;
 }
 
-/// Arbitrary priority values
+// / Arbitrary priority values
 static const uint8_t PRIORITY_HIGHEST = 0;
 static const uint8_t PRIORITY_HIGH    = 8;
 static const uint8_t PRIORITY_MEDIUM  = 16;
 static const uint8_t PRIORITY_LOW     = 24;
 static const uint8_t PRIORITY_LOWEST  = 31;
 
-/// Defined for the standard data type uavcan.protocol.NodeStatus
+// / Defined for the standard data type uavcan.protocol.NodeStatus
 enum node_health
 {
     HEALTH_OK       = 0,
@@ -112,7 +126,7 @@ enum node_health
     HEALTH_CRITICAL = 3
 };
 
-/// Defined for the standard data type uavcan.protocol.NodeStatus
+// / Defined for the standard data type uavcan.protocol.NodeStatus
 enum node_mode
 {
     MODE_OPERATIONAL     = 0,
@@ -121,8 +135,10 @@ enum node_mode
     MODE_SOFTWARE_UPDATE = 3,
     MODE_OFFLINE         = 7
 };
-/// Standard data type: uavcan.protocol.NodeStatus
-int publish_node_status(CanardInstance* ins, enum node_health health, enum node_mode mode, uint16_t vendor_specific_status_code)
+
+// / Standard data type: uavcan.protocol.NodeStatus
+int publish_node_status(CanardInstance* ins, enum node_health health, enum node_mode mode,
+                        uint16_t vendor_specific_status_code)
 {
     static uint64_t startup_timestamp_usec;
     if (startup_timestamp_usec == 0)
@@ -149,9 +165,10 @@ int publish_node_status(CanardInstance* ins, enum node_health health, enum node_
     static const uint16_t data_type_id = 341;
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
-    return canardBroadcast(ins, data_type_signature, 
-        data_type_id, &transfer_id, PRIORITY_LOW, payload, sizeof(payload));
+    return canardBroadcast(ins, data_type_signature,
+                           data_type_id, &transfer_id, PRIORITY_LOW, payload, sizeof(payload));
 }
+
 /*
  * Float16 support
  */
@@ -170,6 +187,7 @@ uint16_t make_float16(float value)
     const uint32_t round_mask = ~0xFFFU;
 
     union fp32 in;
+
     uint16_t out = 0;
 
     in.f = value;
@@ -197,7 +215,8 @@ uint16_t make_float16(float value)
 
     return out;
 }
-/// Standard data type: uavcan.equipment.air_data.TrueAirspeed
+
+// / Standard data type: uavcan.equipment.air_data.TrueAirspeed
 int publish_true_airspeed(CanardInstance* ins, float mean, float variance)
 {
     const uint16_t f16_mean     = make_float16(mean);
@@ -212,25 +231,25 @@ int publish_true_airspeed(CanardInstance* ins, float mean, float variance)
     static const uint16_t data_type_id = 1020;
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
-    return canardBroadcast(ins, data_type_signature, 
-        data_type_id, &transfer_id, PRIORITY_MEDIUM, payload, sizeof(payload));
+    return canardBroadcast(ins, data_type_signature,
+                           data_type_id, &transfer_id, PRIORITY_MEDIUM, payload, sizeof(payload));
 }
 
-/// Standard data type: uavcan.equipment.multi
+// / Standard data type: uavcan.equipment.multi
 int publish_multi(CanardInstance* ins)
 {
     static int len = 80;
     uint8_t payload[len];
     uint8_t i;
-    for (i=0; i<len; i++)
+    for (i = 0; i<len; i++)
     {
-        payload[i] = i+1;
+        payload[i] = i + 1;
     }
     static const uint16_t data_type_id = 420;
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
-    return canardBroadcast(ins, data_type_signature, 
-        data_type_id, &transfer_id, PRIORITY_HIGH, payload, sizeof(payload));
+    return canardBroadcast(ins, data_type_signature,
+                           data_type_id, &transfer_id, PRIORITY_HIGH, payload, sizeof(payload));
 }
 
 int publish_request(CanardInstance* ins)
@@ -238,16 +257,16 @@ int publish_request(CanardInstance* ins)
     static int len = 43;
     uint8_t payload[len];
     uint8_t i;
-    for (i=0; i<len; i++)
+    for (i = 0; i<len; i++)
     {
-        payload[i] = i+3;
+        payload[i] = i + 3;
     }
     uint8_t dest_id = 33;
     static const uint16_t data_type_id = 15;
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
-    return canardRequestOrRespond(ins, dest_id, data_type_signature, 
-        data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, sizeof(payload));
+    return canardRequestOrRespond(ins, dest_id, data_type_signature,
+                                  data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, sizeof(payload));
 }
 
 int compute_true_airspeed(float* out_airspeed, float* out_variance)
@@ -261,12 +280,12 @@ int compute_true_airspeed(float* out_airspeed, float* out_variance)
 
 void printframe(const CanardCANFrame* frame)
 {
-    printf("%X ",frame->id);
-    printf("[%u] ",frame->data_len);
+    printf("%X ", frame->id);
+    printf("[%u] ", frame->data_len);
     int i;
-    for(i = 0; i < frame->data_len; i++)
+    for (i = 0; i < frame->data_len; i++)
     {
-        printf(" %u ", frame->data[i]);
+        printf(" %X ", frame->data[i]);
     }
     printf("\n");
 }
@@ -275,48 +294,49 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
 {
     // printf("\n");
     printf("transfer type: ");
-    switch(transfer->transfer_type) {
-        case CanardTransferTypeResponse:
-            printf("reponse\n");
-        case CanardTransferTypeRequest:
-            printf("request\n");
-        case CanardTransferTypeBroadcast:
-            printf("broadcast\n");
+    switch (transfer->transfer_type)
+    {
+    case CanardTransferTypeResponse:
+        printf("reponse\n");
+    case CanardTransferTypeRequest:
+        printf("request\n");
+    case CanardTransferTypeBroadcast:
+        printf("broadcast\n");
     }
     unsigned char payload[transfer->payload_len];
     if (transfer->payload_len > 7)
     {
-    CanardBufferBlock* block = transfer->payload_middle;
-    // printf("sizeof payload head: %lu\n",sizeof(transfer->payload_head));
-    // printf("sizeof payload tail: %lu\n",sizeof(transfer->payload_tail));
-    int i, index = 0;
-
-    if(CANARD_RX_PAYLOAD_HEAD_SIZE > 0)
-    {
-        for (i=0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++)
+        CanardBufferBlock* block = transfer->payload_middle;
+        // printf("sizeof payload head: %lu\n",sizeof(transfer->payload_head));
+        // printf("sizeof payload tail: %lu\n",sizeof(transfer->payload_tail));
+        int i;
+        uint8_t index = 0;
+        if (CANARD_RX_PAYLOAD_HEAD_SIZE > 0)
         {
-            payload[i] = transfer->payload_head[i];
+            for (i = 0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++, index++)
+            {
+                payload[i] = transfer->payload_head[i];
+                // printf("index: %u\n", index);
+            }
         }
-        index = i;
-    }
 
-    for (i=0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len); i++, index++)
-    {
-        payload[index] = block->data[i];
-        if(i==CANARD_BUFFER_BLOCK_DATA_SIZE-1)
+        for (i = 0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len); i++, index++)
         {
-            i = -1;
-            block = block->next;
+            payload[index] = block->data[i];
+            // printf("index: %u\n", index);
+            if (i==CANARD_BUFFER_BLOCK_DATA_SIZE - 1)
+            {
+                i = -1;
+                block = block->next;
+            }
         }
-    }
 
-    //printf("tail:\n");
-    int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
-    for (i=0; i<(tail_len);i++, index++)
-    {
-        payload[index] = transfer->payload_tail[i];
-    }
-    
+        // printf("tail:\n");
+        int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
+        for (i = 0; i<(tail_len); i++, index++)
+        {
+            payload[index] = transfer->payload_tail[i];
+        }
     }
     else
     {
@@ -326,36 +346,45 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
             payload[i] = transfer->payload_head[i];
         }
     }
+    // uint64_t payload_64 = canardReadRxTransferPayload(transfer, 0, 64);
+    // printf("payload:%" PRIx64 "\n", payload_64);
+
+    printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 0, 64));
+    printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 64, 64));
+    printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 128, 64));
+
     canardReleaseRxTransferPayload(ins, transfer);
-    //do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
+    // do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
 
     int i;
-    for (i=0;i<sizeof(payload);i++) {
+    for (i = 0; i<sizeof(payload); i++)
+    {
         printf("%02X ", payload[i]);
     }
     printf("\n");
 }
 
 bool should_accept(const CanardInstance* ins, uint64_t* out_data_type_signature,
-                    uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id)
-{   
+                   uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id)
+{
     *out_data_type_signature = 0x8899AABBCCDDEEFF;
     return true;
 }
 
-// returns true with a probability of probability 
+// returns true with a probability of probability
 bool random_drop(double probability)
 {
     return rand() <  probability * ((double)RAND_MAX + 1.0);
 }
 
-void *receiveThread(void* canard_instance)
+void* receiveThread(void* canard_instance)
 {
     struct can_frame r_frame;
+
     CanardCANFrame canard_frame;
     // CanardCANFrame* transmit_frame;
     int nbytes = 0;
-    while(1)
+    while (1)
     {
         nbytes = read(can_socket, &r_frame, sizeof(struct can_frame));
         if (nbytes < 0)
@@ -368,15 +397,15 @@ void *receiveThread(void* canard_instance)
             printf("problem");
         }
         canard_frame.id = r_frame.can_id;
-        //printf("%X\n",CANARD_MSG_TYPE_FROM_ID(r_frame.can_id));
+        // printf("%X\n",CANARD_MSG_TYPE_FROM_ID(r_frame.can_id));
         canard_frame.data_len = r_frame.can_dlc;
         memcpy(canard_frame.data, &r_frame.data, r_frame.can_dlc);
-        //printframe(&canard_frame);
+        printframe(&canard_frame);
         canardHandleRxFrame(canard_instance, &canard_frame, get_monotonic_usec());
     }
 }
 
-void *sendThread(void* canard_instance) {
+void* sendThread(void* canard_instance) {
     enum node_health health = HEALTH_OK;
     uint64_t last_node_status = 0;
     uint64_t last_multi = 0;
@@ -384,7 +413,7 @@ void *sendThread(void* canard_instance) {
     uint64_t last_airspeed = 0;
     uint64_t last_request = 0;
     bool drop = false;
-    while(1)
+    while (1)
     {
         if ((get_monotonic_usec() - last_node_status) > TIME_TO_SEND_NODE_STATUS)
         {
@@ -415,7 +444,8 @@ void *sendThread(void* canard_instance) {
             publish_multi(canard_instance);
             last_multi = get_monotonic_usec();
         }
-        if ((get_monotonic_usec() - last_request) > TIME_TO_SEND_REQUEST) {
+        if ((get_monotonic_usec() - last_request) > TIME_TO_SEND_REQUEST)
+        {
             publish_request(canard_instance);
             last_request = get_monotonic_usec();
         }
@@ -424,19 +454,19 @@ void *sendThread(void* canard_instance) {
             canardCleanupStaleTransfers(canard_instance, get_monotonic_usec());
             last_clean = get_monotonic_usec();
         }
-        const CanardCANFrame *transmit_frame = canardPeekTxQueue(canard_instance);
+        const CanardCANFrame* transmit_frame = canardPeekTxQueue(canard_instance);
         if (transmit_frame != NULL)
         {
             if (drop)
             {
                 printf("dropping\n");
                 // printframe(transmit_frame);
-                //can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
+                // can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
             }
             else
             {
-                //printf("keeping\n");
-                //printframe(transmit_frame);
+                // printf("keeping\n");
+                // printframe(transmit_frame);
                 can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
             }
             canardPopTxQueue(canard_instance);
@@ -477,7 +507,7 @@ int main(int argc, char** argv)
     static CanardInstance canard_instance;
     static CanardPoolAllocatorBlock buffer[32];           // pool blocks
     canardInit(&canard_instance, buffer, sizeof(buffer), on_reception, should_accept);
-    canardSetLocalNodeID(&canard_instance,uavcan_node_id);
+    canardSetLocalNodeID(&canard_instance, uavcan_node_id);
     printf("Initialized.\n");
 
     /*
@@ -488,5 +518,5 @@ int main(int argc, char** argv)
     pthread_create(&tid1, NULL, receiveThread, &canard_instance);
     pthread_create(&tid2, NULL, sendThread, &canard_instance);
     pthread_join(tid1, NULL);
-    pthread_join(tid2,NULL);
+    pthread_join(tid2, NULL);
 }
