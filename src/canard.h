@@ -1,26 +1,12 @@
 /*
- * The MIT License (MIT)
- * 
  * Copyright (c) 2016 UAVCAN Team
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE. 
+ *
+ * Distributed under the MIT License, available in the file LICENSE.
+ *
+ * Author: Michael Sierra <sierramichael.a@gmail.com>
+ *
  */
+
 
 #ifndef CANARD_H
 #define CANARD_H
@@ -51,22 +37,22 @@ extern "C" {
 
 typedef struct
 {
-  uint32_t id;
-  uint8_t data[CANARD_CAN_FRAME_MAX_DATA_LEN];
-  uint8_t data_len;
+    uint32_t id;
+    uint8_t data[CANARD_CAN_FRAME_MAX_DATA_LEN];
+    uint8_t data_len;
 } CanardCANFrame;
 
 typedef enum
 {
-  CanardTransferTypeResponse  = 0,
-  CanardTransferTypeRequest   = 1,
-  CanardTransferTypeBroadcast = 2
+    CanardTransferTypeResponse  = 0,
+    CanardTransferTypeRequest   = 1,
+    CanardTransferTypeBroadcast = 2
 } CanardTransferType;
 
 typedef enum
 {
-  CanardResponse,
-  CanardRequest
+    CanardResponse,
+    CanardRequest
 } CanardRequestResponse;
 
 typedef struct CanardInstance CanardInstance;
@@ -78,10 +64,10 @@ typedef struct CanardTxQueueItem CanardTxQueueItem;
  * The library calls this function to determine whether the transfer should be received.
  */
 typedef bool (*CanardShouldAcceptTransfer)(const CanardInstance* ins,
-                                                uint64_t* out_data_type_signature,
-                                                uint16_t data_type_id, 
-                                                CanardTransferType transfer_type, 
-                                                uint8_t source_node_id);
+                                           uint64_t* out_data_type_signature,
+                                           uint16_t data_type_id,
+                                           CanardTransferType transfer_type,
+                                           uint8_t source_node_id);
 
 /**
  * This function will be invoked by the library every time a transfer is successfully received.
@@ -104,29 +90,31 @@ typedef struct
 } CanardPoolAllocator;
 
 /** buffer block for rx data. */
-typedef struct CanardBufferBlock 
+typedef struct CanardBufferBlock
 {
-  struct CanardBufferBlock* next;
-  uint8_t data[];
+    struct CanardBufferBlock* next;
+
+    uint8_t data[];
 } CanardBufferBlock;
 
 struct CanardRxState
 {
-  struct CanardRxState* next;
-  CanardBufferBlock* buffer_blocks;
+    struct CanardRxState* next;
 
-  uint64_t timestamp_usec;
+    CanardBufferBlock* buffer_blocks;
 
-  //uint32_t dtid_tt_snid_dnid;
-  const uint32_t dtid_tt_snid_dnid;
+    uint64_t timestamp_usec;
 
-  uint16_t payload_crc;
-  uint16_t calculated_crc;
-  uint16_t payload_len : 10;
-  uint16_t transfer_id : 5;
-  uint16_t next_toggle : 1;
+    // uint32_t dtid_tt_snid_dnid;
+    const uint32_t dtid_tt_snid_dnid;
 
-  uint8_t buffer_head[];
+    uint16_t payload_crc;
+    uint16_t calculated_crc;
+    uint16_t payload_len : 10;
+    uint16_t transfer_id : 5;
+    uint16_t next_toggle : 1;
+
+    uint8_t buffer_head[];
 };
 
 /**
@@ -139,15 +127,18 @@ struct CanardRxState
  */
 struct CanardInstance
 {
-  uint8_t node_id;  // local node
+    uint8_t node_id; // local node
 
-  CanardShouldAcceptTransfer should_accept; 						// function to decide whether we want this transfer
-  CanardOnTransferReception on_reception;        					// function we call after rx transfer is complete
+    CanardShouldAcceptTransfer should_accept;                                           // function to decide whether we
+                                                                                        // want this transfer
+    CanardOnTransferReception on_reception;                                             // function we call after rx
+                                                                                        // transfer is complete
 
-  CanardPoolAllocator allocator;									// pool allocator
+    CanardPoolAllocator allocator;                                                                      // pool
+                                                                                                        // allocator
 
-  CanardRxState* rx_states;
-  CanardTxQueueItem* tx_queue;
+    CanardRxState* rx_states;
+    CanardTxQueueItem* tx_queue;
 };
 
 
@@ -180,30 +171,36 @@ struct CanardRxTransfer
      * In simple cases it should be possible to get data directly from the head and/or tail pointers.
      * Otherwise it is advised to use canardReadRxTransferPayload().
      */
-    const uint8_t*           payload_head;   ///< Always valid, i.e. not NULL.
-    CanardBufferBlock* payload_middle; ///< May be NULL if the buffer was not needed. Always NULL for single-frame transfers.
-    const uint8_t*           payload_tail;   ///< Last bytes of multi-frame transfers. Always NULL for single-frame transfers.
+    const uint8_t*           payload_head;   // /< Always valid, i.e. not NULL.
+    CanardBufferBlock* payload_middle; // /< May be NULL if the buffer was not needed. Always NULL for single-frame
+                                       // transfers.
+    const uint8_t*           payload_tail;   // /< Last bytes of multi-frame transfers. Always NULL for single-frame
+                                             // transfers.
     uint16_t payload_len;
     uint16_t middle_len;
 
     /**
      * These fields identify the transfer for the application logic.
      */
-    uint16_t data_type_id;                  ///< 0 to 255 for services, 0 to 65535 for messages
-    uint8_t transfer_type;                  ///< See @ref CanardTransferType
-    uint8_t transfer_id;                    ///< 0 to 31
-    uint8_t priority;                       ///< 0 to 31
-    uint8_t source_node_id;                 ///< 1 to 127, or 0 if the source is anonymous
+    uint16_t data_type_id;                  // /< 0 to 255 for services, 0 to 65535 for messages
+    uint8_t transfer_type;                  // /< See @ref CanardTransferType
+    uint8_t transfer_id;                    // /< 0 to 31
+    uint8_t priority;                       // /< 0 to 31
+    uint8_t source_node_id;                 // /< 1 to 127, or 0 if the source is anonymous
 };
 
 void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
-                  CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept);
+                CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
-int canardBroadcast(CanardInstance* ins, uint64_t data_type_signature,uint16_t data_type_id, uint8_t* inout_transfer_id, 
-                              uint8_t priority, const void* payload, uint16_t payload_len);
-int canardRequestOrRespond(CanardInstance* ins, uint8_t destination_node_id, uint64_t data_type_signature, uint16_t data_type_id, uint8_t* inout_transfer_id, 
-                              uint8_t priority, CanardRequestResponse kind, const void* payload, uint16_t payload_len);
+int canardBroadcast(CanardInstance* ins, uint64_t data_type_signature, uint16_t data_type_id,
+                    uint8_t* inout_transfer_id,
+                    uint8_t priority, const void* payload,
+                    uint16_t payload_len);
+int canardRequestOrRespond(CanardInstance* ins, uint8_t destination_node_id, uint64_t data_type_signature,
+                           uint16_t data_type_id, uint8_t* inout_transfer_id,
+                           uint8_t priority, CanardRequestResponse kind, const void* payload,
+                           uint16_t payload_len);
 const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
 void canardPopTxQueue(CanardInstance* ins);
 void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec);
