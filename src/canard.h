@@ -208,6 +208,7 @@ const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
 void canardPopTxQueue(CanardInstance* ins);
 void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec);
 void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec);
+uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer, uint16_t bit_offset, uint8_t bit_length);
 uint64_t canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer);
 
 #ifdef __cplusplus

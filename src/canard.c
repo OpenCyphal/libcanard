@@ -356,6 +356,73 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec
     prev = state;
     state = state->next;
   }
+/**
+ * Reads bits (1 to 64) from RX transfer buffer.
+ * This function can be used to decode received transfers.
+ * Note that this function does not need the library's instance object.
+ */
+uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
+                                     uint16_t bit_offset,
+                                     uint8_t bit_length)
+{
+    uint64_t bits = 0;
+    int shift_val =  bit_length - 8;
+    if (transfer->payload_len > 7)      //multi frame
+    {
+        CanardBufferBlock* block = transfer->payload_middle;
+        int i;
+        uint8_t index = 0;
+
+        if (CANARD_RX_PAYLOAD_HEAD_SIZE > 0)    //head
+        {
+            for (i = 0; i<CANARD_RX_PAYLOAD_HEAD_SIZE && index<bit_length && shift_val>=0; i++, index++)
+            {
+                if (index>=bit_offset / 8)
+                {
+                    bits |= ((uint64_t)transfer->payload_head[i] << shift_val);
+                    shift_val -= 8;
+                }
+            }
+        }
+        //middle (buffer blocks)
+        for (i = 0; index<(CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len) &&
+             index<bit_length && shift_val>=0; i++, index++)
+        {
+            if (index>=bit_offset / 8)
+            {
+                bits |= ((uint64_t)block->data[i] << shift_val);
+                shift_val -= 8;
+            }
+            if (i==CANARD_BUFFER_BLOCK_DATA_SIZE - 1)
+            {
+                i = 0;
+                block = block->next;
+            }
+        }
+        // tail
+        int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
+        for (i = 0; i<(tail_len) && index<bit_length && shift_val>=0; i++, index++)
+        {
+            if (index>=bit_offset / 8)
+            {
+                bits |= ((uint64_t)transfer->payload_tail[i] << shift_val);
+                shift_val -= 8;
+            }
+        }
+    }
+    else    //single frame
+    {
+        uint8_t i;
+        for (i = 0; i<transfer->payload_len && i<bit_length && shift_val>=0; i++)
+        {
+            if (i>=bit_offset / 8)
+            {
+                bits |= ((uint64_t)transfer->payload_head[i] << shift_val);
+                shift_val -= 8;
+            }
+        }
+    }
+    return bits;
 }
 
 /**
