@@ -439,23 +439,6 @@ uint64_t canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* t
 }
 
 /**
- * This function can be invoked by the application to release pool blocks that are used
- * to store the payload of this transfer
- */
-CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins, CanardRxState* rxstate)
-{
-    CanardBufferBlock* temp = rxstate->buffer_blocks;
-    while (rxstate->buffer_blocks != NULL)
-    {
-        temp = rxstate->buffer_blocks->next;
-        canardFreeBlock(&ins->allocator, rxstate->buffer_blocks);
-        rxstate->buffer_blocks = temp;
-    }
-    rxstate->payload_len = 0;
-    return 0;
-}
-
-/**
  *  internal (static functions)
  *
  *
@@ -775,6 +758,23 @@ CANARD_INTERNAL CanardRxState* canardCreateRxState(CanardPoolAllocator* allocato
     memcpy(state, &init, sizeof *state);
 
     return state;
+}
+
+/**
+ * This function can be invoked by the application to release pool blocks that are used
+ * to store the payload of this transfer
+ */
+CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins, CanardRxState* rxstate)
+{
+    CanardBufferBlock* temp = rxstate->buffer_blocks;
+    while (rxstate->buffer_blocks != NULL)
+    {
+        temp = rxstate->buffer_blocks->next;
+        canardFreeBlock(&ins->allocator, rxstate->buffer_blocks);
+        rxstate->buffer_blocks = temp;
+    }
+    rxstate->payload_len = 0;
+    return 0;
 }
 
 /**
