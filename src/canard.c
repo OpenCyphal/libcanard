@@ -276,13 +276,21 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     if (IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte)) // beginning of multi frame transfer
     { // take off the crc and store the payload
         rxstate->timestamp_usec = timestamp_usec;
-        canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data + 2, frame->data_len - 3);
+        int ret = canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data + 2, frame->data_len - 3);
+        if (ret != 1)
+        {
+            return;
+        }
         rxstate->payload_crc = ((uint16_t)frame->data[0] << 8) | ((uint16_t)frame->data[1]);
         rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data + 2, frame->data_len - 3);
     }
     else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))
     {
-        canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data, frame->data_len - 1);
+        int ret = canardBufferBlockPushBytes(&ins->allocator, rxstate, frame->data, frame->data_len - 1);
+        if (ret != 1)
+        {
+            return;
+        }
         rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data, frame->data_len - 1);
     }
     else
@@ -782,7 +790,7 @@ CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins, CanardRx
 /**
  * pushes data into the rx state. Fills the buffer head, then appends data to buffer blocks
  */
-CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, CanardRxState* state,
+CANARD_INTERNAL int canardBufferBlockPushBytes(CanardPoolAllocator* allocator, CanardRxState* state,
                                                 const uint8_t* data,
                                                 uint8_t data_len)
 {
@@ -799,7 +807,7 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
         if (data_index >= data_len /*- 1*/)
         {
             state->payload_len += data_len;
-            return;
+            return 1;
         }
     } // head is full.
 
@@ -830,6 +838,10 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
         if (num_buffer_blocks > nth_block && index_at_nth_block == 0)
         {
             block->next = canardCreateBufferBlock(allocator);
+            if (block->next == NULL)
+            {
+                return -1;
+            }
             block = block->next;
             nth_block++;
         }
@@ -845,12 +857,16 @@ CANARD_INTERNAL void canardBufferBlockPushBytes(CanardPoolAllocator* allocator, 
         if (data_index < data_len)
         {
             block->next = canardCreateBufferBlock(allocator);
+            if (block->next == NULL)
+            {
+                return -1;
+            }
             block = block->next;
             index_at_nth_block = 0;
         }
     }
     state->payload_len += data_len;
-    return;
+    return 1;
 }
 
 /**
