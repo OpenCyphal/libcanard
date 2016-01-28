@@ -92,7 +92,7 @@ int canardBroadcast(CanardInstance* ins,
         {
             // anonymous transfer, random discriminator
             uint16_t discriminator = (crcAdd(0xFFFFU, payload, payload_len)) & 0x7FFEU;
-            can_id = ((uint32_t)priority << 24) | (uint32_t)(discriminator << 9) |
+            can_id = ((uint32_t)priority << 24) | ((uint32_t)discriminator << 9) |
                      ((uint32_t)(data_type_id & 0xFF) << 8) | (uint32_t)canardGetLocalNodeID(ins);
         }
     }
