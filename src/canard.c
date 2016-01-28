@@ -364,16 +364,14 @@ uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
         CanardBufferBlock* block = transfer->payload_middle;
         int i;
         uint8_t index = 0;
-
-        if (CANARD_RX_PAYLOAD_HEAD_SIZE > 0)    //head
+        
+        //head
+        for (i = 0; i<CANARD_RX_PAYLOAD_HEAD_SIZE && index<bit_length && shift_val>=0; i++, index++)
         {
-            for (i = 0; i<CANARD_RX_PAYLOAD_HEAD_SIZE && index<bit_length && shift_val>=0; i++, index++)
+            if (index>=bit_offset / 8)
             {
-                if (index>=bit_offset / 8)
-                {
-                    bits |= ((uint64_t)transfer->payload_head[i] << shift_val);
-                    shift_val -= 8;
-                }
+                bits |= ((uint64_t)transfer->payload_head[i] << shift_val);
+                shift_val -= 8;
             }
         }
         //middle (buffer blocks)
