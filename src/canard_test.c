@@ -298,17 +298,20 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     {
     case CanardTransferTypeResponse:
         printf("reponse\n");
+        break;
     case CanardTransferTypeRequest:
         printf("request\n");
+        break;
     case CanardTransferTypeBroadcast:
         printf("broadcast\n");
+        break;
+    default:
+        break;
     }
     unsigned char payload[transfer->payload_len];
     if (transfer->payload_len > 7)
     {
         CanardBufferBlock* block = transfer->payload_middle;
-        // printf("sizeof payload head: %lu\n",sizeof(transfer->payload_head));
-        // printf("sizeof payload tail: %lu\n",sizeof(transfer->payload_tail));
         int i;
         uint8_t index = 0;
         if (CANARD_RX_PAYLOAD_HEAD_SIZE > 0)
@@ -316,14 +319,12 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
             for (i = 0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++, index++)
             {
                 payload[i] = transfer->payload_head[i];
-                // printf("index: %u\n", index);
             }
         }
 
         for (i = 0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len); i++, index++)
         {
             payload[index] = block->data[i];
-            // printf("index: %u\n", index);
             if (i==CANARD_BUFFER_BLOCK_DATA_SIZE - 1)
             {
                 i = -1;
@@ -331,7 +332,6 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
             }
         }
 
-        // printf("tail:\n");
         int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
         for (i = 0; i<(tail_len); i++, index++)
         {
@@ -346,12 +346,8 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
             payload[i] = transfer->payload_head[i];
         }
     }
-    // uint64_t payload_64 = canardReadRxTransferPayload(transfer, 0, 64);
-    // printf("payload:%" PRIx64 "\n", payload_64);
 
     printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 0, 64));
-    printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 64, 64));
-    printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 128, 64));
 
     canardReleaseRxTransferPayload(ins, transfer);
     // do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
@@ -400,7 +396,7 @@ void* receiveThread(void* canard_instance)
         // printf("%X\n",CANARD_MSG_TYPE_FROM_ID(r_frame.can_id));
         canard_frame.data_len = r_frame.can_dlc;
         memcpy(canard_frame.data, &r_frame.data, r_frame.can_dlc);
-        printframe(&canard_frame);
+        // printframe(&canard_frame);
         canardHandleRxFrame(canard_instance, &canard_frame, get_monotonic_usec());
     }
 }
