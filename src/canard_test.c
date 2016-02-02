@@ -308,7 +308,7 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     default:
         break;
     }
-    unsigned char payload[transfer->payload_len];
+    unsigned char payload[transfer->payload_len] = 0;
     if (transfer->payload_len > 7)
     {
         CanardBufferBlock* block = transfer->payload_middle;
