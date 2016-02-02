@@ -238,10 +238,6 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         if (!IS_START_OF_TRANSFER(tail_byte)) // missed the first frame
         {
             rxstate->transfer_id += 1;
-            if (rxstate->transfer_id >= 32)
-            {
-                rxstate->transfer_id = 0;
-            }
             return;
         }
     }
@@ -650,10 +646,6 @@ CANARD_INTERNAL void canardPrepareForNextTransfer(CanardRxState* state)
 {
     state->buffer_blocks = NULL; // payload should be empty anyway
     state->transfer_id += 1;
-    if (state->transfer_id >= 32)
-    {
-        state->transfer_id = 0;
-    }
     state->payload_len = 0;
     state->next_toggle = 0;
     return;
