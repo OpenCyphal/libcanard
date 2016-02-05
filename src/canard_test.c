@@ -57,6 +57,7 @@ int can_init(const char* can_iface_name)
 
     (void)memset(&ifr, 0, sizeof(ifr));
     (void)strncpy(ifr.ifr_name, can_iface_name, IFNAMSIZ);
+    ifr.ifr_name[IFNAMSIZ] = '\0';
     const int ioctl_result = ioctl(sock, SIOCGIFINDEX, &ifr);
     if (ioctl_result < 0)
     {
@@ -308,7 +309,8 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     default:
         break;
     }
-    unsigned char payload[transfer->payload_len] = 0;
+    uint8_t payload[transfer->payload_len];
+    memset(payload, 0, sizeof payload);
     if (transfer->payload_len > 7)
     {
         CanardBufferBlock* block = transfer->payload_middle;
