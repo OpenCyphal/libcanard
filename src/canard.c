@@ -110,7 +110,6 @@ int canardBroadcast(CanardInstance* ins,
     canardEnqueueData(ins, can_id, inout_transfer_id, crc, payload, payload_len);
 
     tidIncrement(inout_transfer_id);
-
     return 1;
 }
 
@@ -366,9 +365,9 @@ uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
     if (transfer->payload_len > 7)      //multi frame
     {
         CanardBufferBlock* block = transfer->payload_middle;
-        int i;
-        uint8_t index = 0;
-        
+        uint16_t i;
+        uint16_t index = 0;
+
         //head
         for (i = 0; i<CANARD_RX_PAYLOAD_HEAD_SIZE && index<bit_length && shift_val>=0; i++, index++)
         {
