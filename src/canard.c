@@ -290,12 +290,18 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     }
     else
     {
+        uint16_t middle_len = 0;
+        // for transfers without buffer_blocks
+        if (rxstate->buffer_blocks != NULL)
+        {
+            middle_len = rxstate->payload_len - CANARD_RX_PAYLOAD_HEAD_SIZE;
+        }
         CanardRxTransfer rxtransfer = {
             .timestamp_usec = timestamp_usec,
             .payload_head = rxstate->buffer_head,
             .payload_middle = rxstate->buffer_blocks,
             .payload_tail = frame->data,
-            .middle_len = rxstate->payload_len - CANARD_RX_PAYLOAD_HEAD_SIZE,
+            .middle_len = middle_len,
             .payload_len = rxstate->payload_len + frame->data_len - 1,
             .data_type_id = data_type_id,
             .transfer_type = transfer_type,
