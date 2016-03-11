@@ -289,18 +289,29 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data, frame->data_len - 1);
     }
     else
-    {
+    {   
+        uint8_t tail_offset = 0;
         uint16_t middle_len = 0;
+        if (rxstate->payload_len < CANARD_RX_PAYLOAD_HEAD_SIZE)
+        {
+            int i;
+            for (i=rxstate->payload_len, tail_offset=0; i<CANARD_RX_PAYLOAD_HEAD_SIZE && tail_offset<frame->data_len-1; i++, tail_offset++)
+            {
+                rxstate->buffer_head[i] = frame->data[tail_offset];
+            }
+        }
+
         // for transfers without buffer_blocks
         if (rxstate->buffer_blocks != NULL)
         {
             middle_len = rxstate->payload_len - CANARD_RX_PAYLOAD_HEAD_SIZE;
         }
+
         CanardRxTransfer rxtransfer = {
             .timestamp_usec = timestamp_usec,
             .payload_head = rxstate->buffer_head,
             .payload_middle = rxstate->buffer_blocks,
-            .payload_tail = frame->data,
+            .payload_tail = frame->data + tail_offset,
             .middle_len = middle_len,
             .payload_len = rxstate->payload_len + frame->data_len - 1,
             .data_type_id = data_type_id,
