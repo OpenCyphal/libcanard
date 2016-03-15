@@ -193,6 +193,11 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     uint16_t data_type_id = canardDataType(frame->id);
     uint32_t transfer_descriptor = CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, source_node_id,
                                                                    destination_node_id);
+    
+    if(transfer_type != CanardTransferTypeBroadcast && destination_node_id != canardGetLocalNodeID(ins))
+    {
+        return;
+    }
 
     CanardRxState* rxstate = NULL;
     unsigned char tail_byte = frame->data[frame->data_len - 1];
