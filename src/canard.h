@@ -15,13 +15,8 @@
 extern "C" {
 #endif
 
-#include <stdio.h>
-#include <unistd.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stddef.h>
-#include <string.h>
-#include <math.h>
 #include <stdbool.h>
 
 /** The size of a memory block in bytes. */

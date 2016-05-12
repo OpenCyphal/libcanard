@@ -10,6 +10,7 @@
 #include "canard.h"
 #include "canard_internals.h"
 #include <inttypes.h>
+#include <string.h>
 
 
 #define CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, \
@@ -299,7 +300,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         uint16_t middle_len = 0;
         if (rxstate->payload_len < CANARD_RX_PAYLOAD_HEAD_SIZE)
         {
-            int i;
+            uint16_t i;
             for (i=rxstate->payload_len, tail_offset=0; i<CANARD_RX_PAYLOAD_HEAD_SIZE && tail_offset<frame->data_len-1; i++, tail_offset++)
             {
                 rxstate->buffer_head[i] = frame->data[tail_offset];
