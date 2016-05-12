@@ -12,9 +12,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include "canard.h"
 // #include "canard_debug.h"
 /*
