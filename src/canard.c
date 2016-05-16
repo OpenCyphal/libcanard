@@ -530,8 +530,8 @@ CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins, uint32_t can_id, uint
             if (data_index == 0)
             {
                 // add crc
-                queue_item->frame.data[0] = (uint8_t)(crc >> 8);
-                queue_item->frame.data[1] = (uint8_t)(crc);
+                queue_item->frame.data[0] = (uint8_t)(crc);
+                queue_item->frame.data[1] = (uint8_t)(crc >> 8);
                 i = 2;
             }
             else
