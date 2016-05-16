@@ -919,7 +919,7 @@ CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val, uint8_t byte)
 CANARD_INTERNAL uint16_t crcAddSignature(uint16_t crc_val, uint64_t data_type_signature)
 {
     int shift_val;
-    for (shift_val = 56; shift_val>0; shift_val -= 8)
+    for (shift_val = 0; shift_val<64; shift_val += 8)
     {
         crc_val = crcAddByte(crc_val, (uint8_t)(data_type_signature >> shift_val));
     }
