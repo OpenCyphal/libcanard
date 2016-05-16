@@ -282,7 +282,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         {
             return;
         }
-        rxstate->payload_crc = ((uint16_t)frame->data[0] << 8) | ((uint16_t)frame->data[1]);
+        rxstate->payload_crc = ((uint16_t)frame->data[0]) | ((uint16_t)frame->data[1] << 8);
         rxstate->calculated_crc = crcAdd(rxstate->calculated_crc, frame->data + 2, frame->data_len - 3);
     }
     else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))
