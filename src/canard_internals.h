@@ -43,7 +43,7 @@ extern "C" {
 #define CANARD_CAN_FRAME_RTR    (1U << 30)  // remote transmission
 #define CANARD_CAN_FRAME_ERR    (1U << 29)  // error frame
 
-#define CANARD_SOURCE_ID_FROM_ID(x) (x)& (0X7F)
+#define CANARD_SOURCE_ID_FROM_ID(x) ((x)& (0X7F))
 #define CANARD_SERVICE_NOT_MSG_FROM_ID(x)   (((x) >> 7)& 0X1)
 #define CANARD_REQUEST_NOT_RESPONSE_FROM_ID(x) (((x) >> 15)& 0X1)
 #define CANARD_DEST_ID_FROM_ID(x)   (((x) >> 8)& 0X7F)
