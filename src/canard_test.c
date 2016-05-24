@@ -39,6 +39,7 @@
 #define TIME_TO_SEND_AIRSPEED 51000000000
 #define TIME_TO_SEND_MULTI 1000000
 #define TIME_TO_SEND_REQUEST 1000000
+#define TIME_TO_SEND_NODE_INFO 2000000
 static int can_socket = -1;
 
 int can_init(const char* can_iface_name)
@@ -268,6 +269,18 @@ int publish_request(CanardInstance* ins)
                                   data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, sizeof(payload));
 }
 
+// / Standard data type: uavcan.protocol.GetNodeInfo
+int publish_get_node_info(CanardInstance* ins)
+{
+    uint8_t payload[1];
+    uint8_t dest_id = 127;
+    static const uint16_t data_type_id = 1;
+    static uint8_t transfer_id;
+    uint64_t data_type_signature = 0xEE468A8121C46A9E;
+    return canardRequestOrRespond(ins, dest_id, data_type_signature,
+                                  data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, 0);
+}
+
 int compute_true_airspeed(float* out_airspeed, float* out_variance)
 {
     *out_airspeed = 1.2345F; // This is a stub.
@@ -363,7 +376,14 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
 bool should_accept(const CanardInstance* ins, uint64_t* out_data_type_signature,
                    uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id)
 {
-    *out_data_type_signature = 0x8899AABBCCDDEEFF;
+    if (data_type_id == 1 && transfer_type == CanardTransferTypeResponse && source_node_id == 127)
+    {
+        *out_data_type_signature = 0xEE468A8121C46A9E;
+    }
+    else
+    {
+        *out_data_type_signature = 0x8899AABBCCDDEEFF;
+    }
     return true;
 }
 
@@ -408,6 +428,7 @@ void* sendThread(void* canard_instance) {
     uint64_t last_clean = 0;
     uint64_t last_airspeed = 0;
     uint64_t last_request = 0;
+    uint64_t last_node_info = 0;
     bool drop = false;
     while (1)
     {
@@ -444,6 +465,11 @@ void* sendThread(void* canard_instance) {
         {
             publish_request(canard_instance);
             last_request = get_monotonic_usec();
+        }
+        if ((get_monotonic_usec() - last_node_info) > TIME_TO_SEND_NODE_INFO)
+        {
+            publish_get_node_info(canard_instance);
+            last_node_info = get_monotonic_usec();
         }
         if ((get_monotonic_usec() - last_clean) > CLEANUP_STALE_TRANSFERS)
         {
