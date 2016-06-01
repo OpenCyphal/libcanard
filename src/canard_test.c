@@ -262,7 +262,7 @@ int publish_request(CanardInstance* ins)
         payload[i] = i + 3;
     }
     uint8_t dest_id = 33;
-    static const uint16_t data_type_id = 15;
+    static const uint8_t data_type_id = 15;
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
     return canardRequestOrRespond(ins, dest_id, data_type_signature,
@@ -274,7 +274,7 @@ int publish_get_node_info(CanardInstance* ins)
 {
     uint8_t payload[1];
     uint8_t dest_id = 127;
-    static const uint16_t data_type_id = 1;
+    static const uint8_t data_type_id = 1;
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0xEE468A8121C46A9E;
     return canardRequestOrRespond(ins, dest_id, data_type_signature,
