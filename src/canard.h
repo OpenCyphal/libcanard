@@ -185,6 +185,10 @@ struct CanardRxTransfer
     uint8_t source_node_id;                 // /< 1 to 127, or 0 if the source is anonymous
 };
 
+int canardOpen(const char* can_iface_name);
+void canardClose(int fd);
+int canardReceive(int fd, CanardCANFrame* out_frame);
+int canardTransmit(int fd, const CanardCANFrame* frame);
 void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
                 CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);

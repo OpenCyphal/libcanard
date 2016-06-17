@@ -1,7 +1,7 @@
 CC = gcc
 CPP = g++
 all: 
-	$(CC) -g -Wall canard_test.c canard.c -m32 -lpthread -std=gnu99 -o canard
+	$(CC) -g -Wall -DCANARD_LINUX=1 canard_test.c canard.c -m32 -lpthread -std=gnu99 -o canard
 crc_test:
 	$(CC) -g -Wall crc_test.c -lpthread -std=gnu99 -o crc_test
 clean:
