@@ -11,14 +11,6 @@
 #include "canard_internals.h"
 #include <string.h>
 
-#ifndef CANARD_LINUX
-#define CANARD_LINUX 0
-#endif
-
-#ifndef CANARD_NUTTX
-#define CANARD_NUTTX 0
-#endif
-
 #if CANARD_LINUX
 #include <unistd.h>
 #include <net/if.h>
@@ -52,9 +44,9 @@ struct CanardTxQueueItem
 
 #if CANARD_LINUX
 /**
- * Opens a CAN interface.
+ * Initializes the CAN driver.
  */
-int canardOpen(const char* can_iface_name)
+int canardInitDriver(CanardInstance* ins, const char* can_iface_name)
 {
     const size_t iface_name_size = strlen(can_iface_name) + 1;
     if (iface_name_size > IFNAMSIZ)
@@ -94,7 +86,8 @@ int canardOpen(const char* can_iface_name)
         goto fail1;
     }
 
-    return fd;
+    ins->driver.fd = fd;
+    return 1;
 
 fail1:
     close(fd);
@@ -103,21 +96,21 @@ fail0:
 }
 
 /**
- * Closes a CAN interface.
+ * Quits the CAN driver.
  */
-void canardClose(int fd)
+void canardQuitDriver(CanardInstance* ins)
 {
-    close(fd);
+    close(ins->driver.fd);
 }
 
 /**
  * Receives a CanardCANFrame from a CAN interface.
  */
-int canardReceive(int fd, CanardCANFrame* out_frame)
+int canardReceive(CanardInstance* ins, CanardCANFrame* out_frame)
 {
     struct can_frame receive_frame;
 
-    const ssize_t nbytes = read(fd, &receive_frame, sizeof(receive_frame));
+    const ssize_t nbytes = read(ins->driver.fd, &receive_frame, sizeof(receive_frame));
     if (nbytes < 0 || (size_t)nbytes != sizeof(receive_frame))
     {
         return -1;
@@ -133,7 +126,7 @@ int canardReceive(int fd, CanardCANFrame* out_frame)
 /**
  * Transmits a CanardCANFrame from a CAN interface.
  */
-int canardTransmit(int fd, const CanardCANFrame* frame)
+int canardTransmit(CanardInstance* ins, const CanardCANFrame* frame)
 {
     struct can_frame transmit_frame;
 
@@ -143,7 +136,7 @@ int canardTransmit(int fd, const CanardCANFrame* frame)
     transmit_frame.can_dlc = frame->data_len;
     memcpy(transmit_frame.data, frame->data, frame->data_len);
 
-    const ssize_t nbytes = write(fd, &transmit_frame, sizeof(transmit_frame));
+    const ssize_t nbytes = write(ins->driver.fd, &transmit_frame, sizeof(transmit_frame));
     if (nbytes < 0 || (size_t)nbytes != sizeof(transmit_frame))
     {
         return -1;
@@ -155,9 +148,9 @@ int canardTransmit(int fd, const CanardCANFrame* frame)
 
 #if CANARD_NUTTX
 /**
- * Opens a CAN interface.
+ * Initializes the CAN driver.
  */
-int canardOpen(const char* can_iface_name)
+int canardInitDriver(CanardInstance* ins, const char* can_iface_name)
 {
     const int fd = open(can_iface_name, O_RDWR);
     if (fd < 0)
@@ -165,25 +158,26 @@ int canardOpen(const char* can_iface_name)
         return -1;
     }
 
-    return fd;
+    ins->driver.fd = fd;
+    return 1;
 }
 
 /**
- * Closes a CAN interface.
+ * Quits the CAN driver.
  */
-void canardClose(int fd)
+void canardQuitDriver(CanardInstance* ins)
 {
-    close(fd);
+    close(ins->driver.fd);
 }
 
 /**
  * Receives a CanardCANFrame from a CAN interface.
  */
-int canardReceive(int fd, CanardCANFrame* out_frame)
+int canardReceive(CanardInstance* ins, CanardCANFrame* out_frame)
 {
     struct can_msg_s receive_msg;
 
-    const ssize_t nbytes = read(fd, &receive_msg, sizeof(receive_msg));
+    const ssize_t nbytes = read(ins->driver.fd, &receive_msg, sizeof(receive_msg));
     if (nbytes < 0 || (size_t)nbytes < CAN_MSGLEN(0) || (size_t)nbytes > sizeof(receive_msg))
     {
         return -1;
@@ -199,7 +193,7 @@ int canardReceive(int fd, CanardCANFrame* out_frame)
 /**
  * Transmits a CanardCANFrame from a CAN interface.
  */
-int canardTransmit(int fd, const CanardCANFrame* frame)
+int canardTransmit(CanardInstance* ins, const CanardCANFrame* frame)
 {
     struct can_msg_s transmit_msg;
 
@@ -212,7 +206,7 @@ int canardTransmit(int fd, const CanardCANFrame* frame)
     memcpy(transmit_msg.cm_data, frame->data, frame->data_len);
 
     const size_t msg_len = CAN_MSGLEN(transmit_msg.cm_hdr.ch_dlc);
-    const ssize_t nbytes = write(fd, &transmit_msg, msg_len);
+    const ssize_t nbytes = write(ins->driver.fd, &transmit_msg, msg_len);
     if (nbytes < 0 || (size_t)nbytes != msg_len)
     {
         return -1;

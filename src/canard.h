@@ -19,6 +19,14 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
+#ifndef CANARD_LINUX
+#define CANARD_LINUX 0
+#endif
+
+#ifndef CANARD_NUTTX
+#define CANARD_NUTTX 0
+#endif
+
 /** The size of a memory block in bytes. */
 #define CANARD_MEM_BLOCK_SIZE 32
 
@@ -113,6 +121,13 @@ struct CanardRxState
     uint8_t buffer_head[];
 };
 
+#if CANARD_LINUX || CANARD_NUTTX
+typedef struct
+{
+    int fd;
+} CanardDriver;
+#endif
+
 /**
  * This structure maintains the current canard instance of this node including the node_ID,
  * a function pointer, should_accept, which the application uses to decide whether to keep this or subsequent frames,
@@ -135,8 +150,11 @@ struct CanardInstance
 
     CanardRxState* rx_states;
     CanardTxQueueItem* tx_queue;
-};
 
+#if CANARD_LINUX || CANARD_NUTTX
+    CanardDriver driver;
+#endif
+};
 
 /**
  * This structure represents a received transfer for the application.
@@ -185,10 +203,12 @@ struct CanardRxTransfer
     uint8_t source_node_id;                 // /< 1 to 127, or 0 if the source is anonymous
 };
 
-int canardOpen(const char* can_iface_name);
-void canardClose(int fd);
-int canardReceive(int fd, CanardCANFrame* out_frame);
-int canardTransmit(int fd, const CanardCANFrame* frame);
+#if CANARD_LINUX || CANARD_NUTTX
+int canardInitDriver(CanardInstance* ins, const char* can_iface_name);
+void canardQuitDriver(CanardInstance* ins);
+int canardReceive(CanardInstance* ins, CanardCANFrame* out_frame);
+int canardTransmit(CanardInstance* ins, const CanardCANFrame* frame);
+#endif
 void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
                 CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept);
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id);
