@@ -11,16 +11,6 @@
 #include "canard_internals.h"
 #include <string.h>
 
-#if CANARD_LINUX
-#include <unistd.h>
-#include <net/if.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <linux/can.h>
-#include <linux/can/raw.h>
-#endif
-
 #if CANARD_NUTTX
 #include <fcntl.h>
 #include <unistd.h>
@@ -41,110 +31,6 @@ struct CanardTxQueueItem
 /**
  *  API functions
  */
-
-#if CANARD_LINUX
-/**
- * Initializes the CAN driver.
- */
-int canardInitDriver(CanardInstance* ins, const char* can_iface_name)
-{
-    const size_t iface_name_size = strlen(can_iface_name) + 1;
-    if (iface_name_size > IFNAMSIZ)
-    {
-        goto fail0;
-    }
-
-    // Open the SocketCAN socket
-    const int fd = socket(PF_CAN, SOCK_RAW, CAN_RAW);
-    if (fd < 0)
-    {
-        goto fail0;
-    }
-
-    // Resolve the iface index
-    struct ifreq ifr;
-
-    memset(&ifr, 0, sizeof(ifr));
-    memcpy(ifr.ifr_name, can_iface_name, iface_name_size);
-    const int ioctl_result = ioctl(fd, SIOCGIFINDEX, &ifr);
-    if (ioctl_result < 0)
-    {
-        goto fail1;
-    }
-
-    // Assign the iface
-    struct sockaddr_can addr;
-
-    memset(&addr, 0, sizeof(addr));
-    addr.can_family = AF_CAN;
-    addr.can_ifindex = ifr.ifr_ifindex;
-
-    // Bind the socket to the iface
-    const int bind_result = bind(fd, (struct sockaddr*)&addr, sizeof(addr));
-    if (bind_result < 0)
-    {
-        goto fail1;
-    }
-
-    ins->driver.fd = fd;
-    return 1;
-
-fail1:
-    close(fd);
-fail0:
-    return -1;
-}
-
-/**
- * Quits the CAN driver.
- */
-void canardQuitDriver(CanardInstance* ins)
-{
-    close(ins->driver.fd);
-}
-
-/**
- * Receives a CanardCANFrame from a CAN interface.
- */
-int canardReceive(CanardInstance* ins, CanardCANFrame* out_frame)
-{
-    struct can_frame receive_frame;
-
-    const ssize_t nbytes = read(ins->driver.fd, &receive_frame, sizeof(receive_frame));
-    if (nbytes < 0 || (size_t)nbytes != sizeof(receive_frame))
-    {
-        return -1;
-    }
-
-    out_frame->id = receive_frame.can_id;
-    out_frame->data_len = receive_frame.can_dlc;
-    memcpy(out_frame->data, &receive_frame.data, receive_frame.can_dlc);
-
-    return 1;
-}
-
-/**
- * Transmits a CanardCANFrame from a CAN interface.
- */
-int canardTransmit(CanardInstance* ins, const CanardCANFrame* frame)
-{
-    struct can_frame transmit_frame;
-
-    memset(&transmit_frame, 0, sizeof(transmit_frame));
-
-    transmit_frame.can_id = frame->id | CAN_EFF_FLAG;
-    transmit_frame.can_dlc = frame->data_len;
-    memcpy(transmit_frame.data, frame->data, frame->data_len);
-
-    const ssize_t nbytes = write(ins->driver.fd, &transmit_frame, sizeof(transmit_frame));
-    if (nbytes < 0 || (size_t)nbytes != sizeof(transmit_frame))
-    {
-        return -1;
-    }
-
-    return 1;
-}
-#endif
 
 #if CANARD_NUTTX
 /**

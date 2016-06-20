@@ -15,6 +15,7 @@
 #include <time.h>
 #include "canard.h"
 // #include "canard_debug.h"
+#include "socketcan.h"
 
 #include <inttypes.h>
 #include <pthread.h>
@@ -28,6 +29,8 @@
 #define TIME_TO_SEND_MULTI 1000000
 #define TIME_TO_SEND_REQUEST 1000000
 #define TIME_TO_SEND_NODE_INFO 2000000
+
+static SocketCANInstance socketcan_instance;
 
 static uint8_t uavcan_node_id;
 
@@ -331,7 +334,7 @@ void* receiveThread(void* canard_instance)
     int result = 0;
     while (1)
     {
-        result = canardReceive(canard_instance, &receive_frame);
+        result = socketcanReceive(&socketcan_instance, &receive_frame, -1);
         if (result != 1)
         {
             continue;
@@ -403,13 +406,13 @@ void* sendThread(void* canard_instance) {
             {
                 printf("dropping\n");
                 // printframe(transmit_frame);
-                // canardTransmit(canard_instance, transmit_frame);
+                // socketcanTransmit(&socketcan_instance, transmit_frame, -1);
             }
             else
             {
                 // printf("keeping\n");
                 // printframe(transmit_frame);
-                canardTransmit(canard_instance, transmit_frame);
+                socketcanTransmit(&socketcan_instance, transmit_frame, -1);
             }
             canardPopTxQueue(canard_instance);
             drop = random_drop(.0);
@@ -436,6 +439,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    if (socketcanInit(&socketcan_instance, argv[2]) != 1)
+    {
+        printf("Failed to open iface %s\n", argv[2]);
+        return 1;
+    }
+
     // /*
     //  * Main loop
     //  */
@@ -444,13 +453,6 @@ int main(int argc, char** argv)
     static CanardPoolAllocatorBlock buffer[32];           // pool blocks
     canardInit(&canard_instance, buffer, sizeof(buffer), on_reception, should_accept);
     canardSetLocalNodeID(&canard_instance, uavcan_node_id);
-
-    if (canardInitDriver(&canard_instance, argv[2]) != 1)
-    {
-        printf("Failed to open iface %s\n", argv[2]);
-        return 1;
-    }
-
     printf("Initialized.\n");
 
     /*
