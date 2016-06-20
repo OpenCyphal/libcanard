@@ -11,12 +11,6 @@
 #include "canard_internals.h"
 #include <string.h>
 
-#if CANARD_NUTTX
-#include <fcntl.h>
-#include <unistd.h>
-#include <nuttx/can.h>
-#endif
-
 #define CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, \
                                         src_node_id, dst_node_id) \
     ((data_type_id) | ((transfer_type) << 16) | \
@@ -31,76 +25,6 @@ struct CanardTxQueueItem
 /**
  *  API functions
  */
-
-#if CANARD_NUTTX
-/**
- * Initializes the CAN driver.
- */
-int canardInitDriver(CanardInstance* ins, const char* can_iface_name)
-{
-    const int fd = open(can_iface_name, O_RDWR);
-    if (fd < 0)
-    {
-        return -1;
-    }
-
-    ins->driver.fd = fd;
-    return 1;
-}
-
-/**
- * Quits the CAN driver.
- */
-void canardQuitDriver(CanardInstance* ins)
-{
-    close(ins->driver.fd);
-}
-
-/**
- * Receives a CanardCANFrame from a CAN interface.
- */
-int canardReceive(CanardInstance* ins, CanardCANFrame* out_frame)
-{
-    struct can_msg_s receive_msg;
-
-    const ssize_t nbytes = read(ins->driver.fd, &receive_msg, sizeof(receive_msg));
-    if (nbytes < 0 || (size_t)nbytes < CAN_MSGLEN(0) || (size_t)nbytes > sizeof(receive_msg))
-    {
-        return -1;
-    }
-
-    out_frame->id = receive_msg.cm_hdr.ch_id;
-    out_frame->data_len = receive_msg.cm_hdr.ch_dlc;
-    memcpy(out_frame->data, receive_msg.cm_data, receive_msg.cm_hdr.ch_dlc);
-
-    return 1;
-}
-
-/**
- * Transmits a CanardCANFrame from a CAN interface.
- */
-int canardTransmit(CanardInstance* ins, const CanardCANFrame* frame)
-{
-    struct can_msg_s transmit_msg;
-
-    memset(&transmit_msg, 0, sizeof(transmit_msg));
-
-    transmit_msg.cm_hdr.ch_id = frame->id;
-    transmit_msg.cm_hdr.ch_dlc = frame->data_len;
-    transmit_msg.cm_hdr.ch_extid = 1;
-
-    memcpy(transmit_msg.cm_data, frame->data, frame->data_len);
-
-    const size_t msg_len = CAN_MSGLEN(transmit_msg.cm_hdr.ch_dlc);
-    const ssize_t nbytes = write(ins->driver.fd, &transmit_msg, msg_len);
-    if (nbytes < 0 || (size_t)nbytes != msg_len)
-    {
-        return -1;
-    }
-
-    return 1;
-}
-#endif
 
 /**
  * Initializes the library state.
