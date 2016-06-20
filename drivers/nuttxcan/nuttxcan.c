@@ -73,7 +73,7 @@ int nuttxcanTransmit(NuttXCANInstance* ins, const CanardCANFrame* frame, int tim
     memcpy(transmit_msg.cm_data, frame->data, frame->data_len);
 
     const size_t msg_len = CAN_MSGLEN(transmit_msg.cm_hdr.ch_dlc);
-    const ssize_t nbytes = write(ins->driver.fd, &transmit_msg, msg_len);
+    const ssize_t nbytes = write(ins->fd, &transmit_msg, msg_len);
     if (nbytes < 0 || (size_t)nbytes != msg_len)
     {
         return -1;
@@ -107,7 +107,7 @@ int nuttxcanReceive(NuttXCANInstance* ins, CanardCANFrame* out_frame, int timeou
     }
 
     struct can_msg_s receive_msg;
-    const ssize_t nbytes = read(ins->driver.fd, &receive_msg, sizeof(receive_msg));
+    const ssize_t nbytes = read(ins->fd, &receive_msg, sizeof(receive_msg));
     if (nbytes < 0 || (size_t)nbytes < CAN_MSGLEN(0) || (size_t)nbytes > sizeof(receive_msg))
     {
         return -1;
