@@ -9,7 +9,9 @@
 
 #include "canard.h"
 #include "canard_internals.h"
+#include <inttypes.h>
 #include <string.h>
+
 
 #define CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, \
                                         src_node_id, dst_node_id) \
