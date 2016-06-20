@@ -52,9 +52,13 @@ int nuttxcanTransmit(NuttXCANInstance* ins, const CanardCANFrame* frame, int tim
     fds.events |= POLLOUT;
 
     const int poll_result = poll(&fds, 1, timeout_msec);
-    if (poll_result <= 0)
+    if (poll_result < 0)
     {
         return -1;
+    }
+    if (poll_result == 0)
+    {
+        return 0;
     }
     if ((fds.revents & POLLOUT) == 0)
     {
@@ -89,9 +93,13 @@ int nuttxcanReceive(NuttXCANInstance* ins, CanardCANFrame* out_frame, int timeou
     fds.events |= POLLIN;
 
     const int poll_result = poll(&fds, 1, timeout_msec);
-    if (poll_result <= 0)
+    if (poll_result < 0)
     {
         return -1;
+    }
+    if (poll_result == 0)
+    {
+        return 0;
     }
     if ((fds.revents & POLLIN) == 0)
     {

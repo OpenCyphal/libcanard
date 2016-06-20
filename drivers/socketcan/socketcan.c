@@ -88,9 +88,13 @@ int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int t
     fds.events |= POLLOUT;
 
     const int poll_result = poll(&fds, 1, timeout_msec);
-    if (poll_result <= 0)
+    if (poll_result < 0)
     {
         return -1;
+    }
+    if (poll_result == 0)
+    {
+        return 0;
     }
     if ((fds.revents & POLLOUT) == 0)
     {
@@ -123,9 +127,13 @@ int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int time
     fds.events |= POLLIN;
 
     const int poll_result = poll(&fds, 1, timeout_msec);
-    if (poll_result <= 0)
+    if (poll_result < 0)
     {
         return -1;
+    }
+    if (poll_result == 0)
+    {
+        return 0;
     }
     if ((fds.revents & POLLIN) == 0)
     {
