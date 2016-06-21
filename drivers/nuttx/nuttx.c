@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <nuttx/can.h>
 
-int nuttxInit(NuttXInstance* out_ins, const char* can_iface_name)
+int canardNuttXInit(CanardNuttXInstance* out_ins, const char* can_iface_name)
 {
     const int fd = open(can_iface_name, O_RDWR | O_NONBLOCK);
     if (fd < 0)
@@ -24,14 +24,14 @@ int nuttxInit(NuttXInstance* out_ins, const char* can_iface_name)
     return 0;
 }
 
-int nuttxClose(NuttXInstance* ins)
+int canardNuttXClose(CanardNuttXInstance* ins)
 {
     const int close_result = close(ins->fd);
     ins->fd = -1;
     return close_result;
 }
 
-int nuttxTransmit(NuttXInstance* ins, const CanardCANFrame* frame, int timeout_msec)
+int canardNuttXTransmit(CanardNuttXInstance* ins, const CanardCANFrame* frame, int timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -69,7 +69,7 @@ int nuttxTransmit(NuttXInstance* ins, const CanardCANFrame* frame, int timeout_m
     return 1;
 }
 
-int nuttxReceive(NuttXInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
+int canardNuttXReceive(CanardNuttXInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -104,7 +104,7 @@ int nuttxReceive(NuttXInstance* ins, CanardCANFrame* out_frame, int timeout_msec
     return 1;
 }
 
-int nuttxGetDeviceFileDescriptor(const NuttXInstance* ins)
+int canardNuttXGetDeviceFileDescriptor(const CanardNuttXInstance* ins)
 {
     return ins->fd;
 }
