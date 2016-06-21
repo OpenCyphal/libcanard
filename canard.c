@@ -444,7 +444,7 @@ uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
  * This function can be invoked by the application to release pool blocks that are used
  * to store the payload of this transfer
  */
-uint64_t canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
+void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
 {
     CanardBufferBlock* temp = transfer->payload_middle;
     while (transfer->payload_middle != NULL)
@@ -458,7 +458,6 @@ uint64_t canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* t
     transfer->payload_head = NULL;
     transfer->payload_tail = NULL;
     transfer->payload_len = 0;
-    return 0;
 }
 
 /**
