@@ -16,9 +16,6 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-/**
- * Initializes the SocketCAN instance.
- */
 int socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
 {
     const size_t iface_name_size = strlen(can_iface_name) + 1;
@@ -55,7 +52,7 @@ int socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
     }
 
     out_ins->fd = fd;
-    return 1;
+    return 0;
 
 fail1:
     close(fd);
@@ -63,23 +60,13 @@ fail0:
     return -1;
 }
 
-/**
- * Deinitializes the SocketCAN instance.
- */
 int socketcanClose(SocketCANInstance* ins)
 {
     const int close_result = close(ins->fd);
-    if (close_result < 0)
-    {
-        return -1;
-    }
-
-    return 1;
+    ins->fd = -1;
+    return close_result;
 }
 
-/**
- * Transmits a CanardCANFrame to the CAN socket.
- */
 int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int timeout_msec)
 {
     struct pollfd fds;
@@ -116,9 +103,6 @@ int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int t
     return 1;
 }
 
-/**
- * Receives a CanardCANFrame from the CAN socket.
- */
 int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
 {
     struct pollfd fds;
@@ -154,9 +138,6 @@ int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int time
     return 1;
 }
 
-/**
- * Returns the file descriptor of the CAN socket.
- */
 int socketcanGetSocketFileDescriptor(const SocketCANInstance* ins)
 {
     return ins->fd;

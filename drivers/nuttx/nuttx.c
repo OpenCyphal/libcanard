@@ -5,17 +5,14 @@
  *
  */
 
-#include "nuttxcan.h"
+#include "nuttx.h"
 #include <fcntl.h>
 #include <poll.h>
 #include <string.h>
 #include <unistd.h>
 #include <nuttx/can.h>
 
-/**
- * Initializes the NuttXCAN instance.
- */
-int nuttxcanInit(NuttXCANInstance* out_ins, const char* can_iface_name)
+int nuttxInit(NuttXInstance* out_ins, const char* can_iface_name)
 {
     const int fd = open(can_iface_name, O_RDWR | O_NONBLOCK);
     if (fd < 0)
@@ -24,27 +21,17 @@ int nuttxcanInit(NuttXCANInstance* out_ins, const char* can_iface_name)
     }
 
     out_ins->fd = fd;
-    return 1;
+    return 0;
 }
 
-/**
- * Deinitializes the NuttXCAN instance.
- */
-int nuttxcanClose(NuttXCANInstance* ins)
+int nuttxClose(NuttXInstance* ins)
 {
     const int close_result = close(ins->fd);
-    if (close_result < 0)
-    {
-        return -1;
-    }
-
-    return 1;
+    ins->fd = -1;
+    return close_result;
 }
 
-/**
- * Transmits a CanardCANFrame to the CAN device.
- */
-int nuttxcanTransmit(NuttXCANInstance* ins, const CanardCANFrame* frame, int timeout_msec)
+int nuttxTransmit(NuttXInstance* ins, const CanardCANFrame* frame, int timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -82,10 +69,7 @@ int nuttxcanTransmit(NuttXCANInstance* ins, const CanardCANFrame* frame, int tim
     return 1;
 }
 
-/**
- * Receives a CanardCANFrame from the CAN device.
- */
-int nuttxcanReceive(NuttXCANInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
+int nuttxReceive(NuttXInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -120,10 +104,7 @@ int nuttxcanReceive(NuttXCANInstance* ins, CanardCANFrame* out_frame, int timeou
     return 1;
 }
 
-/**
- * Returns the file descriptor of the CAN device.
- */
-int nuttxcanGetDeviceFileDescriptor(const NuttXCANInstance* ins)
+int nuttxGetDeviceFileDescriptor(const NuttXInstance* ins)
 {
     return ins->fd;
 }
