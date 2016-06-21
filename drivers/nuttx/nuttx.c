@@ -5,7 +5,7 @@
  *
  */
 
-#include "nuttx.h"
+#include "canard_nuttx.h"
 #include <fcntl.h>
 #include <poll.h>
 #include <string.h>

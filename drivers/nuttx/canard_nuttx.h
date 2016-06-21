@@ -5,8 +5,8 @@
  *
  */
 
-#ifndef NUTTX_H
-#define NUTTX_H
+#ifndef CANARD_NUTTX_H
+#define CANARD_NUTTX_H
 
 #include <canard.h>
 
