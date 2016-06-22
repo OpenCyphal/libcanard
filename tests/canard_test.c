@@ -8,25 +8,14 @@
  */
 
 #include <stdio.h>
-#include <unistd.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
 #include "canard.h"
 // #include "canard_debug.h"
-/*
- * This part is specific for Linux. It can be replaced for use on other platforms.
- * Note that under Linux this source must be linked with librt (for GCC add -lrt)
- */
-#include <sys/time.h>
-#include <net/if.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <linux/can.h>
-#include <linux/can/raw.h>
-#include <time.h>
+#include "socketcan.h"
 
 #include <inttypes.h>
 #include <pthread.h>
@@ -40,64 +29,10 @@
 #define TIME_TO_SEND_MULTI 1000000
 #define TIME_TO_SEND_REQUEST 1000000
 #define TIME_TO_SEND_NODE_INFO 2000000
-static int can_socket = -1;
 
-int can_init(const char* can_iface_name)
-{
-    // Open the SocketCAN socket
-    const int sock = socket(PF_CAN, SOCK_RAW, CAN_RAW);
-    if (sock < 0)
-    {
-        return -1;
-    }
-
-    // Resolve the iface index
-    struct ifreq ifr;
-
-    (void)memset(&ifr, 0, sizeof(ifr));
-    (void)strncpy(ifr.ifr_name, can_iface_name, IFNAMSIZ);
-    ifr.ifr_name[IFNAMSIZ] = '\0';
-    const int ioctl_result = ioctl(sock, SIOCGIFINDEX, &ifr);
-    if (ioctl_result < 0)
-    {
-        return -1;
-    }
-
-    // Assign the iface
-    struct sockaddr_can addr;
-
-    (void)memset(&addr, 0, sizeof(addr));
-    addr.can_family  = AF_CAN;
-    addr.can_ifindex = ifr.ifr_ifindex;
-
-    // Bind the socket to the iface
-    const int bind_result = bind(sock, (struct sockaddr*)&addr, sizeof(addr));
-    if (bind_result < 0)
-    {
-        return -1;
-    }
-
-    can_socket = sock;
-    return 0;
-}
+static SocketCANInstance socketcan_instance;
 
 static uint8_t uavcan_node_id;
-
-int can_send(uint32_t extended_can_id, const uint8_t* frame_data, uint8_t frame_data_len)
-{
-    if (frame_data_len > 8 || frame_data == NULL)
-    {
-        return -1;
-    }
-
-    struct can_frame frame;
-
-    frame.can_id  = extended_can_id | CAN_EFF_FLAG;
-    frame.can_dlc = frame_data_len;
-    memcpy(frame.data, frame_data, frame_data_len);
-
-    return write(can_socket, &frame, sizeof(struct can_frame));
-}
 
 uint64_t get_monotonic_usec(void)
 {
@@ -395,29 +330,17 @@ bool random_drop(double probability)
 
 void* receiveThread(void* canard_instance)
 {
-    struct can_frame r_frame;
-
-    CanardCANFrame canard_frame;
-    // CanardCANFrame* transmit_frame;
-    int nbytes = 0;
+    CanardCANFrame receive_frame;
+    int result = 0;
     while (1)
     {
-        nbytes = read(can_socket, &r_frame, sizeof(struct can_frame));
-        if (nbytes < 0)
+        result = socketcanReceive(&socketcan_instance, &receive_frame, -1);
+        if (result != 1)
         {
-            perror("can raw socket read");
-            return NULL;
+            continue;
         }
-        else if (nbytes == 0)
-        {
-            printf("problem");
-        }
-        canard_frame.id = r_frame.can_id;
-        // printf("%X\n",CANARD_MSG_TYPE_FROM_ID(r_frame.can_id));
-        canard_frame.data_len = r_frame.can_dlc;
-        memcpy(canard_frame.data, &r_frame.data, r_frame.can_dlc);
-        // printframe(&canard_frame);
-        canardHandleRxFrame(canard_instance, &canard_frame, get_monotonic_usec());
+        // printframe(&receive_frame);
+        canardHandleRxFrame(canard_instance, &receive_frame, get_monotonic_usec());
     }
 }
 
@@ -483,13 +406,13 @@ void* sendThread(void* canard_instance) {
             {
                 printf("dropping\n");
                 // printframe(transmit_frame);
-                // can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
+                // socketcanTransmit(&socketcan_instance, transmit_frame, -1);
             }
             else
             {
                 // printf("keeping\n");
                 // printframe(transmit_frame);
-                can_send(transmit_frame->id, transmit_frame->data, transmit_frame->data_len);
+                socketcanTransmit(&socketcan_instance, transmit_frame, -1);
             }
             canardPopTxQueue(canard_instance);
             drop = random_drop(.0);
@@ -516,7 +439,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (can_init(argv[2]) < 0)
+    if (socketcanInit(&socketcan_instance, argv[2]) != 1)
     {
         printf("Failed to open iface %s\n", argv[2]);
         return 1;
