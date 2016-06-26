@@ -50,13 +50,18 @@ uint16_t crc_reset(void)
 
 int main(int argc, char** argv)
 {
+    (void)argc;
+    (void)argv;
+
     uint16_t crc_running_val = crc_reset();
     crc_running_val = crc_add_byte(crc_running_val,'1');
     crc_running_val = crc_add_byte(crc_running_val,'2');
     crc_running_val = crc_add_byte(crc_running_val,'3');
     printf("%X \n", crc_running_val);
 
-    crc_running_val = crc_add(crc_running_val, "456789", 6);
+    crc_running_val = crc_add(crc_running_val, (const uint8_t*)"456789", 6);
     printf("%X \n", crc_running_val);
     crc_running_val = crc_reset();
+
+    return 0;
 }
