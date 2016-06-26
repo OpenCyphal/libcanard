@@ -10,6 +10,7 @@ addons:
     - libgtest-dev
     - libc6-dev-i386
     - g++-multilib
+    - gcc-multilib
     - libstdc++6-4.6-dev:i386
 
 env:
