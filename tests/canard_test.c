@@ -46,11 +46,11 @@ uint64_t get_monotonic_usec(void)
 }
 
 // / Arbitrary priority values
-static const uint8_t PRIORITY_HIGHEST = 0;
+//static const uint8_t PRIORITY_HIGHEST = 0;
 static const uint8_t PRIORITY_HIGH    = 8;
 static const uint8_t PRIORITY_MEDIUM  = 16;
 static const uint8_t PRIORITY_LOW     = 24;
-static const uint8_t PRIORITY_LOWEST  = 31;
+//static const uint8_t PRIORITY_LOWEST  = 31;
 
 // / Defined for the standard data type uavcan.protocol.NodeStatus
 enum node_health
@@ -264,7 +264,7 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
         uint8_t index = 0;
         if (CANARD_RX_PAYLOAD_HEAD_SIZE > 0)
         {
-            for (i = 0; i < CANARD_RX_PAYLOAD_HEAD_SIZE; i++, index++)
+            for (i = 0; i < (int)CANARD_RX_PAYLOAD_HEAD_SIZE; i++, index++)
             {
                 payload[i] = transfer->payload_head[i];
             }
@@ -301,7 +301,7 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
     // do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
 
     int i;
-    for (i = 0; i<sizeof(payload); i++)
+    for (i = 0; i < (int)sizeof(payload); i++)
     {
         printf("%02X ", payload[i]);
     }
@@ -311,6 +311,7 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
 bool should_accept(const CanardInstance* ins, uint64_t* out_data_type_signature,
                    uint16_t data_type_id, CanardTransferType transfer_type, uint8_t source_node_id)
 {
+    (void)ins;
     if (data_type_id == 1 && transfer_type == CanardTransferTypeResponse && source_node_id == 127)
     {
         *out_data_type_signature = 0xEE468A8121C46A9E;
@@ -464,4 +465,6 @@ int main(int argc, char** argv)
     pthread_create(&tid2, NULL, sendThread, &canard_instance);
     pthread_join(tid1, NULL);
     pthread_join(tid2, NULL);
+
+    return 0;
 }
