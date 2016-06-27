@@ -19,7 +19,7 @@ before_install:
     - mkdir gtest-build
     - mkdir build/
     - pushd gtest-build
-    - cmake /usr/src/gtest
+    - CXXFLAGS='-m32' CFLAGS='-m32' cmake /usr/src/gtest
     - make
     - popd
 
