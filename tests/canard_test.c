@@ -46,11 +46,11 @@ uint64_t get_monotonic_usec(void)
 }
 
 // / Arbitrary priority values
-static const uint8_t PRIORITY_HIGHEST = 0;
+//static const uint8_t PRIORITY_HIGHEST = 0;
 static const uint8_t PRIORITY_HIGH    = 8;
 static const uint8_t PRIORITY_MEDIUM  = 16;
 static const uint8_t PRIORITY_LOW     = 24;
-static const uint8_t PRIORITY_LOWEST  = 31;
+//static const uint8_t PRIORITY_LOWEST  = 31;
 
 // / Defined for the standard data type uavcan.protocol.NodeStatus
 enum node_health
