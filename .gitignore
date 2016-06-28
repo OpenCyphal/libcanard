@@ -33,3 +33,12 @@
 
 # CMake build directory
 build/
+
+# IDE and tools
+.idea
+.metadata
+.settings
+.project
+.cproject
+.pydevproject
+.gdbinit
