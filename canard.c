@@ -1,22 +1,32 @@
 /*
  * Copyright (c) 2016 UAVCAN Team
  *
- * Distributed under the MIT License, available in the file LICENSE.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Author: Michael Sierra <sierramichael.a@gmail.com>
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
  *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Contributors: https://github.com/UAVCAN/libcanard/contributors
+ *
+ * Documentation: http://uavcan.org/Implementations/Libcanard
  */
 
-#include "canard.h"
 #include "canard_internals.h"
-#include <inttypes.h>
 #include <string.h>
 
-
-#define CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, \
-                                        src_node_id, dst_node_id) \
-    ((data_type_id) | ((transfer_type) << 16) | \
-     ((src_node_id) << 18) | ((dst_node_id) << 25))
 
 struct CanardTxQueueItem
 {
@@ -24,13 +34,8 @@ struct CanardTxQueueItem
     CanardCANFrame frame;
 };
 
-/**
- *  API functions
- */
-
-/**
- * Initializes the library state.
- * Local node ID will be set to zero, i.e. the node will be anonymous.
+/*
+ * API functions
  */
 void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size,
                 CanardOnTransferReception on_reception, CanardShouldAcceptTransfer should_accept)
@@ -43,27 +48,16 @@ void canardInit(CanardInstance* out_ins,  void* mem_arena, size_t mem_arena_size
     canardInitPoolAllocator(&out_ins->allocator, mem_arena, mem_arena_size / CANARD_MEM_BLOCK_SIZE);
 }
 
-/**
- * Assigns a new node ID value to the current node.
- */
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id)
 {
     ins->node_id = self_node_id;
 }
 
-/**
- * Returns node ID of the local node.
- * Returns zero if the node ID has not been set.
- */
 uint8_t canardGetLocalNodeID(const CanardInstance* ins)
 {
     return ins->node_id;
 }
 
-/**
- * Sends a broadcast transfer.
- * If the node is in passive mode, only single frame transfers will be allowed.
- */
 int canardBroadcast(CanardInstance* ins,
                     uint64_t data_type_signature,
                     uint16_t data_type_id,
@@ -114,10 +108,6 @@ int canardBroadcast(CanardInstance* ins,
     return 1;
 }
 
-/**
- * Sends a request or a response transfer.
- * Fails if the node is in passive mode.
- */
 int canardRequestOrRespond(CanardInstance* ins,
                            uint8_t destination_node_id,
                            uint64_t data_type_signature,
@@ -159,10 +149,6 @@ int canardRequestOrRespond(CanardInstance* ins,
     return 1;
 }
 
-/**
- * Returns a pointer to the top priority frame in the TX queue.
- * Returns NULL if the TX queue is empty.
- */
 const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins)
 {
     if (ins->tx_queue == NULL)
@@ -172,9 +158,6 @@ const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins)
     return &ins->tx_queue->frame;
 }
 
-/**
- * Removes the top priority frame from the TX queue.
- */
 void canardPopTxQueue(CanardInstance* ins)
 {
     CanardTxQueueItem* item = ins->tx_queue;
@@ -182,9 +165,6 @@ void canardPopTxQueue(CanardInstance* ins)
     canardFreeBlock(&ins->allocator, item);
 }
 
-/**
- * Processes a received CAN frame with a timestamp.
- */
 void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec)
 {
     uint8_t transfer_type = canardTransferType(frame->id);
@@ -339,10 +319,6 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     rxstate->next_toggle ^= 1;
 }
 
-/**
- * Traverses the list of transfers and removes those that were last updated more than
- * timeout_usec microseconds ago
- */
 void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec)
 {
     CanardRxState* prev = ins->rx_states, * state = ins->rx_states;
@@ -372,11 +348,6 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec
     }
 }
 
-/**
- * Reads bits (1 to 64) from RX transfer buffer.
- * This function can be used to decode received transfers.
- * Note that this function does not need the library's instance object.
- */
 uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
                                      uint16_t bit_offset,
                                      uint8_t bit_length)
@@ -440,10 +411,6 @@ uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
     return bits;
 }
 
-/**
- * This function can be invoked by the application to release pool blocks that are used
- * to store the payload of this transfer
- */
 void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
 {
     CanardBufferBlock* temp = transfer->payload_middle;
@@ -460,14 +427,8 @@ void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* trans
     transfer->payload_len = 0;
 }
 
-/**
- *  internal (static functions)
- *
- *
- */
-
-/**
- * TransferID
+/*
+ * Internal (static functions)
  */
 CANARD_INTERNAL int computeForwardDistance(uint8_t a, uint8_t b)
 {
@@ -603,7 +564,7 @@ CANARD_INTERNAL void canardPushTxQueue(CanardInstance* ins, CanardTxQueueItem* i
 }
 
 /**
- * creates new tx queue item from allocator
+ * Creates new tx queue item from allocator
  */
 CANARD_INTERNAL CanardTxQueueItem* canardCreateTxItem(CanardPoolAllocator* allocator)
 {
@@ -618,7 +579,7 @@ CANARD_INTERNAL CanardTxQueueItem* canardCreateTxItem(CanardPoolAllocator* alloc
 }
 
 /**
- * returns true if priority of rhs is higher than id
+ * Returns true if priority of rhs is higher than id
  */
 CANARD_INTERNAL bool priorityHigherThan(uint32_t rhs, uint32_t id)
 {
@@ -707,7 +668,7 @@ CANARD_INTERNAL uint8_t canardTransferType(uint32_t id)
     }
 }
 
-/**
+/*
  *  CanardRxState functions
  */
 
@@ -795,7 +756,7 @@ CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins, CanardRx
     return 0;
 }
 
-/**
+/*
  *  CanardBufferBlock functions
  */
 
@@ -895,7 +856,7 @@ CANARD_INTERNAL CanardBufferBlock* canardCreateBufferBlock(CanardPoolAllocator* 
     return block;
 }
 
-/**
+/*
  * CRC functions
  */
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val, uint8_t byte)
@@ -935,7 +896,7 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val, const uint8_t* bytes, uint16_t
     return crc_val;
 }
 
-/**
+/*
  *  Pool Allocator functions
  */
 CANARD_INTERNAL void canardInitPoolAllocator(CanardPoolAllocator* allocator, CanardPoolAllocatorBlock* buf,
