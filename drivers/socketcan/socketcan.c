@@ -5,16 +5,19 @@
  *
  */
 
+// This is needed to enable necessary declarations in sys/
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
+
+#include <net/if.h>
 #include "socketcan.h"
 #include <poll.h>
 #include <string.h>
 #include <unistd.h>
-#include <net/if.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <linux/can.h>
-#include <linux/can/raw.h>
+
 
 int socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
 {

@@ -7,6 +7,11 @@
  *
  */
 
+// This is needed to enable necessary declarations in sys/
+#ifndef _GNU_SOURCE
+# define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,14 +19,12 @@
 #include <stdbool.h>
 #include <time.h>
 #include "canard.h"
-// #include "canard_debug.h"
 #include "socketcan.h"
 
 #include <inttypes.h>
 #include <pthread.h>
 
 #define CLEANUP_STALE_TRANSFERS 2000000
-#define CANARD_AVAILABLE_BLOCKS 32
 
 
 #define TIME_TO_SEND_NODE_STATUS 101000000
