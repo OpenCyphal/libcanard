@@ -186,6 +186,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     const uint8_t destination_node_id =
             (transfer_type == CanardTransferTypeBroadcast) ? ((uint8_t)0) : DEST_ID_FROM_ID(frame->id);
 
+    // TODO: This function should maintain statistics of transfer errors and such.
+
     if ((frame->id & CANARD_CAN_FRAME_EFF) == 0 ||
         (frame->id & CANARD_CAN_FRAME_RTR) != 0 ||
         (frame->id & CANARD_CAN_FRAME_ERR) != 0 ||
