@@ -361,6 +361,15 @@ void canardReleaseRxTransferPayload(CanardInstance* ins,
  */
 CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* ins);
 
+/**
+ * Float16 marshaling helpers.
+ * These functions convert between the native float and 16-bit float.
+ * It is assumed that the native float is IEEE 754 single precision float.
+ */
+uint16_t canardConvertNativeFloatToFloat16(float value);
+float canardConvertFloat16ToNativeFloat(uint16_t value);
+
+
 #ifdef __cplusplus
 }
 #endif
