@@ -5,6 +5,9 @@
  *
  * Author: Michael Sierra <sierramichael.a@gmail.com>
  *
+ * THIS APPLICATION IS NOT SUPPORTED.
+ * It is kept for historical purposes and will be removed from the repository once a
+ * better replacement is made available.
  */
 
 // This is needed to enable necessary declarations in sys/
