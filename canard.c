@@ -258,6 +258,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     {
         rx_state->timestamp_usec = timestamp_usec;
         CanardRxTransfer rx_transfer = {
+            .timestamp_usec = timestamp_usec,
             .payload_head = frame->data,
             .payload_len = (uint8_t)(frame->data_len - 1U),
             .data_type_id = data_type_id,
