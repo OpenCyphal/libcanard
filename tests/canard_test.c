@@ -443,7 +443,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (socketcanInit(&socketcan_instance, argv[2]) != 1)
+    if (socketcanInit(&socketcan_instance, argv[2]) < 0)
     {
         printf("Failed to open iface %s\n", argv[2]);
         return 1;
