@@ -134,6 +134,11 @@ int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int time
         return -1;
     }
 
+    if (receive_frame.can_dlc > CAN_MAX_DLEN)           // Appeasing Coverity Scan
+    {
+        return -1;
+    }
+
     out_frame->id = receive_frame.can_id;               // TODO: Map flags properly
     out_frame->data_len = receive_frame.can_dlc;
     memcpy(out_frame->data, &receive_frame.data, receive_frame.can_dlc);
