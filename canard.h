@@ -37,9 +37,10 @@ extern "C" {
 
 /// Error code definitions; inverse of these values may be returned from API calls.
 #define CANARD_OK                           0
-#define CANARD_ERROR_INVALID_ARGUMENT       1
-#define CANARD_ERROR_OUT_OF_MEMORY          2
-#define CANARD_ERROR_NODE_ID_NOT_SET        3
+// Value 1 is omitted intentionally, since -1 is often used in 3rd party code
+#define CANARD_ERROR_INVALID_ARGUMENT       2
+#define CANARD_ERROR_OUT_OF_MEMORY          3
+#define CANARD_ERROR_NODE_ID_NOT_SET        4
 
 /// The size of a memory block in bytes.
 #define CANARD_MEM_BLOCK_SIZE               32
