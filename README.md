@@ -10,7 +10,7 @@ Links:
 * **[DOCUMENTATION](http://uavcan.org/Implementations/Libcanard)**
 * **[DISCUSSION GROUP](https://groups.google.com/forum/#!forum/uavcan)**
 
-## Using in an Application
+## Usage
 
 If you're not using Git, you can just copy the entire library into your project tree.
 If you're using Git, it is recommended to add Libcanard to your project as a Git submodule,
