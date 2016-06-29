@@ -310,7 +310,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
             return;
         }
         rx_state->payload_crc = ((uint16_t) frame->data[0]) | ((uint16_t) frame->data[1] << 8);
-        rx_state->calculated_crc = crcAdd(rx_state->calculated_crc, frame->data + 2, (uint8_t)(frame->data_len - 3));
+        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
+                                          frame->data + 2, (uint8_t)(frame->data_len - 3));
     }
     else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))    // Middle of a multi-frame transfer
     {
@@ -320,7 +321,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         {
             return;
         }
-        rx_state->calculated_crc = crcAdd(rx_state->calculated_crc, frame->data, (uint8_t)(frame->data_len - 1));
+        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
+                                          frame->data, (uint8_t)(frame->data_len - 1));
     }
     else                                                                            // End of a multi-frame transfer
     {
@@ -329,7 +331,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         if (rx_state->payload_len < CANARD_RX_PAYLOAD_HEAD_SIZE)
         {
             uint16_t i = 0;
-            for (i = rx_state->payload_len, tail_offset = 0;
+            for (i = (uint16_t)rx_state->payload_len, tail_offset = 0;
                  i < CANARD_RX_PAYLOAD_HEAD_SIZE && tail_offset < frame->data_len - 1;
                  i++, tail_offset++)
             {
@@ -358,7 +360,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         };
 
         // CRC validation
-        rx_state->calculated_crc = crcAdd(rx_state->calculated_crc, frame->data, frame->data_len - 1U);
+        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc, frame->data, frame->data_len - 1U);
         if (rx_state->calculated_crc == rx_state->payload_crc)
         {
             ins->on_reception(ins, &rx_transfer);
@@ -925,7 +927,7 @@ CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
     // if head is not full, add data to head
     if ((int) CANARD_RX_PAYLOAD_HEAD_SIZE - (int) state->payload_len > 0)
     {
-        for (uint16_t i = state->payload_len;
+        for (uint16_t i = (uint16_t)state->payload_len;
              i < CANARD_RX_PAYLOAD_HEAD_SIZE && data_index < data_len;
              i++, data_index++)
         {
