@@ -44,6 +44,14 @@ void canardInit(CanardInstance* out_ins,
                 CanardOnTransferReception on_reception,
                 CanardShouldAcceptTransfer should_accept)
 {
+    /*
+     * Checking memory layout.
+     * This condition is supposed to be true for all 32-bit and smaller platforms.
+     * If your application fails here, make sure it's not built in 64-bit mode.
+     * Refer to the design documentation for more info.
+     */
+    assert(CANARD_RX_PAYLOAD_HEAD_SIZE >= 6);
+
     memset(out_ins, 0, sizeof(*out_ins));
 
     out_ins->node_id = CANARD_BROADCAST_NODE_ID;
