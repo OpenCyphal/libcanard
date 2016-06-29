@@ -129,7 +129,7 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
  */
 CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
                                        CanardPoolAllocatorBlock* buf,
-                                       size_t buf_len);
+                                       uint16_t buf_len);
 
 /**
  * Allocates a block from the given pool allocator.

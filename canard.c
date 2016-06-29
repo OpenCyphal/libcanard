@@ -52,7 +52,13 @@ void canardInit(CanardInstance* out_ins,
     out_ins->rx_states = NULL;
     out_ins->tx_queue = NULL;
 
-    initPoolAllocator(&out_ins->allocator, mem_arena, mem_arena_size / CANARD_MEM_BLOCK_SIZE);
+    size_t pool_capacity = mem_arena_size / CANARD_MEM_BLOCK_SIZE;
+    if (pool_capacity > 0xFFFFU)
+    {
+        pool_capacity = 0xFFFFU;
+    }
+
+    initPoolAllocator(&out_ins->allocator, mem_arena, (uint16_t)pool_capacity);
 }
 
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id)
@@ -464,6 +470,11 @@ void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* trans
     transfer->payload_head = NULL;
     transfer->payload_tail = NULL;
     transfer->payload_len = 0;
+}
+
+CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* ins)
+{
+    return ins->allocator.statistics;
 }
 
 /*
@@ -967,7 +978,7 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val, const uint8_t* bytes, size_t l
  */
 CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
                                        CanardPoolAllocatorBlock* buf,
-                                       size_t buf_len)
+                                       uint16_t buf_len)
 {
     size_t current_index = 0;
     CanardPoolAllocatorBlock** current_block = &(allocator->free_list);
@@ -978,6 +989,10 @@ CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
         current_index++;
     }
     *current_block = NULL;
+
+    allocator->statistics.capacity_blocks = buf_len;
+    allocator->statistics.current_usage_blocks = 0;
+    allocator->statistics.peak_usage_blocks = 0;
 }
 
 CANARD_INTERNAL void* allocateBlock(CanardPoolAllocator* allocator)
@@ -992,6 +1007,13 @@ CANARD_INTERNAL void* allocateBlock(CanardPoolAllocator* allocator)
     void* result = allocator->free_list;
     allocator->free_list = allocator->free_list->next;
 
+    // Update statistics
+    allocator->statistics.current_usage_blocks++;
+    if (allocator->statistics.peak_usage_blocks < allocator->statistics.current_usage_blocks)
+    {
+        allocator->statistics.peak_usage_blocks = allocator->statistics.current_usage_blocks;
+    }
+
     return result;
 }
 
@@ -1001,4 +1023,7 @@ CANARD_INTERNAL void freeBlock(CanardPoolAllocator* allocator, void* p)
 
     block->next = allocator->free_list;
     allocator->free_list = block;
+
+    assert(allocator->statistics.current_usage_blocks > 0);
+    allocator->statistics.current_usage_blocks--;
 }

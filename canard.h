@@ -148,11 +148,23 @@ typedef union CanardPoolAllocatorBlock_u
 } CanardPoolAllocatorBlock;
 
 /**
+ * This structure provides usage statistics of the memory pool allocator.
+ * This data helps to evaluate whether the allocated memory is sufficient for the application.
+ */
+typedef struct
+{
+    uint16_t capacity_blocks;               ///< Pool capacity in number of blocks
+    uint16_t current_usage_blocks;          ///< Number of blocks that are currently allocated by the library
+    uint16_t peak_usage_blocks;             ///< Maximum number of blocks used since initialization
+} CanardPoolAllocatorStatistics;
+
+/**
  * INTERNAL DEFINITION, DO NOT USE DIRECTLY.
  */
 typedef struct
 {
     CanardPoolAllocatorBlock* free_list;
+    CanardPoolAllocatorStatistics statistics;
 } CanardPoolAllocator;
 
 /**
@@ -342,6 +354,12 @@ uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
  */
 void canardReleaseRxTransferPayload(CanardInstance* ins,
                                     CanardRxTransfer* transfer);
+
+/**
+ * Returns a copy of the pool allocator usage statistics.
+ * Refer to the type CanardPoolAllocatorStatistics.
+ */
+CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* ins);
 
 #ifdef __cplusplus
 }
