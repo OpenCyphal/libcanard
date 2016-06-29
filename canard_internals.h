@@ -84,7 +84,7 @@ CANARD_INTERNAL int canardBufferBlockPushBytes(CanardPoolAllocator* allocator,
 
 CANARD_INTERNAL CanardBufferBlock* canardCreateBufferBlock(CanardPoolAllocator* allocator);
 
-CANARD_INTERNAL uint8_t canardTransferType(uint32_t id);
+CANARD_INTERNAL CanardTransferType canardTransferType(uint32_t id);
 
 CANARD_INTERNAL uint16_t canardDataType(uint32_t id);
 
@@ -106,6 +106,7 @@ CANARD_INTERNAL void tidIncrement(uint8_t* transfer_id);
 CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins,
                                                    CanardRxState* rxstate);
 
+/// Returns the number of frames enqueued
 CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins,
                                       uint32_t can_id,
                                       uint8_t* transfer_id,
@@ -121,7 +122,7 @@ CANARD_INTERNAL uint16_t crcAddSignature(uint16_t crc_val,
 
 CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
                                 const uint8_t* bytes,
-                                uint16_t len);
+                                size_t len);
 
 /**
  * Inits a memory allocator.
@@ -132,7 +133,7 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
  */
 CANARD_INTERNAL void canardInitPoolAllocator(CanardPoolAllocator* allocator,
                                              CanardPoolAllocatorBlock* buf,
-                                             unsigned int buf_len);
+                                             size_t buf_len);
 
 /**
  * Allocates a block from the given pool allocator.
