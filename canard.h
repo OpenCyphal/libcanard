@@ -190,10 +190,12 @@ struct CanardRxState
     const uint32_t dtid_tt_snid_dnid;
 
     uint16_t payload_crc;
-    uint16_t calculated_crc;
-    uint16_t payload_len : 10;
-    uint16_t transfer_id : 5;
-    uint16_t next_toggle : 1;
+
+    // We're using plain 'unsigned' here, because C99 doesn't permit explicit field type specification
+    unsigned calculated_crc : 16;
+    unsigned payload_len    : 10;
+    unsigned transfer_id    : 5;
+    unsigned next_toggle    : 1;    // 16+10+5+1 = 32, aligned.
 
     uint8_t buffer_head[];
 };
