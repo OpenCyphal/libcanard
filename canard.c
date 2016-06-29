@@ -178,7 +178,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 {
     const CanardTransferType transfer_type = extractTransferType(frame->id);
     const uint8_t destination_node_id =
-            (transfer_type == CanardTransferTypeBroadcast) ? ((uint8_t)0) : CANARD_DEST_ID_FROM_ID(frame->id);
+            (transfer_type == CanardTransferTypeBroadcast) ? ((uint8_t)0) : DEST_ID_FROM_ID(frame->id);
 
     if ((frame->id & CANARD_CAN_FRAME_EFF) == 0 ||
         (frame->id & CANARD_CAN_FRAME_RTR) != 0 ||
@@ -194,11 +194,11 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         return;     // Address mismatch
     }
 
-    const uint8_t priority = CANARD_PRIORITY_FROM_ID(frame->id);
-    const uint8_t source_node_id = CANARD_SOURCE_ID_FROM_ID(frame->id);
+    const uint8_t priority = PRIORITY_FROM_ID(frame->id);
+    const uint8_t source_node_id = SOURCE_ID_FROM_ID(frame->id);
     const uint16_t data_type_id = extractDataType(frame->id);
     const uint32_t transfer_descriptor =
-            CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, source_node_id, destination_node_id);
+            MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, source_node_id, destination_node_id);
 
     const uint8_t tail_byte = frame->data[frame->data_len - 1];
 
@@ -696,11 +696,11 @@ CANARD_INTERNAL uint16_t extractDataType(uint32_t id)
 {
     if (extractTransferType(id) == CanardTransferTypeBroadcast)
     {
-        return (uint16_t) CANARD_MSG_TYPE_FROM_ID(id);
+        return (uint16_t) MSG_TYPE_FROM_ID(id);
     }
     else
     {
-        return (uint16_t) CANARD_SRV_TYPE_FROM_ID(id);
+        return (uint16_t) SRV_TYPE_FROM_ID(id);
     }
 }
 
@@ -709,12 +709,12 @@ CANARD_INTERNAL uint16_t extractDataType(uint32_t id)
  */
 CANARD_INTERNAL CanardTransferType extractTransferType(uint32_t id)
 {
-    const bool is_service = CANARD_SERVICE_NOT_MSG_FROM_ID(id);
+    const bool is_service = SERVICE_NOT_MSG_FROM_ID(id);
     if (!is_service)
     {
         return CanardTransferTypeBroadcast;
     }
-    else if (CANARD_REQUEST_NOT_RESPONSE_FROM_ID(id) == 1)
+    else if (REQUEST_NOT_RESPONSE_FROM_ID(id) == 1)
     {
         return CanardTransferTypeRequest;
     }
