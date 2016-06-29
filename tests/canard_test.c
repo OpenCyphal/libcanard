@@ -51,13 +51,6 @@ uint64_t get_monotonic_usec(void)
     return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000UL;
 }
 
-// / Arbitrary priority values
-//static const uint8_t PRIORITY_HIGHEST = 0;
-static const uint8_t PRIORITY_HIGH    = 8;
-static const uint8_t PRIORITY_MEDIUM  = 16;
-static const uint8_t PRIORITY_LOW     = 24;
-//static const uint8_t PRIORITY_LOWEST  = 31;
-
 // / Defined for the standard data type uavcan.protocol.NodeStatus
 enum node_health
 {
@@ -107,61 +100,14 @@ int publish_node_status(CanardInstance* ins, enum node_health health, enum node_
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
     return canardBroadcast(ins, data_type_signature,
-                           data_type_id, &transfer_id, PRIORITY_LOW, payload, sizeof(payload));
-}
-
-/*
- * Float16 support
- */
-uint16_t make_float16(float value)
-{
-    union fp32
-    {
-        uint32_t u;
-        float f;
-    };
-
-    const union fp32 f32infty = { 255U << 23 };
-    const union fp32 f16infty = { 31U << 23 };
-    const union fp32 magic = { 15U << 23 };
-    const uint32_t sign_mask = 0x80000000U;
-    const uint32_t round_mask = ~0xFFFU;
-
-    union fp32 in;
-
-    uint16_t out = 0;
-
-    in.f = value;
-
-    uint32_t sign = in.u & sign_mask;
-    in.u ^= sign;
-
-    if (in.u >= f32infty.u)
-    {
-        out = (in.u > f32infty.u) ? 0x7FFFU : 0x7C00U;
-    }
-    else
-    {
-        in.u &= round_mask;
-        in.f *= magic.f;
-        in.u -= round_mask;
-        if (in.u > f16infty.u)
-        {
-            in.u = f16infty.u;
-        }
-        out = (uint16_t)(in.u >> 13);
-    }
-
-    out |= (uint16_t)(sign >> 16);
-
-    return out;
+                           data_type_id, &transfer_id, CANARD_TRANSFER_PRIORITY_LOW, payload, sizeof(payload));
 }
 
 // / Standard data type: uavcan.equipment.air_data.TrueAirspeed
 int publish_true_airspeed(CanardInstance* ins, float mean, float variance)
 {
-    const uint16_t f16_mean     = make_float16(mean);
-    const uint16_t f16_variance = make_float16(variance);
+    const uint16_t f16_mean     = canardConvertNativeFloatToFloat16(mean);
+    const uint16_t f16_variance = canardConvertNativeFloatToFloat16(variance);
 
     uint8_t payload[4];
     payload[0] = (f16_mean >> 0) & 0xFF;
@@ -173,7 +119,7 @@ int publish_true_airspeed(CanardInstance* ins, float mean, float variance)
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
     return canardBroadcast(ins, data_type_signature,
-                           data_type_id, &transfer_id, PRIORITY_MEDIUM, payload, sizeof(payload));
+                           data_type_id, &transfer_id, CANARD_TRANSFER_PRIORITY_MEDIUM, payload, sizeof(payload));
 }
 
 // / Standard data type: uavcan.equipment.multi
@@ -190,7 +136,7 @@ int publish_multi(CanardInstance* ins)
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
     return canardBroadcast(ins, data_type_signature,
-                           data_type_id, &transfer_id, PRIORITY_HIGH, payload, sizeof(payload));
+                           data_type_id, &transfer_id, CANARD_TRANSFER_PRIORITY_HIGH, payload, sizeof(payload));
 }
 
 int publish_request(CanardInstance* ins)
@@ -207,7 +153,8 @@ int publish_request(CanardInstance* ins)
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0x8899AABBCCDDEEFF;
     return canardRequestOrRespond(ins, dest_id, data_type_signature,
-                                  data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, sizeof(payload));
+                                  data_type_id, &transfer_id, CANARD_TRANSFER_PRIORITY_LOW,
+                                  CanardRequest, payload, sizeof(payload));
 }
 
 // / Standard data type: uavcan.protocol.GetNodeInfo
@@ -219,7 +166,7 @@ int publish_get_node_info(CanardInstance* ins)
     static uint8_t transfer_id;
     uint64_t data_type_signature = 0xEE468A8121C46A9E;
     return canardRequestOrRespond(ins, dest_id, data_type_signature,
-                                  data_type_id, &transfer_id, PRIORITY_LOW, CanardRequest, payload, 0);
+                                  data_type_id, &transfer_id, CANARD_TRANSFER_PRIORITY_LOW, CanardRequest, payload, 0);
 }
 
 int compute_true_airspeed(float* out_airspeed, float* out_variance)
