@@ -12,7 +12,7 @@ class MemoryAllocatorTestGroup: public ::testing::Test {
 
     virtual void SetUp()
     {
-        canardInitPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+        initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
     }
 
 };
@@ -29,7 +29,7 @@ TEST_F(MemoryAllocatorTestGroup, CanAllocateBlock)
 {
     void *block;
 
-    block = canardAllocateBlock(&allocator);
+    block = allocateBlock(&allocator);
 
     // Check that the first free memory block was used and that the next block
     // is ready.
@@ -43,19 +43,19 @@ TEST_F(MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft)
 
     // First exhaust all availables block
     for (int i = 0; i < AVAILABLE_BLOCKS; ++i) {
-        canardAllocateBlock(&allocator);
+        allocateBlock(&allocator);
     }
 
     // Try to allocate one extra block
-    block = canardAllocateBlock(&allocator);
+    block = allocateBlock(&allocator);
     ASSERT_EQ(NULL, block);
 }
 
 TEST_F(MemoryAllocatorTestGroup, CanFreeBlock)
 {
-    void *block = canardAllocateBlock(&allocator);
+    void *block = allocateBlock(&allocator);
 
-    canardFreeBlock(&allocator, block);
+    freeBlock(&allocator, block);
 
     // Check that the block was added back to the beginning
     ASSERT_EQ(&buffer[0], allocator.free_list);

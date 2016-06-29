@@ -65,54 +65,54 @@ extern "C" {
 #define TOGGLE_BIT(x)                               ((bool)(((x) >> 5) & 0x1))
 
 
-CANARD_INTERNAL CanardRxState* canardRxStateTraversal(CanardInstance* ins,
-                                                      uint32_t transfer_descriptor);
+CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins,
+                                                uint32_t transfer_descriptor);
 
-CANARD_INTERNAL CanardRxState* canardCreateRxState(CanardPoolAllocator* allocator,
-                                                   uint32_t transfer_descriptor);
+CANARD_INTERNAL CanardRxState* createRxState(CanardPoolAllocator* allocator,
+                                             uint32_t transfer_descriptor);
 
-CANARD_INTERNAL CanardRxState* canardPrependRxState(CanardInstance* ins,
-                                                    uint32_t transfer_descriptor);
+CANARD_INTERNAL CanardRxState* prependRxState(CanardInstance* ins,
+                                              uint32_t transfer_descriptor);
 
-CANARD_INTERNAL CanardRxState* canardFindRxState(CanardRxState* state,
-                                                 uint32_t transfer_descriptor);
+CANARD_INTERNAL CanardRxState* findRxState(CanardRxState* state,
+                                           uint32_t transfer_descriptor);
 
-CANARD_INTERNAL int canardBufferBlockPushBytes(CanardPoolAllocator* allocator,
-                                               CanardRxState* state,
-                                               const uint8_t* data,
-                                               uint8_t data_len);
+CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
+                                         CanardRxState* state,
+                                         const uint8_t* data,
+                                         uint8_t data_len);
 
-CANARD_INTERNAL CanardBufferBlock* canardCreateBufferBlock(CanardPoolAllocator* allocator);
+CANARD_INTERNAL CanardBufferBlock* createBufferBlock(CanardPoolAllocator* allocator);
 
-CANARD_INTERNAL CanardTransferType canardTransferType(uint32_t id);
+CANARD_INTERNAL CanardTransferType extractTransferType(uint32_t id);
 
-CANARD_INTERNAL uint16_t canardDataType(uint32_t id);
+CANARD_INTERNAL uint16_t extractDataType(uint32_t id);
 
-CANARD_INTERNAL void canardPushTxQueue(CanardInstance* ins,
-                                       CanardTxQueueItem* item);
+CANARD_INTERNAL void pushTxQueue(CanardInstance* ins,
+                                 CanardTxQueueItem* item);
 
-CANARD_INTERNAL bool priorityHigherThan(uint32_t id,
-                                        uint32_t rhs);
+CANARD_INTERNAL bool isPriorityHigher(uint32_t id,
+                                      uint32_t rhs);
 
-CANARD_INTERNAL CanardTxQueueItem* canardCreateTxItem(CanardPoolAllocator* allocator);
+CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator);
 
-CANARD_INTERNAL void canardPrepareForNextTransfer(CanardRxState* state);
+CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state);
 
-CANARD_INTERNAL int computeForwardDistance(uint8_t a,
-                                           uint8_t b);
+CANARD_INTERNAL int computeTransferIDForwardDistance(uint8_t a,
+                                                     uint8_t b);
 
-CANARD_INTERNAL void tidIncrement(uint8_t* transfer_id);
+CANARD_INTERNAL void incrementTransferID(uint8_t* transfer_id);
 
-CANARD_INTERNAL uint64_t canardReleaseStatePayload(CanardInstance* ins,
-                                                   CanardRxState* rxstate);
+CANARD_INTERNAL uint64_t releaseStatePayload(CanardInstance* ins,
+                                             CanardRxState* rxstate);
 
 /// Returns the number of frames enqueued
-CANARD_INTERNAL int canardEnqueueData(CanardInstance* ins,
-                                      uint32_t can_id,
-                                      uint8_t* transfer_id,
-                                      uint16_t crc,
-                                      const uint8_t* payload,
-                                      uint16_t payload_len);
+CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
+                                    uint32_t can_id,
+                                    uint8_t* transfer_id,
+                                    uint16_t crc,
+                                    const uint8_t* payload,
+                                    uint16_t payload_len);
 
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val,
                                     uint8_t byte);
@@ -131,20 +131,20 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
  * @param [in] buf The buffer used by the memory allocator.
  * @param [in] buf_len The number of blocks in buf.
  */
-CANARD_INTERNAL void canardInitPoolAllocator(CanardPoolAllocator* allocator,
-                                             CanardPoolAllocatorBlock* buf,
-                                             size_t buf_len);
+CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
+                                       CanardPoolAllocatorBlock* buf,
+                                       size_t buf_len);
 
 /**
  * Allocates a block from the given pool allocator.
  */
-CANARD_INTERNAL void* canardAllocateBlock(CanardPoolAllocator* allocator);
+CANARD_INTERNAL void* allocateBlock(CanardPoolAllocator* allocator);
 
 /**
  * Frees a memory block previously returned by canardAllocateBlock.
  */
-CANARD_INTERNAL void canardFreeBlock(CanardPoolAllocator* allocator,
-                                     void* p);
+CANARD_INTERNAL void freeBlock(CanardPoolAllocator* allocator,
+                               void* p);
 
 
 #ifdef __cplusplus
