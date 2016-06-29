@@ -54,9 +54,9 @@ int canardNuttXTransmit(CanardNuttXInstance* ins, const CanardCANFrame* frame, i
 
     struct can_msg_s transmit_msg;
     memset(&transmit_msg, 0, sizeof(transmit_msg));
-    transmit_msg.cm_hdr.ch_id = frame->id;
+    transmit_msg.cm_hdr.ch_id = frame->id & CANARD_EXT_ID_MASK;
     transmit_msg.cm_hdr.ch_dlc = frame->data_len;
-    transmit_msg.cm_hdr.ch_extid = 1;
+    transmit_msg.cm_hdr.ch_extid = (frame->id & CANARD_CAN_FRAME_EFF) != 0;
     memcpy(transmit_msg.cm_data, frame->data, frame->data_len);
 
     const size_t msg_len = CAN_MSGLEN(transmit_msg.cm_hdr.ch_dlc);
@@ -100,6 +100,11 @@ int canardNuttXReceive(CanardNuttXInstance* ins, CanardCANFrame* out_frame, int 
     out_frame->id = receive_msg.cm_hdr.ch_id;
     out_frame->data_len = receive_msg.cm_hdr.ch_dlc;
     memcpy(out_frame->data, receive_msg.cm_data, receive_msg.cm_hdr.ch_dlc);
+
+    if (receive_msg.cm_hdr.ch_extid != 0)
+    {
+        out_frame->id |= CANARD_CAN_FRAME_EFF;
+    }
 
     return 1;
 }

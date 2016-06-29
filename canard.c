@@ -180,11 +180,18 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     const uint8_t destination_node_id =
             (transfer_type == CanardTransferTypeBroadcast) ? ((uint8_t)0) : CANARD_DEST_ID_FROM_ID(frame->id);
 
-    if ((transfer_type != CanardTransferTypeBroadcast &&
-         destination_node_id != canardGetLocalNodeID(ins)) ||
+    if ((frame->id & CANARD_CAN_FRAME_EFF) == 0 ||
+        (frame->id & CANARD_CAN_FRAME_RTR) != 0 ||
+        (frame->id & CANARD_CAN_FRAME_ERR) != 0 ||
         (frame->data_len < 1))
     {
-        return;
+        return;     // Unsupported frame, not UAVCAN - ignore
+    }
+
+    if (transfer_type != CanardTransferTypeBroadcast &&
+        destination_node_id != canardGetLocalNodeID(ins))
+    {
+        return;     // Address mismatch
     }
 
     const uint8_t priority = CANARD_PRIORITY_FROM_ID(frame->id);
@@ -493,6 +500,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
     assert(ins != NULL);
     assert(transfer_id != NULL);
     assert((payload_len > 0) ? (payload != NULL) : true);
+    assert((can_id & CANARD_CAN_EXT_ID_MASK) == can_id);            // Flags must be cleared
 
     int result = 0;
 
@@ -508,7 +516,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
 
         queue_item->frame.data_len = (uint8_t)(payload_len + 1);
         queue_item->frame.data[payload_len] = (uint8_t)(0xC0 | (*transfer_id & 31));
-        queue_item->frame.id = can_id;
+        queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
 
         pushTxQueue(ins, queue_item);
         result++;
@@ -550,7 +558,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
             sot_eot = (data_index == payload_len) ? (uint8_t)0x40 : sot_eot;
 
             queue_item->frame.data[i] = (uint8_t)(sot_eot | (toggle << 5) | (*transfer_id & 31));
-            queue_item->frame.id = can_id;
+            queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
             queue_item->frame.data_len = (uint8_t)(i + 1);
             pushTxQueue(ins, queue_item);
 
@@ -631,8 +639,8 @@ CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator)
  */
 CANARD_INTERNAL bool isPriorityHigher(uint32_t rhs, uint32_t id)
 {
-    const uint32_t clean_id = id & CANARD_EXT_ID_MASK;
-    const uint32_t rhs_clean_id = rhs & CANARD_EXT_ID_MASK;
+    const uint32_t clean_id = id & CANARD_CAN_EXT_ID_MASK;
+    const uint32_t rhs_clean_id = rhs & CANARD_CAN_EXT_ID_MASK;
 
     /*
      * STD vs EXT - if 11 most significant bits are the same, EXT loses.

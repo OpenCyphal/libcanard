@@ -63,11 +63,23 @@ extern "C" {
 #define CANARD_TRANSFER_PRIORITY_LOW        24
 #define CANARD_TRANSFER_PRIORITY_LOWEST     31
 
+/// Related to CanardCANFrame
+#define CANARD_CAN_EXT_ID_MASK                      0x1FFFFFFFU
+#define CANARD_CAN_FRAME_EFF                        (1U << 31)          ///< Extended frame format
+#define CANARD_CAN_FRAME_RTR                        (1U << 30)          ///< Remote transmission (not used by UAVCAN)
+#define CANARD_CAN_FRAME_ERR                        (1U << 29)          ///< Error frame (not used by UAVCAN)
+
 /**
  * This data type holds a standard CAN 2.0B data frame with 29-bit ID.
  */
 typedef struct
 {
+    /**
+     * Refer to the following definitions:
+     *  - CANARD_CAN_FRAME_EFF
+     *  - CANARD_CAN_FRAME_RTR
+     *  - CANARD_CAN_FRAME_ERR
+     */
     uint32_t id;
     uint8_t data[CANARD_CAN_FRAME_MAX_DATA_LEN];
     uint8_t data_len;

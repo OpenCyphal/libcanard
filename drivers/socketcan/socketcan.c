@@ -93,7 +93,7 @@ int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int t
 
     struct can_frame transmit_frame;
     memset(&transmit_frame, 0, sizeof(transmit_frame));
-    transmit_frame.can_id = frame->id | CAN_EFF_FLAG;
+    transmit_frame.can_id = frame->id;                  // TODO: Map flags properly
     transmit_frame.can_dlc = frame->data_len;
     memcpy(transmit_frame.data, frame->data, frame->data_len);
 
@@ -134,7 +134,7 @@ int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int time
         return -1;
     }
 
-    out_frame->id = receive_frame.can_id;
+    out_frame->id = receive_frame.can_id;               // TODO: Map flags properly
     out_frame->data_len = receive_frame.can_dlc;
     memcpy(out_frame->data, &receive_frame.data, receive_frame.can_dlc);
 

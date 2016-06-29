@@ -41,10 +41,6 @@ extern "C" {
 #define TRANSFER_TIMEOUT_USEC                       2000000
 
 #define TRANSFER_ID_BIT_LEN                         5
-#define CANARD_EXT_ID_MASK                          0x1FFFFFFFU
-#define CANARD_CAN_FRAME_EFF                        (1U << 31)                          // extended frame format
-#define CANARD_CAN_FRAME_RTR                        (1U << 30)                          // remote transmission
-#define CANARD_CAN_FRAME_ERR                        (1U << 29)                          // error frame
 
 #define CANARD_SOURCE_ID_FROM_ID(x)                 ((uint8_t) (((x) >> 0)  & 0x7F))
 #define CANARD_SERVICE_NOT_MSG_FROM_ID(x)           ((bool)    (((x) >> 7)  & 0x1))
