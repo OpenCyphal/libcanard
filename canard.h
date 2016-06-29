@@ -35,6 +35,11 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
+/// Error code definitions; inverse of these values may be returned from API calls.
+#define CANARD_OK                           0
+#define CANARD_ERROR_INVALID_ARGUMENT       1
+#define CANARD_ERROR_OUT_OF_MEMORY          2
+#define CANARD_ERROR_NODE_ID_NOT_SET        3
 
 /// The size of a memory block in bytes.
 #define CANARD_MEM_BLOCK_SIZE               32

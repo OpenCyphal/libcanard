@@ -75,11 +75,11 @@ int canardBroadcast(CanardInstance* ins,
 {
     if (payload == NULL)
     {
-        return -1;
+        return -CANARD_ERROR_INVALID_ARGUMENT;
     }
-    if (priority > 31)
+    if (priority > CANARD_TRANSFER_PRIORITY_LOWEST)
     {
-        return -1;
+        return -CANARD_ERROR_INVALID_ARGUMENT;
     }
 
     uint32_t can_id = 0;
@@ -89,7 +89,7 @@ int canardBroadcast(CanardInstance* ins,
     {
         if (payload_len > 7)
         {
-            return -1;
+            return -CANARD_ERROR_NODE_ID_NOT_SET;
         }
         else
         {
@@ -129,15 +129,15 @@ int canardRequestOrRespond(CanardInstance* ins,
 {
     if (payload == NULL)
     {
-        return -1;
-    }
-    if (canardGetLocalNodeID(ins) == 0)
-    {
-        return -1;
+        return -CANARD_ERROR_INVALID_ARGUMENT;
     }
     if (priority > 31)
     {
-        return -1;
+        return -CANARD_ERROR_INVALID_ARGUMENT;
+    }
+    if (canardGetLocalNodeID(ins) == 0)
+    {
+        return -CANARD_ERROR_NODE_ID_NOT_SET;
     }
 
     const uint32_t can_id = ((uint32_t) priority << 24) | ((uint32_t) data_type_id << 16) |
@@ -509,7 +509,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
         CanardTxQueueItem* queue_item = createTxItem(&ins->allocator);
         if (queue_item == NULL)
         {
-            return -1;
+            return -CANARD_ERROR_OUT_OF_MEMORY;
         }
 
         memcpy(queue_item->frame.data, payload, payload_len);
@@ -534,7 +534,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
             queue_item = createTxItem(&ins->allocator);
             if (queue_item == NULL)
             {
-                return -1;          // TODO: Purge all frames enqueued so far
+                return -CANARD_ERROR_OUT_OF_MEMORY;          // TODO: Purge all frames enqueued so far
             }
 
             uint8_t i = 0;
@@ -686,7 +686,6 @@ CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state)
     state->transfer_id += 1;
     state->payload_len = 0;
     state->next_toggle = 0;
-    return;
 }
 
 /**
@@ -813,7 +812,7 @@ CANARD_INTERNAL uint64_t releaseStatePayload(CanardInstance* ins, CanardRxState*
         rxstate->buffer_blocks = temp;
     }
     rxstate->payload_len = 0;
-    return 0;
+    return CANARD_OK;
 }
 
 /*
@@ -878,7 +877,7 @@ CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
             block->next = createBufferBlock(allocator);
             if (block->next == NULL)
             {
-                return -1;
+                return -CANARD_ERROR_OUT_OF_MEMORY;
             }
             block = block->next;
         }
@@ -899,7 +898,7 @@ CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
             block->next = createBufferBlock(allocator);
             if (block->next == NULL)
             {
-                return -1;
+                return -CANARD_ERROR_OUT_OF_MEMORY;
             }
             block = block->next;
             index_at_nth_block = 0;
