@@ -32,11 +32,13 @@ int canardNuttXClose(CanardNuttXInstance* ins);
 
 /**
  * Transmits a CanardCANFrame to the CAN device.
+ * Use negative timeout to block infinitely.
  */
 int canardNuttXTransmit(CanardNuttXInstance* ins, const CanardCANFrame* frame, int timeout_msec);
 
 /**
  * Receives a CanardCANFrame from the CAN device.
+ * Use negative timeout to block infinitely.
  */
 int canardNuttXReceive(CanardNuttXInstance* ins, CanardCANFrame* out_frame, int timeout_msec);
 
