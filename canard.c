@@ -262,6 +262,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
             .payload_len = (uint8_t)(frame->data_len - 1U),
             .data_type_id = data_type_id,
             .transfer_type = transfer_type,
+            .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),
             .priority = priority,
             .source_node_id = source_node_id
         };
@@ -340,6 +341,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
             .payload_len = (uint16_t)(rx_state->payload_len + frame->data_len - 1),
             .data_type_id = data_type_id,
             .transfer_type = transfer_type,
+            .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),
             .priority = priority,
             .source_node_id = source_node_id
         };
