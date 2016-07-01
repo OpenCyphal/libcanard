@@ -42,6 +42,8 @@ extern "C" {
 
 #define TRANSFER_ID_BIT_LEN                         5
 
+#define ANON_MSG_DATA_TYPE_ID_BIT_LEN               2
+
 #define SOURCE_ID_FROM_ID(x)                        ((uint8_t) (((x) >> 0)  & 0x7F))
 #define SERVICE_NOT_MSG_FROM_ID(x)                  ((bool)    (((x) >> 7)  & 0x1))
 #define REQUEST_NOT_RESPONSE_FROM_ID(x)             ((bool)    (((x) >> 15) & 0x1))

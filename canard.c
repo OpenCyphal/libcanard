@@ -790,7 +790,12 @@ CANARD_INTERNAL uint16_t extractDataType(uint32_t id)
 {
     if (extractTransferType(id) == CanardTransferTypeBroadcast)
     {
-        return (uint16_t) MSG_TYPE_FROM_ID(id);
+        uint16_t dtid = MSG_TYPE_FROM_ID(id);
+        if (SOURCE_ID_FROM_ID(id) == CANARD_BROADCAST_NODE_ID)
+        {
+            dtid &= (1U << ANON_MSG_DATA_TYPE_ID_BIT_LEN) - 1U;
+        }
+        return dtid;
     }
     else
     {
