@@ -292,48 +292,50 @@ int main(int argc, char** argv)
             processTxRxOnce(&socketcan, 1);
         }
 
-        if (canardGetLocalNodeID(&canard) == CANARD_BROADCAST_NODE_ID)
+        if (canardGetLocalNodeID(&canard) != CANARD_BROADCAST_NODE_ID)
         {
-            // Structure of the request is documented in the DSDL definition
-            // See http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
-            uint8_t allocation_request[CANARD_CAN_FRAME_MAX_DATA_LEN - 1];
-            allocation_request[0] = PreferredNodeID << 1;
+            break;
+        }
 
-            if (node_id_allocation_unique_id_offset == 0)
-            {
-                allocation_request[0] |= 1;     // First part of unique ID
-            }
+        // Structure of the request is documented in the DSDL definition
+        // See http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
+        uint8_t allocation_request[CANARD_CAN_FRAME_MAX_DATA_LEN - 1];
+        allocation_request[0] = PreferredNodeID << 1;
 
-            uint8_t my_unique_id[UNIQUE_ID_LENGTH_BYTES];
-            readUniqueID(my_unique_id);
+        if (node_id_allocation_unique_id_offset == 0)
+        {
+            allocation_request[0] |= 1;     // First part of unique ID
+        }
 
-            static const uint8_t MaxLenOfUniqueIDInRequest = 6;
-            uint8_t uid_size = (uint8_t)(UNIQUE_ID_LENGTH_BYTES - node_id_allocation_unique_id_offset);
-            if (uid_size > MaxLenOfUniqueIDInRequest)
-            {
-                uid_size = MaxLenOfUniqueIDInRequest;
-            }
+        uint8_t my_unique_id[UNIQUE_ID_LENGTH_BYTES];
+        readUniqueID(my_unique_id);
 
-            // Paranoia time
-            assert(node_id_allocation_unique_id_offset < UNIQUE_ID_LENGTH_BYTES);
-            assert(uid_size <= MaxLenOfUniqueIDInRequest);
-            assert(uid_size > 0);
-            assert((uid_size + node_id_allocation_unique_id_offset) <= UNIQUE_ID_LENGTH_BYTES);
+        static const uint8_t MaxLenOfUniqueIDInRequest = 6;
+        uint8_t uid_size = (uint8_t)(UNIQUE_ID_LENGTH_BYTES - node_id_allocation_unique_id_offset);
+        if (uid_size > MaxLenOfUniqueIDInRequest)
+        {
+            uid_size = MaxLenOfUniqueIDInRequest;
+        }
 
-            memmove(&allocation_request[1], &my_unique_id[node_id_allocation_unique_id_offset], uid_size);
+        // Paranoia time
+        assert(node_id_allocation_unique_id_offset < UNIQUE_ID_LENGTH_BYTES);
+        assert(uid_size <= MaxLenOfUniqueIDInRequest);
+        assert(uid_size > 0);
+        assert((uid_size + node_id_allocation_unique_id_offset) <= UNIQUE_ID_LENGTH_BYTES);
 
-            // Broadcasting the request
-            const int bcast_res = canardBroadcast(&canard,
-                                                  UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
-                                                  UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
-                                                  &node_id_allocation_transfer_id,
-                                                  CANARD_TRANSFER_PRIORITY_LOW,
-                                                  &allocation_request[0],
-                                                  (uint16_t) (uid_size + 1));
-            if (bcast_res < 0)
-            {
-                (void)fprintf(stderr, "Could not broadcast dynamic node ID allocation request; error %d\n", bcast_res);
-            }
+        memmove(&allocation_request[1], &my_unique_id[node_id_allocation_unique_id_offset], uid_size);
+
+        // Broadcasting the request
+        const int bcast_res = canardBroadcast(&canard,
+                                              UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
+                                              UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
+                                              &node_id_allocation_transfer_id,
+                                              CANARD_TRANSFER_PRIORITY_LOW,
+                                              &allocation_request[0],
+                                              (uint16_t) (uid_size + 1));
+        if (bcast_res < 0)
+        {
+            (void)fprintf(stderr, "Could not broadcast dynamic node ID allocation request; error %d\n", bcast_res);
         }
     }
 
