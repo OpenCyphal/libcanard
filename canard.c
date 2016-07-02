@@ -522,11 +522,43 @@ int canardReadScalarFromRxTransfer(const CanardRxTransfer* transfer,
     }
 
     /*
-     * Extending the sign bit if needed.
+     * Extending the sign bit if needed. I miss templates.
      */
     if (value_is_signed && (std_byte_length * 8 != bit_length))
     {
-        assert(false);      // Not implemented
+        if (bit_length <= 8)
+        {
+            if ((storage.s8 & (1U << (bit_length - 1))) != 0)                           // If the sign bit is set...
+            {
+                storage.s8 |= (uint8_t) 0xFFU & (uint8_t) ~((1U << bit_length) - 1U);   // ...set all bits above it.
+            }
+        }
+        else if (bit_length <= 16)
+        {
+            if ((storage.s16 & (1U << (bit_length - 1))) != 0)
+            {
+                storage.s16 |= (uint16_t) 0xFFFFU & (uint16_t) ~((1U << bit_length) - 1U);
+            }
+        }
+        else if (bit_length <= 32)
+        {
+            if ((storage.s32 & (((uint32_t) 1) << (bit_length - 1))) != 0)
+            {
+                storage.s32 |= (uint32_t) 0xFFFFFFFFUL & (uint32_t) ~((((uint32_t) 1) << bit_length) - 1U);
+            }
+        }
+        else if (bit_length < 64)   // Strictly less, this is not a typo
+        {
+            if ((storage.s64 & (((uint64_t) 1) << (bit_length - 1))) != 0)
+            {
+                storage.s64 |= (uint64_t) 0xFFFFFFFFFFFFFFFFULL & (uint64_t) ~((((uint64_t) 1) << bit_length) - 1U);
+            }
+        }
+        else
+        {
+            assert(false);
+            return -CANARD_ERROR_INTERNAL;
+        }
     }
 
     /*

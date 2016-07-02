@@ -93,4 +93,12 @@ TEST(PayloadRead, SingleFrame)
 
     // Inexact size
     ASSERT_EQ(0b010111101101011100101011101111, read<uint32_t>(&transfer, 21, 30));
+
+    // Negatives; reference values taken from libuavcan test suite or computed manually
+    ASSERT_EQ(-1, read<int8_t>(&transfer, 16, 3));  // 0b111
+    ASSERT_EQ(-4, read<int8_t>(&transfer, 2, 3));   // 0b100
+
+    ASSERT_EQ(-91,    read<int8_t>(&transfer, 0, 8));       //         0b10100101
+    ASSERT_EQ(-15451, read<int16_t>(&transfer, 0, 16));     // 0b1100001110100101
+    ASSERT_EQ(-7771,  read<int16_t>(&transfer, 0, 15));     //  0b100001110100101
 }
