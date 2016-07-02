@@ -112,6 +112,14 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
                                     const uint8_t* payload,
                                     uint16_t payload_len);
 
+CANARD_INTERNAL void copyBitArray(const uint8_t* src,
+                                  size_t src_offset,
+                                  size_t src_len,
+                                  uint8_t* dst,
+                                  size_t dst_offset);
+
+CANARD_INTERNAL bool isBigEndian(void);
+
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val,
                                     uint8_t byte);
 

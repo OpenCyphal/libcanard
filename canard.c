@@ -407,68 +407,158 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec
     }
 }
 
-uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
-                                     uint16_t bit_offset,
-                                     uint8_t bit_length)
+int canardReadScalarFromRxTransfer(const CanardRxTransfer* transfer,
+                                   uint16_t bit_offset,
+                                   uint8_t bit_length,
+                                   bool value_is_signed,
+                                   void* out_value)
 {
-    uint64_t bits = 0;
-    int shift_val = bit_length - 8;
-
-    if (transfer->payload_len > 7)      // Multi frame
+    if (transfer == NULL || out_value == NULL)
     {
-        CanardBufferBlock* block = transfer->payload_middle;
-        uint16_t index = 0;
-
-        // Head
-        for (uint16_t i = 0; i < CANARD_RX_PAYLOAD_HEAD_SIZE && shift_val >= 0; i++, index++)
-        {
-            if (index >= bit_offset / 8)
-            {
-                bits |= ((uint64_t) transfer->payload_head[i] << shift_val);
-                shift_val -= 8;
-            }
-        }
-
-        // Middle (buffer blocks)
-        for (uint16_t i = 0; index < (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len) && shift_val >= 0; index++)
-        {
-            if (index >= bit_offset / 8)
-            {
-                bits |= ((uint64_t) block->data[i] << shift_val);
-                shift_val -= 8;
-            }
-            i++;
-            if (i >= CANARD_BUFFER_BLOCK_DATA_SIZE)
-            {
-                i = 0;
-                block = block->next;
-            }
-        }
-
-        // Tail
-        const int tail_len = transfer->payload_len - (CANARD_RX_PAYLOAD_HEAD_SIZE + transfer->middle_len);
-        for (int i = 0; i < (tail_len) && shift_val >= 0; i++, index++)
-        {
-            if (index >= bit_offset / 8)
-            {
-                bits |= ((uint64_t) transfer->payload_tail[i] << shift_val);
-                shift_val -= 8;
-            }
-        }
-    }
-    else    // Single frame
-    {
-        for (uint8_t i = 0; i < transfer->payload_len && shift_val >= 0; i++)
-        {
-            if (i >= bit_offset / 8)
-            {
-                bits |= ((uint64_t) transfer->payload_head[i] << shift_val);
-                shift_val -= 8;
-            }
-        }
+        return -CANARD_ERROR_INVALID_ARGUMENT;
     }
 
-    return bits;
+    if (bit_length < 1 || bit_length > 64)
+    {
+        return -CANARD_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (bit_length == 1 && value_is_signed)
+    {
+        return -CANARD_ERROR_INVALID_ARGUMENT;
+    }
+
+    const uint16_t byte_offset         = (uint16_t)(bit_offset / 8);
+    const uint8_t bit_offset_remainder = (uint8_t) (bit_offset % 8);
+
+    /*
+     * Checking ranges
+     */
+    if (bit_offset >= transfer->payload_len * 8)
+    {
+        return 0;       // Out of range, reading zero bits
+    }
+
+    if (bit_offset + bit_length > transfer->payload_len * 8)
+    {
+        bit_length = (uint8_t)(transfer->payload_len * 8 - bit_offset);
+    }
+
+    assert(byte_offset < transfer->payload_len);
+    assert((bit_length > 0) &&
+           (bit_length <= 64));
+    assert(bit_offset_remainder < 8);
+
+    /*
+     * Reading raw bytes into the temporary storage.
+     * Luckily, C guarantees that every element is aligned at the beginning (lower address) of the union.
+     */
+    union
+    {
+        bool     boolean;       ///< sizeof(bool) is implementation-defined, so it has to be handled separately
+        uint8_t  u8;            ///< Also char
+        int8_t   s8;
+        uint16_t u16;
+        int16_t  s16;
+        uint32_t u32;
+        int32_t  s32;           ///< Also float, possibly double, possibly long double (depends on implementation)
+        uint64_t u64;
+        int64_t  s64;           ///< Also double, possibly float, possibly long double (depends on implementation)
+        uint8_t bytes[8];
+    } storage;
+
+    memset(&storage, 0, sizeof(storage));   // This is important
+
+    if (transfer->payload_len > (CANARD_CAN_FRAME_MAX_DATA_LEN - 1))        // Multi frame
+    {
+        assert(false);      // Not implemented
+    }
+    else                                                                    // Single frame
+    {
+        copyBitArray(&transfer->payload_head[byte_offset], bit_offset_remainder, bit_length, &storage.bytes[0], 0);
+    }
+
+    /*
+     * The bit copy algorithm assumes that more significant bits have lower index, so we need to shift some.
+     * Extra most significant bits will be filled with zeroes, which is fine.
+     */
+    if ((bit_length % 8) != 0)
+    {
+        storage.bytes[bit_length / 8] = (uint8_t)(storage.bytes[bit_length / 8] >> ((8 - (bit_length % 8)) & 7));
+    }
+
+    /*
+     * Determining the closest standard byte length - this will be needed for byte reordering and sign bit extension.
+     */
+    uint8_t std_byte_length = 0;
+    if      (bit_length == 1)   { std_byte_length = sizeof(bool); }
+    else if (bit_length <= 8)   { std_byte_length = 1; }
+    else if (bit_length <= 16)  { std_byte_length = 2; }
+    else if (bit_length <= 32)  { std_byte_length = 4; }
+    else if (bit_length <= 64)  { std_byte_length = 8; }
+    else
+    {
+        assert(false);
+        return -CANARD_ERROR_INTERNAL;
+    }
+
+    assert((std_byte_length > 0) && (std_byte_length <= 8));
+
+    /*
+     * Flipping the byte order if needed.
+     */
+    if (isBigEndian())
+    {
+        uint8_t fwd = 0;
+        uint8_t rev = (uint8_t)(std_byte_length - 1);
+        while (fwd < rev)
+        {
+            const uint8_t x = storage.bytes[fwd];
+            storage.bytes[fwd] = storage.bytes[rev];
+            storage.bytes[rev] = x;
+            fwd++;
+            rev--;
+        }
+    }
+
+    /*
+     * Extending the sign bit if needed.
+     */
+    if (value_is_signed && (std_byte_length * 8 != bit_length))
+    {
+        assert(false);      // Not implemented
+    }
+
+    /*
+     * Copying the result out.
+     */
+    if (value_is_signed)
+    {
+        if      (bit_length <= 8)   { *( (int8_t*) out_value) = storage.s8;  }
+        else if (bit_length <= 16)  { *((int16_t*) out_value) = storage.s16; }
+        else if (bit_length <= 32)  { *((int32_t*) out_value) = storage.s32; }
+        else if (bit_length <= 64)  { *((int64_t*) out_value) = storage.s64; }
+        else
+        {
+            assert(false);
+            return -CANARD_ERROR_INTERNAL;
+        }
+    }
+    else
+    {
+        if      (bit_length == 1)   { *(    (bool*) out_value) = storage.boolean; }
+        else if (bit_length <= 8)   { *( (uint8_t*) out_value) = storage.u8;  }
+        else if (bit_length <= 16)  { *((uint16_t*) out_value) = storage.u16; }
+        else if (bit_length <= 32)  { *((uint32_t*) out_value) = storage.u32; }
+        else if (bit_length <= 64)  { *((uint64_t*) out_value) = storage.u64; }
+        else
+        {
+            assert(false);
+            return -CANARD_ERROR_INTERNAL;
+        }
+    }
+
+    return bit_length;
 }
 
 void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
@@ -1022,6 +1112,58 @@ CANARD_INTERNAL CanardBufferBlock* createBufferBlock(CanardPoolAllocator* alloca
     }
     block->next = NULL;
     return block;
+}
+
+/**
+ * Bit array copy routine, originally developed by Ben Dyer for Libuavcan. Thanks Ben.
+ */
+void copyBitArray(const uint8_t* src, size_t src_offset, size_t src_len,
+                        uint8_t* dst, size_t dst_offset)
+{
+    assert(src_len > 0U);
+    assert(src_offset < 8U);
+
+    const size_t last_bit = src_offset + src_len;
+    while (last_bit - src_offset)
+    {
+        const uint8_t src_bit_offset = (uint8_t)(src_offset % 8U);
+        const uint8_t dst_bit_offset = (uint8_t)(dst_offset % 8U);
+
+        uint8_t max_offset = src_bit_offset;
+        if (max_offset < dst_bit_offset)
+        {
+            max_offset = dst_bit_offset;
+        }
+
+        size_t copy_bits = last_bit - src_offset;
+        if (copy_bits > (8U - max_offset))
+        {
+            copy_bits = 8U - max_offset;
+        }
+
+        const uint8_t write_mask = (uint8_t)((uint8_t)(0xFF00U >> copy_bits) >> dst_bit_offset);
+        const uint8_t src_data = (uint8_t)((src[src_offset / 8U] << src_bit_offset) >> dst_bit_offset);
+
+        dst[dst_offset / 8U] = (uint8_t)((dst[dst_offset / 8U] & ~write_mask) | (src_data & write_mask));
+
+        src_offset += copy_bits;
+        dst_offset += copy_bits;
+    }
+}
+
+CANARD_INTERNAL bool isBigEndian(void)
+{
+#if defined(BYTE_ORDER) && defined(BIG_ENDIAN)
+    return BYTE_ORDER == BIG_ENDIAN;                // Some compilers offer this neat shortcut
+#else
+    union
+    {
+        uint16_t a;
+        uint8_t b[2];
+    } u;
+    u.a = 1;
+    return u.b[1] == 1;                             // Some don't...
+#endif
 }
 
 /*

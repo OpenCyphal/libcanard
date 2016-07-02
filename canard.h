@@ -41,6 +41,7 @@ extern "C" {
 #define CANARD_ERROR_INVALID_ARGUMENT       2
 #define CANARD_ERROR_OUT_OF_MEMORY          3
 #define CANARD_ERROR_NODE_ID_NOT_SET        4
+#define CANARD_ERROR_INTERNAL               5
 
 /// The size of a memory block in bytes.
 #define CANARD_MEM_BLOCK_SIZE               32
@@ -244,7 +245,7 @@ struct CanardRxTransfer
      * of the payload of the CAN frame.
      *
      * In simple cases it should be possible to get data directly from the head and/or tail pointers.
-     * Otherwise it is advised to use canardReadRxTransferPayload().
+     * Otherwise it is advised to use canardReadScalarFromRxTransfer().
      */
     const uint8_t* payload_head;            ///< Always valid, i.e. not NULL. Maximum size is defined in the constant
                                             ///< CANARD_RX_PAYLOAD_HEAD_SIZE.
@@ -343,11 +344,29 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
 /**
  * Reads 1 to 64 bits from the specified RX transfer buffer.
  * This function can be used to decode received transfers.
- * Note that this function does not need the library's instance object.
+ * Returns the number of bits copied, which may be less than requested if operation ran out of buffer boundaries,
+ * or negated error code, such as invalid argument.
+ *
+ * The type of value pointed to by 'out_value' is defined as follows:
+ *  -----------------------------------------------------------
+ *  bit_length  value_is_signed out_value points to
+ *  -----------------------------------------------------------
+ *  1           false           bool (may be incompatible with uint8_t!)
+ *  1           true            N/A
+ *  [2, 8]      false           uint8_t, or char
+ *  [2, 8]      true            int8_t, or char
+ *  [9, 16]     false           uint16_t
+ *  [9, 16]     true            int16_t
+ *  [17, 32]    false           uint32_t
+ *  [17, 32]    true            int32_t, or 32-bit float
+ *  [33, 64]    false           uint64_t
+ *  [33, 64]    true            int64_t, or 64-bit float
  */
-uint64_t canardReadRxTransferPayload(const CanardRxTransfer* transfer,
-                                     uint16_t bit_offset,
-                                     uint8_t bit_length);
+int canardReadScalarFromRxTransfer(const CanardRxTransfer* transfer,
+                                   uint16_t bit_offset,
+                                   uint8_t bit_length,
+                                   bool value_is_signed,
+                                   void* out_value);
 
 /**
  * This function can be invoked by the application to release pool blocks that are used
