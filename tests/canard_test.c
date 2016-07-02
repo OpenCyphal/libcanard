@@ -248,8 +248,6 @@ void on_reception(CanardInstance* ins, CanardRxTransfer* transfer)
         }
     }
 
-    printf("payload:%016" PRIx64 "\n", canardReadRxTransferPayload(transfer, 0, 64));
-
     canardReleaseRxTransferPayload(ins, transfer);
     // do stuff with the data then call canardReleaseRxTransferPayload() if there are blocks (multi-frame transfers)
 
