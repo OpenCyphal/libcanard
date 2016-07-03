@@ -168,4 +168,8 @@ TEST(ScalarDecode, MultiFrame)
     // 64 from two middle blocks, 32 from the first, 32 from the second
     ASSERT_EQ(0b1100110011001100110011001100110001011010010110100101101001011010ULL,
               read<uint64_t>(&transfer, CANARD_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32, 64));
+
+    // Last 64
+    ASSERT_EQ(0b0100010000110011001000100001000111001100110011001100110011001100ULL,
+              read<uint64_t>(&transfer, transfer.payload_len * 8 - 64, 64));
 }
