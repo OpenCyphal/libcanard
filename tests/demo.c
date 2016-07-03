@@ -361,7 +361,7 @@ void process1HzTasks(uint64_t timestamp_usec)
 void processTxRxOnce(SocketCANInstance* socketcan, int timeout_msec)
 {
     // Transmitting
-    for (const CanardCANFrame* txf = canardPeekTxQueue(&canard); (txf = canardPeekTxQueue(&canard)) != NULL;)
+    for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&canard)) != NULL;)
     {
         const int tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
