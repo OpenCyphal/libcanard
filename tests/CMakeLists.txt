@@ -31,7 +31,15 @@ target_link_libraries(run_tests
                       pthread)
 
 # Demo application
+exec_program("git"
+             ${CMAKE_CURRENT_SOURCE_DIR}
+             ARGS "rev-parse --short=8 HEAD"
+             OUTPUT_VARIABLE GIT_HASH)
+
 add_executable(demo
                demo.c
                ../canard.c
                ../drivers/socketcan/socketcan.c)
+
+target_compile_definitions(demo
+                           PUBLIC GIT_HASH=0x${GIT_HASH})

@@ -19,8 +19,15 @@
 #include <errno.h>
 
 /*
+ * Application constants
+ */
+#define APP_VERSION_MAJOR                                           1
+#define APP_VERSION_MINOR                                           0
+#define APP_NODE_NAME                                               "org.uavcan.libcanard.demo"
+
+/*
  * Some useful constants defined by the UAVCAN specification.
- * Data type signature values can be easily obtained with the script get_data_type_signature.py
+ * Data type signature values can be easily obtained with the script show_data_type_info.py
  */
 #define UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID                      1
 #define UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE               0x0b2a812620a11d40
@@ -38,6 +45,10 @@
 
 #define UAVCAN_NODE_MODE_OPERATIONAL                                0
 #define UAVCAN_NODE_MODE_INITIALIZATION                             1
+
+#define UAVCAN_GET_NODE_INFO_RESPONSE_MAX_SIZE                      ((3015 + 7) / 8)
+#define UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE                    0xee468a8121c46a9e
+#define UAVCAN_GET_NODE_INFO_DATA_TYPE_ID                           1
 
 #define UNIQUE_ID_LENGTH_BYTES                                      16
 
@@ -199,6 +210,58 @@ static void onTransferReceived(CanardInstance* ins,
             printf("Node ID %d allocated by %d\n", allocated_node_id, transfer->source_node_id);
         }
     }
+
+    if ((transfer->transfer_type == CanardTransferTypeRequest) &&
+        (transfer->data_type_id == UAVCAN_GET_NODE_INFO_DATA_TYPE_ID))
+    {
+        printf("GetNodeInfo request from %d\n", transfer->source_node_id);
+
+        uint8_t buffer[UAVCAN_GET_NODE_INFO_RESPONSE_MAX_SIZE];
+        memset(buffer, 0, UAVCAN_GET_NODE_INFO_RESPONSE_MAX_SIZE);
+
+        // NodeStatus
+        makeNodeStatusMessage(buffer);
+
+        // SoftwareVersion
+        uint8_t u8 = APP_VERSION_MAJOR;
+        canardEncodeScalar(buffer, 56, 8, &u8);
+        u8 = APP_VERSION_MINOR;
+        canardEncodeScalar(buffer, 64, 8, &u8);
+        u8 = 1;                                     // Optional field flags, VCS commit is set
+        canardEncodeScalar(buffer, 72, 8, &u8);
+        uint32_t u32 = GIT_HASH;
+        canardEncodeScalar(buffer, 80, 32, &u32);
+        // Image CRC skipped
+
+        // HardwareVersion
+        // Major skipped
+        // Minor skipped
+        readUniqueID(&buffer[24]);
+        // Certificate of authenticity skipped
+
+        // Name
+        const size_t name_len = strlen(APP_NODE_NAME);
+        memcpy(&buffer[41], APP_NODE_NAME, name_len);
+
+        const size_t total_size = 41 + name_len;
+
+        /*
+         * Transmitting; in this case we don't have to release the payload because it's empty anyway.
+         */
+        const int resp_res = canardRequestOrRespond(ins,
+                                                    transfer->source_node_id,
+                                                    UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE,
+                                                    UAVCAN_GET_NODE_INFO_DATA_TYPE_ID,
+                                                    &transfer->transfer_id,
+                                                    transfer->priority,
+                                                    CanardResponse,
+                                                    &buffer[0],
+                                                    (uint16_t)total_size);
+        if (resp_res <= 0)
+        {
+            (void)fprintf(stderr, "Could not respond to GetNodeInfo; error %d\n", resp_res);
+        }
+    }
 }
 
 
@@ -231,6 +294,12 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
     }
     else
     {
+        if ((transfer_type == CanardTransferTypeRequest) &&
+            (data_type_id == UAVCAN_GET_NODE_INFO_DATA_TYPE_ID))
+        {
+            *out_data_type_signature = UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE;
+            return true;
+        }
     }
 
     return false;
