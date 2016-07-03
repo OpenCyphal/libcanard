@@ -314,6 +314,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
                                              (uint8_t) (frame->data_len - 3));
         if (ret < 0)
         {
+            releaseStatePayload(ins, rx_state);
+            prepareForNextTransfer(rx_state);
             return;
         }
         rx_state->payload_crc = ((uint16_t) frame->data[0]) | ((uint16_t) frame->data[1] << 8);
@@ -326,6 +328,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
                                              (uint8_t) (frame->data_len - 1));
         if (ret < 0)
         {
+            releaseStatePayload(ins, rx_state);
+            prepareForNextTransfer(rx_state);
             return;
         }
         rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
@@ -385,6 +389,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
             .priority = priority,
             .source_node_id = source_node_id
         };
+
+        rx_state->buffer_blocks = NULL;     // Block list ownership has been transferred to rx_transfer!
 
         // CRC validation
         rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc, frame->data, frame->data_len - 1U);
@@ -669,10 +675,9 @@ void canardEncodeScalar(void* destination,
 
 void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
 {
-    CanardBufferBlock* temp = NULL;
     while (transfer->payload_middle != NULL)
     {
-        temp = transfer->payload_middle->next;
+        CanardBufferBlock* const temp = transfer->payload_middle->next;
         freeBlock(&ins->allocator, transfer->payload_middle);
         transfer->payload_middle = temp;
     }
@@ -973,7 +978,7 @@ CANARD_INTERNAL bool isPriorityHigher(uint32_t rhs, uint32_t id)
  */
 CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state)
 {
-    state->buffer_blocks = NULL; // payload should be empty anyway
+    assert(state->buffer_blocks == NULL);
     state->transfer_id += 1;
     state->payload_len = 0;
     state->next_toggle = 0;
@@ -1094,16 +1099,11 @@ CANARD_INTERNAL CanardRxState* createRxState(CanardPoolAllocator* allocator, uin
     return state;
 }
 
-/**
- * This function can be invoked by the application to release pool blocks that are used
- * to store the payload of this transfer
- */
 CANARD_INTERNAL uint64_t releaseStatePayload(CanardInstance* ins, CanardRxState* rxstate)
 {
-    CanardBufferBlock* temp = NULL;
     while (rxstate->buffer_blocks != NULL)
     {
-        temp = rxstate->buffer_blocks->next;
+        CanardBufferBlock* const temp = rxstate->buffer_blocks->next;
         freeBlock(&ins->allocator, rxstate->buffer_blocks);
         rxstate->buffer_blocks = temp;
     }
@@ -1206,9 +1206,6 @@ CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
     return 1;
 }
 
-/**
- * creates new buffer block
- */
 CANARD_INTERNAL CanardBufferBlock* createBufferBlock(CanardPoolAllocator* allocator)
 {
     CanardBufferBlock* block = (CanardBufferBlock*) allocateBlock(allocator);
