@@ -23,7 +23,9 @@
  */
 
 #include <type_traits>
+#include <algorithm>
 #include <stdexcept>
+#include <memory>
 #include <gtest/gtest.h>
 #include "canard_internals.h"
 
@@ -51,7 +53,7 @@ static inline T read(CanardRxTransfer* transfer, uint16_t bit_offset, uint8_t bi
 }
 
 
-TEST(PayloadRead, SingleFrame)
+TEST(ScalarDecode, SingleFrame)
 {
     auto transfer = CanardRxTransfer();
 
@@ -101,4 +103,69 @@ TEST(PayloadRead, SingleFrame)
     ASSERT_EQ(-91,    read<int8_t>(&transfer, 0, 8));       //         0b10100101
     ASSERT_EQ(-15451, read<int16_t>(&transfer, 0, 16));     // 0b1100001110100101
     ASSERT_EQ(-7771,  read<int16_t>(&transfer, 0, 15));     //  0b100001110100101
+}
+
+
+TEST(ScalarDecode, MultiFrame)
+{
+    /*
+     * Configuring allocator
+     */
+    CanardPoolAllocatorBlock allocator_blocks[2];
+    CanardPoolAllocator allocator;
+    initPoolAllocator(&allocator, &allocator_blocks[0], 2);
+
+    /*
+     * Configuring the transfer object
+     */
+    auto transfer = CanardRxTransfer();
+
+    uint8_t head[CANARD_RX_PAYLOAD_HEAD_SIZE];
+    for (auto& x : head)
+    {
+        x = 0b10100101;
+    }
+    static_assert(CANARD_RX_PAYLOAD_HEAD_SIZE == 6, "Assumption is not met, are we on a 32-bit x86 machine?");
+
+    auto middle_a = createBufferBlock(&allocator);
+    auto middle_b = createBufferBlock(&allocator);
+
+    std::fill_n(&middle_a->data[0], CANARD_BUFFER_BLOCK_DATA_SIZE, 0b01011010);
+    std::fill_n(&middle_b->data[0], CANARD_BUFFER_BLOCK_DATA_SIZE, 0b11001100);
+
+    middle_a->next = middle_b;
+    middle_b->next = nullptr;
+
+    const uint8_t tail[4] =
+    {
+        0b00010001,
+        0b00100010,
+        0b00110011,
+        0b01000100
+    };
+
+    transfer.payload_head   = &head[0];
+    transfer.payload_middle = middle_a;
+    transfer.payload_tail   = &tail[0];
+
+    transfer.payload_len = CANARD_RX_PAYLOAD_HEAD_SIZE + CANARD_BUFFER_BLOCK_DATA_SIZE * 2 + sizeof(tail);
+
+    std::cout << "Payload size: " << transfer.payload_len << std::endl;
+
+    /*
+     * Testing
+     */
+    ASSERT_EQ(0b10100101, read<uint8_t>(&transfer, 0, 8));
+    ASSERT_EQ(0b01011010, read<uint8_t>(&transfer, 4, 8));
+    ASSERT_EQ(0b00000101, read<uint8_t>(&transfer, 4, 4));
+
+    ASSERT_EQ(false, read<bool>(&transfer, CANARD_RX_PAYLOAD_HEAD_SIZE * 8, 1));
+    ASSERT_EQ(true,  read<bool>(&transfer, CANARD_RX_PAYLOAD_HEAD_SIZE * 8 + 1, 1));
+
+    // 64 from beginning, 48 bits from head, 16 bits from the middle
+    ASSERT_EQ(0b0101101001011010101001011010010110100101101001011010010110100101ULL, read<uint64_t>(&transfer, 0, 64));
+
+    // 64 from two middle blocks, 32 from the first, 32 from the second
+    ASSERT_EQ(0b1100110011001100110011001100110001011010010110100101101001011010ULL,
+              read<uint64_t>(&transfer, CANARD_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32, 64));
 }

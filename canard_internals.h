@@ -113,13 +113,27 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
                                     uint16_t payload_len);
 
 CANARD_INTERNAL void copyBitArray(const uint8_t* src,
-                                  size_t src_offset,
-                                  size_t src_len,
+                                  uint32_t src_offset,
+                                  uint32_t src_len,
                                   uint8_t* dst,
-                                  size_t dst_offset);
+                                  uint32_t dst_offset);
+
+/**
+ * Moves specified bits from the scattered transfer storage to a specified contiguous buffer.
+ * Returns the number of bits copied, or negated error code.
+ */
+CANARD_INTERNAL int descatterTransferPayload(const CanardRxTransfer* transfer,
+                                             uint32_t bit_offset,
+                                             uint8_t bit_length,
+                                             void* output);
 
 CANARD_INTERNAL bool isBigEndian(void);
 
+CANARD_INTERNAL void swapByteOrder(void* data, unsigned size);
+
+/*
+ * Transfer CRC
+ */
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val,
                                     uint8_t byte);
 

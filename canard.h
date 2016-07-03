@@ -41,7 +41,7 @@ extern "C" {
 #define CANARD_ERROR_INVALID_ARGUMENT       2
 #define CANARD_ERROR_OUT_OF_MEMORY          3
 #define CANARD_ERROR_NODE_ID_NOT_SET        4
-#define CANARD_ERROR_INTERNAL               5
+#define CANARD_ERROR_INTERNAL               9
 
 /// The size of a memory block in bytes.
 #define CANARD_MEM_BLOCK_SIZE               32
@@ -231,10 +231,10 @@ struct CanardRxTransfer
 
     /**
      * Payload is scattered across three storages:
-     *  - Head points to CanardRxState.buffer_head (length of which is up to Canard_PAYLOAD_HEAD_SIZE), or to the
+     *  - Head points to CanardRxState.buffer_head (length of which is up to CANARD_PAYLOAD_HEAD_SIZE), or to the
      *    payload field (possibly with offset) of the last received CAN frame.
      *
-     *  - Middle is located in the linked list of dynamic blocks.
+     *  - Middle is located in the linked list of dynamic blocks (only for multi-frame transfers).
      *
      *  - Tail points to the payload field (possibly with offset) of the last received CAN frame
      *    (only for multi-frame transfers).
@@ -247,14 +247,16 @@ struct CanardRxTransfer
      * In simple cases it should be possible to get data directly from the head and/or tail pointers.
      * Otherwise it is advised to use canardReadScalarFromRxTransfer().
      */
-    const uint8_t* payload_head;            ///< Always valid, i.e. not NULL. Maximum size is defined in the constant
+    const uint8_t* payload_head;            ///< Always valid, i.e. not NULL.
+                                            ///< For multi frame transfers, the maximum size is defined in the constant
                                             ///< CANARD_RX_PAYLOAD_HEAD_SIZE.
+                                            ///< For single-frame transfers, the size is defined in the
+                                            ///< field payload_len.
     CanardBufferBlock* payload_middle;      ///< May be NULL if the buffer was not needed. Always NULL for single-frame
                                             ///< transfers.
     const uint8_t* payload_tail;            ///< Last bytes of multi-frame transfers. Always NULL for single-frame
                                             ///< transfers.
     uint16_t payload_len;                   ///< Effective length of the payload in bytes.
-    uint16_t middle_len;                    ///< Number of bytes stored in payload_middle (above)
 
     /**
      * These fields identify the transfer for the application.
@@ -363,7 +365,7 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
  *  [33, 64]    true            int64_t, or 64-bit float
  */
 int canardReadScalarFromRxTransfer(const CanardRxTransfer* transfer,
-                                   uint16_t bit_offset,
+                                   uint32_t bit_offset,
                                    uint8_t bit_length,
                                    bool value_is_signed,
                                    void* out_value);
