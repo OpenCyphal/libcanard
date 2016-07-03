@@ -27,6 +27,18 @@
 #define UAVCAN_NODE_ID_ALLOCATION_RANDOM_TIMEOUT_RANGE_USEC         400000UL
 #define UAVCAN_NODE_ID_ALLOCATION_REQUEST_DELAY_OFFSET_USEC         600000UL
 
+#define UAVCAN_NODE_STATUS_MESSAGE_SIZE                             7
+#define UAVCAN_NODE_STATUS_DATA_TYPE_ID                             341
+#define UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE                      0x0f0868d0c1a7c6f1
+
+#define UAVCAN_NODE_HEALTH_OK                                       0
+#define UAVCAN_NODE_HEALTH_WARNING                                  1
+#define UAVCAN_NODE_HEALTH_ERROR                                    2
+#define UAVCAN_NODE_HEALTH_CRITICAL                                 3
+
+#define UAVCAN_NODE_MODE_OPERATIONAL                                0
+#define UAVCAN_NODE_MODE_INITIALIZATION                             1
+
 #define UNIQUE_ID_LENGTH_BYTES                                      16
 
 
@@ -43,6 +55,12 @@ static uint8_t canard_memory_pool[1024];            ///< Arena for memory alloca
  */
 static uint64_t send_next_node_id_allocation_request_at;    ///< When the next node ID allocation request should be sent
 static uint8_t node_id_allocation_unique_id_offset;         ///< Depends on the stage of the next request
+
+/*
+ * Node status variables
+ */
+static uint8_t node_health = UAVCAN_NODE_HEALTH_OK;
+static uint8_t node_mode   = UAVCAN_NODE_MODE_INITIALIZATION;
 
 
 uint64_t getMonotonicTimestampUSec(void)
@@ -82,6 +100,28 @@ void readUniqueID(uint8_t* out_uid)
     {
         out_uid[i] = i;
     }
+}
+
+
+void makeNodeStatusMessage(uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE])
+{
+    memset(buffer, 0, UAVCAN_NODE_STATUS_MESSAGE_SIZE);
+
+    static uint32_t started_at_sec = 0;
+    if (started_at_sec == 0)
+    {
+        started_at_sec = (uint32_t)(getMonotonicTimestampUSec() / 1000000U);
+    }
+
+    const uint32_t uptime_sec = (uint32_t)((getMonotonicTimestampUSec() / 1000000U) - started_at_sec);
+
+    /*
+     * Here we're using the helper for demonstrational purposes; in this simple case it could be preferred to
+     * encode the values manually.
+     */
+    canardEncodeScalar(buffer,  0, 32, &uptime_sec);
+    canardEncodeScalar(buffer, 32,  2, &node_health);
+    canardEncodeScalar(buffer, 34,  3, &node_mode);
 }
 
 
@@ -200,9 +240,52 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
 /**
  * This function is called at 1 Hz rate from the main loop.
  */
-void process1HzTasks(void)
+void process1HzTasks(uint64_t timestamp_usec)
 {
-    // TODO
+    /*
+     * Purging transfers that are no longer transmitted. This will occasionally free up some memory.
+     */
+    canardCleanupStaleTransfers(&canard, timestamp_usec);
+
+    /*
+     * Printing the memory usage statistics.
+     */
+    {
+        const CanardPoolAllocatorStatistics stats = canardGetPoolAllocatorStatistics(&canard);
+        const unsigned peak_percent = 100U * stats.peak_usage_blocks / stats.capacity_blocks;
+
+        printf("Memory pool stats: capacity %u blocks, usage %u blocks, peak usage %u blocks (%u%%)\n",
+               stats.capacity_blocks, stats.current_usage_blocks, stats.peak_usage_blocks, peak_percent);
+
+        /*
+         * The recommended way to establish the minimal size of the memory pool is to stress-test the application and
+         * record the worst case memory usage.
+         */
+        if (peak_percent > 70)
+        {
+            puts("WARNING: ENLARGE MEMORY POOL");
+        }
+    }
+
+    /*
+     * Transmitting the node status message periodically.
+     */
+    {
+        uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE];
+        makeNodeStatusMessage(buffer);
+
+        static uint8_t transfer_id;
+
+        const int bc_res = canardBroadcast(&canard, UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE,
+                                           UAVCAN_NODE_STATUS_DATA_TYPE_ID, &transfer_id, CANARD_TRANSFER_PRIORITY_LOW,
+                                           buffer, UAVCAN_NODE_STATUS_MESSAGE_SIZE);
+        if (bc_res <= 0)
+        {
+            (void)fprintf(stderr, "Could not broadcast node status; error %d\n", bc_res);
+        }
+    }
+
+    node_mode = UAVCAN_NODE_MODE_OPERATIONAL;
 }
 
 
@@ -366,7 +449,7 @@ int main(int argc, char** argv)
         if (ts >= next_1hz_service_at)
         {
             next_1hz_service_at += 1000000;
-            process1HzTasks();
+            process1HzTasks(ts);
         }
     }
 
