@@ -42,7 +42,7 @@ static inline T read(CanardRxTransfer* transfer, uint16_t bit_offset, uint8_t bi
 {
     auto value = T();
 
-    const int res = canardReadScalarFromRxTransfer(transfer, bit_offset, bit_length, std::is_signed<T>::value, &value);
+    const int res = canardDecodeScalar(transfer, bit_offset, bit_length, std::is_signed<T>::value, &value);
     if (res != bit_length)
     {
         throw std::runtime_error("Unexpected return value; expected " +

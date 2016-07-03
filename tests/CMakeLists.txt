@@ -30,14 +30,6 @@ target_link_libraries(run_tests
                       ${GTEST_BOTH_LIBRARIES}
                       pthread)
 
-# Old test application
-add_executable(canard_test
-               canard_test.c
-               ../canard.c
-               ../drivers/socketcan/socketcan.c)
-target_link_libraries(canard_test
-                      pthread)
-
 # Demo application
 add_executable(demo
                demo.c
