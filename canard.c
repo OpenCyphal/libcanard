@@ -333,15 +333,43 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     }
     else                                                                            // End of a multi-frame transfer
     {
+        const uint8_t frame_payload_size = (uint8_t)(frame->data_len - 1);
+
         uint8_t tail_offset = 0;
+
         if (rx_state->payload_len < CANARD_RX_PAYLOAD_HEAD_SIZE)
         {
-            uint16_t i = 0;
-            for (i = (uint16_t)rx_state->payload_len, tail_offset = 0;
-                 i < CANARD_RX_PAYLOAD_HEAD_SIZE && tail_offset < frame->data_len - 1;
+            // Copy the beginning of the frame into the head, point the tail pointer to the remainder
+            for (size_t i = rx_state->payload_len;
+                 (i < CANARD_RX_PAYLOAD_HEAD_SIZE) && (tail_offset < frame_payload_size);
                  i++, tail_offset++)
             {
                 rx_state->buffer_head[i] = frame->data[tail_offset];
+            }
+        }
+        else
+        {
+            // Like above, except that the beginning goes into the last block of the storage
+            CanardBufferBlock* block = rx_state->buffer_blocks;
+            if (block != NULL)          // If there's no middle, that's fine, we'll use only head and tail
+            {
+                size_t offset = CANARD_RX_PAYLOAD_HEAD_SIZE;    // Payload offset of the first block
+                while (block->next != NULL)
+                {
+                    block = block->next;
+                    offset += CANARD_BUFFER_BLOCK_DATA_SIZE;
+                }
+                assert(block != NULL);
+
+                const size_t offset_within_block = rx_state->payload_len - offset;
+                assert(offset_within_block < CANARD_BUFFER_BLOCK_DATA_SIZE);
+
+                for (size_t i = offset_within_block;
+                     (i < CANARD_BUFFER_BLOCK_DATA_SIZE) && (tail_offset < frame_payload_size);
+                     i++, tail_offset++)
+                {
+                    block->data[i] = frame->data[tail_offset];
+                }
             }
         }
 
@@ -349,8 +377,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
             .timestamp_usec = timestamp_usec,
             .payload_head = rx_state->buffer_head,
             .payload_middle = rx_state->buffer_blocks,
-            .payload_tail = frame->data + tail_offset,
-            .payload_len = (uint16_t)(rx_state->payload_len + frame->data_len - 1),
+            .payload_tail = (tail_offset >= frame->data_len) ? NULL : (frame->data + tail_offset),
+            .payload_len = (uint16_t)(rx_state->payload_len + frame_payload_size),
             .data_type_id = data_type_id,
             .transfer_type = transfer_type,
             .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),

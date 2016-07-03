@@ -128,7 +128,12 @@ static void onTransferReceived(CanardInstance* ins,
         // Matching the received UID against the local one
         if (memcmp(received_unique_id, my_unique_id, received_unique_id_len) != 0)
         {
-            printf("Mismatching allocation response from %d\n", transfer->source_node_id);
+            printf("Mismatching allocation response from %d:", transfer->source_node_id);
+            for (int i = 0; i < received_unique_id_len; i++)
+            {
+                printf(" %02x/%02x", received_unique_id[i], my_unique_id[i]);
+            }
+            puts("");
             return;         // No match, return
         }
 
