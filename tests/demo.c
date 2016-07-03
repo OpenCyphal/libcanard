@@ -107,6 +107,7 @@ static void onTransferReceived(CanardInstance* ins,
         if (transfer->source_node_id == CANARD_BROADCAST_NODE_ID)
         {
             puts("Allocation request from another allocatee");
+            node_id_allocation_unique_id_offset = 0;
             return;
         }
 
@@ -134,6 +135,7 @@ static void onTransferReceived(CanardInstance* ins,
                 printf(" %02x/%02x", received_unique_id[i], my_unique_id[i]);
             }
             puts("");
+            node_id_allocation_unique_id_offset = 0;
             return;         // No match, return
         }
 
@@ -343,6 +345,9 @@ int main(int argc, char** argv)
         {
             (void)fprintf(stderr, "Could not broadcast dynamic node ID allocation request; error %d\n", bcast_res);
         }
+
+        // Preparing for timeout; if response is received, this value will be updated from the callback.
+        node_id_allocation_unique_id_offset = 0;
     }
 
     printf("Dynamic node ID allocation complete [%d]\n", canardGetLocalNodeID(&canard));
