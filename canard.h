@@ -334,9 +334,13 @@ int canardBroadcast(CanardInstance* ins,            ///< Library instance
  * Please refer to the specification for more details about data type signatures. Signature for any data type can be
  * obtained in many ways; for example, using the command line tool distributed with Libcanard (see the repository).
  *
- * Pointer to the Transfer ID should point to a persistent variable (e.g. static or heap allocated, not on the stack);
- * it will be updated by the library after every transmission. The Transfer ID value cannot be shared between
- * transfers that have different descriptors! More on this in the transport layer specification.
+ * For Request transfers, the pointer to the Transfer ID should point to a persistent variable (e.g. static or heap
+ * allocated, not on the stack); it will be updated by the library after every request. The Transfer ID value
+ * cannot be shared between requests that have different descriptors! More on this in the transport layer
+ * specification.
+ *
+ * For Response transfers, the pointer to the Transfer ID will be treated as const (i.e. read-only), and normally it
+ * should point to the transfer_id field of the structure CanardRxTransfer.
  */
 int canardRequestOrRespond(CanardInstance* ins,             ///< Library instance
                            uint8_t destination_node_id,     ///< Node ID of the server/client
