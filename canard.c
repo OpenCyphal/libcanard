@@ -190,7 +190,10 @@ int canardRequestOrRespond(CanardInstance* ins,
 
     const int result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
 
-    incrementTransferID(inout_transfer_id);
+    if (kind == CanardRequest)                      // Response Transfer ID must not be altered
+    {
+        incrementTransferID(inout_transfer_id);
+    }
 
     return result;
 }
