@@ -511,9 +511,12 @@ int canardDecodeScalar(const CanardRxTransfer* transfer,
     /*
      * The bit copy algorithm assumes that more significant bits have lower index, so we need to shift some.
      * Extra most significant bits will be filled with zeroes, which is fine.
+     * Coverity Scan mistakenly believes that the array may be overrun if bit_length == 64; however, this branch will
+     * not be taken if bit_length == 64, because 64 % 8 == 0.
      */
     if ((bit_length % 8) != 0)
     {
+        // coverity[overrun-local]
         storage.bytes[bit_length / 8] = (uint8_t)(storage.bytes[bit_length / 8] >> ((8 - (bit_length % 8)) & 7));
     }
 
@@ -680,9 +683,12 @@ void canardEncodeScalar(void* destination,
      * The bit copy algorithm assumes that more significant bits have lower index, so we need to shift some.
      * Extra least significant bits will be filled with zeroes, which is fine.
      * Extra most significant bits will be discarded here.
+     * Coverity Scan mistakenly believes that the array may be overrun if bit_length == 64; however, this branch will
+     * not be taken if bit_length == 64, because 64 % 8 == 0.
      */
     if ((bit_length % 8) != 0)
     {
+        // coverity[overrun-local]
         storage.bytes[bit_length / 8] = (uint8_t)(storage.bytes[bit_length / 8] << ((8 - (bit_length % 8)) & 7));
     }
 
