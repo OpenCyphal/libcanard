@@ -183,3 +183,40 @@ TEST(ScalarDecode, MultiFrame)
     ASSERT_EQ(0b0100010000110011001000100001000110100101101001011010010110100101ULL,
               read<uint64_t>(&transfer, transfer.payload_len * 8 - 64, 64));
 }
+
+
+TEST(ScalarEncode, Basic)
+{
+    uint8_t buffer[32];
+    std::fill_n(std::begin(buffer), sizeof(buffer), 0);
+
+    uint8_t u8 = 123;
+    canardEncodeScalar(buffer, 0, 8, &u8);
+    ASSERT_EQ(123, buffer[0]);
+    ASSERT_EQ(0, buffer[1]);
+
+    u8 = 0b1111;
+    canardEncodeScalar(buffer, 5, 4, &u8);
+    ASSERT_EQ(123 | 0b111, buffer[0]);
+    ASSERT_EQ(0b10000000,  buffer[1]);
+
+    int16_t s16 = -1;
+    canardEncodeScalar(buffer, 9, 15, &s16);
+    ASSERT_EQ(123 | 0b111, buffer[0]);
+    ASSERT_EQ(0b11111111,  buffer[1]);
+    ASSERT_EQ(0b11111111,  buffer[2]);
+    ASSERT_EQ(0b00000000,  buffer[3]);
+
+    int64_t s64 = (int64_t) 0b0000000100100011101111000110011110001001101010111100110111101111L;
+    canardEncodeScalar(buffer, 16, 60, &s64);
+    ASSERT_EQ(123 | 0b111, buffer[0]);  // 0
+    ASSERT_EQ(0b11111111,  buffer[1]);  // 8
+    ASSERT_EQ(0b11101111,  buffer[2]);  // 16
+    ASSERT_EQ(0b11001101,  buffer[3]);
+    ASSERT_EQ(0b10101011,  buffer[4]);
+    ASSERT_EQ(0b10001001,  buffer[5]);
+    ASSERT_EQ(0b01100111,  buffer[6]);
+    ASSERT_EQ(0b10111100,  buffer[7]);
+    ASSERT_EQ(0b00100011,  buffer[8]);
+    ASSERT_EQ(0b00010000,  buffer[9]);
+}

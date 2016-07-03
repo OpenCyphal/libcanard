@@ -344,10 +344,16 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
                                  uint64_t current_time_usec);
 
 /**
- * Reads 1 to 64 bits from the specified RX transfer buffer.
- * This function can be used to decode received transfers.
- * Returns the number of bits copied, which may be less than requested if operation ran out of buffer boundaries,
- * or negated error code, such as invalid argument.
+ * This function can be used to extract values from received UAVCAN transfers. It decodes a scalar value -
+ * boolean, integer, character, or floating point - from the specified bit position in the RX transfer buffer.
+ * Simple single-frame transfers can also be parsed manually.
+ *
+ * Returns the number of bits successfully decoded, which may be less than requested if operation ran out of
+ * buffer boundaries, or negated error code, such as invalid argument.
+ *
+ * Caveat:  This function works correctly only on platforms that use two's complement signed integer representation.
+ *          I am not aware of any modern microarchitecture that uses anything else than two's complement, so it should
+ *          not affect portability in any way.
  *
  * The type of value pointed to by 'out_value' is defined as follows:
  *  -----------------------------------------------------------
@@ -364,11 +370,36 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
  *  [33, 64]    false           uint64_t
  *  [33, 64]    true            int64_t, or 64-bit float
  */
-int canardDecodeScalar(const CanardRxTransfer* transfer,
-                       uint32_t bit_offset,
-                       uint8_t bit_length,
-                       bool value_is_signed,
-                       void* out_value);
+int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer where the data will be copied from
+                       uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
+                       uint8_t bit_length,                  ///< Length of the value, in bits; see the table
+                       bool value_is_signed,                ///< True if the value can be negative; see the table
+                       void* out_value);                    ///< Pointer to the output storage; see the table
+
+/**
+ * This function can be used to encode values for later transmission in a UAVCAN transfer. It encodes a scalar value -
+ * boolean, integer, character, or floating point - and puts it to the specified bit position in the specified
+ * contiguous buffer.
+ * Simple single-frame transfers can also be encoded manually.
+ *
+ * Caveat:  This function works correctly only on platforms that use two's complement signed integer representation.
+ *          I am not aware of any modern microarchitecture that uses anything else than two's complement, so it should
+ *          not affect portability in any way.
+ *
+ * The type of value pointed to by 'value' is defined as follows:
+ *  -----------------------------------------------------------
+ *  bit_length  out_value points to
+ *  -----------------------------------------------------------
+ *  1           bool (may be incompatible with uint8_t!)
+ *  [2, 8]      uint8_t, int8_t, or char
+ *  [9, 16]     uint16_t, int16_t
+ *  [17, 32]    uint32_t, int32_t, or 32-bit float
+ *  [33, 64]    uint64_t, int64_t, or 64-bit float
+ */
+void canardEncodeScalar(void* destination,      ///< Destination buffer where the result will be stored
+                        uint32_t bit_offset,    ///< Offset, in bits, from the beginning of the destination buffer
+                        uint8_t bit_length,     ///< Length of the value, in bits; see the table
+                        const void* value);     ///< Pointer to the value; see the table
 
 /**
  * This function can be invoked by the application to release pool blocks that are used

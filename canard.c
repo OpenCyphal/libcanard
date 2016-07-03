@@ -591,6 +591,82 @@ int canardDecodeScalar(const CanardRxTransfer* transfer,
     return result;
 }
 
+void canardEncodeScalar(void* destination,
+                        uint32_t bit_offset,
+                        uint8_t bit_length,
+                        const void* value)
+{
+    /*
+     * This function can only fail due to invalid arguments, so it was decided to make it return void,
+     * and in the case of bad arguments try the best effort or just trigger an assertion failure.
+     * Maybe not the best solution, but it simplifies the API.
+     */
+    assert(destination != NULL);
+    assert(value != NULL);
+
+    if (bit_length > 64)
+    {
+        assert(false);
+        bit_length = 64;
+    }
+
+    if (bit_length < 1)
+    {
+        assert(false);
+        bit_length = 1;
+    }
+
+    /*
+     * Preparing the data in the temporary storage.
+     */
+    union
+    {
+        bool     boolean;
+        uint8_t  u8;
+        uint16_t u16;
+        uint32_t u32;
+        uint64_t u64;
+        uint8_t bytes[8];
+    } storage;
+
+    memset(&storage, 0, sizeof(storage));
+
+    uint8_t std_byte_length = 0;
+
+    // Extra most significant bits can be safely ignored here.
+    if      (bit_length == 1)   { std_byte_length = sizeof(bool);   storage.boolean = (*((bool*) value) != 0); }
+    else if (bit_length <= 8)   { std_byte_length = 1;              storage.u8  = *((uint8_t*) value);  }
+    else if (bit_length <= 16)  { std_byte_length = 2;              storage.u16 = *((uint16_t*) value); }
+    else if (bit_length <= 32)  { std_byte_length = 4;              storage.u32 = *((uint32_t*) value); }
+    else if (bit_length <= 64)  { std_byte_length = 8;              storage.u64 = *((uint64_t*) value); }
+    else
+    {
+        assert(false);
+    }
+
+    assert(std_byte_length > 0);
+
+    if (isBigEndian())
+    {
+        swapByteOrder(&storage.bytes[0], std_byte_length);
+    }
+
+    /*
+     * The bit copy algorithm assumes that more significant bits have lower index, so we need to shift some.
+     * Extra least significant bits will be filled with zeroes, which is fine.
+     * Extra most significant bits will be discarded here.
+     */
+    if ((bit_length % 8) != 0)
+    {
+        storage.bytes[bit_length / 8] = (uint8_t)(storage.bytes[bit_length / 8] << ((8 - (bit_length % 8)) & 7));
+    }
+
+    /*
+     * Now, the storage contains properly serialized scalar. Copying it out.
+     */
+    copyBitArray(&storage.bytes[0], 0, bit_length, (uint8_t*) destination, bit_offset);
+}
+
 void canardReleaseRxTransferPayload(CanardInstance* ins, CanardRxTransfer* transfer)
 {
     CanardBufferBlock* temp = NULL;
