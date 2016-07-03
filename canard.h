@@ -35,6 +35,10 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
+/// Libcanard version. API will be backwards compatible within the same major version.
+#define CANARD_VERSION_MAJOR                        0
+#define CANARD_VERSION_MINOR                        1
+
 /// Error code definitions; inverse of these values may be returned from API calls.
 #define CANARD_OK                                   0
 // Value 1 is omitted intentionally, since -1 is often used in 3rd party code
