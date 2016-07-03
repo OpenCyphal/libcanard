@@ -21,19 +21,20 @@ except ImportError:
 
 # TODO: Add support for vendor-specific data types!
 if '--help' in sys.argv:
-    print('Usage: %s [data type name]' % sys.argv[0])
+    print('Usage: %s' % sys.argv[0])
     exit(0)
 
-if len(sys.argv) < 2:
-    longest_name = max(map(len, uavcan.TYPENAMES.keys()))
-    for typename, typedef in uavcan.TYPENAMES.items():
-        print('%-*s 0x%016x' % (longest_name, typename, typedef.get_data_type_signature()))
-else:
-    typename = sys.argv[1]
+longest_name = max(map(len, uavcan.TYPENAMES.keys()))
+
+header = 'Full Data Type Name'.ljust(longest_name) + ' | DDTID |   Type Signature   |  Max Bit Len  '
+print(header)
+print('-' * len(header))
+
+for typename, typedef in sorted(uavcan.TYPENAMES.items()):
+    ddtid = typedef.default_dtid if typedef.default_dtid is not None else 'N/A'
+    s = '%-*s   % 5s   0x%016x' % (longest_name, typename, ddtid, typedef.get_data_type_signature())
     try:
-        signature = uavcan.TYPENAMES[typename].get_data_type_signature()
-    except KeyError:
-        sys.stderr.write('Data type not found: %r\n' % typename)
-        exit(1)
-    else:
-        print('0x%016x' % signature)
+        s += '   % 5d' % typedef.get_max_bitlen()
+    except Exception:
+        s += '   % 5d / %-5d' % (typedef.get_max_bitlen_request(), typedef.get_max_bitlen_response())
+    print(s)
