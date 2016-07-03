@@ -122,12 +122,17 @@ typedef struct CanardTxQueueItem CanardTxQueueItem;
 /**
  * The application must implement this function and supply a pointer to it to the library during initialization.
  * The library calls this function to determine whether the transfer should be received.
+ *
+ * If the application returns true, the value pointed to by 'out_data_type_signature' must be initialized with the
+ * correct data type signature, otherwise transfer reception will fail with CRC mismatch error. Please refer to the
+ * specification for more details about data type signatures. Signature for any data type can be obtained in many
+ * ways; for example, using the command line tool distributed with Libcanard (see the repository).
  */
-typedef bool (* CanardShouldAcceptTransfer)(const CanardInstance* ins,
-                                            uint64_t* out_data_type_signature,
-                                            uint16_t data_type_id,
-                                            CanardTransferType transfer_type,
-                                            uint8_t source_node_id);
+typedef bool (* CanardShouldAcceptTransfer)(const CanardInstance* ins,          ///< Library instance
+                                            uint64_t* out_data_type_signature,  ///< Must be set by the application!
+                                            uint16_t data_type_id,              ///< Refer to the specification
+                                            CanardTransferType transfer_type,   ///< Refer to CanardTransferType
+                                            uint8_t source_node_id);            ///< Source node ID or Broadcast (0)
 
 /**
  * This function will be invoked by the library every time a transfer is successfully received.
@@ -135,8 +140,8 @@ typedef bool (* CanardShouldAcceptTransfer)(const CanardInstance* ins,
  * to call canardReleaseRxTransferPayload() first, so that the memory that was used for the block
  * buffer can be released and re-used by the TX queue.
  */
-typedef void (* CanardOnTransferReception)(CanardInstance* ins,
-                                           CanardRxTransfer* transfer);
+typedef void (* CanardOnTransferReception)(CanardInstance* ins,                 ///< Library instance
+                                           CanardRxTransfer* transfer);         ///< Ptr to temporary transfer object
 
 /**
  * INTERNAL DEFINITION, DO NOT USE DIRECTLY.
@@ -169,6 +174,7 @@ typedef struct
 } CanardPoolAllocator;
 
 /**
+ * INTERNAL DEFINITION, DO NOT USE DIRECTLY.
  * Buffer block for received data.
  */
 typedef struct CanardBufferBlock
@@ -221,6 +227,7 @@ struct CanardInstance
 /**
  * This structure represents a received transfer for the application.
  * An instance of it is passed to the application via callback when the library receives a new transfer.
+ * Pointers to the structure and all its fields are invalidated after the callback returns.
  */
 struct CanardRxTransfer
 {
@@ -269,67 +276,93 @@ struct CanardRxTransfer
 };
 
 /**
- * Initializes the library state.
+ * Initializes a library instance.
  * Local node ID will be set to zero, i.e. the node will be anonymous.
+ *
+ * Typically, size of the memory pool should not be less than 1K, although it depends on the application. The
+ * recommended way to detect the required pool size is to measure the peak pool usage after a stress-test. Refer to
+ * the function canardGetPoolAllocatorStatistics().
  */
-void canardInit(CanardInstance* out_ins,
-                void* mem_arena,
-                size_t mem_arena_size,
-                CanardOnTransferReception on_reception,
-                CanardShouldAcceptTransfer should_accept);
+void canardInit(CanardInstance* out_ins,                    ///< Uninitialized library instance
+                void* mem_arena,                            ///< Raw memory chunk used for dynamic allocation
+                size_t mem_arena_size,                      ///< Size of the above, in bytes
+                CanardOnTransferReception on_reception,     ///< Callback, see CanardOnTransferReception
+                CanardShouldAcceptTransfer should_accept);  ///< Callback, see CanardShouldAcceptTransfer
 
 /**
  * Assigns a new node ID value to the current node.
- * A node ID can be assigned only once.
+ * Node ID can be assigned only once.
  */
 void canardSetLocalNodeID(CanardInstance* ins,
                           uint8_t self_node_id);
 
 /**
  * Returns node ID of the local node.
- * Returns zero if the node ID has not been set, i.e. if the local node is anonymous.
+ * Returns zero (broadcast) if the node ID is not set, i.e. if the local node is anonymous.
  */
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
 
 /**
  * Sends a broadcast transfer.
- * If the node is in passive mode, only single frame transfers will be allowed.
+ * If the node is in passive mode, only single frame transfers will be allowed (they will be transmitted as anonymous).
+ *
+ * For anonymous transfers, maximum data type ID is limited to 3 (see specification for details).
+ *
+ * Please refer to the specification for more details about data type signatures. Signature for any data type can be
+ * obtained in many ways; for example, using the command line tool distributed with Libcanard (see the repository).
+ *
+ * Pointer to the Transfer ID should point to a persistent variable (e.g. static or heap allocated, not on the stack);
+ * it will be updated by the library after every transmission. The Transfer ID value cannot be shared between
+ * transfers that have different descriptors! More on this in the transport layer specification.
  */
-int canardBroadcast(CanardInstance* ins,
-                    uint64_t data_type_signature,
-                    uint16_t data_type_id,
-                    uint8_t* inout_transfer_id,
-                    uint8_t priority,
-                    const void* payload,
-                    uint16_t payload_len);
+int canardBroadcast(CanardInstance* ins,            ///< Library instance
+                    uint64_t data_type_signature,   ///< See above
+                    uint16_t data_type_id,          ///< Refer to the specification
+                    uint8_t* inout_transfer_id,     ///< Pointer to a persistent variable containing the transfer ID
+                    uint8_t priority,               ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
+                    const void* payload,            ///< Transfer payload
+                    uint16_t payload_len);          ///< Length of the above, in bytes
 
 /**
  * Sends a request or a response transfer.
  * Fails if the node is in passive mode.
+ *
+ * Please refer to the specification for more details about data type signatures. Signature for any data type can be
+ * obtained in many ways; for example, using the command line tool distributed with Libcanard (see the repository).
+ *
+ * Pointer to the Transfer ID should point to a persistent variable (e.g. static or heap allocated, not on the stack);
+ * it will be updated by the library after every transmission. The Transfer ID value cannot be shared between
+ * transfers that have different descriptors! More on this in the transport layer specification.
  */
-int canardRequestOrRespond(CanardInstance* ins,
-                           uint8_t destination_node_id,
-                           uint64_t data_type_signature,
-                           uint8_t data_type_id,
-                           uint8_t* inout_transfer_id,
-                           uint8_t priority,
-                           CanardRequestResponse kind,
-                           const void* payload,
-                           uint16_t payload_len);
+int canardRequestOrRespond(CanardInstance* ins,             ///< Library instance
+                           uint8_t destination_node_id,     ///< Node ID of the server/client
+                           uint64_t data_type_signature,    ///< See above
+                           uint8_t data_type_id,            ///< Refer to the specification
+                           uint8_t* inout_transfer_id,      ///< Pointer to a persistent variable with the transfer ID
+                           uint8_t priority,                ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
+                           CanardRequestResponse kind,      ///< Refer to CanardRequestResponse
+                           const void* payload,             ///< Transfer payload
+                           uint16_t payload_len);           ///< Length of the above, in bytes
 
 /**
  * Returns a pointer to the top priority frame in the TX queue.
  * Returns NULL if the TX queue is empty.
+ * The application will call this function after canardBroadcast() or canardRequestOrRespond() to transmit generated
+ * frames over the CAN bus.
  */
 const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
 
 /**
  * Removes the top priority frame from the TX queue.
+ * The application will call this function after canardPeekTxQueue() once the obtained frame has been processed.
+ * Calling canardBroadcast() or canardRequestOrRespond() between canardPeekTxQueue() and canardPopTxQueue()
+ * is NOT allowed, because it may change the frame at the top of the TX queue.
  */
 void canardPopTxQueue(CanardInstance* ins);
 
 /**
  * Processes a received CAN frame with a timestamp.
+ * The application will call this function when it receives a new frame from the CAN bus.
  */
 void canardHandleRxFrame(CanardInstance* ins,
                          const CanardCANFrame* frame,
@@ -403,8 +436,14 @@ void canardEncodeScalar(void* destination,      ///< Destination buffer where th
 
 /**
  * This function can be invoked by the application to release pool blocks that are used
- * to store the payload of this transfer.
- * It is not mandatory to invoke it though - the library will do that if the application didn't.
+ * to store the payload of the transfer.
+ *
+ * If the application needs to send new transfers from the transfer reception callback, this function should be
+ * invoked right before calling canardBroadcast() or canardRequestOrRespond(). Not releasing the buffers before
+ * transmission may cause higher peak usage of the memory pool.
+ *
+ * If the application didn't call this function before returning from the callback, the library will do that,
+ * so it is guaranteed that the memory will not leak.
  */
 void canardReleaseRxTransferPayload(CanardInstance* ins,
                                     CanardRxTransfer* transfer);
@@ -412,13 +451,16 @@ void canardReleaseRxTransferPayload(CanardInstance* ins,
 /**
  * Returns a copy of the pool allocator usage statistics.
  * Refer to the type CanardPoolAllocatorStatistics.
+ * Use this function to determine worst case memory needs of your application.
  */
 CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* ins);
 
 /**
  * Float16 marshaling helpers.
  * These functions convert between the native float and 16-bit float.
- * It is assumed that the native float is IEEE 754 single precision float.
+ * It is assumed that the native float is IEEE 754 single precision float, otherwise results will be unpredictable.
+ * Vast majority of modern computers and microcontrollers use IEEE 754, so this limitation should not affect
+ * portability.
  */
 uint16_t canardConvertNativeFloatToFloat16(float value);
 float canardConvertFloat16ToNativeFloat(uint16_t value);
