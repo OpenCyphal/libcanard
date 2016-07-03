@@ -78,7 +78,18 @@ void canardInit(CanardInstance* out_ins,
 
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id)
 {
-    ins->node_id = self_node_id;
+    assert(ins != NULL);
+
+    if ((ins->node_id == CANARD_BROADCAST_NODE_ID) &&
+        (self_node_id >= CANARD_MIN_NODE_ID) &&
+        (self_node_id <= CANARD_MAX_NODE_ID))
+    {
+        ins->node_id = self_node_id;
+    }
+    else
+    {
+        assert(false);
+    }
 }
 
 uint8_t canardGetLocalNodeID(const CanardInstance* ins)
@@ -112,13 +123,18 @@ int canardBroadcast(CanardInstance* ins,
         {
             return -CANARD_ERROR_NODE_ID_NOT_SET;
         }
-        else
+
+        static const uint16_t DTIDMask = (1U << ANON_MSG_DATA_TYPE_ID_BIT_LEN) - 1U;
+
+        if ((data_type_id & DTIDMask) != data_type_id)
         {
-            // anonymous transfer, random discriminator
-            const uint16_t discriminator = (uint16_t)((crcAdd(0xFFFFU, payload, payload_len)) & 0x7FFEU);
-            can_id = ((uint32_t) priority << 24) | ((uint32_t) discriminator << 9) |
-                     ((uint32_t) (data_type_id & 0xFF) << 8) | (uint32_t) canardGetLocalNodeID(ins);
+            return -CANARD_ERROR_INVALID_ARGUMENT;
         }
+
+        // anonymous transfer, random discriminator
+        const uint16_t discriminator = (uint16_t)((crcAdd(0xFFFFU, payload, payload_len)) & 0x7FFEU);
+        can_id = ((uint32_t) priority << 24) | ((uint32_t) discriminator << 9) |
+                 ((uint32_t) (data_type_id & DTIDMask) << 8) | (uint32_t) canardGetLocalNodeID(ins);
     }
     else
     {
@@ -152,7 +168,7 @@ int canardRequestOrRespond(CanardInstance* ins,
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
     }
-    if (priority > 31)
+    if (priority > CANARD_TRANSFER_PRIORITY_LOWEST)
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
     }
@@ -794,9 +810,17 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
                                     uint16_t payload_len)
 {
     assert(ins != NULL);
-    assert(transfer_id != NULL);
-    assert((payload_len > 0) ? (payload != NULL) : true);
     assert((can_id & CANARD_CAN_EXT_ID_MASK) == can_id);            // Flags must be cleared
+
+    if (transfer_id == NULL)
+    {
+        return -CANARD_ERROR_INVALID_ARGUMENT;
+    }
+
+    if ((payload_len > 0) && (payload == NULL))
+    {
+        return -CANARD_ERROR_INVALID_ARGUMENT;
+    }
 
     int result = 0;
 
@@ -817,7 +841,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
         pushTxQueue(ins, queue_item);
         result++;
     }
-    else if (payload_len >= CANARD_CAN_FRAME_MAX_DATA_LEN)                  // Multi frame transfer
+    else                                                                    // Multi frame transfer
     {
         uint8_t data_index = 0;
         uint8_t toggle = 0;
