@@ -36,39 +36,39 @@ extern "C" {
 #include <stdbool.h>
 
 /// Error code definitions; inverse of these values may be returned from API calls.
-#define CANARD_OK                           0
+#define CANARD_OK                                   0
 // Value 1 is omitted intentionally, since -1 is often used in 3rd party code
-#define CANARD_ERROR_INVALID_ARGUMENT       2
-#define CANARD_ERROR_OUT_OF_MEMORY          3
-#define CANARD_ERROR_NODE_ID_NOT_SET        4
-#define CANARD_ERROR_INTERNAL               9
+#define CANARD_ERROR_INVALID_ARGUMENT               2
+#define CANARD_ERROR_OUT_OF_MEMORY                  3
+#define CANARD_ERROR_NODE_ID_NOT_SET                4
+#define CANARD_ERROR_INTERNAL                       9
 
 /// The size of a memory block in bytes.
-#define CANARD_MEM_BLOCK_SIZE               32
+#define CANARD_MEM_BLOCK_SIZE                       32
 
 /// This will be changed when the support for CAN FD is added
-#define CANARD_CAN_FRAME_MAX_DATA_LEN       8
+#define CANARD_CAN_FRAME_MAX_DATA_LEN               8
 
 /// Node ID values. Refer to the specification for more info.
-#define CANARD_BROADCAST_NODE_ID            0
-#define CANARD_MIN_NODE_ID                  1
-#define CANARD_MAX_NODE_ID                  127
+#define CANARD_BROADCAST_NODE_ID                    0
+#define CANARD_MIN_NODE_ID                          1
+#define CANARD_MAX_NODE_ID                          127
 
 /// Refer to the type CanardRxTransfer
-#define CANARD_RX_PAYLOAD_HEAD_SIZE         (CANARD_MEM_BLOCK_SIZE - offsetof(CanardRxState, buffer_head))
+#define CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE      (CANARD_MEM_BLOCK_SIZE - offsetof(CanardRxState, buffer_head))
 
 /// Refer to the type CanardBufferBlock
-#define CANARD_BUFFER_BLOCK_DATA_SIZE       (CANARD_MEM_BLOCK_SIZE - offsetof(CanardBufferBlock, data))
+#define CANARD_BUFFER_BLOCK_DATA_SIZE               (CANARD_MEM_BLOCK_SIZE - offsetof(CanardBufferBlock, data))
 
 /// Refer to canardCleanupStaleTransfers() for details.
 #define CANARD_RECOMMENDED_STALE_TRANSFER_CLEANUP_INTERVAL_USEC     1000000U
 
 /// Transfer priority definitions
-#define CANARD_TRANSFER_PRIORITY_HIGHEST    0
-#define CANARD_TRANSFER_PRIORITY_HIGH       8
-#define CANARD_TRANSFER_PRIORITY_MEDIUM     16
-#define CANARD_TRANSFER_PRIORITY_LOW        24
-#define CANARD_TRANSFER_PRIORITY_LOWEST     31
+#define CANARD_TRANSFER_PRIORITY_HIGHEST            0
+#define CANARD_TRANSFER_PRIORITY_HIGH               8
+#define CANARD_TRANSFER_PRIORITY_MEDIUM             16
+#define CANARD_TRANSFER_PRIORITY_LOW                24
+#define CANARD_TRANSFER_PRIORITY_LOWEST             31
 
 /// Related to CanardCANFrame
 #define CANARD_CAN_EXT_ID_MASK                      0x1FFFFFFFU
@@ -249,7 +249,7 @@ struct CanardRxTransfer
      */
     const uint8_t* payload_head;            ///< Always valid, i.e. not NULL.
                                             ///< For multi frame transfers, the maximum size is defined in the constant
-                                            ///< CANARD_RX_PAYLOAD_HEAD_SIZE.
+                                            ///< CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE.
                                             ///< For single-frame transfers, the size is defined in the
                                             ///< field payload_len.
     CanardBufferBlock* payload_middle;      ///< May be NULL if the buffer was not needed. Always NULL for single-frame

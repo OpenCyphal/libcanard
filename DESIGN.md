@@ -127,7 +127,7 @@ typedef struct CanardRxState
     uint8_t buffer_head[];
 } CanardRxState;
 
-#define CANARD_RX_PAYLOAD_HEAD_SIZE (CANARD_MEM_BLOCK_SIZE - sizeof(CanardRxState))
+#define CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE (CANARD_MEM_BLOCK_SIZE - sizeof(CanardRxState))
 ```
 
 Few things to note:
