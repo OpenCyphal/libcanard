@@ -400,7 +400,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
             .timestamp_usec = timestamp_usec,
             .payload_head = rx_state->buffer_head,
             .payload_middle = rx_state->buffer_blocks,
-            .payload_tail = (tail_offset >= frame->data_len) ? NULL : (frame->data + tail_offset),
+            .payload_tail = (tail_offset >= frame_payload_size) ? NULL : (&frame->data[tail_offset]),
             .payload_len = (uint16_t)(rx_state->payload_len + frame_payload_size),
             .data_type_id = data_type_id,
             .transfer_type = transfer_type,
