@@ -223,12 +223,9 @@ static void onTransferReceived(CanardInstance* ins,
         makeNodeStatusMessage(buffer);
 
         // SoftwareVersion
-        uint8_t u8 = APP_VERSION_MAJOR;
-        canardEncodeScalar(buffer, 56, 8, &u8);
-        u8 = APP_VERSION_MINOR;
-        canardEncodeScalar(buffer, 64, 8, &u8);
-        u8 = 1;                                     // Optional field flags, VCS commit is set
-        canardEncodeScalar(buffer, 72, 8, &u8);
+        buffer[7] = APP_VERSION_MAJOR;
+        buffer[8] = APP_VERSION_MINOR;
+        buffer[9] = 1;                          // Optional field flags, VCS commit is set
         uint32_t u32 = GIT_HASH;
         canardEncodeScalar(buffer, 80, 32, &u32);
         // Image CRC skipped
