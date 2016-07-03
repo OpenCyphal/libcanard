@@ -1260,7 +1260,8 @@ CANARD_INTERNAL int descatterTransferPayload(const CanardRxTransfer* transfer,
             assert(input_bit_offset >= block_bit_offset);
             const uint32_t offset = input_bit_offset - block_bit_offset;
 
-            copyBitArray(&transfer->payload_tail[0], offset, remaining_bit_length, (uint8_t*) output, output_bit_offset);
+            copyBitArray(&transfer->payload_tail[0], offset, remaining_bit_length, (uint8_t*) output,
+                         output_bit_offset);
 
             input_bit_offset += remaining_bit_length;
             output_bit_offset += remaining_bit_length;

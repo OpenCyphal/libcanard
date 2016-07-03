@@ -172,4 +172,14 @@ TEST(ScalarDecode, MultiFrame)
     // Last 64
     ASSERT_EQ(0b0100010000110011001000100001000111001100110011001100110011001100ULL,
               read<uint64_t>(&transfer, transfer.payload_len * 8 - 64, 64));
+
+    /*
+     * Testing without the middle
+     */
+    transfer.payload_middle = NULL;
+    transfer.payload_len -= CANARD_BUFFER_BLOCK_DATA_SIZE * 2;
+
+    // Last 64
+    ASSERT_EQ(0b0100010000110011001000100001000110100101101001011010010110100101ULL,
+              read<uint64_t>(&transfer, transfer.payload_len * 8 - 64, 64));
 }
