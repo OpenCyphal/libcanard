@@ -245,7 +245,7 @@ struct CanardRxTransfer
      * of the payload of the CAN frame.
      *
      * In simple cases it should be possible to get data directly from the head and/or tail pointers.
-     * Otherwise it is advised to use canardReadScalarFromRxTransfer().
+     * Otherwise it is advised to use canardDecodeScalar().
      */
     const uint8_t* payload_head;            ///< Always valid, i.e. not NULL.
                                             ///< For multi frame transfers, the maximum size is defined in the constant
@@ -364,11 +364,11 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
  *  [33, 64]    false           uint64_t
  *  [33, 64]    true            int64_t, or 64-bit float
  */
-int canardReadScalarFromRxTransfer(const CanardRxTransfer* transfer,
-                                   uint32_t bit_offset,
-                                   uint8_t bit_length,
-                                   bool value_is_signed,
-                                   void* out_value);
+int canardDecodeScalar(const CanardRxTransfer* transfer,
+                       uint32_t bit_offset,
+                       uint8_t bit_length,
+                       bool value_is_signed,
+                       void* out_value);
 
 /**
  * This function can be invoked by the application to release pool blocks that are used

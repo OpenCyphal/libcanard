@@ -118,8 +118,7 @@ static void onTransferReceived(CanardInstance* ins,
         {
             assert(received_unique_id_len < UNIQUE_ID_LENGTH_BYTES);
             const uint8_t bit_offset = (uint8_t)(UniqueIDBitOffset + received_unique_id_len * 8U);
-            (void)canardReadScalarFromRxTransfer(transfer, bit_offset, 8, false,
-                                                 &received_unique_id[received_unique_id_len]);
+            (void) canardDecodeScalar(transfer, bit_offset, 8, false, &received_unique_id[received_unique_id_len]);
         }
 
         // Obtaining the local unique ID
@@ -146,7 +145,7 @@ static void onTransferReceived(CanardInstance* ins,
         {
             // Allocation complete - copying the allocated node ID from the message
             uint8_t allocated_node_id = 0;
-            (void)canardReadScalarFromRxTransfer(transfer, 0, 7, false, &allocated_node_id);
+            (void) canardDecodeScalar(transfer, 0, 7, false, &allocated_node_id);
             assert(allocated_node_id <= 127);
 
             canardSetLocalNodeID(ins, allocated_node_id);

@@ -406,11 +406,11 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec
     }
 }
 
-int canardReadScalarFromRxTransfer(const CanardRxTransfer* transfer,
-                                   uint32_t bit_offset,
-                                   uint8_t bit_length,
-                                   bool value_is_signed,
-                                   void* out_value)
+int canardDecodeScalar(const CanardRxTransfer* transfer,
+                       uint32_t bit_offset,
+                       uint8_t bit_length,
+                       bool value_is_signed,
+                       void* out_value)
 {
     if (transfer == NULL || out_value == NULL)
     {
