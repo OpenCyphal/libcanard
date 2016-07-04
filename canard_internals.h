@@ -24,6 +24,11 @@
  * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
+/*
+ * This file holds function declarations that expose the library's internal definitions for unit testing.
+ * It is NOT part of the library's API and should not even be looked at by the user.
+ */
+
 #ifndef CANARD_INTERNALS_H
 #define CANARD_INTERNALS_H
 
@@ -37,31 +42,6 @@ extern "C" {
 #ifndef CANARD_INTERNAL
 # define CANARD_INTERNAL static
 #endif
-
-
-#define TRANSFER_TIMEOUT_USEC                       2000000
-
-#define TRANSFER_ID_BIT_LEN                         5
-
-#define ANON_MSG_DATA_TYPE_ID_BIT_LEN               2
-
-#define SOURCE_ID_FROM_ID(x)                        ((uint8_t) (((x) >> 0)  & 0x7F))
-#define SERVICE_NOT_MSG_FROM_ID(x)                  ((bool)    (((x) >> 7)  & 0x1))
-#define REQUEST_NOT_RESPONSE_FROM_ID(x)             ((bool)    (((x) >> 15) & 0x1))
-#define DEST_ID_FROM_ID(x)                          ((uint8_t) (((x) >> 8)  & 0x7F))
-#define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 24) & 0x1F))
-#define MSG_TYPE_FROM_ID(x)                         ((uint16_t)(((x) >> 8)  & 0xFFFF))
-#define SRV_TYPE_FROM_ID(x)                         ((uint8_t) (((x) >> 16) & 0xFF))
-
-#define MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, src_node_id, dst_node_id)             \
-    (((uint32_t)data_type_id) | (((uint32_t)transfer_type) << 16) |                                 \
-    (((uint32_t)src_node_id) << 18) | (((uint32_t)dst_node_id) << 25))
-
-#define TRANSFER_ID_FROM_TAIL_BYTE(x)               ((uint8_t)((x) & 0x1F))
-
-#define IS_START_OF_TRANSFER(x)                     ((bool)(((x) >> 7) & 0x1))
-#define IS_END_OF_TRANSFER(x)                       ((bool)(((x) >> 6) & 0x1))
-#define TOGGLE_BIT(x)                               ((bool)(((x) >> 5) & 0x1))
 
 
 CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins,
