@@ -24,6 +24,11 @@
  * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
+/*
+ * This file holds function declarations that expose the library's internal definitions for unit testing.
+ * It is NOT part of the library's API and should not even be looked at by the user.
+ */
+
 #ifndef CANARD_INTERNALS_H
 #define CANARD_INTERNALS_H
 
@@ -33,32 +38,10 @@
 extern "C" {
 #endif
 
+/// This macro is needed only for testing and development. Do not redefine this in production.
 #ifndef CANARD_INTERNAL
 # define CANARD_INTERNAL static
 #endif
-
-
-#define TRANSFER_TIMEOUT_USEC                       2000000
-
-#define TRANSFER_ID_BIT_LEN                         5
-
-#define SOURCE_ID_FROM_ID(x)                        ((uint8_t) (((x) >> 0)  & 0x7F))
-#define SERVICE_NOT_MSG_FROM_ID(x)                  ((bool)    (((x) >> 7)  & 0x1))
-#define REQUEST_NOT_RESPONSE_FROM_ID(x)             ((bool)    (((x) >> 15) & 0x1))
-#define DEST_ID_FROM_ID(x)                          ((uint8_t) (((x) >> 8)  & 0x7F))
-#define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 24) & 0x1F))
-#define MSG_TYPE_FROM_ID(x)                         ((uint16_t)(((x) >> 8)  & 0xFFFF))
-#define SRV_TYPE_FROM_ID(x)                         ((uint8_t) (((x) >> 16) & 0xFF))
-
-#define MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, src_node_id, dst_node_id)             \
-    (((uint32_t)data_type_id) | (((uint32_t)transfer_type) << 16) |                                 \
-    (((uint32_t)src_node_id) << 18) | (((uint32_t)dst_node_id) << 25))
-
-#define TRANSFER_ID_FROM_TAIL_BYTE(x)               ((uint8_t)((x) & 0x1F))
-
-#define IS_START_OF_TRANSFER(x)                     ((bool)(((x) >> 7) & 0x1))
-#define IS_END_OF_TRANSFER(x)                       ((bool)(((x) >> 6) & 0x1))
-#define TOGGLE_BIT(x)                               ((bool)(((x) >> 5) & 0x1))
 
 
 CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins,
@@ -110,6 +93,28 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
                                     const uint8_t* payload,
                                     uint16_t payload_len);
 
+CANARD_INTERNAL void copyBitArray(const uint8_t* src,
+                                  uint32_t src_offset,
+                                  uint32_t src_len,
+                                  uint8_t* dst,
+                                  uint32_t dst_offset);
+
+/**
+ * Moves specified bits from the scattered transfer storage to a specified contiguous buffer.
+ * Returns the number of bits copied, or negated error code.
+ */
+CANARD_INTERNAL int descatterTransferPayload(const CanardRxTransfer* transfer,
+                                             uint32_t bit_offset,
+                                             uint8_t bit_length,
+                                             void* output);
+
+CANARD_INTERNAL bool isBigEndian(void);
+
+CANARD_INTERNAL void swapByteOrder(void* data, unsigned size);
+
+/*
+ * Transfer CRC
+ */
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val,
                                     uint8_t byte);
 
