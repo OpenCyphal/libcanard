@@ -33,6 +33,7 @@
 extern "C" {
 #endif
 
+/// This macro is needed only for testing and development. Do not redefine this in production.
 #ifndef CANARD_INTERNAL
 # define CANARD_INTERNAL static
 #endif
