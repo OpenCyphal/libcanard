@@ -240,8 +240,9 @@ void canardPopTxQueue(CanardInstance* ins)
 void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec)
 {
     const CanardTransferType transfer_type = extractTransferType(frame->id);
-    const uint8_t destination_node_id =
-            (transfer_type == CanardTransferTypeBroadcast) ? ((uint8_t)0) : DEST_ID_FROM_ID(frame->id);
+    const uint8_t destination_node_id = (transfer_type == CanardTransferTypeBroadcast) ?
+                                        (uint8_t)CANARD_BROADCAST_NODE_ID :
+                                        DEST_ID_FROM_ID(frame->id);
 
     // TODO: This function should maintain statistics of transfer errors and such.
 
