@@ -429,7 +429,7 @@ int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer
  *
  * The type of value pointed to by 'value' is defined as follows:
  *  -----------------------------------------------------------
- *  bit_length  out_value points to
+ *  bit_length  value points to
  *  -----------------------------------------------------------
  *  1           bool (may be incompatible with uint8_t!)
  *  [2, 8]      uint8_t, int8_t, or char
