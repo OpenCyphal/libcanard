@@ -19,7 +19,7 @@ extern "C"
 /**
  * Initializes the AVR instance.
  */
-int canardAVRInit(void);
+int canardAVRInit(uint32_t id);
 
 /**
  * Deinitializes the AVR instance.

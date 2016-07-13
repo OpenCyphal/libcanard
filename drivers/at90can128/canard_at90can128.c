@@ -9,13 +9,33 @@
 #include <string.h>
 
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <avr/pgmspace.h>
-#include "can.h"
+#include <can.h>
 
-int canardAVRInit(void)
+int canardAVRInit(uint32_t id)
 {
 
     can_init(BITRATE_500_KBPS);
+    can_set_mode(NORMAL_MODE);
+
+    // todo: filter messages (let only messages for this id pass)
+    //       by hardware filter
+    // create a new filter for receiving all messages
+    can_filter_t filter = {
+        .id = 0,
+        .mask = 0,
+        .flags = {
+            .rtr = 0,
+            .extended = 0
+        }
+    };
+
+    can_set_filter(0, &filter);
+
+    // enable interrupts
+    sei();
+
     return 0;
 }
 
