@@ -752,9 +752,9 @@ uint16_t canardConvertNativeFloatToFloat16(float value)
         float f;
     };
 
-    const union FP32 f32inf = { 255U << 23 };
-    const union FP32 f16inf = { 31U << 23 };
-    const union FP32 magic = { 15U << 23 };
+    const union FP32 f32inf = { 255UL << 23 };
+    const union FP32 f16inf = { 31UL << 23 };
+    const union FP32 magic = { 15UL << 23 };
     const uint32_t sign_mask = 0x80000000U;
     const uint32_t round_mask = ~0xFFFU;
 
@@ -796,17 +796,17 @@ float canardConvertFloat16ToNativeFloat(uint16_t value)
         float f;
     };
 
-    const union FP32 magic = { (254U - 15U) << 23 };
-    const union FP32 was_inf_nan = { (127U + 16U) << 23 };
+    const union FP32 magic = { (254UL - 15UL) << 23 };
+    const union FP32 was_inf_nan = { (127UL + 16UL) << 23 };
     union FP32 out;
 
     out.u = (value & 0x7FFFU) << 13;
     out.f *= magic.f;
     if (out.f >= was_inf_nan.f)
     {
-        out.u |= 255U << 23;
+        out.u |= 255UL << 23;
     }
-    out.u |= (value & 0x8000U) << 16;
+    out.u |= (value & 0x8000UL) << 16;
 
     return out.f;
 }
