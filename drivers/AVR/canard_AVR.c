@@ -5,7 +5,7 @@
  *
  */
 
-#include <canard_at90can128.h>
+#include <canard_AVR.h>
 #include <string.h>
 
 #include <avr/io.h>
@@ -15,7 +15,6 @@
 
 int canardAVRInit(uint32_t id)
 {
-
     can_init(BITRATE_500_KBPS);
     can_set_mode(NORMAL_MODE);
 
@@ -47,11 +46,7 @@ int canardAVRClose(void)
 int canardAVRTransmit(const CanardCANFrame* frame)
 {
     const int poll_result = can_check_free_buffer();
-    if (poll_result < 0)
-    {
-        return -1;
-    }
-    if (poll_result == 0)
+    if (poll_result <= 0)
     {
         return 0;
     }
@@ -74,13 +69,8 @@ int canardAVRTransmit(const CanardCANFrame* frame)
 
 int canardAVRReceive(CanardCANFrame* out_frame)
 {
-
     const int poll_result = can_check_message();
-    if (poll_result < 0)
-    {
-        return -1;
-    }
-    if (poll_result == 0)
+    if (poll_result <= 0)
     {
         return 0;
     }
