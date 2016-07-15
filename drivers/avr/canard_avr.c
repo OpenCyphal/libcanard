@@ -7,7 +7,7 @@
 
 #define HAS_CAN_CONFIG_H
 
-#include <canard_AVR.h>
+#include <canard_avr.h>
 #include <string.h>
 
 #include <avr/io.h>

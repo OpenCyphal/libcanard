@@ -1,3 +1,3 @@
-[submodule "drivers/AVR/avr-can-lib"]
-	path = drivers/AVR/avr-can-lib
+[submodule "drivers/avr/avr-can-lib"]
+	path = drivers/avr/avr-can-lib
 	url = https://github.com/rennerm/avr-can-lib
