@@ -42,5 +42,5 @@ $ make
 ### Use
 
  1. Initialize `canardAVRInit(CAN_BITRATE)` with appropriate bitrate (bits/sec.)
- 2. Retrieve (allocation of dynamic node ID) or set CAN ID manually
+ 2. Retrieve (allocation of dynamic node ID) or set node ID manually
  3. Set CAN hardware filter `canardAVRConfigureAcceptanceFilters(NODE_ID)` with node ID from above

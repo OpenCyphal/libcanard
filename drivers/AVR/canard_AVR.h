@@ -73,9 +73,9 @@ int canardAVRReceive(CanardCANFrame* out_frame);
 
 /**
  * @ingroup canard_avr_interface
- * @brief Set hardware acceptance filters for specific CAN ID
+ * @brief Set hardware acceptance filters for specific node ID
  *
- * @param [in] id  CAN ID for hardware filter
+ * @param [in] id  node ID for hardware filter
  *
  * @retval      -1         Error, filters could no be set
  * @retval      1          Set filter successful
