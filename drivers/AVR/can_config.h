@@ -1,7 +1,5 @@
-#ifndef	CONFIG_H
-#define	CONFIG_H
-
-#define CAN_CONFIG_LOADED
+#ifndef	CAN_CONFIG_H
+#define	CAN_CONFIG_H
 
 // -----------------------------------------------------------------------------
 /* Global settings for building the can-lib and application program.
@@ -24,7 +22,7 @@
  * Selecting them on any other controller will have no effect, they will
  * be 0 all the time.
  */
-#define	SUPPORT_TIMESTAMPS		1
+#define	SUPPORT_TIMESTAMPS		0
 
 
 // -----------------------------------------------------------------------------
@@ -36,6 +34,36 @@
 #define	SUPPORT_AT90CAN			1
 #define	SUPPORT_SJA1000			0
 
+
+// -----------------------------------------------------------------------------
+/* Setting for MCP2515
+ *
+ * Declare which pins you are using for communication.
+ * Remember NOT to use them in your application!
+ * It is a good idea to use bits from the port that carries MOSI, MISO, SCK.
+ */
+#define	MCP2515_CS				B,4
+#define	MCP2515_INT				B,2
+
+// -----------------------------------------------------------------------------
+// Setting for SJA1000
+
+#define	SJA1000_INT				E,0
+#define	SJA1000_MEMORY_MAPPED	1
+
+// memory-mapped interface
+#define	SJA1000_BASE_ADDR		0x8000		// for ATMega162
+
+/*
+// port-interface
+#define	SJA1000_WR				D,6
+#define	SJA1000_RD				D,7
+
+#define	SJA1000_ALE				E,1
+#define	SJA1000_CS				C,0
+#define	SJA1000_DATA			A
+*/
+
 // -----------------------------------------------------------------------------
 // Setting for AT90CAN
 
@@ -46,4 +74,4 @@
 // only available if CAN_TX_BUFFER_SIZE > 0
 #define CAN_FORCE_TX_ORDER		1
 
-#endif	// CONFIG_H
+#endif	// CAN_CONFIG_H
