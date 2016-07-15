@@ -71,6 +71,17 @@ int canardAVRTransmit(const CanardCANFrame* frame);
  */
 int canardAVRReceive(CanardCANFrame* out_frame);
 
+/**
+ * @ingroup canard_avr_interface
+ * @brief Set hardware acceptance filters for specific CAN ID
+ *
+ * @param [in] id  CAN ID for hardware filter
+ *
+ * @retval      -1         Error, filters could no be set
+ * @retval      1          Set filter successful
+ */
+int canardAVRConfigureAcceptanceFilters(uint8_t node_id);
+
 #ifdef __cplusplus
 }
 #endif
