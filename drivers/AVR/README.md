@@ -4,7 +4,7 @@
 
  Github: https://github.com/dergraaf/avr-can-lib
 
- ## Important
+## Important
 
  **Only tested for AT90CAN128!**
  Currently the driver works only with additional buffer from the avr-can-lib (see below) as the internal CAN Buffer (MOb's) are not read fast enough and therefore overflow occur even with hardware filter enabled.
@@ -15,9 +15,9 @@
 #define CAN_FORCE_TX_ORDER              1
 ```
 
- ## How-to
+## How-to
 
- ### Setup library
+### Setup library
  Adjust file *can_config.h* to your needs.
  In file *CMakeLists.txt* set your controller and corresponding frequency:
 
@@ -39,7 +39,7 @@ $ make
  *can_config.h*  
  in your project.
 
- ### Use
+### Use
 
  1. Initialize `canardAVRInit(CAN_BITRATE)` with appropriate bitrate (bits/sec.)
  2. Retrieve (allocation of dynamic node ID) or set CAN ID manually
