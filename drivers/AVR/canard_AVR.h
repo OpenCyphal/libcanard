@@ -32,11 +32,11 @@ extern "C"
  * @brief Initialize CAN interface on AVR microcontroller.
  * @warning Enables interrupts!
  *
- * @param [in] id  CAN ID for hardware filter (to be implemented)
+ * @param [in] bitrate  Set CAN bitrate (bits/sec.)
  *
- * @retval     0   Successfully initialized.
+ * @retval     0        Successfully initialized.
  */
-int canardAVRInit(uint32_t id);
+int canardAVRInit(uint32_t bitrate);
 
 /**
  * @ingroup canard_avr_interface

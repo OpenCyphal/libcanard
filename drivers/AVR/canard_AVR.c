@@ -5,6 +5,8 @@
  *
  */
 
+#define HAS_CAN_CONFIG_H
+
 #include <canard_AVR.h>
 #include <string.h>
 
@@ -13,13 +15,60 @@
 #include <avr/pgmspace.h>
 #include <can.h>
 
-int canardAVRInit(uint32_t id)
+int canardAVRInit(uint32_t bitrate)
 {
-    can_init(BITRATE_500_KBPS);
+    can_bitrate_t br;
+    switch(bitrate)
+    {
+    case 10000:
+    {
+        br = BITRATE_10_KBPS;
+        break;
+    }
+    case 20000:
+    {
+        br = BITRATE_20_KBPS;
+        break;
+    }
+    case 50000:
+    {
+        br = BITRATE_50_KBPS;
+        break;
+    }
+    case 100000:
+    {
+        br = BITRATE_100_KBPS;
+        break;
+    }
+    case 125000:
+    {
+        br = BITRATE_125_KBPS;
+        break;
+    }
+    case 250000:
+    {
+        br = BITRATE_250_KBPS;
+        break;
+    }
+    case 500000:
+    {
+        br = BITRATE_500_KBPS;
+        break;
+    }
+    case 1000000:
+    {
+        br = BITRATE_1_MBPS;
+        break;
+    }
+    default:
+    {
+        br = BITRATE_10_KBPS;
+    }
+    }
+
+    can_init(br);
     can_set_mode(NORMAL_MODE);
 
-    // todo: filter messages (let only messages for this id pass)
-    //       by hardware filter
     // create a new filter for receiving all messages
     can_filter_t filter = {
         .id = 0,
