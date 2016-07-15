@@ -150,35 +150,18 @@ int canardAVRConfigureAcceptanceFilters(uint8_t node_id)
 
     // create a new filter for receiving messages
     can_filter_t filter_in = {
-        .id = (uint32_t)(node_id << 8),
-        .mask = ~(uint32_t)(node_id << 8),
+        .id = ((uint32_t)node_id << 8),
+        .mask = ((uint32_t)0x7F << 8),
         .flags = {
             .rtr = 0,
-            .extended = 0
+            .extended = 3
         }
     };
 
-    for (i = 0; i<7; i++)
+    // setup 2 MOb's to receive, 12 MOb's are used as send buffer
+    for (i = 0; i<2; i++)
     {
         if (!can_set_filter(i, &filter_in))
-        {
-            res = -1;
-        }
-    }
-
-    // create a new filter for sending messages
-    can_filter_t filter_out = {
-        .id = (uint32_t)(node_id),
-        .mask = ~(uint32_t)(node_id),
-        .flags = {
-            .rtr = 0,
-            .extended = 0
-        }
-    };
-
-    for (i = 7; i<14; i++)
-    {
-        if (!can_set_filter(i, &filter_out))
         {
             res = -1;
         }
