@@ -1,5 +1,5 @@
-#ifndef	CAN_CONFIG_H
-#define	CAN_CONFIG_H
+#ifndef CAN_CONFIG_H
+#define CAN_CONFIG_H
 
 // -----------------------------------------------------------------------------
 /* Global settings for building the can-lib and application program.
@@ -15,24 +15,24 @@
  *
  * Select if you want to use 29 bit identifiers.
  */
-#define	SUPPORT_EXTENDED_CANID	1
+#define SUPPORT_EXTENDED_CANID  1
 
 /* Select if you want to use timestamps.
  * Timestamps are sourced from a register internal to the AT90CAN.
  * Selecting them on any other controller will have no effect, they will
  * be 0 all the time.
  */
-#define	SUPPORT_TIMESTAMPS		0
+#define SUPPORT_TIMESTAMPS              0
 
 
 // -----------------------------------------------------------------------------
 /* Global settings for building the can-lib.
  *
- * Select ONE CAN controller for which you are building the can-lib. 
+ * Select ONE CAN controller for which you are building the can-lib.
  */
-#define	SUPPORT_MCP2515			0
-#define	SUPPORT_AT90CAN			1
-#define	SUPPORT_SJA1000			0
+#define SUPPORT_MCP2515                 0
+#define SUPPORT_AT90CAN                 1
+#define SUPPORT_SJA1000                 0
 
 
 // -----------------------------------------------------------------------------
@@ -42,36 +42,36 @@
  * Remember NOT to use them in your application!
  * It is a good idea to use bits from the port that carries MOSI, MISO, SCK.
  */
-#define	MCP2515_CS				B,4
-#define	MCP2515_INT				B,2
+#define MCP2515_CS                              B, 4
+#define MCP2515_INT                             B, 2
 
 // -----------------------------------------------------------------------------
 // Setting for SJA1000
 
-#define	SJA1000_INT				E,0
-#define	SJA1000_MEMORY_MAPPED	1
+#define SJA1000_INT                             E, 0
+#define SJA1000_MEMORY_MAPPED   1
 
 // memory-mapped interface
-#define	SJA1000_BASE_ADDR		0x8000		// for ATMega162
+#define SJA1000_BASE_ADDR               0x8000          // for ATMega162
 
 /*
-// port-interface
-#define	SJA1000_WR				D,6
-#define	SJA1000_RD				D,7
+   // port-interface
+   #define	SJA1000_WR				D,6
+   #define	SJA1000_RD				D,7
 
-#define	SJA1000_ALE				E,1
-#define	SJA1000_CS				C,0
-#define	SJA1000_DATA			A
-*/
+   #define	SJA1000_ALE				E,1
+   #define	SJA1000_CS				C,0
+   #define	SJA1000_DATA			A
+ */
 
 // -----------------------------------------------------------------------------
 // Setting for AT90CAN
 
 // Number of CAN messages which are buffered in RAM additinally to the MObs
-#define CAN_RX_BUFFER_SIZE		16
-#define CAN_TX_BUFFER_SIZE		8
+#define CAN_RX_BUFFER_SIZE              16
+#define CAN_TX_BUFFER_SIZE              8
 
 // only available if CAN_TX_BUFFER_SIZE > 0
-#define CAN_FORCE_TX_ORDER		1
+#define CAN_FORCE_TX_ORDER              1
 
-#endif	// CAN_CONFIG_H
+#endif  // CAN_CONFIG_H
