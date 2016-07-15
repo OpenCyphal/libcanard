@@ -62,7 +62,7 @@ int canardAVRInit(uint32_t bitrate)
     }
     default:
     {
-        br = BITRATE_10_KBPS;
+        return -1;
     }
     }
 

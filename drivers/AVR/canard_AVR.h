@@ -43,7 +43,8 @@ int canardAVRInit(uint32_t bitrate);
  * @brief Deinitialize CAN interface on AVR microcontroller.
  * @warning Not implemented
  *
- * @retval 0
+ * @retval 1     Initialisation successful
+ * @retval -1    Error, bitrate not supported
  */
 int canardAVRClose(void);
 
