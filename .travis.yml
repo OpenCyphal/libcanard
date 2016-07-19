@@ -32,7 +32,7 @@ script:
     - make
     - ./run_tests
     - cd ..
-    # Building the AVR driver
+    # Building the AVR driver (TODO: skip this during Clang build)
     - mkdir build-avr
     - cd build-avr
     - cmake ../drivers/avr
