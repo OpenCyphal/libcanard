@@ -128,7 +128,7 @@ int canardBroadcast(CanardInstance* ins,
                     const void* payload,
                     uint16_t payload_len)
 {
-    if (payload == NULL)
+    if (payload == NULL && payload_len > 0)
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
     }
@@ -187,7 +187,7 @@ int canardRequestOrRespond(CanardInstance* ins,
                            const void* payload,
                            uint16_t payload_len)
 {
-    if (payload == NULL)
+    if (payload == NULL && payload_len > 0)
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
     }
