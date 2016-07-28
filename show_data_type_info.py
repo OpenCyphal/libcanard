@@ -25,23 +25,23 @@ def printUsage():
     print("""show_data_type_info:
     [-h, --help]: show this help
     [-c, --custom] [path/to/custom/types]: path to your custom types '00.mymsgtype.uavcan'
-    """);
+    """)
     
 if __name__ == "__main__":
     # decode options given to the script
     try:
         opts, args = getopt.getopt(sys.argv[1:],'hc:',['help','custom='])
     except getopt.GetoptError:
-        printUsage();
-        sys.exit();
-        
+        printUsage()
+        sys.exit()
+    
     # include/execute options given to the script
     for opt, arg in opts:
         if opt in ('-h','--help'):
-            printUsage();
-            sys.exit();
+            printUsage()
+            sys.exit()
         elif opt in ('-c','--custom'):
-            uavcan.load_dsdl(arg);
+            uavcan.load_dsdl(arg)
     
     longest_name = max(map(len, uavcan.TYPENAMES.keys()))
     
