@@ -1227,6 +1227,12 @@ CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
     if (state->buffer_blocks == NULL)
     {
         state->buffer_blocks = createBufferBlock(allocator);
+
+        if (state->buffer_blocks == NULL)
+        {
+            return -CANARD_ERROR_OUT_OF_MEMORY;
+        }
+
         block = state->buffer_blocks;
         index_at_nth_block = 0;
     }
