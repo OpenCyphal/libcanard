@@ -277,18 +277,25 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         if (ins->should_accept(ins, &data_type_signature, data_type_id, transfer_type, source_node_id))
         {
             rx_state = traverseRxStates(ins, transfer_descriptor);
+
+            if(rx_state == NULL)
+            {
+                return; // No allocator room for this frame
+            }
+
             rx_state->calculated_crc = crcAddSignature(0xFFFFU, data_type_signature);
         }
     }
     else
     {
         rx_state = findRxState(ins->rx_states, transfer_descriptor);
+
+        if (rx_state == NULL)
+        {
+            return;
+        }
     }
 
-    if (rx_state == NULL)
-    {
-        return;
-    }
 
     // Resolving the state flags:
     const bool not_initialized = rx_state->timestamp_usec == 0;
@@ -1096,6 +1103,12 @@ CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins, uint32_t tr
     if (states == NULL) // initialize CanardRxStates
     {
         states = createRxState(&ins->allocator, transfer_descriptor);
+        
+        if(states == NULL)
+        {
+            return NULL;
+        }
+
         ins->rx_states = states;
         return states;
     }
@@ -1133,6 +1146,12 @@ CANARD_INTERNAL CanardRxState* findRxState(CanardRxState* state, uint32_t transf
 CANARD_INTERNAL CanardRxState* prependRxState(CanardInstance* ins, uint32_t transfer_descriptor)
 {
     CanardRxState* state = createRxState(&ins->allocator, transfer_descriptor);
+
+    if(state == NULL)
+    {
+        return NULL;
+    }
+
     state->next = ins->rx_states;
     ins->rx_states = state;
     return state;
