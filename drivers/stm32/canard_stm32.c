@@ -73,7 +73,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* timings,
     if (!waitMSRINAKBitStateChange(true))
     {
         BXCAN->MCR = CANARD_STM32_CAN_MCR_RESET;
-        return CANARD_STM32_ERROR_MSR_INAK_NOT_SET;
+        return -CANARD_STM32_ERROR_MSR_INAK_NOT_SET;
     }
 
     /*
@@ -96,7 +96,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* timings,
     if (!waitMSRINAKBitStateChange(false))
     {
         BXCAN->MCR = CANARD_STM32_CAN_MCR_RESET;
-        return CANARD_STM32_ERROR_MSR_INAK_NOT_CLEARED;
+        return -CANARD_STM32_ERROR_MSR_INAK_NOT_CLEARED;
     }
 
     /*
@@ -120,6 +120,8 @@ int canardSTM32Init(const CanardSTM32CANTimings* timings,
     BXCAN->FA1R = 1;
 
     BXCAN->FMR &= ~CANARD_STM32_CAN_FMR_FINIT;
+
+    return 0;
 }
 
 
