@@ -325,6 +325,7 @@ typedef struct
  * - Local node ID
  * - Memory pool and the associated state variables
  * - List of RX state objects
+ * - An optional user-provided untyped pointer to user-specific data
  */
 struct CanardInstance;
 
@@ -336,7 +337,8 @@ void canardInit(CanardInstance* out_ins,
                 void* mem_arena,
                 size_t mem_arena_size,
                 CanardOnTransferReception on_reception,
-                CanardShouldAcceptTransfer should_accept);
+                CanardShouldAcceptTransfer should_accept,
+                void* user_reference);
 
 /**
  * Assigns a new node ID value to the current node.

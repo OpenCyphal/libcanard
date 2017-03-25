@@ -233,6 +233,8 @@ struct CanardInstance
 
     CanardRxState* rx_states;                       ///< RX transfer states
     CanardTxQueueItem* tx_queue;                    ///< TX frames awaiting transmission
+
+    void* user_reference;                           ///< User pointer that can link this instance with other objects
 };
 
 /**
@@ -298,7 +300,15 @@ void canardInit(CanardInstance* out_ins,                    ///< Uninitialized l
                 void* mem_arena,                            ///< Raw memory chunk used for dynamic allocation
                 size_t mem_arena_size,                      ///< Size of the above, in bytes
                 CanardOnTransferReception on_reception,     ///< Callback, see CanardOnTransferReception
-                CanardShouldAcceptTransfer should_accept);  ///< Callback, see CanardShouldAcceptTransfer
+                CanardShouldAcceptTransfer should_accept,   ///< Callback, see CanardShouldAcceptTransfer
+                void* user_reference);                      ///< Optional pointer for user's convenience, can be NULL
+
+/**
+ * Returns the value of the user pointer.
+ * The user pointer is configured once during initialization.
+ * It can be used to store references to any user-specific data, or to link the instance object with C++ objects.
+ */
+void* canardGetUserReference(CanardInstance* ins);
 
 /**
  * Assigns a new node ID value to the current node.
