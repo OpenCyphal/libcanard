@@ -27,15 +27,14 @@
 #ifndef CANARD_H
 #define CANARD_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 #include <assert.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /// Libcanard version. API will be backwards compatible within the same major version.
 #define CANARD_VERSION_MAJOR                        0
