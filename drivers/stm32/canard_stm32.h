@@ -90,7 +90,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
  * @retval      0               No space in the buffer
  * @retval      negative        Error
  */
-int canardSTM32Transmit(const CanardCANFrame* frame);
+int canardSTM32Transmit(const CanardCANFrame* const frame);
 
 /**
  * Reads one frame from the RX buffer, unless the buffer is empty.
@@ -100,7 +100,7 @@ int canardSTM32Transmit(const CanardCANFrame* frame);
  * @retval      0               The buffer is empty
  * @retval      negative        Error
  */
-int canardSTM32Receive(CanardCANFrame* out_frame);
+int canardSTM32Receive(CanardCANFrame* const out_frame);
 
 /**
  * Sets up acceptance filters according to the provided list of ID and masks.
@@ -109,8 +109,8 @@ int canardSTM32Receive(CanardCANFrame* out_frame);
  * @retval      0               Success
  * @retval      negative        Error
  */
-int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* filter_configs,
-                                          unsigned num_filter_configs);
+int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
+                                          const unsigned num_filter_configs);
 
 /**
  * Returns the runnning interface statistics.

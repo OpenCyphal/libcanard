@@ -271,7 +271,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
 }
 
 
-int canardSTM32Transmit(const CanardCANFrame* frame)
+int canardSTM32Transmit(const CanardCANFrame* const frame)
 {
     if (frame == NULL)
     {
@@ -377,7 +377,7 @@ int canardSTM32Transmit(const CanardCANFrame* frame)
 }
 
 
-int canardSTM32Receive(CanardCANFrame* out_frame)
+int canardSTM32Receive(CanardCANFrame* const out_frame)
 {
     if (out_frame == NULL)
     {
@@ -439,8 +439,8 @@ int canardSTM32Receive(CanardCANFrame* out_frame)
 }
 
 
-int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* filter_configs,
-                                          unsigned num_filter_configs)
+int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
+                                          const unsigned num_filter_configs)
 {
     // TODO: IMPLEMENT THIS
     assert(0);
