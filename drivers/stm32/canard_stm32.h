@@ -21,6 +21,7 @@ extern "C"
 #define CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE                         1000
 #define CANARD_STM32_ERROR_MSR_INAK_NOT_SET                             1001
 #define CANARD_STM32_ERROR_MSR_INAK_NOT_CLEARED                         1002
+#define CANARD_STM32_ERROR_UNSUPPORTED_FRAME_FORMAT                     1003
 
 /**
  * This is defined by the bxCAN hardware.
@@ -64,6 +65,8 @@ typedef struct
  *
  * WARNING: The clock of the CAN module must be enabled before this function is invoked!
  *
+ * WARNING: The driver is not thread-safe!
+ *
  * @retval      0               Success
  * @retval      negative        Error
  */
@@ -72,6 +75,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* timings,
 
 /**
  * Pushes one frame into the TX buffer, if there is space.
+ * Note that proper care is taken to ensure that no inner priority inversion is taking place.
  * This function does never block.
  *
  * @retval      1               Transmitted successfully
