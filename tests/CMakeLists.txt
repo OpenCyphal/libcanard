@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2016 UAVCAN Team
+# Copyright (c) 2016-2017 UAVCAN Team
 #
 
 cmake_minimum_required(VERSION 2.8)

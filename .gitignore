@@ -33,6 +33,7 @@
 
 # CMake build directory
 build/
+cmake-build-*/
 
 # IDE and tools
 .idea

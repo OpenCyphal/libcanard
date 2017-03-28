@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 UAVCAN Team
+ * Copyright (c) 2016-2017 UAVCAN Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -72,8 +72,11 @@ void canardInit(CanardInstance* out_ins,
                 void* mem_arena,
                 size_t mem_arena_size,
                 CanardOnTransferReception on_reception,
-                CanardShouldAcceptTransfer should_accept)
+                CanardShouldAcceptTransfer should_accept,
+                void* user_reference)
 {
+    CANARD_ASSERT(out_ins != NULL);
+
     /*
      * Checking memory layout.
      * This condition is supposed to be true for all 32-bit and smaller platforms.
@@ -89,6 +92,7 @@ void canardInit(CanardInstance* out_ins,
     out_ins->should_accept = should_accept;
     out_ins->rx_states = NULL;
     out_ins->tx_queue = NULL;
+    out_ins->user_reference = user_reference;
 
     size_t pool_capacity = mem_arena_size / CANARD_MEM_BLOCK_SIZE;
     if (pool_capacity > 0xFFFFU)
@@ -97,6 +101,12 @@ void canardInit(CanardInstance* out_ins,
     }
 
     initPoolAllocator(&out_ins->allocator, mem_arena, (uint16_t)pool_capacity);
+}
+
+void* canardGetUserReference(CanardInstance* ins)
+{
+    CANARD_ASSERT(ins != NULL);
+    return ins->user_reference;
 }
 
 void canardSetLocalNodeID(CanardInstance* ins, uint8_t self_node_id)

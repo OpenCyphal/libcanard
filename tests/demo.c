@@ -424,7 +424,7 @@ int main(int argc, char** argv)
     /*
      * Initializing the Libcanard instance.
      */
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool), onTransferReceived, shouldAcceptTransfer);
+    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool), onTransferReceived, shouldAcceptTransfer, NULL);
 
     /*
      * Performing the dynamic node ID allocation procedure.
