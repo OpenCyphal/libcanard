@@ -32,6 +32,8 @@
  */
 static CanardSTM32Stats g_stats;
 
+static bool g_abort_tx_on_error = false;
+
 
 static bool isFramePriorityHigher(uint32_t a, uint32_t b)
 {
@@ -143,14 +145,37 @@ static bool waitMSRINAKBitStateChange(bool target_state)
 }
 
 
-int canardSTM32Init(const CanardSTM32CANTimings* timings,
-                    CanardSTM32IfaceMode iface_mode)
+static void processErrorStatus(void)
+{
+    /*
+     * Aborting TX transmissions if abort on error was requested
+     * Updating error counter
+     */
+    const uint8_t lec = (uint8_t)((BXCAN->ESR & CANARD_STM32_CAN_ESR_LEC_MASK) >> CANARD_STM32_CAN_ESR_LEC_SHIFT);
+
+    if (lec != 0)
+    {
+        BXCAN->ESR = 0;                 // This action does only affect the LEC bits, other bits are read only!
+        g_stats.error_count++;
+
+        // Abort pending transmissions if auto abort on error is enabled, or if we're in bus off mode
+        if (g_abort_tx_on_error || (BXCAN->ESR & CANARD_STM32_CAN_ESR_BOFF))
+        {
+            BXCAN->TSR = CANARD_STM32_CAN_TSR_ABRQ0 | CANARD_STM32_CAN_TSR_ABRQ1 | CANARD_STM32_CAN_TSR_ABRQ2;
+        }
+    }
+}
+
+
+int canardSTM32Init(const CanardSTM32CANTimings* const timings,
+                    const CanardSTM32IfaceMode iface_mode)
 {
     /*
      * Paranoia time.
      */
     if ((iface_mode != CanardSTM32IfaceModeNormal) &&
-        (iface_mode != CanardSTM32IfaceModeSilent))
+        (iface_mode != CanardSTM32IfaceModeSilent) &&
+        (iface_mode != CanardSTM32IfaceModeAutomaticTxAbortOnError))
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
     }
@@ -178,6 +203,8 @@ int canardSTM32Init(const CanardSTM32CANTimings* timings,
     }
 
     memset(&g_stats, 0, sizeof(g_stats));
+
+    g_abort_tx_on_error = (iface_mode == CanardSTM32IfaceModeAutomaticTxAbortOnError);
 
     /*
      * Hardware initialization (the hardware has already confirmed initialization mode, see above)
@@ -255,6 +282,11 @@ int canardSTM32Transmit(const CanardCANFrame* frame)
     {
         return -CANARD_STM32_ERROR_UNSUPPORTED_FRAME_FORMAT;
     }
+
+    /*
+     * Handling error status might free up some slots through aborts
+     */
+    processErrorStatus();
 
     /*
      * Seeking an empty slot, checking if priority inversion would occur if we enqueued now.
@@ -359,10 +391,9 @@ int canardSTM32Receive(CanardCANFrame* out_frame)
     };
 
     /*
-     * Aborting TX transmissions if abort on error was requested
-     * Updating error counter
+     * This function must be polled periodically, so we use this opportunity to do it.
      */
-    // TODO
+    processErrorStatus();
 
     /*
      * Reading the TX FIFO

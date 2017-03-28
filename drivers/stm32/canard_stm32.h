@@ -33,7 +33,8 @@ extern "C"
 typedef enum
 {
     CanardSTM32IfaceModeNormal,
-    CanardSTM32IfaceModeSilent
+    CanardSTM32IfaceModeSilent,
+    CanardSTM32IfaceModeAutomaticTxAbortOnError
 } CanardSTM32IfaceMode;
 
 
@@ -77,8 +78,8 @@ typedef struct
  * @retval      0               Success
  * @retval      negative        Error
  */
-int canardSTM32Init(const CanardSTM32CANTimings* timings,
-                    CanardSTM32IfaceMode iface_mode);
+int canardSTM32Init(const CanardSTM32CANTimings* const timings,
+                    const CanardSTM32IfaceMode iface_mode);
 
 /**
  * Pushes one frame into the TX buffer, if there is space.
