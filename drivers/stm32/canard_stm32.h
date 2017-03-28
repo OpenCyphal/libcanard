@@ -39,6 +39,13 @@ typedef enum
 
 typedef struct
 {
+    uint64_t rx_overflow_count;
+    uint64_t error_count;
+} CanardSTM32Stats;
+
+
+typedef struct
+{
     uint32_t id;
     uint32_t mask;
 } CanardSTM32AcceptanceFilterConfiguration;
@@ -105,6 +112,11 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
                                           unsigned num_filter_configs);
 
 /**
+ * Returns the runnning interface statistics.
+ */
+CanardSTM32Stats canardSTM32GetStats(void);
+
+/**
  * Given the rate of the clock supplied to the bxCAN macrocell (typically PCLK1) and the desired bit rate,
  * this function iteratively solves for the best possible timing settings. The CAN bus timing parameters,
  * such as the sample point location, the number of time quantas per bit, etc., are optimized according to the
@@ -148,7 +160,7 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
  * @retval 0            Success
  * @retval negative     Solution could not be found for the provided inputs.
  */
-static
+static inline
 int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
                                  const uint32_t target_bitrate,
                                  CanardSTM32CANTimings* const out_timings)

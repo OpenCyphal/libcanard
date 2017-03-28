@@ -21,16 +21,16 @@
 # define CANARD_STM32_DEBUG_INNER_PRIORITY_INVERSION            1
 #endif
 
-#if !defined(CANARD_STM32_DEBUG_RX_OVERFLOW)
-# define CANARD_STM32_DEBUG_RX_OVERFLOW                         1
-#endif
-
-
 #if CANARD_STM32_USE_CAN2
 # define BXCAN                                                  CANARD_STM32_CAN2
 #else
 # define BXCAN                                                  CANARD_STM32_CAN1
 #endif
+
+/*
+ * State variables
+ */
+static CanardSTM32Stats g_stats;
 
 
 static bool isFramePriorityHigher(uint32_t a, uint32_t b)
@@ -177,6 +177,8 @@ int canardSTM32Init(const CanardSTM32CANTimings* timings,
         return -CANARD_STM32_ERROR_MSR_INAK_NOT_SET;
     }
 
+    memset(&g_stats, 0, sizeof(g_stats));
+
     /*
      * Hardware initialization (the hardware has already confirmed initialization mode, see above)
      */
@@ -295,11 +297,11 @@ int canardSTM32Transmit(const CanardCANFrame* frame)
              * just happend (sic!), because we can't enqueue the higher priority frame due to all TX mailboxes
              * being busy. This scenario is extremely unlikely, because in order for it to happen, the application
              * would need to transmit 4 (four) or more CAN frames with different CAN ID ordered from high ID to
-             * low ID. For example:
+             * low ID nearly at the same time. For example:
              *  1. 0x123        <-- Takes mailbox 0 (or any other)
              *  2. 0x122        <-- Takes mailbox 2 (or any other)
              *  3. 0x121        <-- Takes mailbox 1 (or any other)
-             *  4. 0x120        <-- INNER PRIORITY INVERSION HERE
+             *  4. 0x120        <-- INNER PRIORITY INVERSION HERE (only if all three TX mailboxes are still busy)
              * This situation is even less likely to cause any noticeable disruptions on the CAN bus. Despite that,
              * it is better to warn the developer about that during debugging, so we fire an assertion failure here.
              * It is perfectly safe to remove it.
@@ -356,15 +358,26 @@ int canardSTM32Receive(CanardCANFrame* out_frame)
         &BXCAN->RF1R
     };
 
+    /*
+     * Aborting TX transmissions if abort on error was requested
+     * Updating error counter
+     */
+    // TODO
+
+    /*
+     * Reading the TX FIFO
+     */
     for (uint_fast8_t i = 0; i < 2; i++)
     {
         volatile CanardSTM32RxMailboxType* const mb = &BXCAN->RxMailbox[i];
 
         if (((*RFxR[i]) & CANARD_STM32_CAN_RFR_FMP_MASK) != 0)
         {
-#if CANARD_STM32_DEBUG_RX_OVERFLOW
-            assert((*RFxR[i] & CANARD_STM32_CAN_RFR_FOVR) == 0);        // RX overflow!
-#endif
+            if (*RFxR[i] & CANARD_STM32_CAN_RFR_FOVR)
+            {
+                g_stats.rx_overflow_count++;
+            }
+
             out_frame->id = convertFrameIDRegisterToCanard(mb->RIR);
 
             out_frame->data_len = mb->RDTR & CANARD_STM32_CAN_RDTR_DLC_MASK;
@@ -403,4 +416,10 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
     (void) filter_configs;
     (void) num_filter_configs;
     return 0;
+}
+
+
+CanardSTM32Stats canardSTM32GetStats(void)
+{
+    return g_stats;
 }
