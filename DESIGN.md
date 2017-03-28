@@ -436,19 +436,19 @@ typedef void (*CanardOnTransferReception)(CanardInstance* ins,
  *          not affect portability in any way.
  *
  * The type of value pointed to by 'out_value' is defined as follows:
- *  -----------------------------------------------------------
- *  bit_length  value_is_signed out_value points to
- *  -----------------------------------------------------------
- *  1           false           bool (may be incompatible with uint8_t!)
- *  1           true            N/A
- *  [2, 8]      false           uint8_t, or char
- *  [2, 8]      true            int8_t, or char
- *  [9, 16]     false           uint16_t
- *  [9, 16]     true            int16_t
- *  [17, 32]    false           uint32_t
- *  [17, 32]    true            int32_t, or 32-bit float
- *  [33, 64]    false           uint64_t
- *  [33, 64]    true            int64_t, or 64-bit float
+ *
+ *  | bit_length | value_is_signed | out_value points to                      |
+ *  |------------|-----------------|------------------------------------------|
+ *  | 1          | false           | bool (may be incompatible with uint8_t!) |
+ *  | 1          | true            | N/A                                      |
+ *  | [2, 8]     | false           | uint8_t, or char                         |
+ *  | [2, 8]     | true            | int8_t, or char                          |
+ *  | [9, 16]    | false           | uint16_t                                 |
+ *  | [9, 16]    | true            | int16_t                                  |
+ *  | [17, 32]   | false           | uint32_t                                 |
+ *  | [17, 32]   | true            | int32_t, or 32-bit float                 |
+ *  | [33, 64]   | false           | uint64_t                                 |
+ *  | [33, 64]   | true            | int64_t, or 64-bit float                 |
  */
 int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer where the data will be copied from
                        uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
@@ -467,14 +467,14 @@ int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer
  *          not affect portability in any way.
  *
  * The type of value pointed to by 'value' is defined as follows:
- *  -----------------------------------------------------------
- *  bit_length  out_value points to
- *  -----------------------------------------------------------
- *  1           bool (may be incompatible with uint8_t!)
- *  [2, 8]      uint8_t, int8_t, or char
- *  [9, 16]     uint16_t, int16_t
- *  [17, 32]    uint32_t, int32_t, or 32-bit float
- *  [33, 64]    uint64_t, int64_t, or 64-bit float
+ *
+ *  | bit_length | value points to                          |
+ *  |------------|------------------------------------------|
+ *  | 1          | bool (may be incompatible with uint8_t!) |
+ *  | [2, 8]     | uint8_t, int8_t, or char                 |
+ *  | [9, 16]    | uint16_t, int16_t                        |
+ *  | [17, 32]   | uint32_t, int32_t, or 32-bit float       |
+ *  | [33, 64]   | uint64_t, int64_t, or 64-bit float       |
  */
 void canardEncodeScalar(void* destination,      ///< Destination buffer where the result will be stored
                         uint32_t bit_offset,    ///< Offset, in bits, from the beginning of the destination buffer

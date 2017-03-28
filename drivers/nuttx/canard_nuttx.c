@@ -10,7 +10,7 @@
 #include <poll.h>
 #include <string.h>
 #include <unistd.h>
-#include <nuttx/can.h>
+#include <nuttx/drivers/can.h>
 
 int canardNuttXInit(CanardNuttXInstance* out_ins, const char* can_iface_name)
 {
