@@ -109,7 +109,7 @@ typedef struct
 #define CANARD_STM32_CAN_TSR_TERR2             (1U << 19) // Bit 19: Transmission Error of Mailbox 2
 #define CANARD_STM32_CAN_TSR_ABRQ2             (1U << 23) // Bit 23: Abort Request for Mailbox 2
 #define CANARD_STM32_CAN_TSR_CODE_SHIFT        (24U)      // Bits 25-24: Mailbox Code
-#define CANARD_STM32_CAN_TSR_CODE_MASK         (3U << TSR_CODE_SHIFT)
+#define CANARD_STM32_CAN_TSR_CODE_MASK         (3U << CANARD_STM32_CAN_TSR_CODE_SHIFT)
 #define CANARD_STM32_CAN_TSR_TME0              (1U << 26) // Bit 26: Transmit Mailbox 0 Empty
 #define CANARD_STM32_CAN_TSR_TME1              (1U << 27) // Bit 27: Transmit Mailbox 1 Empty
 #define CANARD_STM32_CAN_TSR_TME2              (1U << 28) // Bit 28: Transmit Mailbox 2 Empty
@@ -120,7 +120,7 @@ typedef struct
 // CAN receive FIFO 0/1 registers
 
 #define CANARD_STM32_CAN_RFR_FMP_SHIFT         (0U)       // Bits 1-0: FIFO Message Pending
-#define CANARD_STM32_CAN_RFR_FMP_MASK          (3U << RFR_FMP_SHIFT)
+#define CANARD_STM32_CAN_RFR_FMP_MASK          (3U << CANARD_STM32_CAN_RFR_FMP_SHIFT)
 #define CANARD_STM32_CAN_RFR_FULL              (1U << 3)  // Bit 3: FIFO 0 Full
 #define CANARD_STM32_CAN_RFR_FOVR              (1U << 4)  // Bit 4: FIFO 0 Overrun
 #define CANARD_STM32_CAN_RFR_RFOM              (1U << 5)  // Bit 5: Release FIFO 0 Output Mailbox
@@ -148,30 +148,30 @@ typedef struct
 #define CANARD_STM32_CAN_ESR_EPVF              (1U << 1)  // Bit 1: Error Passive Flag
 #define CANARD_STM32_CAN_ESR_BOFF              (1U << 2)  // Bit 2: Bus-Off Flag
 #define CANARD_STM32_CAN_ESR_LEC_SHIFT         (4U)       // Bits 6-4: Last Error Code
-#define CANARD_STM32_CAN_ESR_LEC_MASK          (7U << ESR_LEC_SHIFT)
-#define CANARD_STM32_CAN_ESR_NOERROR           (0U << ESR_LEC_SHIFT) // 000: No Error
-#define CANARD_STM32_CAN_ESR_STUFFERROR        (1U << ESR_LEC_SHIFT) // 001: Stuff Error
-#define CANARD_STM32_CAN_ESR_FORMERROR         (2U << ESR_LEC_SHIFT) // 010: Form Error
-#define CANARD_STM32_CAN_ESR_ACKERROR          (3U << ESR_LEC_SHIFT) // 011: Acknowledgment Error
-#define CANARD_STM32_CAN_ESR_BRECERROR         (4U << ESR_LEC_SHIFT) // 100: Bit recessive Error
-#define CANARD_STM32_CAN_ESR_BDOMERROR         (5U << ESR_LEC_SHIFT) // 101: Bit dominant Error
-#define CANARD_STM32_CAN_ESR_CRCERRPR          (6U << ESR_LEC_SHIFT) // 110: CRC Error
-#define CANARD_STM32_CAN_ESR_SWERROR           (7U << ESR_LEC_SHIFT) // 111: Set by software
+#define CANARD_STM32_CAN_ESR_LEC_MASK          (7U << CANARD_STM32_CAN_ESR_LEC_SHIFT)
+#define CANARD_STM32_CAN_ESR_NOERROR           (0U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 000: No Error
+#define CANARD_STM32_CAN_ESR_STUFFERROR        (1U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 001: Stuff Error
+#define CANARD_STM32_CAN_ESR_FORMERROR         (2U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 010: Form Error
+#define CANARD_STM32_CAN_ESR_ACKERROR          (3U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 011: Acknowledgment Error
+#define CANARD_STM32_CAN_ESR_BRECERROR         (4U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 100: Bit recessive Error
+#define CANARD_STM32_CAN_ESR_BDOMERROR         (5U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 101: Bit dominant Error
+#define CANARD_STM32_CAN_ESR_CRCERRPR          (6U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 110: CRC Error
+#define CANARD_STM32_CAN_ESR_SWERROR           (7U << CANARD_STM32_CAN_ESR_LEC_SHIFT) // 111: Set by software
 #define CANARD_STM32_CAN_ESR_TEC_SHIFT         (16U)      // Bits 23-16: LS byte of the 9-bit Transmit Error Counter
-#define CANARD_STM32_CAN_ESR_TEC_MASK          (0xFFU << ESR_TEC_SHIFT)
+#define CANARD_STM32_CAN_ESR_TEC_MASK          (0xFFU << CANARD_STM32_CAN_ESR_TEC_SHIFT)
 #define CANARD_STM32_CAN_ESR_REC_SHIFT         (24U)      // Bits 31-24: Receive Error Counter
-#define CANARD_STM32_CAN_ESR_REC_MASK          (0xFFU << ESR_REC_SHIFT)
+#define CANARD_STM32_CAN_ESR_REC_MASK          (0xFFU << CANARD_STM32_CAN_ESR_REC_SHIFT)
 
 // CAN bit timing register
 
 #define CANARD_STM32_CAN_BTR_BRP_SHIFT         (0U)       // Bits 9-0: Baud Rate Prescaler
-#define CANARD_STM32_CAN_BTR_BRP_MASK          (0x03FFU << BTR_BRP_SHIFT)
+#define CANARD_STM32_CAN_BTR_BRP_MASK          (0x03FFU << CANARD_STM32_CAN_BTR_BRP_SHIFT)
 #define CANARD_STM32_CAN_BTR_TS1_SHIFT         (16U)      // Bits 19-16: Time Segment 1
-#define CANARD_STM32_CAN_BTR_TS1_MASK          (0x0FU <<  BTR_TS1_SHIFT)
+#define CANARD_STM32_CAN_BTR_TS1_MASK          (0x0FU <<  CANARD_STM32_CAN_BTR_TS1_SHIFT)
 #define CANARD_STM32_CAN_BTR_TS2_SHIFT         (20U)      // Bits 22-20: Time Segment 2
-#define CANARD_STM32_CAN_BTR_TS2_MASK          (7U << BTR_TS2_SHIFT)
+#define CANARD_STM32_CAN_BTR_TS2_MASK          (7U << CANARD_STM32_CAN_BTR_TS2_SHIFT)
 #define CANARD_STM32_CAN_BTR_SJW_SHIFT         (24U)      // Bits 25-24: Resynchronization Jump Width
-#define CANARD_STM32_CAN_BTR_SJW_MASK          (3U << BTR_SJW_SHIFT)
+#define CANARD_STM32_CAN_BTR_SJW_MASK          (3U << CANARD_STM32_CAN_BTR_SJW_SHIFT)
 #define CANARD_STM32_CAN_BTR_LBKM              (1U << 30) // Bit 30: Loop Back Mode (Debug);
 #define CANARD_STM32_CAN_BTR_SILM              (1U << 31) // Bit 31: Silent Mode (Debug);
 
@@ -185,79 +185,35 @@ typedef struct
 #define CANARD_STM32_CAN_TIR_RTR               (1U << 1)  // Bit 1: Remote Transmission Request
 #define CANARD_STM32_CAN_TIR_IDE               (1U << 2)  // Bit 2: Identifier Extension
 #define CANARD_STM32_CAN_TIR_EXID_SHIFT        (3U)       // Bit 3-31: Extended Identifier
-#define CANARD_STM32_CAN_TIR_EXID_MASK         (0x1FFFFFFFU << TIR_EXID_SHIFT)
+#define CANARD_STM32_CAN_TIR_EXID_MASK         (0x1FFFFFFFU << CANARD_STM32_CAN_TIR_EXID_SHIFT)
 #define CANARD_STM32_CAN_TIR_STID_SHIFT        (21U)      // Bits 21-31: Standard Identifier
-#define CANARD_STM32_CAN_TIR_STID_MASK         (0x07FFU << TIR_STID_SHIFT)
+#define CANARD_STM32_CAN_TIR_STID_MASK         (0x07FFU << CANARD_STM32_CAN_TIR_STID_SHIFT)
 
 // Mailbox data length control and time stamp register
 
 #define CANARD_STM32_CAN_TDTR_DLC_SHIFT        (0U)       // Bits 3:0: Data Length Code
-#define CANARD_STM32_CAN_TDTR_DLC_MASK         (0x0FU << TDTR_DLC_SHIFT)
+#define CANARD_STM32_CAN_TDTR_DLC_MASK         (0x0FU << CANARD_STM32_CAN_TDTR_DLC_SHIFT)
 #define CANARD_STM32_CAN_TDTR_TGT              (1U << 8)  // Bit 8: Transmit Global Time
 #define CANARD_STM32_CAN_TDTR_TIME_SHIFT       (16U)      // Bits 31:16: Message Time Stamp
-#define CANARD_STM32_CAN_TDTR_TIME_MASK        (0xFFFFU << TDTR_TIME_SHIFT)
-
-// Mailbox data low register
-
-#define CANARD_STM32_CAN_TDLR_DATA0_SHIFT      (0U)       // Bits 7-0: Data Byte 0
-#define CANARD_STM32_CAN_TDLR_DATA0_MASK       (0xFFU << TDLR_DATA0_SHIFT)
-#define CANARD_STM32_CAN_TDLR_DATA1_SHIFT      (8U)       // Bits 15-8: Data Byte 1
-#define CANARD_STM32_CAN_TDLR_DATA1_MASK       (0xFFU << TDLR_DATA1_SHIFT)
-#define CANARD_STM32_CAN_TDLR_DATA2_SHIFT      (16U)      // Bits 23-16: Data Byte 2
-#define CANARD_STM32_CAN_TDLR_DATA2_MASK       (0xFFU << TDLR_DATA2_SHIFT)
-#define CANARD_STM32_CAN_TDLR_DATA3_SHIFT      (24U)      // Bits 31-24: Data Byte 3
-#define CANARD_STM32_CAN_TDLR_DATA3_MASK       (0xFFU << TDLR_DATA3_SHIFT)
-
-// Mailbox data high register
-
-#define CANARD_STM32_CAN_TDHR_DATA4_SHIFT      (0U)       // Bits 7-0: Data Byte 4
-#define CANARD_STM32_CAN_TDHR_DATA4_MASK       (0xFFU << TDHR_DATA4_SHIFT)
-#define CANARD_STM32_CAN_TDHR_DATA5_SHIFT      (8U)       // Bits 15-8: Data Byte 5
-#define CANARD_STM32_CAN_TDHR_DATA5_MASK       (0xFFU << TDHR_DATA5_SHIFT)
-#define CANARD_STM32_CAN_TDHR_DATA6_SHIFT      (16U)      // Bits 23-16: Data Byte 6
-#define CANARD_STM32_CAN_TDHR_DATA6_MASK       (0xFFU << TDHR_DATA6_SHIFT)
-#define CANARD_STM32_CAN_TDHR_DATA7_SHIFT      (24U)      // Bits 31-24: Data Byte 7
-#define CANARD_STM32_CAN_TDHR_DATA7_MASK       (0xFFU << TDHR_DATA7_SHIFT)
+#define CANARD_STM32_CAN_TDTR_TIME_MASK        (0xFFFFU << CANARD_STM32_CAN_TDTR_TIME_SHIFT)
 
 // Rx FIFO mailbox identifier register
 
 #define CANARD_STM32_CAN_RIR_RTR               (1U << 1)  // Bit 1: Remote Transmission Request
 #define CANARD_STM32_CAN_RIR_IDE               (1U << 2)  // Bit 2: Identifier Extension
 #define CANARD_STM32_CAN_RIR_EXID_SHIFT        (3U)       // Bit 3-31: Extended Identifier
-#define CANARD_STM32_CAN_RIR_EXID_MASK         (0x1FFFFFFFU << RIR_EXID_SHIFT)
+#define CANARD_STM32_CAN_RIR_EXID_MASK         (0x1FFFFFFFU << CANARD_STM32_CAN_RIR_EXID_SHIFT)
 #define CANARD_STM32_CAN_RIR_STID_SHIFT        (21U)      // Bits 21-31: Standard Identifier
-#define CANARD_STM32_CAN_RIR_STID_MASK         (0x07FFU << RIR_STID_SHIFT)
+#define CANARD_STM32_CAN_RIR_STID_MASK         (0x07FFU << CANARD_STM32_CAN_RIR_STID_SHIFT)
 
 // Receive FIFO mailbox data length control and time stamp register
 
 #define CANARD_STM32_CAN_RDTR_DLC_SHIFT        (0U)       // Bits 3:0: Data Length Code
-#define CANARD_STM32_CAN_RDTR_DLC_MASK         (0x0FU << RDTR_DLC_SHIFT)
+#define CANARD_STM32_CAN_RDTR_DLC_MASK         (0x0FU << CANARD_STM32_CAN_RDTR_DLC_SHIFT)
 #define CANARD_STM32_CAN_RDTR_FM_SHIFT         (8U)       // Bits 15-8: Filter Match Index
-#define CANARD_STM32_CAN_RDTR_FM_MASK          (0xFFU << RDTR_FM_SHIFT)
+#define CANARD_STM32_CAN_RDTR_FM_MASK          (0xFFU << CANARD_STM32_CAN_RDTR_FM_SHIFT)
 #define CANARD_STM32_CAN_RDTR_TIME_SHIFT       (16U)      // Bits 31:16: Message Time Stamp
-#define CANARD_STM32_CAN_RDTR_TIME_MASK        (0xFFFFU << RDTR_TIME_SHIFT)
-
-// Receive FIFO mailbox data low register
-
-#define CANARD_STM32_CAN_RDLR_DATA0_SHIFT      (0U)       // Bits 7-0: Data Byte 0
-#define CANARD_STM32_CAN_RDLR_DATA0_MASK       (0xFFU << RDLR_DATA0_SHIFT)
-#define CANARD_STM32_CAN_RDLR_DATA1_SHIFT      (8U)       // Bits 15-8: Data Byte 1
-#define CANARD_STM32_CAN_RDLR_DATA1_MASK       (0xFFU << RDLR_DATA1_SHIFT)
-#define CANARD_STM32_CAN_RDLR_DATA2_SHIFT      (16U)      // Bits 23-16: Data Byte 2
-#define CANARD_STM32_CAN_RDLR_DATA2_MASK       (0xFFU << RDLR_DATA2_SHIFT)
-#define CANARD_STM32_CAN_RDLR_DATA3_SHIFT      (24U)      // Bits 31-24: Data Byte 3
-#define CANARD_STM32_CAN_RDLR_DATA3_MASK       (0xFFU << RDLR_DATA3_SHIFT)
-
-// Receive FIFO mailbox data high register
-
-#define CANARD_STM32_CAN_RDHR_DATA4_SHIFT      (0U)       // Bits 7-0: Data Byte 4
-#define CANARD_STM32_CAN_RDHR_DATA4_MASK       (0xFFU << RDHR_DATA4_SHIFT)
-#define CANARD_STM32_CAN_RDHR_DATA5_SHIFT      (8U)       // Bits 15-8: Data Byte 5
-#define CANARD_STM32_CAN_RDHR_DATA5_MASK       (0xFFU << RDHR_DATA5_SHIFT)
-#define CANARD_STM32_CAN_RDHR_DATA6_SHIFT      (16U)      // Bits 23-16: Data Byte 6
-#define CANARD_STM32_CAN_RDHR_DATA6_MASK       (0xFFU << RDHR_DATA6_SHIFT)
-#define CANARD_STM32_CAN_RDHR_DATA7_SHIFT      (24U)      // Bits 31-24: Data Byte 7
-#define CANARD_STM32_CAN_RDHR_DATA7_MASK       (0xFFU << RDHR_DATA7_SHIFT)
+#define CANARD_STM32_CAN_RDTR_TIME_MASK        (0xFFFFU << CANARD_STM32_CAN_RDTR_TIME_SHIFT)
 
 // CAN filter master register
 
