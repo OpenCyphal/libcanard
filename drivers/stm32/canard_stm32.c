@@ -268,22 +268,6 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
 
     CANARD_STM32_CAN1->FMR &= ~CANARD_STM32_CAN_FMR_FINIT;              // Leave initialization mode
 
-    /*
-     * Poor man's unit test
-     */
-#define TEST_FRAME_ID_CONVERSION(x)  assert(convertFrameIDRegisterToCanard(convertFrameIDCanardToRegister(x)) == (x))
-
-    TEST_FRAME_ID_CONVERSION(0                      | CANARD_CAN_FRAME_EFF | CANARD_CAN_FRAME_RTR);
-    TEST_FRAME_ID_CONVERSION(CANARD_CAN_EXT_ID_MASK | CANARD_CAN_FRAME_EFF | CANARD_CAN_FRAME_RTR);
-    TEST_FRAME_ID_CONVERSION(0                                             | CANARD_CAN_FRAME_RTR);
-    TEST_FRAME_ID_CONVERSION(CANARD_CAN_STD_ID_MASK                        | CANARD_CAN_FRAME_RTR);
-    TEST_FRAME_ID_CONVERSION(0                      | CANARD_CAN_FRAME_EFF);
-    TEST_FRAME_ID_CONVERSION(CANARD_CAN_EXT_ID_MASK | CANARD_CAN_FRAME_EFF);
-    TEST_FRAME_ID_CONVERSION(0);
-    TEST_FRAME_ID_CONVERSION(CANARD_CAN_STD_ID_MASK);
-
-#undef TEST_FRAME_ID_CONVERSION
-
     return 0;
 }
 
