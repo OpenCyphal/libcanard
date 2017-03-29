@@ -18,6 +18,26 @@ extern "C"
 {
 #endif
 
+/**
+ * Set this build config macro to 1 to use CAN2 instead of CAN1, if available.
+ * Setting this parameter when CAN2 is not available may not be detected at compile time!
+ */
+#if !defined(CANARD_STM32_USE_CAN2)
+# define CANARD_STM32_USE_CAN2                                  0
+#endif
+
+/**
+ * Trigger an assertion failure if inner priority inversion is detected at run time.
+ * This setting has no effect in release builds, where NDEBUG is defined.
+ */
+#if !defined(CANARD_STM32_DEBUG_INNER_PRIORITY_INVERSION)
+# define CANARD_STM32_DEBUG_INNER_PRIORITY_INVERSION            1
+#endif
+
+/**
+ * Driver error codes.
+ * These values are returned negated from API functions that return int.
+ */
 #define CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE                         1000
 #define CANARD_STM32_ERROR_MSR_INAK_NOT_SET                             1001
 #define CANARD_STM32_ERROR_MSR_INAK_NOT_CLEARED                         1002
@@ -25,16 +45,20 @@ extern "C"
 
 /**
  * This is defined by the bxCAN hardware.
- * Actually there is 28 filters, but only 27 are available to one interface at the same time (check this).
+ * Devices with only one CAN interface have 14 filters (e.g. F103).
+ * Devices with two CAN interfaces have 28 filters, which are shared between two interfaces (e.g. F105, F446).
+ * The filters are distributed between CAN1 and CAN2 by means of the CAN2 start filter bank selection,
+ * which is a number from 1 to 27 inclusive. Seeing as the start bank cannot be set to 0, CAN2 has one filter less
+ * to use.
  */
-#define CANARD_STM32_NUM_ACCEPTANCE_FILTERS                             27
+#define CANARD_STM32_NUM_ACCEPTANCE_FILTERS                            14
 
 
 typedef enum
 {
-    CanardSTM32IfaceModeNormal,
-    CanardSTM32IfaceModeSilent,
-    CanardSTM32IfaceModeAutomaticTxAbortOnError
+    CanardSTM32IfaceModeNormal,                //!< CanardSTM32IfaceModeNormal
+    CanardSTM32IfaceModeSilent,                //!< CanardSTM32IfaceModeSilent
+    CanardSTM32IfaceModeAutomaticTxAbortOnError//!< CanardSTM32IfaceModeAutomaticTxAbortOnError
 } CanardSTM32IfaceMode;
 
 
@@ -105,6 +129,10 @@ int canardSTM32Receive(CanardCANFrame* const out_frame);
 /**
  * Sets up acceptance filters according to the provided list of ID and masks.
  * Note that when the interface is reinitialized, hardware acceptance filters are reset.
+ * Also note that during filter reconfiguration, some RX frames may be lost.
+ *
+ * Setting zero filters will result in rejection of all frames.
+ * In order to accept all frames, set one filter with ID = Mask = 0, which is also the default configuration.
  *
  * @retval      0               Success
  * @retval      negative        Error

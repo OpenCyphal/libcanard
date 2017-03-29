@@ -10,16 +10,6 @@
 #include "_internal_bxcan.h"
 #include <unistd.h>
 
-/*
- * Build configuration
- */
-#if !defined(CANARD_STM32_USE_CAN2)
-# define CANARD_STM32_USE_CAN2                                  0
-#endif
-
-#if !defined(CANARD_STM32_DEBUG_INNER_PRIORITY_INVERSION)
-# define CANARD_STM32_DEBUG_INNER_PRIORITY_INVERSION            1
-#endif
 
 #if CANARD_STM32_USE_CAN2
 # define BXCAN                                                  CANARD_STM32_CAN2
@@ -230,26 +220,39 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
     }
 
     /*
-     * Default filter configuration
+     * Default filter configuration.
+     * CAN2 filters are offset by 14.
+     * We use 14 filters at most always which simplifies the code and ensures compatibility with all
+     * MCU within the STM32 family.
      */
-    BXCAN->FMR |= CANARD_STM32_CAN_FMR_FINIT;
-    BXCAN->FMR &= 0xFFFFC0F1;
+    {
+        uint32_t fmr = BXCAN->FMR & 0xFFFFC0F1;
+        fmr |= CANARD_STM32_NUM_ACCEPTANCE_FILTERS << 8;                // CAN2 start bank = 14 (if CAN2 is present)
+        BXCAN->FMR = fmr | CANARD_STM32_CAN_FMR_FINIT;
+    }
+
+    assert(((BXCAN->FMR >> 8) & 0x3F) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
+
+    BXCAN->FM1R = 0;                                                    // Indentifier Mask mode
+    BXCAN->FS1R = 0x0FFFFFFF;                                           // All 32-bit
+
+    // Filters are alternating between FIFO0 and FIFO1 in order to equalize the load.
+    // This will cause occasional priority inversion and frame reordering on reception,
+    // but that is acceptable for UAVCAN, and a majority of other protocols will tolerate
+    // this too, since there will be no reordering within the same CAN ID.
+    BXCAN->FFA1R = 0x0AAAAAAA;
 
 #if CANARD_STM32_USE_CAN2
-    BXCAN->FMR |= 1 << 8;                                       // All filters are available to CAN2
+    BXCAN->FilterRegister[CANARD_STM32_NUM_ACCEPTANCE_FILTERS].FR1 = 0;
+    BXCAN->FilterRegister[CANARD_STM32_NUM_ACCEPTANCE_FILTERS].FR2 = 0;
+    BXCAN->FA1R = (1 << CANARD_STM32_NUM_ACCEPTANCE_FILTERS);           // One filter enabled
 #else
-    BXCAN->FMR |= CANARD_STM32_NUM_ACCEPTANCE_FILTERS << 8;     // All filters are available to CAN1
-#endif
-
-    BXCAN->FFA1R = 0;                           // All assigned to FIFO0 by default
-    BXCAN->FM1R = 0;                            // Indentifier Mask mode
-
-    BXCAN->FS1R = 0x0FFF;                       // All 32-bit
     BXCAN->FilterRegister[0].FR1 = 0;
     BXCAN->FilterRegister[0].FR2 = 0;
-    BXCAN->FA1R = 1;                            // One filter enabled
+    BXCAN->FA1R = 1;                                                    // One filter enabled
+#endif
 
-    BXCAN->FMR &= ~CANARD_STM32_CAN_FMR_FINIT;
+    BXCAN->FMR &= ~CANARD_STM32_CAN_FMR_FINIT;                          // Leave initialization mode
 
     /*
      * Poor man's unit test
@@ -442,10 +445,79 @@ int canardSTM32Receive(CanardCANFrame* const out_frame)
 int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
                                           const unsigned num_filter_configs)
 {
-    // TODO: IMPLEMENT THIS
-    assert(0);
-    (void) filter_configs;
-    (void) num_filter_configs;
+    // Note that num_filter_configs = 0 is a valid configuration, which rejects all frames.
+    if ((filter_configs == NULL) ||
+        (num_filter_configs > CANARD_STM32_NUM_ACCEPTANCE_FILTERS))
+    {
+        return -CANARD_ERROR_INVALID_ARGUMENT;
+    }
+
+    /*
+     * First we disable all filters. This may cause momentary RX frame losses, but the application
+     * should be able to tolerate that.
+     */
+    BXCAN->FA1R = 0;
+
+    /*
+     * Having filters disabled we can update the configuration.
+     * Register mapping: FR1 - ID, FR2 - Mask
+     */
+    for (unsigned i = 0; i < num_filter_configs; i++)
+    {
+        /*
+         * Converting the ID and the Mask into the representation that can be chewed by the hardware.
+         * If Mask asks us to accept both STDID and EXTID, we need to use EXT mode on the filter,
+         * otherwise it will reject all EXTID frames. This logic is not documented in the RM.
+         * True story. This is sacred knowledge! Don't tell the unworthy.
+         */
+        uint32_t id   = 0;
+        uint32_t mask = 0;
+
+        const CanardSTM32AcceptanceFilterConfiguration* const cfg = filter_configs + i;
+
+        if ((cfg->id & CANARD_CAN_FRAME_EFF) || !(cfg->mask & CANARD_CAN_FRAME_EFF))
+        {
+            // The application wants to trick us by requesting both ext and std frames!
+            id   = (cfg->id   & CANARD_CAN_EXT_ID_MASK) << 3;   // Little they know, we can handle that correctly.
+            mask = (cfg->mask & CANARD_CAN_EXT_ID_MASK) << 3;   // See?
+            id |= CANARD_STM32_CAN_RIR_IDE;                     // That's how we do this. Where's my sunglasses?
+        }
+        else
+        {
+            id   = (cfg->id   & CANARD_CAN_STD_ID_MASK) << 21;  // Regular std frames, nothing fancy.
+            mask = (cfg->mask & CANARD_CAN_STD_ID_MASK) << 21;  // Boring.
+        }
+
+        if (cfg->id & CANARD_CAN_FRAME_RTR)
+        {
+            id |= CANARD_STM32_CAN_RIR_RTR;
+        }
+
+        if (cfg->mask & CANARD_CAN_FRAME_EFF)
+        {
+            mask |= CANARD_STM32_CAN_RIR_IDE;
+        }
+
+        if (cfg->mask & CANARD_CAN_FRAME_RTR)
+        {
+            mask |= CANARD_STM32_CAN_RIR_RTR;
+        }
+
+        /*
+         * Applying the converted representation to the registers.
+         */
+        const unsigned filter_index =
+#if CANARD_STM32_USE_CAN2
+            i + CANARD_STM32_NUM_ACCEPTANCE_FILTERS;
+#else
+            i;
+#endif
+        BXCAN->FilterRegister[filter_index].FR1 = id;
+        BXCAN->FilterRegister[filter_index].FR2 = mask;
+
+        BXCAN->FA1R |= 1U << filter_index;      // Enable
+    }
+
     return 0;
 }
 
