@@ -234,39 +234,39 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
     }
 
     /*
-     * Default filter configuration.
+     * Default filter configuration. Note that ALL filters are available ONLY via CAN1!
      * CAN2 filters are offset by 14.
      * We use 14 filters at most always which simplifies the code and ensures compatibility with all
      * MCU within the STM32 family.
      */
     {
-        uint32_t fmr = BXCAN->FMR & 0xFFFFC0F1;
+        uint32_t fmr = CANARD_STM32_CAN1->FMR & 0xFFFFC0F1;
         fmr |= CANARD_STM32_NUM_ACCEPTANCE_FILTERS << 8;                // CAN2 start bank = 14 (if CAN2 is present)
-        BXCAN->FMR = fmr | CANARD_STM32_CAN_FMR_FINIT;
+        CANARD_STM32_CAN1->FMR = fmr | CANARD_STM32_CAN_FMR_FINIT;
     }
 
-    assert(((BXCAN->FMR >> 8) & 0x3F) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
+    assert(((CANARD_STM32_CAN1->FMR >> 8) & 0x3F) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
 
-    BXCAN->FM1R = 0;                                                    // Indentifier Mask mode
-    BXCAN->FS1R = 0x0FFFFFFF;                                           // All 32-bit
+    CANARD_STM32_CAN1->FM1R = 0;                                        // Indentifier Mask mode
+    CANARD_STM32_CAN1->FS1R = 0x0FFFFFFF;                               // All 32-bit
 
     // Filters are alternating between FIFO0 and FIFO1 in order to equalize the load.
     // This will cause occasional priority inversion and frame reordering on reception,
     // but that is acceptable for UAVCAN, and a majority of other protocols will tolerate
     // this too, since there will be no reordering within the same CAN ID.
-    BXCAN->FFA1R = 0x0AAAAAAA;
+    CANARD_STM32_CAN1->FFA1R = 0x0AAAAAAA;
 
 #if CANARD_STM32_USE_CAN2
-    BXCAN->FilterRegister[CANARD_STM32_NUM_ACCEPTANCE_FILTERS].FR1 = 0;
-    BXCAN->FilterRegister[CANARD_STM32_NUM_ACCEPTANCE_FILTERS].FR2 = 0;
-    BXCAN->FA1R = (1 << CANARD_STM32_NUM_ACCEPTANCE_FILTERS);           // One filter enabled
+    CANARD_STM32_CAN1->FilterRegister[CANARD_STM32_NUM_ACCEPTANCE_FILTERS].FR1 = 0;
+    CANARD_STM32_CAN1->FilterRegister[CANARD_STM32_NUM_ACCEPTANCE_FILTERS].FR2 = 0;
+    CANARD_STM32_CAN1->FA1R = (1 << CANARD_STM32_NUM_ACCEPTANCE_FILTERS);  // One filter enabled
 #else
-    BXCAN->FilterRegister[0].FR1 = 0;
-    BXCAN->FilterRegister[0].FR2 = 0;
-    BXCAN->FA1R = 1;                                                    // One filter enabled
+    CANARD_STM32_CAN1->FilterRegister[0].FR1 = 0;
+    CANARD_STM32_CAN1->FilterRegister[0].FR2 = 0;
+    CANARD_STM32_CAN1->FA1R = 1;                                        // One filter enabled
 #endif
 
-    BXCAN->FMR &= ~CANARD_STM32_CAN_FMR_FINIT;                          // Leave initialization mode
+    CANARD_STM32_CAN1->FMR &= ~CANARD_STM32_CAN_FMR_FINIT;              // Leave initialization mode
 
     /*
      * Poor man's unit test
@@ -470,7 +470,7 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
      * First we disable all filters. This may cause momentary RX frame losses, but the application
      * should be able to tolerate that.
      */
-    BXCAN->FA1R = 0;
+    CANARD_STM32_CAN1->FA1R = 0;
 
     /*
      * Having filters disabled we can update the configuration.
@@ -526,10 +526,10 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
 #else
             i;
 #endif
-        BXCAN->FilterRegister[filter_index].FR1 = id;
-        BXCAN->FilterRegister[filter_index].FR2 = mask;
+        CANARD_STM32_CAN1->FilterRegister[filter_index].FR1 = id;
+        CANARD_STM32_CAN1->FilterRegister[filter_index].FR2 = mask;
 
-        BXCAN->FA1R |= 1U << filter_index;      // Enable
+        CANARD_STM32_CAN1->FA1R |= 1U << filter_index;      // Enable
     }
 
     return 0;
