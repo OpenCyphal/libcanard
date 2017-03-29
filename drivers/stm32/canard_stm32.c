@@ -115,13 +115,13 @@ static uint32_t convertFrameIDRegisterToCanard(const uint32_t id)
 }
 
 
-static bool waitMSRINAKBitStateChange(bool target_state)
+static bool waitMSRINAKBitStateChange(volatile const CanardSTM32CANType* const bxcan, const bool target_state)
 {
     static const unsigned TimeoutMilliseconds = 2000;
 
     for (unsigned wait_ack = 0; wait_ack < TimeoutMilliseconds; wait_ack++)
     {
-        const bool state = (BXCAN->MSR & CANARD_STM32_CAN_MSR_INAK) != 0;
+        const bool state = (bxcan->MSR & CANARD_STM32_CAN_MSR_INAK) != 0;
         if (state == target_state)
         {
             return true;
@@ -182,19 +182,33 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
     /*
      * Initial setup
      */
-    BXCAN->IER = 0;                                     // We need no interrupts
-    BXCAN->MCR &= ~CANARD_STM32_CAN_MCR_SLEEP;          // Exit sleep mode
-    BXCAN->MCR |= CANARD_STM32_CAN_MCR_INRQ;            // Request init
+    memset(&g_stats, 0, sizeof(g_stats));
 
-    if (!waitMSRINAKBitStateChange(true))
+    g_abort_tx_on_error = (iface_mode == CanardSTM32IfaceModeAutomaticTxAbortOnError);
+
+#if CANARD_STM32_USE_CAN2
+    // If we're using CAN2, we MUST initialize CAN1 first, because CAN2 is a slave to CAN1.
+    CANARD_STM32_CAN1->IER = 0;                                 // We need no interrupts
+    CANARD_STM32_CAN1->MCR &= ~CANARD_STM32_CAN_MCR_SLEEP;      // Exit sleep mode
+    CANARD_STM32_CAN1->MCR |= CANARD_STM32_CAN_MCR_INRQ;        // Request init
+
+    if (!waitMSRINAKBitStateChange(CANARD_STM32_CAN1, true))    // Wait for synchronization
+    {
+        CANARD_STM32_CAN1->MCR = CANARD_STM32_CAN_MCR_RESET;
+        return -CANARD_STM32_ERROR_MSR_INAK_NOT_SET;
+    }
+    // CAN1 will be left in the initialization mode forever, in this mode it does not affect the bus at all.
+#endif
+
+    BXCAN->IER = 0;                                             // We need no interrupts
+    BXCAN->MCR &= ~CANARD_STM32_CAN_MCR_SLEEP;                  // Exit sleep mode
+    BXCAN->MCR |= CANARD_STM32_CAN_MCR_INRQ;                    // Request init
+
+    if (!waitMSRINAKBitStateChange(BXCAN, true))                // Wait for synchronization
     {
         BXCAN->MCR = CANARD_STM32_CAN_MCR_RESET;
         return -CANARD_STM32_ERROR_MSR_INAK_NOT_SET;
     }
-
-    memset(&g_stats, 0, sizeof(g_stats));
-
-    g_abort_tx_on_error = (iface_mode == CanardSTM32IfaceModeAutomaticTxAbortOnError);
 
     /*
      * Hardware initialization (the hardware has already confirmed initialization mode, see above)
@@ -213,7 +227,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
 
     BXCAN->MCR &= ~CANARD_STM32_CAN_MCR_INRQ;   // Leave init mode
 
-    if (!waitMSRINAKBitStateChange(false))
+    if (!waitMSRINAKBitStateChange(BXCAN, false))
     {
         BXCAN->MCR = CANARD_STM32_CAN_MCR_RESET;
         return -CANARD_STM32_ERROR_MSR_INAK_NOT_CLEARED;

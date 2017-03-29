@@ -96,6 +96,7 @@ typedef struct
  * This function can be invoked any number of times.
  *
  * WARNING: The clock of the CAN module must be enabled before this function is invoked!
+ *          If CAN2 is used, CAN1 must be also enabled!
  *
  * WARNING: The driver is not thread-safe!
  *
