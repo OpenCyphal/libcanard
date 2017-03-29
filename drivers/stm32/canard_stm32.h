@@ -53,22 +53,29 @@ extern "C"
  */
 #define CANARD_STM32_NUM_ACCEPTANCE_FILTERS                            14
 
-
+/**
+ * The interface can be initialized in either of these modes.
+ */
 typedef enum
 {
-    CanardSTM32IfaceModeNormal,                //!< CanardSTM32IfaceModeNormal
-    CanardSTM32IfaceModeSilent,                //!< CanardSTM32IfaceModeSilent
-    CanardSTM32IfaceModeAutomaticTxAbortOnError//!< CanardSTM32IfaceModeAutomaticTxAbortOnError
+    CanardSTM32IfaceModeNormal,                         //!< Normal mode
+    CanardSTM32IfaceModeSilent,                         //!< Do not affect the bus, only listen
+    CanardSTM32IfaceModeAutomaticTxAbortOnError         //!< Abort pending TX if a bus error has occurred
 } CanardSTM32IfaceMode;
 
-
+/**
+ * Interface statistics; these values can be queried using a dedicated API call.
+ */
 typedef struct
 {
     uint64_t rx_overflow_count;
     uint64_t error_count;
 } CanardSTM32Stats;
 
-
+/**
+ * ID and Mask of a hardware acceptance filter.
+ * The ID and Mask fields support flags @ref CANARD_CAN_FRAME_EFF and @ref CANARD_CAN_FRAME_RTR.
+ */
 typedef struct
 {
     uint32_t id;
@@ -91,14 +98,20 @@ typedef struct
 
 /**
  * Initializes the CAN controller at the specified bit rate.
- * The mode can be either normal or silent;
- * in silent mode the controller will be only listening, not affecting the state of the bus.
- * This function can be invoked any number of times.
+ * The mode can be either normal, silent, or auto-abort on error;
+ * in silent mode the controller will be only listening, not affecting the state of the bus;
+ * in the auto abort mode the controller will cancel the pending transmissions if a bus error is encountered.
+ * The auto abort mode is needed for dynamic node ID allocation procedure; please refer to the UAVCAN specification
+ * for more information about this topic.
+ *
+ * This function can be invoked any number of times; every invocation re-initializes everything from scratch.
  *
  * WARNING: The clock of the CAN module must be enabled before this function is invoked!
  *          If CAN2 is used, CAN1 must be also enabled!
  *
  * WARNING: The driver is not thread-safe!
+ *          It does not use IRQ or critical sections though, so it is safe to invoke its API functions from the
+ *          IRQ context from the application.
  *
  * @retval      0               Success
  * @retval      negative        Error
@@ -118,7 +131,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
 int canardSTM32Transmit(const CanardCANFrame* const frame);
 
 /**
- * Reads one frame from the RX buffer, unless the buffer is empty.
+ * Reads one frame from the hardware RX FIFO, unless all FIFO are empty.
  * This function does never block.
  *
  * @retval      1               Read successfully
