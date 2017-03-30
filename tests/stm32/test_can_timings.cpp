@@ -32,7 +32,7 @@
 static std::uint32_t computeBDTR(const std::uint32_t pclk1,
                                  const std::uint32_t target_bitrate)
 {
-    CanardSTM32CANTimings timings{};
+    CanardSTM32CANTimings timings = CanardSTM32CANTimings();
 
     const int res = canardSTM32ComputeCANTimings(pclk1, target_bitrate, &timings);
 
