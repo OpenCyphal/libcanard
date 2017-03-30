@@ -26,6 +26,7 @@
 #include <drivers/stm32/canard_stm32.h>
 #include <cstdio>
 #include <string>
+#include <stdexcept>
 
 
 static std::uint32_t computeBDTR(const std::uint32_t pclk1,
@@ -56,6 +57,9 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
 }
 
 
+/*
+ * Reference values were validated manually with the help of http://www.bittiming.can-wiki.info/
+ */
 TEST(STM32, CANTimings)
 {
     EXPECT_EQ(0x00060003, computeBDTR(36000000, 1000000));
