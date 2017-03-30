@@ -22,7 +22,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCANARD_INTERNAL=''")
 set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -DCANARD_INTERNAL=''")
 
 # Unit tests
-file(GLOB_RECURSE tests_src "*.cpp")
+file(GLOB tests_src
+     RELATIVE "${CMAKE_SOURCE_DIR}"
+     "*.cpp"
+     "stm32/*.cpp")
+message(STATUS "Unit test source files: ${tests_src}")
 add_executable(run_tests
                ${tests_src}
                ../canard.c)

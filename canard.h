@@ -82,6 +82,7 @@ extern "C" {
 
 /// Related to CanardCANFrame
 #define CANARD_CAN_EXT_ID_MASK                      0x1FFFFFFFU
+#define CANARD_CAN_STD_ID_MASK                      0x000007FFU
 #define CANARD_CAN_FRAME_EFF                        (1UL << 31)          ///< Extended frame format
 #define CANARD_CAN_FRAME_RTR                        (1UL << 30)          ///< Remote transmission (not used by UAVCAN)
 #define CANARD_CAN_FRAME_ERR                        (1UL << 29)          ///< Error frame (not used by UAVCAN)
