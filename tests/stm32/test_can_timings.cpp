@@ -44,7 +44,7 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
                                (((timings.bit_segment_2 - 1)                    &    7U) << 20) |
                                (((timings.bit_rate_prescaler - 1)               & 1023U) << 0);
 
-    std::printf("pclk %9u    target %9u    %s (%d)    presc %4u    bs %2u/%u %.1f%%    BDTR 0x%08x\n",
+    std::printf("PCLK %9u    Target %9u    %s (%d)    Presc %4u    BS %2u/%u %.1f%%    BDTR 0x%08x\n",
                 unsigned(pclk1),
                 unsigned(target_bitrate),
                 (res == 0) ? "OK" : "FAIL",
@@ -61,7 +61,6 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
 
     return bdtr;
 }
-
 
 /*
  * Reference values were validated manually with the help of http://www.bittiming.can-wiki.info/
