@@ -44,7 +44,7 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
                                (((timings.bit_segment_2 - 1)                    &    7U) << 20) |
                                (((timings.bit_rate_prescaler - 1)               & 1023U) << 0);
 
-    std::printf("pclk %9u    target %9u    %s (%d)    presc %4u    bs %u/%u %.1f%%    BDTR 0x%08x\n",
+    std::printf("pclk %9u    target %9u    %s (%d)    presc %4u    bs %2u/%u %.1f%%    BDTR 0x%08x\n",
                 unsigned(pclk1),
                 unsigned(target_bitrate),
                 (res == 0) ? "OK" : "FAIL",
@@ -75,7 +75,7 @@ TEST(STM32, CANTimings)
     EXPECT_EQ(0x001b0017, computeBDTR(36000000,  100000));
     EXPECT_EQ(0x001c00e0, computeBDTR(36000000,   10000));
 
-    EXPECT_EQ(0x00060009, computeBDTR(90000000, 1000000));
+    EXPECT_EQ(0x00070008, computeBDTR(90000000, 1000000));
     EXPECT_EQ(0x001b000b, computeBDTR(90000000,  500000));
     EXPECT_EQ(0x001b0017, computeBDTR(90000000,  250000));
     EXPECT_EQ(0x001c002c, computeBDTR(90000000,  125000));
