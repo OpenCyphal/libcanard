@@ -169,37 +169,6 @@ CanardSTM32Stats canardSTM32GetStats(void);
  *
  * This function is defined in the header in order to encourage the linker to discard it if it is not used.
  *
- * The following code has been used to test it (gcc -std=c99 test.c && ./a.out):
- *
- *     static void runOnce(const uint32_t pclk1,
- *                         const uint32_t target_bitrate)
- *     {
- *         CanardSTM32CANTimings timings;
- *         int res = canardSTM32ComputeCANTimings(pclk1, target_bitrate, &timings);
- *         const uint16_t sample_point_permill =
- *             (uint16_t)(1000 * (1 + timings.bit_segment_1) / (1 + timings.bit_segment_1 + timings.bit_segment_2));
- *         printf("target %9u    %s (%d)    presc %4u    bs %u/%u %.1f%%\n",
- *                (unsigned)target_bitrate, (res == 0) ? "OK" : "FAIL", res, timings.bit_rate_prescaler,
- *                timings.bit_segment_1, timings.bit_segment_2, sample_point_permill * 0.1F);
- *     }
- *
- *     static void testPCLK(const uint32_t pclk1)
- *     {
- *         runOnce(pclk1, 1000000);
- *         runOnce(pclk1,  500000);
- *         runOnce(pclk1,  250000);
- *         runOnce(pclk1,  125000);
- *         runOnce(pclk1,  100000);
- *         runOnce(pclk1,   10000);
- *     }
- *
- *     int main(void)
- *     {
- *         testPCLK(36000000);
- *         testPCLK(90000000);
- *         return 0;
- *     }
- *
  * @retval 0            Success
  * @retval negative     Solution could not be found for the provided inputs.
  */
