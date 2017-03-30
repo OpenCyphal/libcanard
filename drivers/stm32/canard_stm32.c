@@ -117,7 +117,15 @@ static uint32_t convertFrameIDRegisterToCanard(const uint32_t id)
 
 static bool waitMSRINAKBitStateChange(volatile const CanardSTM32CANType* const bxcan, const bool target_state)
 {
-    static const unsigned TimeoutMilliseconds = 2000;
+    /**
+     * A properly functioning bus will exhibit 11 consecutive recessive bits at the end of every correct transmission,
+     * or while the bus is idle. The 11 consecutive recessive bits are made up of:
+     *  1 bit - acknowledgement delimiter
+     *  7 bit - end of frame bits
+     *  3 bit - inter frame space
+     * This adds up to 11; therefore, it is not really necessary to wait longer than a few frame TX intervals.
+     */
+    static const unsigned TimeoutMilliseconds = 1000;
 
     for (unsigned wait_ack = 0; wait_ack < TimeoutMilliseconds; wait_ack++)
     {
@@ -221,9 +229,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
                  ((timings->bit_rate_prescaler - 1)                & 1023U) |
                  ((iface_mode == CanardSTM32IfaceModeSilent) ? CANARD_STM32_CAN_BTR_SILM : 0);
 
-    BXCAN->IER = CANARD_STM32_CAN_IER_TMEIE |   // TX mailbox empty
-                 CANARD_STM32_CAN_IER_FMPIE0 |  // RX FIFO 0 is not empty
-                 CANARD_STM32_CAN_IER_FMPIE1;   // RX FIFO 1 is not empty
+    assert(0 == BXCAN->IER);                    // Making sure the iterrupts are indeed disabled
 
     BXCAN->MCR &= ~CANARD_STM32_CAN_MCR_INRQ;   // Leave init mode
 
