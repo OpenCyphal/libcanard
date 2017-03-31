@@ -295,6 +295,10 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
             rx_state->calculated_crc = crcAddSignature(0xFFFFU, data_type_signature);
         }
+        else
+        {
+            return;     // The application doesn't want this transfer
+        }
     }
     else
     {
@@ -306,6 +310,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         }
     }
 
+    CANARD_ASSERT(rx_state != NULL);    // All paths that lead to NULL should be terminated with return above
 
     // Resolving the state flags:
     const bool not_initialized = rx_state->timestamp_usec == 0;
