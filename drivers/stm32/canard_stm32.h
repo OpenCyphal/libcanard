@@ -55,6 +55,18 @@ extern "C"
 
 /**
  * The interface can be initialized in either of these modes.
+ *
+ * The Silent mode is useful for automatic CAN bit rate detection, where the interface is initialized at an
+ * arbitrarily guessed CAN bit rate (typically either 1 Mbps, 500 Kbps, 250 Kbps, or 125 Kbps, these are the
+ * standard values defined by the UAVCAN specification), and the bus is then listened for 1 second in order to
+ * determine whether the bit rate was guessed correctly. It is paramount to use the silent mode in this case so
+ * as to not interfere with ongoing communications on the bus if the guess was incorrect.
+ *
+ * The automatic TX abort on error mode should be used during dynamic node ID allocation. The reason for that
+ * is well explained in the UAVCAN specification, please read it.
+ *
+ * The normal mode should be used for all other use cases, particularly for the normal operation of the node,
+ * hence the name.
  */
 typedef enum
 {
