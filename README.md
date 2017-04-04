@@ -50,6 +50,11 @@ Please check out the explanations provided in the comments in the header file to
 Most importantly, check out the demo application under `tests/demo.c`.
 Also use [code search to find real life usage examples](https://github.com/search?q=libcanard&type=Code&utf8=%E2%9C%93).
 
+At the moment the library does not provide means to automate (de)serialization of UAVCAN data structures,
+like other implementations (e.g. libuavcan for C++ or pyuavcan for Python) do.
+Therefore, data structures need to be parsed and assembled manually.
+The necessary examples are provided in the demo application.
+
 ## Library Development
 
 This section is intended only for library developers and contributors.
