@@ -7,7 +7,6 @@ Minimal implementation of the UAVCAN protocol stack in C for resource constraine
 
 Links:
 
-* **[DOCUMENTATION](http://uavcan.org/Implementations/Libcanard)**
 * **[DISCUSSION GROUP](https://groups.google.com/forum/#!forum/uavcan)**
 
 ## Usage
@@ -20,7 +19,13 @@ like this:
 git submodule add https://github.com/UAVCAN/libcanard
 ```
 
-The entire library is contained in two files: `canard.c` and `canard.h`.
+The entire library is contained in three files:
+
+- `canard.c` - the only translation unit; add it to your build or compile it into a separate static library;
+- `canard.h` - the API header; include it in your application;
+- `canard_internals.h` - internal definitions of the library;
+keep this file in the same directory with `canard.c`.
+
 Add `canard.c` to your application build, add `libcanard` directory to the include paths,
 and you're ready to roll.
 
@@ -39,6 +44,11 @@ CSRC += libcanard/canard.c
 INCLUDE += libcanard/drivers/socketcan
 CSRC += libcanard/drivers/socketcan/socketcan.c
 ```
+
+There is no dedicated documentation for the library API, because it is simple enough to be self-documenting.
+Please check out the explanations provided in the comments in the header file to learn the basics.
+Most importantly, check out the demo application under `tests/demo.c`.
+Also use [code search to find real life usage examples](https://github.com/search?q=libcanard&type=Code&utf8=%E2%9C%93).
 
 ## Library Development
 
