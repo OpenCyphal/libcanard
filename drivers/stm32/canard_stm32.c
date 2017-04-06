@@ -33,8 +33,8 @@ static bool isFramePriorityHigher(uint32_t a, uint32_t b)
     /*
      * STD vs EXT - if 11 most significant bits are the same, EXT loses.
      */
-    const bool ext_a = a & CANARD_CAN_FRAME_EFF;
-    const bool ext_b = b & CANARD_CAN_FRAME_EFF;
+    const bool ext_a = (a & CANARD_CAN_FRAME_EFF) != 0;
+    const bool ext_b = (b & CANARD_CAN_FRAME_EFF) != 0;
     if (ext_a != ext_b)
     {
         const uint32_t arb11_a = ext_a ? (clean_a >> 18) : clean_a;
@@ -52,8 +52,8 @@ static bool isFramePriorityHigher(uint32_t a, uint32_t b)
     /*
      * RTR vs Data frame - if frame identifiers and frame types are the same, RTR loses.
      */
-    const bool rtr_a = a & CANARD_CAN_FRAME_RTR;
-    const bool rtr_b = b & CANARD_CAN_FRAME_RTR;
+    const bool rtr_a = (a & CANARD_CAN_FRAME_RTR) != 0;
+    const bool rtr_b = (b & CANARD_CAN_FRAME_RTR) != 0;
     if ((clean_a == clean_b) && (rtr_a != rtr_b))
     {
         return rtr_b;
@@ -229,7 +229,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
                  ((timings->bit_rate_prescaler - 1)                & 1023U) |
                  ((iface_mode == CanardSTM32IfaceModeSilent) ? CANARD_STM32_CAN_BTR_SILM : 0);
 
-    assert(0 == BXCAN->IER);                    // Making sure the iterrupts are indeed disabled
+    CANARD_ASSERT(0 == BXCAN->IER);             // Making sure the iterrupts are indeed disabled
 
     BXCAN->MCR &= ~CANARD_STM32_CAN_MCR_INRQ;   // Leave init mode
 
@@ -251,7 +251,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
         CANARD_STM32_CAN1->FMR = fmr | CANARD_STM32_CAN_FMR_FINIT;
     }
 
-    assert(((CANARD_STM32_CAN1->FMR >> 8) & 0x3F) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
+    CANARD_ASSERT(((CANARD_STM32_CAN1->FMR >> 8) & 0x3F) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
 
     CANARD_STM32_CAN1->FM1R = 0;                                        // Indentifier Mask mode
     CANARD_STM32_CAN1->FS1R = 0x0FFFFFFF;                               // All 32-bit
@@ -346,7 +346,7 @@ int canardSTM32Transmit(const CanardCANFrame* const frame)
              * It is perfectly safe to remove it.
              */
 #if CANARD_STM32_DEBUG_INNER_PRIORITY_INVERSION
-            assert(!"CAN PRIO INV");
+            CANARD_ASSERT(!"CAN PRIO INV");
 #endif
             return 0;
         }
@@ -356,7 +356,7 @@ int canardSTM32Transmit(const CanardCANFrame* const frame)
         tx_mailbox = 0;
     }
 
-    assert(tx_mailbox < 3);                             // Index check - the value must be correct here
+    CANARD_ASSERT(tx_mailbox < 3);                      // Index check - the value must be correct here
 
     /*
      * By this time we've proved that a priority inversion would not occur, and we've also found a free TX mailbox.
@@ -418,7 +418,7 @@ int canardSTM32Receive(CanardCANFrame* const out_frame)
 
             out_frame->id = convertFrameIDRegisterToCanard(mb->RIR);
 
-            out_frame->data_len = mb->RDTR & CANARD_STM32_CAN_RDTR_DLC_MASK;
+            out_frame->data_len = (uint8_t)(mb->RDTR & CANARD_STM32_CAN_RDTR_DLC_MASK);
 
             // Caching to regular (non volatile) memory for faster reads
             const uint32_t rdlr = mb->RDLR;

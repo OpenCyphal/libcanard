@@ -177,6 +177,8 @@ CanardSTM32Stats canardSTM32GetStats(void);
  * such as the sample point location, the number of time quantas per bit, etc., are optimized according to the
  * recommendations provided in the specifications of UAVCAN, DeviceNet, and CANOpen.
  *
+ * Unless noted otherwise, all units are SI units; particularly, frequency is specified in hertz.
+ *
  * The implementation is adapted from libuavcan.
  *
  * This function is defined in the header in order to encourage the linker to discard it if it is not used.
@@ -194,7 +196,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
         return -CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE;
     }
 
-    assert(out_timings != NULL);
+    CANARD_ASSERT(out_timings != NULL);
     memset(out_timings, 0, sizeof(*out_timings));
 
     /*
@@ -215,7 +217,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      *   125  kbps      16      17
      */
     const int max_quanta_per_bit = (target_bitrate >= 1000000) ? 10 : 17;
-    assert(max_quanta_per_bit <= (MaxBS1 + MaxBS2));
+    CANARD_ASSERT(max_quanta_per_bit <= (MaxBS1 + MaxBS2));
 
     static const int MaxSamplePointLocationPermill = 900;
 
@@ -272,7 +274,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      */
     uint8_t bs1 = (uint8_t)(((7 * bs1_bs2_sum - 1) + 4) / 8);       // Trying rounding to nearest first
     uint8_t bs2 = (uint8_t)(bs1_bs2_sum - bs1);
-    assert(bs1_bs2_sum > bs1);
+    CANARD_ASSERT(bs1_bs2_sum > bs1);
 
     {
         const uint16_t sample_point_permill = (uint16_t)(1000 * (1 + bs1) / (1 + bs1 + bs2));
@@ -298,11 +300,11 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
         !valid)
     {
         // This actually means that the algorithm has a logic error, hence assert(0).
-        assert(0);
+        CANARD_ASSERT(0);
         return -CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE;
     }
 
-    out_timings->bit_rate_prescaler = prescaler;
+    out_timings->bit_rate_prescaler = (uint16_t) prescaler;
     out_timings->max_resynchronization_jump_width = 1;      // One is recommended by UAVCAN, CANOpen, and DeviceNet
     out_timings->bit_segment_1 = bs1;
     out_timings->bit_segment_2 = bs2;
