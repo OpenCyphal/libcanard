@@ -1,6 +1,6 @@
-#libcanard design document
+# libcanard design document
 
-##Design goals
+## Design goals
 
 The following list contains main design goals in the order of importance.
 
@@ -19,7 +19,7 @@ The following list contains main design goals in the order of importance.
     Unlike libuavcan, which somewhat resembles a framework rather than just a library, this project should not attempt to implement all of the high-level functionality of UAVCAN.
 
 
-##Feature set
+## Feature set
 
 According to the core design goals defined above, the functionality of the library should be restricted to the bare minimum.
 The following features are considered to comprise the bare minimum:
@@ -44,15 +44,15 @@ The following features are intentionally not supported by the library:
     Vast majority of deeply embedded systems use 32/16/8-bit CPU.
     Systems that are based on AMD64 can still be supported by means of x86 compatibility mode (although it is recommended to use libuavcan instead).
 
-#Architecture
+# Architecture
 
-##Memory management
+## Memory management
 
-###Library state
+### Library state
 Entire state of the library should be kept in one instance of a C structure.
 Every API call of the library that depends on the state will be accepting the aforementioned instance as its first argument.
 
-###Dynamic memory pool
+### Dynamic memory pool
 The library should implement a block memory allocator that will be used by the following subsystems (each is described below):
 
 * Incoming transfer buffers.
@@ -66,7 +66,7 @@ For reference, libuavcan uses 64-byte blocks.
 Implementation of the block allocation algorithm can be borrowed from libuavcan.
 
 
-###Transfer buffers
+### Transfer buffers
 Transfer buffers should be implemented as a singly-linked lists of blocks, where every block is an instance of the following structure:
 
 ```c
@@ -92,7 +92,7 @@ According to the transport layer specification, the following operations must be
 
 New blocks should be allocated ad hoc, however their removal should happen at once, after the data is processed upon completion of transfer reception.
 
-###RX transfer states
+### RX transfer states
 
 The library will have to keep some state associated with every unique incoming transfer.
 The concept of unique transfer is explained in the specification here.
@@ -163,7 +163,7 @@ Using the concepts defined above, the frame reception procedure can be defined r
 * If the frame is the last one in the transfer, report to the application, then remove all buffered data and prepare the RX state instance for the next transfer.
     Exit.
 
-###TX queue
+### TX queue
 
 Frames that are scheduled for transmission should be stored in a prioritized TX queue.
 When the CAN driver is ready to accept a frame, the application will take the highest priority frame from the TX queue and pass it to the driver.
@@ -197,14 +197,14 @@ typedef struct CanardTxQueueItem
 } CanardTxQueueItem;
 ```
 
-###Threading model
+### Threading model
 
 The library should be single-threaded, not thread-aware.
 Hence the API will be not thread-safe, which is OK as most applications will likely be running all of the UAVCAN-related logic in one thread.
 
 The documentation should provide advices about how to integrate the library in a multithreaded environment.
 
-###API
+### API
 
 The following list provides a high-level description of the major use cases:
 
@@ -489,7 +489,7 @@ void canardReleaseRxTransferPayload(CanardInstance* ins,
                                     CanardRxTransfer* transfer);
 ```
 
-###Code generation
+### Code generation
 
 As noted above, this shall remain an optional part of the library, as some applications may opt to implement serialization and deserialization manually.
 The DSDL compiler should generate a tiny standalone single-header library for every data type the user needs to use in deserialized form.
@@ -520,17 +520,17 @@ An example is provided below.
 |-----------------|--------------|
 | `Foo[<5] bars`  | `Foo bars[4]; uint16_t bars_len;`
 
-#Implementation notes
+# Implementation notes
 
-##Packaging
+## Packaging
 
 The suggested approach is to keep all of the library’s functions in just one C file, and expose the entire API via just one header file.
 
-##Coding style
+## Coding style
 
 Please refer to [the Zubax coding style](https://github.com/Zubax/zubax_style_guide).
 
-##Testing
+## Testing
 
 The library should be equipped with a testing suite (like libuavcan).
 The testing suite should be based on the Google Test library (in which case it can be written in C++), or it can be just a dedicated application with a custom testing environment (in which case it is recommended to stick to C99).
@@ -540,10 +540,10 @@ Since 64-bit systems are not supported by the proposed design, on AMD64 systems 
 
 A continuous integration environment like Travis CI should be set up early in the project to run the test suite on each commit / pull request.
 
-##Name
+## Name
 It has been agreed to name the library “libcanard”.
 
-##License
+## License
 The library must be released under the MIT open source license.
 A short summary can be found [on tl;dr legal](http://www.tldrlegal.com/l/mit).
 The license statement must declare that the code was developed by the UAVCAN project team.
