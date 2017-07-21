@@ -61,7 +61,7 @@ This section is intended only for library developers and contributors.
 
 The library design document can be found in [DESIGN.md](DESIGN.md)
 
-Contributors, please follow the [Zubax Style Guide](https://github.com/Zubax/zubax_style_guide).
+Contributors, please follow the [Zubax C++ Coding Conventions](https://kb.zubax.com/x/84Ah).
 
 ### Building and Running Tests
 
