@@ -528,7 +528,7 @@ The suggested approach is to keep all of the library’s functions in just one C
 
 ## Coding style
 
-Please refer to [the Zubax coding style](https://github.com/Zubax/zubax_style_guide).
+Please refer to [the Zubax coding conventions](https://kb.zubax.com/x/84Ah).
 
 ## Testing
 
