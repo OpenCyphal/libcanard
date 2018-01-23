@@ -898,7 +898,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
     }
     else                                                                    // Multi frame transfer
     {
-        uint8_t data_index = 0;
+        uint16_t data_index = 0;
         uint8_t toggle = 0;
         uint8_t sot_eot = 0x80;
 
