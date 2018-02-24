@@ -472,7 +472,44 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
          * Converting the ID and the Mask into the representation that can be chewed by the hardware.
          * If Mask asks us to accept both STDID and EXTID, we need to use EXT mode on the filter,
          * otherwise it will reject all EXTID frames. This logic is not documented in the RM.
-         * True story. This is sacred knowledge! Don't tell the unworthy.
+         *
+         * The logic of the hardware acceptance filters can be described as follows:
+         *
+         *  accepted = (received_id & filter_mask) == (filter_id & filter_mask)
+         *
+         * Where:
+         *  - accepted      - if true, the frame will be accepted by the filter.
+         *  - received_id   - the CAN ID of the received frame, either 11-bit or 29-bit, with extension bits
+         *                    marking extended frames, error frames, etc.
+         *  - filter_id     - the value of the filter ID register.
+         *  - filter_mask   - the value of the filter mask register.
+         *
+         * There are special bits that are not members of the CAN ID field:
+         *  - EFF - set for extended frames (29-bit), cleared for standard frames (11-bit)
+         *  - RTR - like above, indicates Remote Transmission Request frames.
+         *
+         * The following truth table summarizes the logic (where: FM - filter mask, FID - filter ID, RID - received
+         * frame ID, A - true if accepted, X - any state):
+         *
+         *  FM  FID RID A
+         *  0   X   X   1
+         *  1   0   0   1
+         *  1   1   0   0
+         *  1   0   1   0
+         *  1   1   1   1
+         *
+         * One would expect that for the purposes of hardware filtering, the special bits should be treated
+         * in the same way as the real ID bits. However, this is not the case with bxCAN. The following truth
+         * table has been determined empirically (this behavior was not documented as of 2017):
+         *
+         *  FM  FID RID A
+         *  0   0   0   1
+         *  0   0   1   0       <-- frame rejected!
+         *  0   1   X   1
+         *  1   0   0   1
+         *  1   1   0   0
+         *  1   0   1   0
+         *  1   1   1   1
          */
         uint32_t id   = 0;
         uint32_t mask = 0;
@@ -481,15 +518,14 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
 
         if ((cfg->id & CANARD_CAN_FRAME_EFF) || !(cfg->mask & CANARD_CAN_FRAME_EFF))
         {
-            // The application wants to trick us by requesting both ext and std frames!
-            id   = (cfg->id   & CANARD_CAN_EXT_ID_MASK) << 3;   // Little they know, we can handle that correctly.
-            mask = (cfg->mask & CANARD_CAN_EXT_ID_MASK) << 3;   // See?
-            id |= CANARD_STM32_CAN_RIR_IDE;                     // That's how we do this. Where's my sunglasses?
+            id   = (cfg->id   & CANARD_CAN_EXT_ID_MASK) << 3;
+            mask = (cfg->mask & CANARD_CAN_EXT_ID_MASK) << 3;
+            id |= CANARD_STM32_CAN_RIR_IDE;
         }
         else
         {
-            id   = (cfg->id   & CANARD_CAN_STD_ID_MASK) << 21;  // Regular std frames, nothing fancy.
-            mask = (cfg->mask & CANARD_CAN_STD_ID_MASK) << 21;  // Boring.
+            id   = (cfg->id   & CANARD_CAN_STD_ID_MASK) << 21;
+            mask = (cfg->mask & CANARD_CAN_STD_ID_MASK) << 21;
         }
 
         if (cfg->id & CANARD_CAN_FRAME_RTR)
