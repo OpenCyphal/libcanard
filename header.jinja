@@ -1,0 +1,23 @@
+#ifndef _CANARD_SERIALIZE_
+#define _CANARD_SERIALIZE_
+
+#include <stdint.h>
+#include <stdbool.h>
+
+{% for t in types %}
+{{ uavcan_type_to_c(t) }} {
+    {% for f in t.fields -%}
+    {%- if f.type.category == f.type.CATEGORY_ARRAY -%}
+    {{ uavcan_type_to_c(f.type.value_type) }} {{ f.name }}[{{ f.type.max_size }}];
+    {%- else -%}
+    {{ uavcan_type_to_c(f.type) }} {{ f.name }};
+    {%- endif %}
+    {% endfor %}
+};
+{% endfor %}
+
+{% for t in types %}
+void serialize_{{ normalized_name(t) }}(uint8_t *buffer, {{ uavcan_type_to_c(t) }} value);
+void deserialize_{{ normalized_name(t) }}({{ uavcan_type_to_c(t) }} *out, uint8_t *buffer);
+{% endfor %}
+#endif
