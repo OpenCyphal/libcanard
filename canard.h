@@ -45,10 +45,10 @@ extern "C" {
 # define CANARD_ASSERT(x)   assert(x)
 #endif
 
-/// By default this macro expands to static_assert if supported by the language (C11, C++14, or newer).
+/// By default this macro expands to static_assert if supported by the language (C11, C++11, or newer).
 /// The user can redefine this if necessary.
 #ifndef CANARD_STATIC_ASSERT
-# if defined(static_assert) || (defined(__cplusplus) && (__cplusplus >= 201402L))
+# if defined(static_assert) || (defined(__cplusplus) && (__cplusplus >= 201103L))
 #  define CANARD_STATIC_ASSERT(...) static_assert(__VA_ARGS__)
 # else
 #  define CANARD_STATIC_ASSERT(x, ...) typedef char _static_assertion_##__LINE__[(x) ? 1 : -1]
