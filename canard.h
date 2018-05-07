@@ -51,7 +51,7 @@ extern "C" {
 # if defined(static_assert) || (defined(__cplusplus) && (__cplusplus >= 201402L))
 #  define CANARD_STATIC_ASSERT(...) static_assert(__VA_ARGS__)
 # else
-#  define CANARD_STATIC_ASSERT(...) struct { char _dummy; }
+#  define CANARD_STATIC_ASSERT(x, ...) typedef char _static_assertion_##__LINE__[(x) ? 1 : -1]
 # endif
 #endif
 
