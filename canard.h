@@ -45,6 +45,17 @@ extern "C" {
 # define CANARD_ASSERT(x)   assert(x)
 #endif
 
+/// By default this macro expands to static_assert if supported by the language (C11, C++11, or newer).
+/// The user can redefine this if necessary.
+#ifndef CANARD_STATIC_ASSERT
+# if (defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)) ||\
+     (defined(__cplusplus) && (__cplusplus >= 201103L))
+#  define CANARD_STATIC_ASSERT(...) static_assert(__VA_ARGS__)
+# else
+#  define CANARD_STATIC_ASSERT(x, ...) typedef char _static_assertion_##__LINE__[(x) ? 1 : -1]
+# endif
+#endif
+
 /// Error code definitions; inverse of these values may be returned from API calls.
 #define CANARD_OK                                   0
 // Value 1 is omitted intentionally, since -1 is often used in 3rd party code
@@ -490,6 +501,10 @@ CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* i
 uint16_t canardConvertNativeFloatToFloat16(float value);
 float canardConvertFloat16ToNativeFloat(uint16_t value);
 
+/// Abort the build if the current platform is not supported.
+CANARD_STATIC_ASSERT(((uint32_t)CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) < 32,
+                     "Platforms where sizeof(void*) > 4 are not supported. "
+                     "On AMD64 use 32-bit mode (e.g. GCC flag -m32).");
 
 #ifdef __cplusplus
 }
