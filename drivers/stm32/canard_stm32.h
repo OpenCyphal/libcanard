@@ -238,7 +238,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      */
     uint8_t bs1_bs2_sum = (uint8_t)(max_quanta_per_bit - 1);
 
-    while ((prescaler_bs % (1 + bs1_bs2_sum)) != 0)
+    while ((prescaler_bs % (1U + bs1_bs2_sum)) != 0)
     {
         if (bs1_bs2_sum <= 2)
         {
@@ -247,7 +247,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
         bs1_bs2_sum--;
     }
 
-    const uint32_t prescaler = prescaler_bs / (1 + bs1_bs2_sum);
+    const uint32_t prescaler = prescaler_bs / (1U + bs1_bs2_sum);
     if ((prescaler < 1U) || (prescaler > 1024U))
     {
         return -CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE;              // No solution
@@ -277,7 +277,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
     CANARD_ASSERT(bs1_bs2_sum > bs1);
 
     {
-        const uint16_t sample_point_permill = (uint16_t)(1000 * (1 + bs1) / (1 + bs1 + bs2));
+        const uint16_t sample_point_permill = (uint16_t)(1000U * (1U + bs1) / (1U + bs1 + bs2));
 
         if (sample_point_permill > MaxSamplePointLocationPermill)   // Strictly more!
         {
@@ -296,7 +296,7 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      *     ts2,ts1,brp = (x>>20)&7, (x>>16)&15, x&511
      *     return (1+ts1+1)/(1+ts1+1+ts2+1)
      */
-    if ((target_bitrate != (peripheral_clock_rate / (prescaler * (1 + bs1 + bs2)))) ||
+    if ((target_bitrate != (peripheral_clock_rate / (prescaler * (1U + bs1 + bs2)))) ||
         !valid)
     {
         // This actually means that the algorithm has a logic error, hence assert(0).

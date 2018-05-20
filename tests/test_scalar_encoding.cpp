@@ -38,15 +38,15 @@ TEST(BigEndian, Check)
 
 
 template <typename T>
-static inline T read(CanardRxTransfer* transfer, uint16_t bit_offset, uint8_t bit_length)
+static inline T read(CanardRxTransfer* transfer, uint32_t bit_offset, uint8_t bit_length)
 {
     auto value = T();
 
-    const int res = canardDecodeScalar(transfer, bit_offset, bit_length, std::is_signed<T>::value, &value);
+    const int res = canardDecodeScalar(transfer, uint16_t(bit_offset), bit_length, std::is_signed<T>::value, &value);
     if (res != bit_length)
     {
         throw std::runtime_error("Unexpected return value; expected " +
-                                 std::to_string(bit_length) + ", got " + std::to_string(res));
+                                 std::to_string(unsigned(bit_length)) + ", got " + std::to_string(res));
     }
 
     return value;
@@ -55,7 +55,7 @@ static inline T read(CanardRxTransfer* transfer, uint16_t bit_offset, uint8_t bi
 
 TEST(ScalarDecode, SingleFrame)
 {
-    auto transfer = CanardRxTransfer();
+    CanardRxTransfer transfer{};
 
     static const uint8_t buf[7] =
     {
@@ -118,7 +118,7 @@ TEST(ScalarDecode, MultiFrame)
     /*
      * Configuring the transfer object
      */
-    auto transfer = CanardRxTransfer();
+    CanardRxTransfer transfer{};
 
     uint8_t head[CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE];
     for (auto& x : head)
@@ -148,7 +148,8 @@ TEST(ScalarDecode, MultiFrame)
     transfer.payload_middle = middle_a;
     transfer.payload_tail   = &tail[0];
 
-    transfer.payload_len = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE + CANARD_BUFFER_BLOCK_DATA_SIZE * 2 + sizeof(tail);
+    transfer.payload_len =
+        uint16_t(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE + CANARD_BUFFER_BLOCK_DATA_SIZE * 2 + sizeof(tail));
 
     std::cout << "Payload size: " << transfer.payload_len << std::endl;
 
@@ -172,17 +173,17 @@ TEST(ScalarDecode, MultiFrame)
 
     // Last 64
     ASSERT_EQ(0b0100010000110011001000100001000111001100110011001100110011001100ULL,
-              read<uint64_t>(&transfer, transfer.payload_len * 8 - 64, 64));
+              read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
 
     /*
      * Testing without the middle
      */
-    transfer.payload_middle = NULL;
-    transfer.payload_len -= CANARD_BUFFER_BLOCK_DATA_SIZE * 2;
+    transfer.payload_middle = nullptr;
+    transfer.payload_len = uint16_t(transfer.payload_len - CANARD_BUFFER_BLOCK_DATA_SIZE * 2U);
 
     // Last 64
     ASSERT_EQ(0b0100010000110011001000100001000110100101101001011010010110100101ULL,
-              read<uint64_t>(&transfer, transfer.payload_len * 8 - 64, 64));
+              read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
 }
 
 
@@ -198,21 +199,21 @@ TEST(ScalarEncode, Basic)
 
     u8 = 0b1111;
     canardEncodeScalar(buffer, 5, 4, &u8);
-    ASSERT_EQ(123 | 0b111, buffer[0]);
+    ASSERT_EQ(123U | 0b111U, buffer[0]);
     ASSERT_EQ(0b10000000,  buffer[1]);
 
     int16_t s16 = -1;
     canardEncodeScalar(buffer, 9, 15, &s16);
-    ASSERT_EQ(123 | 0b111, buffer[0]);
+    ASSERT_EQ(123U | 0b111U, buffer[0]);
     ASSERT_EQ(0b11111111,  buffer[1]);
     ASSERT_EQ(0b11111111,  buffer[2]);
     ASSERT_EQ(0b00000000,  buffer[3]);
 
-    int64_t s64 = (int64_t) 0b0000000100100011101111000110011110001001101010111100110111101111L;
+    auto s64 = int64_t(0b0000000100100011101111000110011110001001101010111100110111101111L);
     canardEncodeScalar(buffer, 16, 60, &s64);
-    ASSERT_EQ(123 | 0b111, buffer[0]);  // 0
-    ASSERT_EQ(0b11111111,  buffer[1]);  // 8
-    ASSERT_EQ(0b11101111,  buffer[2]);  // 16
+    ASSERT_EQ(123U | 0b111U, buffer[0]);  // 0
+    ASSERT_EQ(0b11111111,  buffer[1]);    // 8
+    ASSERT_EQ(0b11101111,  buffer[2]);    // 16
     ASSERT_EQ(0b11001101,  buffer[3]);
     ASSERT_EQ(0b10101011,  buffer[4]);
     ASSERT_EQ(0b10001001,  buffer[5]);

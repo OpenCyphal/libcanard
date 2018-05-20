@@ -38,12 +38,15 @@ extern "C" {
 
 /// Libcanard version. API will be backwards compatible within the same major version.
 #define CANARD_VERSION_MAJOR                        0
-#define CANARD_VERSION_MINOR                        1
+#define CANARD_VERSION_MINOR                        2
 
 /// By default this macro resolves to the standard assert(). The user can redefine this if necessary.
 #ifndef CANARD_ASSERT
 # define CANARD_ASSERT(x)   assert(x)
 #endif
+
+#define CANARD_GLUE(a, b)           CANARD_GLUE_IMPL_(a, b)
+#define CANARD_GLUE_IMPL_(a, b)     a##b
 
 /// By default this macro expands to static_assert if supported by the language (C11, C++11, or newer).
 /// The user can redefine this if necessary.
@@ -52,7 +55,7 @@ extern "C" {
      (defined(__cplusplus) && (__cplusplus >= 201103L))
 #  define CANARD_STATIC_ASSERT(...) static_assert(__VA_ARGS__)
 # else
-#  define CANARD_STATIC_ASSERT(x, ...) typedef char _static_assertion_##__LINE__[(x) ? 1 : -1]
+#  define CANARD_STATIC_ASSERT(x, ...) typedef char CANARD_GLUE(_static_assertion_, __LINE__)[(x) ? 1 : -1]
 # endif
 #endif
 
@@ -65,10 +68,10 @@ extern "C" {
 #define CANARD_ERROR_INTERNAL                       9
 
 /// The size of a memory block in bytes.
-#define CANARD_MEM_BLOCK_SIZE                       32
+#define CANARD_MEM_BLOCK_SIZE                       32U
 
 /// This will be changed when the support for CAN FD is added
-#define CANARD_CAN_FRAME_MAX_DATA_LEN               8
+#define CANARD_CAN_FRAME_MAX_DATA_LEN               8U
 
 /// Node ID values. Refer to the specification for more info.
 #define CANARD_BROADCAST_NODE_ID                    0
@@ -97,6 +100,10 @@ extern "C" {
 #define CANARD_CAN_FRAME_EFF                        (1UL << 31U)         ///< Extended frame format
 #define CANARD_CAN_FRAME_RTR                        (1UL << 30U)         ///< Remote transmission (not used by UAVCAN)
 #define CANARD_CAN_FRAME_ERR                        (1UL << 29U)         ///< Error frame (not used by UAVCAN)
+
+#define CANARD_TRANSFER_PAYLOAD_LEN_BITS            10U
+#define CANARD_MAX_TRANSFER_PAYLOAD_LEN             ((1U << CANARD_TRANSFER_PAYLOAD_LEN_BITS) - 1U)
+
 
 /**
  * This data type holds a standard CAN 2.0B data frame with 29-bit ID.
@@ -218,16 +225,18 @@ struct CanardRxState
 
     const uint32_t dtid_tt_snid_dnid;
 
-    uint16_t payload_crc;
-
     // We're using plain 'unsigned' here, because C99 doesn't permit explicit field type specification
     unsigned calculated_crc : 16;
-    unsigned payload_len    : 10;
+    unsigned payload_len    : CANARD_TRANSFER_PAYLOAD_LEN_BITS;
     unsigned transfer_id    : 5;
     unsigned next_toggle    : 1;    // 16+10+5+1 = 32, aligned.
 
+    uint16_t payload_crc;
+
     uint8_t buffer_head[];
 };
+CANARD_STATIC_ASSERT(sizeof(CanardRxState) <= 28, "Invalid memory layout");
+CANARD_STATIC_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE >= 4, "Invalid memory layout");
 
 /**
  * This is the core structure that keeps all of the states and allocated resources of the library instance.

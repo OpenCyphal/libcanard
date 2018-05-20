@@ -36,13 +36,13 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
 
     const int res = canardSTM32ComputeCANTimings(pclk1, target_bitrate, &timings);
 
-    const std::uint16_t sample_point_permill =
+    const auto sample_point_permill =
         std::uint16_t((1000 * (1 + timings.bit_segment_1) / (1 + timings.bit_segment_1 + timings.bit_segment_2)));
 
-    const std::uint32_t bdtr = (((timings.max_resynchronization_jump_width - 1) &    3U) << 24) |
-                               (((timings.bit_segment_1 - 1)                    &   15U) << 16) |
-                               (((timings.bit_segment_2 - 1)                    &    7U) << 20) |
-                               (((timings.bit_rate_prescaler - 1)               & 1023U) << 0);
+    const std::uint32_t bdtr = (((timings.max_resynchronization_jump_width - 1U) &    3U) << 24U) |
+                               (((timings.bit_segment_1 - 1U)                    &   15U) << 16U) |
+                               (((timings.bit_segment_2 - 1U)                    &    7U) << 20U) |
+                               (((timings.bit_rate_prescaler - 1U)               & 1023U) << 0U);
 
     std::printf("PCLK %9u    Target %9u    %s (%d)    Presc %4u    BS %2u/%u %.1f%%    BDTR 0x%08x\n",
                 unsigned(pclk1),
@@ -52,7 +52,7 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
                 timings.bit_rate_prescaler,
                 timings.bit_segment_1,
                 timings.bit_segment_2,
-                sample_point_permill * 0.1F,
+                double(sample_point_permill) * 0.1,
                 unsigned(bdtr));
     if (res != 0)
     {

@@ -74,7 +74,7 @@ static uint8_t node_health = UAVCAN_NODE_HEALTH_OK;
 static uint8_t node_mode   = UAVCAN_NODE_MODE_INITIALIZATION;
 
 
-uint64_t getMonotonicTimestampUSec(void)
+static uint64_t getMonotonicTimestampUSec(void)
 {
     struct timespec ts;
     memset(&ts, 0, sizeof(ts));
@@ -82,14 +82,14 @@ uint64_t getMonotonicTimestampUSec(void)
     {
         abort();
     }
-    return ts.tv_sec * 1000000ULL + ts.tv_nsec / 1000ULL;
+    return (uint64_t)(ts.tv_sec * 1000000LL + ts.tv_nsec / 1000LL);
 }
 
 
 /**
  * Returns a pseudo random float in the range [0, 1].
  */
-float getRandomFloat(void)
+static float getRandomFloat(void)
 {
     static bool initialized = false;
     if (!initialized)                   // This is not thread safe, but a race condition here is not harmful.
@@ -105,7 +105,7 @@ float getRandomFloat(void)
 /**
  * This function uses a mock unique ID, this is not allowed in real applications!
  */
-void readUniqueID(uint8_t* out_uid)
+static void readUniqueID(uint8_t* out_uid)
 {
     for (uint8_t i = 0; i < UNIQUE_ID_LENGTH_BYTES; i++)
     {
@@ -114,7 +114,7 @@ void readUniqueID(uint8_t* out_uid)
 }
 
 
-void makeNodeStatusMessage(uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE])
+static void makeNodeStatusMessage(uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE])
 {
     memset(buffer, 0, UAVCAN_NODE_STATUS_MESSAGE_SIZE);
 
@@ -306,7 +306,7 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
 /**
  * This function is called at 1 Hz rate from the main loop.
  */
-void process1HzTasks(uint64_t timestamp_usec)
+static void process1HzTasks(uint64_t timestamp_usec)
 {
     /*
      * Purging transfers that are no longer transmitted. This will occasionally free up some memory.
@@ -358,7 +358,7 @@ void process1HzTasks(uint64_t timestamp_usec)
 /**
  * Transmits all frames from the TX queue, receives up to one frame.
  */
-void processTxRxOnce(SocketCANInstance* socketcan, int timeout_msec)
+static void processTxRxOnce(SocketCANInstance* socketcan, int timeout_msec)
 {
     // Transmitting
     for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&canard)) != NULL;)
@@ -457,7 +457,7 @@ int main(int argc, char** argv)
         // Structure of the request is documented in the DSDL definition
         // See http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
         uint8_t allocation_request[CANARD_CAN_FRAME_MAX_DATA_LEN - 1];
-        allocation_request[0] = PreferredNodeID << 1;
+        allocation_request[0] = (uint8_t)(PreferredNodeID << 1U);
 
         if (node_id_allocation_unique_id_offset == 0)
         {
