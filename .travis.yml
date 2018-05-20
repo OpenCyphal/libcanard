@@ -33,6 +33,7 @@ matrix:
             - clang-5.0
             - libstdc++-7-dev   # This package contains the C++ standard library used by Clang-5.0
             - linux-libc-dev:i386
+            - libc6-dev-i386
       script:
         - clang++-5.0 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes
         - cd tests/
