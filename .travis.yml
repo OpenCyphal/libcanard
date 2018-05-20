@@ -12,6 +12,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            # We need i386 packages because we compile libcanard in 32-bit mode, it doesn't support 64-bit platforms.
             - g++-7
             - g++-7-multilib
             - gcc-7-multilib
@@ -30,6 +31,7 @@ matrix:
             - ubuntu-toolchain-r-test
             - llvm-toolchain-trusty-5.0
           packages:
+            # We need i386 packages because we compile libcanard in 32-bit mode, it doesn't support 64-bit platforms.
             - clang-5.0
             - libstdc++-7-dev:i386   # This package contains the C++ standard library used by Clang-5.0
             - linux-libc-dev:i386
