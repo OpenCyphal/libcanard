@@ -26,14 +26,15 @@
 #include <algorithm>
 #include <stdexcept>
 #include <memory>
-#include <gtest/gtest.h>
+#include <catch.hpp>
+#include <iostream>
 #include "canard_internals.h"
 
 
-TEST(BigEndian, Check)
+TEST_CASE("BigEndian, Check")
 {
     // Assuming that unit tests can only be run on little-endian platforms!
-    ASSERT_FALSE(isBigEndian());
+    REQUIRE_FALSE(isBigEndian());
 }
 
 
@@ -53,7 +54,7 @@ static inline T read(CanardRxTransfer* transfer, uint32_t bit_offset, uint8_t bi
 }
 
 
-TEST(ScalarDecode, SingleFrame)
+TEST_CASE("ScalarDecode, SingleFrame")
 {
     auto transfer = CanardRxTransfer();
 
@@ -71,14 +72,14 @@ TEST(ScalarDecode, SingleFrame)
     transfer.payload_head = &buf[0];
     transfer.payload_len = sizeof(buf);
 
-    ASSERT_EQ(0b10100101, read<uint8_t>(&transfer, 0, 8));
-    ASSERT_EQ(0b01011100, read<uint8_t>(&transfer, 4, 8));
-    ASSERT_EQ(0b00000101, read<uint8_t>(&transfer, 4, 4));
+    REQUIRE(0b10100101 == read<uint8_t>(&transfer, 0, 8));
+    REQUIRE(0b01011100 == read<uint8_t>(&transfer, 4, 8));
+    REQUIRE(0b00000101 == read<uint8_t>(&transfer, 4, 4));
 
-    ASSERT_EQ(true,  read<bool>(&transfer, 9, 1));
-    ASSERT_EQ(false, read<bool>(&transfer, 10, 1));
+    REQUIRE(read<bool>(&transfer, 9, 1));
+    REQUIRE_FALSE(read<bool>(&transfer, 10, 1));
 
-    ASSERT_EQ(0b11101000101010100101010101111110, read<uint32_t>(&transfer, 24, 32));
+    REQUIRE(0b11101000101010100101010101111110 == read<uint32_t>(&transfer, 24, 32));
 
     /*
      * Raw bit stream with offset 21:
@@ -88,25 +89,25 @@ TEST(ScalarDecode, SingleFrame)
      * Which is little endian representation of:
      *   0b01011101101101011100101011101111
      */
-    ASSERT_EQ(0b01011101101101011100101011101111, read<uint32_t>(&transfer, 21, 32));
+    REQUIRE(0b01011101101101011100101011101111 == read<uint32_t>(&transfer, 21, 32));
 
     // Should fail
-    ASSERT_THROW(read<uint32_t>(&transfer, 25, 32), std::runtime_error);
+    REQUIRE_THROWS_AS(read<uint32_t>(&transfer, 25, 32), std::runtime_error);
 
     // Inexact size
-    ASSERT_EQ(0b010111101101011100101011101111, read<uint32_t>(&transfer, 21, 30));
+    REQUIRE(0b010111101101011100101011101111 == read<uint32_t>(&transfer, 21, 30));
 
     // Negatives; reference values taken from libuavcan test suite or computed manually
-    ASSERT_EQ(-1, read<int8_t>(&transfer, 16, 3));  // 0b111
-    ASSERT_EQ(-4, read<int8_t>(&transfer, 2, 3));   // 0b100
+    REQUIRE(-1 == read<int8_t>(&transfer, 16, 3));  // 0b111
+    REQUIRE(-4 == read<int8_t>(&transfer, 2, 3));   // 0b100
 
-    ASSERT_EQ(-91,    read<int8_t>(&transfer, 0, 8));       //         0b10100101
-    ASSERT_EQ(-15451, read<int16_t>(&transfer, 0, 16));     // 0b1100001110100101
-    ASSERT_EQ(-7771,  read<int16_t>(&transfer, 0, 15));     //  0b100001110100101
+    REQUIRE(-91    == read<int8_t>(&transfer, 0, 8));       //         0b10100101
+    REQUIRE(-15451 == read<int16_t>(&transfer, 0, 16));     // 0b1100001110100101
+    REQUIRE(-7771  == read<int16_t>(&transfer, 0, 15));     //  0b100001110100101
 }
 
 
-TEST(ScalarDecode, MultiFrame)
+TEST_CASE("ScalarDecode, MultiFrame")
 {
     /*
      * Configuring allocator
@@ -156,24 +157,24 @@ TEST(ScalarDecode, MultiFrame)
     /*
      * Testing
      */
-    ASSERT_EQ(0b10100101, read<uint8_t>(&transfer, 0, 8));
-    ASSERT_EQ(0b01011010, read<uint8_t>(&transfer, 4, 8));
-    ASSERT_EQ(0b00000101, read<uint8_t>(&transfer, 4, 4));
+    REQUIRE(0b10100101 == read<uint8_t>(&transfer, 0, 8));
+    REQUIRE(0b01011010 == read<uint8_t>(&transfer, 4, 8));
+    REQUIRE(0b00000101 == read<uint8_t>(&transfer, 4, 4));
 
-    ASSERT_EQ(false, read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8, 1));
-    ASSERT_EQ(true,  read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + 1, 1));
+    REQUIRE_FALSE(read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8, 1));
+    REQUIRE(read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + 1, 1));
 
     // 64 from beginning, 48 bits from head, 16 bits from the middle
-    ASSERT_EQ(0b0101101001011010101001011010010110100101101001011010010110100101ULL, read<uint64_t>(&transfer, 0, 64));
+    REQUIRE(0b0101101001011010101001011010010110100101101001011010010110100101ULL == read<uint64_t>(&transfer, 0, 64));
 
     // 64 from two middle blocks, 32 from the first, 32 from the second
-    ASSERT_EQ(0b1100110011001100110011001100110001011010010110100101101001011010ULL,
-              read<uint64_t>(&transfer,
-                             CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32, 64));
+    REQUIRE(0b1100110011001100110011001100110001011010010110100101101001011010ULL ==
+            read<uint64_t>(&transfer,
+                           CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32, 64));
 
     // Last 64
-    ASSERT_EQ(0b0100010000110011001000100001000111001100110011001100110011001100ULL,
-              read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
+    REQUIRE(0b0100010000110011001000100001000111001100110011001100110011001100ULL ==
+            read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
 
     /*
      * Testing without the middle
@@ -182,43 +183,43 @@ TEST(ScalarDecode, MultiFrame)
     transfer.payload_len = uint16_t(transfer.payload_len - CANARD_BUFFER_BLOCK_DATA_SIZE * 2U);
 
     // Last 64
-    ASSERT_EQ(0b0100010000110011001000100001000110100101101001011010010110100101ULL,
-              read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
+    REQUIRE(0b0100010000110011001000100001000110100101101001011010010110100101ULL ==
+            read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
 }
 
 
-TEST(ScalarEncode, Basic)
+TEST_CASE("ScalarEncode, Basic")
 {
     uint8_t buffer[32];
     std::fill_n(std::begin(buffer), sizeof(buffer), 0);
 
     uint8_t u8 = 123;
     canardEncodeScalar(buffer, 0, 8, &u8);
-    ASSERT_EQ(123, buffer[0]);
-    ASSERT_EQ(0, buffer[1]);
+    REQUIRE(123 == buffer[0]);
+    REQUIRE(0 == buffer[1]);
 
     u8 = 0b1111;
     canardEncodeScalar(buffer, 5, 4, &u8);
-    ASSERT_EQ(123U | 0b111U, buffer[0]);
-    ASSERT_EQ(0b10000000,  buffer[1]);
+    REQUIRE((123U | 0b111U) == buffer[0]);
+    REQUIRE(0b10000000 == buffer[1]);
 
     int16_t s16 = -1;
     canardEncodeScalar(buffer, 9, 15, &s16);
-    ASSERT_EQ(123U | 0b111U, buffer[0]);
-    ASSERT_EQ(0b11111111,  buffer[1]);
-    ASSERT_EQ(0b11111111,  buffer[2]);
-    ASSERT_EQ(0b00000000,  buffer[3]);
+    REQUIRE((123U | 0b111U) == buffer[0]);
+    REQUIRE(0b11111111 == buffer[1]);
+    REQUIRE(0b11111111 == buffer[2]);
+    REQUIRE(0b00000000 == buffer[3]);
 
     auto s64 = int64_t(0b0000000100100011101111000110011110001001101010111100110111101111L);
     canardEncodeScalar(buffer, 16, 60, &s64);
-    ASSERT_EQ(123U | 0b111U, buffer[0]);  // 0
-    ASSERT_EQ(0b11111111,  buffer[1]);    // 8
-    ASSERT_EQ(0b11101111,  buffer[2]);    // 16
-    ASSERT_EQ(0b11001101,  buffer[3]);
-    ASSERT_EQ(0b10101011,  buffer[4]);
-    ASSERT_EQ(0b10001001,  buffer[5]);
-    ASSERT_EQ(0b01100111,  buffer[6]);
-    ASSERT_EQ(0b10111100,  buffer[7]);
-    ASSERT_EQ(0b00100011,  buffer[8]);
-    ASSERT_EQ(0b00010000,  buffer[9]);
+    REQUIRE((123U | 0b111U) == buffer[0]);  // 0
+    REQUIRE(0b11111111 == buffer[1]);    // 8
+    REQUIRE(0b11101111 == buffer[2]);    // 16
+    REQUIRE(0b11001101 == buffer[3]);
+    REQUIRE(0b10101011 == buffer[4]);
+    REQUIRE(0b10001001 == buffer[5]);
+    REQUIRE(0b01100111 == buffer[6]);
+    REQUIRE(0b10111100 == buffer[7]);
+    REQUIRE(0b00100011 == buffer[8]);
+    REQUIRE(0b00010000 == buffer[9]);
 }

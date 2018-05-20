@@ -22,7 +22,7 @@
  * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include <drivers/stm32/canard_stm32.h>
 #include <cstdio>
 #include <string>
@@ -65,19 +65,19 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
 /*
  * Reference values were validated manually with the help of http://www.bittiming.can-wiki.info/
  */
-TEST(STM32, CANTimings)
+TEST_CASE("STM32, CANTimings")
 {
-    EXPECT_EQ(0x00060003, computeBDTR(36000000, 1000000));
-    EXPECT_EQ(0x00180005, computeBDTR(36000000,  500000));
-    EXPECT_EQ(0x001c0008, computeBDTR(36000000,  250000));
-    EXPECT_EQ(0x001c0011, computeBDTR(36000000,  125000));
-    EXPECT_EQ(0x001b0017, computeBDTR(36000000,  100000));
-    EXPECT_EQ(0x001c00e0, computeBDTR(36000000,   10000));
+    CHECK(0x00060003 == computeBDTR(36000000, 1000000));
+    CHECK(0x00180005 == computeBDTR(36000000,  500000));
+    CHECK(0x001c0008 == computeBDTR(36000000,  250000));
+    CHECK(0x001c0011 == computeBDTR(36000000,  125000));
+    CHECK(0x001b0017 == computeBDTR(36000000,  100000));
+    CHECK(0x001c00e0 == computeBDTR(36000000,   10000));
 
-    EXPECT_EQ(0x00070008, computeBDTR(90000000, 1000000));
-    EXPECT_EQ(0x001b000b, computeBDTR(90000000,  500000));
-    EXPECT_EQ(0x001b0017, computeBDTR(90000000,  250000));
-    EXPECT_EQ(0x001c002c, computeBDTR(90000000,  125000));
-    EXPECT_EQ(0x001b003b, computeBDTR(90000000,  100000));
-    EXPECT_EQ(0x001b0257, computeBDTR(90000000,   10000));
+    CHECK(0x00070008 == computeBDTR(90000000, 1000000));
+    CHECK(0x001b000b == computeBDTR(90000000,  500000));
+    CHECK(0x001b0017 == computeBDTR(90000000,  250000));
+    CHECK(0x001c002c == computeBDTR(90000000,  125000));
+    CHECK(0x001b003b == computeBDTR(90000000,  100000));
+    CHECK(0x001b0257 == computeBDTR(90000000,   10000));
 }

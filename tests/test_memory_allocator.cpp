@@ -22,55 +22,55 @@
  * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
-#include <gtest/gtest.h>
+#include <catch.hpp>
 #include "canard_internals.h"
 
 
 #define AVAILABLE_BLOCKS 3
 
 
-class MemoryAllocatorTestGroup: public ::testing::Test
+TEST_CASE("MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly")
 {
-protected:
     CanardPoolAllocator allocator;
     CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
 
-    virtual void SetUp()
-    {
-        initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
-    }
-};
-
-TEST_F(MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly)
-{
     // Check that the memory list is constructed correctly.
-    ASSERT_EQ(&buffer[0], allocator.free_list);
-    ASSERT_EQ(&buffer[1], allocator.free_list->next);
-    ASSERT_EQ(&buffer[2], allocator.free_list->next->next);
-    ASSERT_EQ(NULL, allocator.free_list->next->next->next);
+    REQUIRE(&buffer[0] == allocator.free_list);
+    REQUIRE(&buffer[1] == allocator.free_list->next);
+    REQUIRE(&buffer[2] == allocator.free_list->next->next);
+    REQUIRE(NULL == allocator.free_list->next->next->next);
 
     // Check statistics
-    EXPECT_EQ(AVAILABLE_BLOCKS, allocator.statistics.capacity_blocks);
-    EXPECT_EQ(0,                allocator.statistics.current_usage_blocks);
-    EXPECT_EQ(0,                allocator.statistics.peak_usage_blocks);
+    REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
+    REQUIRE(0 ==                allocator.statistics.current_usage_blocks);
+    REQUIRE(0 ==                allocator.statistics.peak_usage_blocks);
 }
 
-TEST_F(MemoryAllocatorTestGroup, CanAllocateBlock)
+TEST_CASE("MemoryAllocatorTestGroup, CanAllocateBlock")
 {
+    CanardPoolAllocator allocator;
+    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+
     void* block = allocateBlock(&allocator);
 
     // Check that the first free memory block was used and that the next block is ready.
-    ASSERT_EQ(&buffer[0], block);
-    ASSERT_EQ(&buffer[1], allocator.free_list);
+    REQUIRE(&buffer[0] == block);
+    REQUIRE(&buffer[1] == allocator.free_list);
 
     // Check statistics
-    EXPECT_EQ(AVAILABLE_BLOCKS, allocator.statistics.capacity_blocks);
-    EXPECT_EQ(1,                allocator.statistics.current_usage_blocks);
-    EXPECT_EQ(1,                allocator.statistics.peak_usage_blocks);
+    REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
+    REQUIRE(1 ==                allocator.statistics.current_usage_blocks);
+    REQUIRE(1 ==                allocator.statistics.peak_usage_blocks);
 }
 
-TEST_F(MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft)
+TEST_CASE("MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft")
 {
+    CanardPoolAllocator allocator;
+    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+
     // First exhaust all availables block
     for (int i = 0; i < AVAILABLE_BLOCKS; ++i)
     {
@@ -79,26 +79,30 @@ TEST_F(MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft)
 
     // Try to allocate one extra block
     void* block = allocateBlock(&allocator);
-    ASSERT_EQ(NULL, block);
+    REQUIRE(NULL == block);
 
     // Check statistics
-    EXPECT_EQ(AVAILABLE_BLOCKS, allocator.statistics.capacity_blocks);
-    EXPECT_EQ(AVAILABLE_BLOCKS, allocator.statistics.current_usage_blocks);
-    EXPECT_EQ(AVAILABLE_BLOCKS, allocator.statistics.peak_usage_blocks);
+    REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
+    REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.current_usage_blocks);
+    REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.peak_usage_blocks);
 }
 
-TEST_F(MemoryAllocatorTestGroup, CanFreeBlock)
+TEST_CASE("MemoryAllocatorTestGroup, CanFreeBlock")
 {
+    CanardPoolAllocator allocator;
+    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+
     void* block = allocateBlock(&allocator);
 
     freeBlock(&allocator, block);
 
     // Check that the block was added back to the beginning
-    ASSERT_EQ(&buffer[0], allocator.free_list);
-    ASSERT_EQ(&buffer[1], allocator.free_list->next);
+    REQUIRE(&buffer[0] == allocator.free_list);
+    REQUIRE(&buffer[1] == allocator.free_list->next);
 
     // Check statistics
-    EXPECT_EQ(AVAILABLE_BLOCKS, allocator.statistics.capacity_blocks);
-    EXPECT_EQ(0,                allocator.statistics.current_usage_blocks);
-    EXPECT_EQ(1,                allocator.statistics.peak_usage_blocks);
+    REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
+    REQUIRE(0 ==                allocator.statistics.current_usage_blocks);
+    REQUIRE(1 ==                allocator.statistics.peak_usage_blocks);
 }

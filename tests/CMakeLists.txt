@@ -2,12 +2,11 @@
 # Copyright (c) 2016-2017 UAVCAN Team
 #
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 project(libcanard)
 
-# GTest
-find_package(GTest REQUIRED)
-include_directories(${GTEST_INCLUDE_DIRS})
+# Catch library for unit testing
+include_directories(catch)
 
 # Libcanard
 include_directories(..)
@@ -39,13 +38,13 @@ set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -DCANARD_INTERNAL=''")
 file(GLOB tests_src
      RELATIVE "${CMAKE_SOURCE_DIR}"
      "*.cpp"
+     "catch/*.cpp"
      "stm32/*.cpp")
 message(STATUS "Unit test source files: ${tests_src}")
 add_executable(run_tests
                ${tests_src}
                ../canard.c)
 target_link_libraries(run_tests
-                      ${GTEST_BOTH_LIBRARIES}
                       pthread)
 
 # Demo application

@@ -17,18 +17,11 @@ addons:
 env:
     - CFLAGS="-Werror" CXXFLAGS="-Werror"
 
-before_install:
-    - mkdir gtest-build
-    - pushd gtest-build
-    - CXXFLAGS='-m32' CFLAGS='-m32' cmake /usr/src/gtest
-    - make
-    - popd
-
 script:
     # Building and running unit tests
     - mkdir build
     - cd build
-    - CMAKE_LIBRARY_PATH=../gtest-build/ cmake ../tests
+    - cmake ../tests
     - make
     - ./run_tests
     - cd ..
