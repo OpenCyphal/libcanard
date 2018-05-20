@@ -31,7 +31,7 @@ matrix:
             - llvm-toolchain-trusty-5.0
           packages:
             - clang-5.0
-            - libstdc++-7-dev   # This package contains the C++ standard library used by Clang-5.0
+            - libstdc++-7-dev:i386   # This package contains the C++ standard library used by Clang-5.0
             - linux-libc-dev:i386
             - libc6-dev-i386
       script:
