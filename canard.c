@@ -471,7 +471,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         return;
     }
 
-    rx_state->next_toggle ^= 1;
+    rx_state->next_toggle = rx_state->next_toggle ? 0 : 1;
 }
 
 void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec)

@@ -55,7 +55,7 @@ static inline T read(CanardRxTransfer* transfer, uint32_t bit_offset, uint8_t bi
 
 TEST(ScalarDecode, SingleFrame)
 {
-    CanardRxTransfer transfer{};
+    auto transfer = CanardRxTransfer();
 
     static const uint8_t buf[7] =
     {
@@ -118,7 +118,7 @@ TEST(ScalarDecode, MultiFrame)
     /*
      * Configuring the transfer object
      */
-    CanardRxTransfer transfer{};
+    auto transfer = CanardRxTransfer();
 
     uint8_t head[CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE];
     for (auto& x : head)
