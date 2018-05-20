@@ -35,7 +35,7 @@ TEST(Float16, FromNative)
     ASSERT_EQ(0b1100000000000000, canardConvertNativeFloatToFloat16(-2));
     ASSERT_EQ(0b0111110000000000, canardConvertNativeFloatToFloat16(999999));   // +inf
     ASSERT_EQ(0b1111101111111111, canardConvertNativeFloatToFloat16(-65519));   // -max
-    ASSERT_EQ(0b0111111111111111, canardConvertNativeFloatToFloat16(std::nan("")));  // nan
+    ASSERT_EQ(0b0111111111111111, canardConvertNativeFloatToFloat16(std::nanf("")));  // nan
 }
 
 
