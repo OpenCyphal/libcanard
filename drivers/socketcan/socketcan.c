@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 UAVCAN Team
+ * Copyright (c) 2016-2018 UAVCAN Team
  *
  * Distributed under the MIT License, available in the file LICENSE.
  *
@@ -17,9 +17,32 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/can.h>
+#include <errno.h>
+#include <stdlib.h>
 
+/// Returns the current errno as negated int16_t
+static int16_t getErrorCode()
+{
+    const int out = -abs(errno);
+    if (out < 0)
+    {
+        if (out >= INT16_MIN)
+        {
+            return (int16_t)out;
+        }
+        else
+        {
+            return INT16_MIN;
+        }
+    }
+    else
+    {
+        assert(false);          // Requested an error when errno is zero?
+        return INT16_MIN;
+    }
+}
 
-int socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
+int16_t socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
 {
     const size_t iface_name_size = strlen(can_iface_name) + 1;
     if (iface_name_size > IFNAMSIZ)
@@ -58,19 +81,19 @@ int socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
     return 0;
 
 fail1:
-    close(fd);
+    (void)close(fd);
 fail0:
-    return -1;
+    return getErrorCode();
 }
 
-int socketcanClose(SocketCANInstance* ins)
+int16_t socketcanClose(SocketCANInstance* ins)
 {
     const int close_result = close(ins->fd);
     ins->fd = -1;
-    return close_result;
+    return (int16_t)((close_result == 0) ? 0 : getErrorCode());
 }
 
-int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int timeout_msec)
+int16_t socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int32_t timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -80,15 +103,15 @@ int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int t
     const int poll_result = poll(&fds, 1, timeout_msec);
     if (poll_result < 0)
     {
-        return -1;
+        return getErrorCode();
     }
     if (poll_result == 0)
     {
         return 0;
     }
-    if ((fds.revents & POLLOUT) == 0)
+    if (((uint32_t)fds.revents & (uint32_t)POLLOUT) == 0)
     {
-        return -1;
+        return -EIO;
     }
 
     struct can_frame transmit_frame;
@@ -98,15 +121,19 @@ int socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int t
     memcpy(transmit_frame.data, frame->data, frame->data_len);
 
     const ssize_t nbytes = write(ins->fd, &transmit_frame, sizeof(transmit_frame));
-    if (nbytes < 0 || (size_t)nbytes != sizeof(transmit_frame))
+    if (nbytes < 0)
     {
-        return -1;
+        return getErrorCode();
+    }
+    if ((size_t)nbytes != sizeof(transmit_frame))
+    {
+        return -EIO;
     }
 
     return 1;
 }
 
-int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
+int16_t socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int32_t timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -116,27 +143,31 @@ int socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int time
     const int poll_result = poll(&fds, 1, timeout_msec);
     if (poll_result < 0)
     {
-        return -1;
+        return getErrorCode();
     }
     if (poll_result == 0)
     {
         return 0;
     }
-    if ((fds.revents & POLLIN) == 0)
+    if (((uint32_t)fds.revents & (uint32_t)POLLIN) == 0)
     {
-        return -1;
+        return -EIO;
     }
 
     struct can_frame receive_frame;
     const ssize_t nbytes = read(ins->fd, &receive_frame, sizeof(receive_frame));
-    if (nbytes < 0 || (size_t)nbytes != sizeof(receive_frame))
+    if (nbytes < 0)
     {
-        return -1;
+        return getErrorCode();
+    }
+    if ((size_t)nbytes != sizeof(receive_frame))
+    {
+        return -EIO;
     }
 
     if (receive_frame.can_dlc > CAN_MAX_DLEN)           // Appeasing Coverity Scan
     {
-        return -1;
+        return -EIO;
     }
 
     out_frame->id = receive_frame.can_id;               // TODO: Map flags properly
