@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 UAVCAN Team
+ * Copyright (c) 2018 UAVCAN Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,35 +22,7 @@
  * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
-#include <catch.hpp>
-#include "canard.h"
-
-static bool shouldAcceptTransferMock(const CanardInstance*,
-                                     uint64_t*,
-                                     uint16_t,
-                                     CanardTransferType,
-                                     uint8_t)
-{
-    return false;
-}
-
-static void onTransferReceptionMock(CanardInstance*,
-                                    CanardRxTransfer*)
-{
-}
-
-
-TEST_CASE("Init, UserReference")
-{
-    std::uint8_t memory_arena[1024];
-
-    ::CanardInstance ins;
-    canardInit(&ins,
-               memory_arena,
-               sizeof(memory_arena),
-               &onTransferReceptionMock,
-               &shouldAcceptTransferMock,
-               reinterpret_cast<void*>(12345));
-
-    REQUIRE(12345 == reinterpret_cast<int>(canardGetUserReference(&ins)));
-}
+// For speedy compilation, the file that contains CATCH_CONFIG_MAIN should not contain any actual tests.
+// https://github.com/catchorg/Catch2/blob/master/docs/slow-compiles.md
+#define CATCH_CONFIG_MAIN
+#include "catch.hpp"  // NOLINT

@@ -77,8 +77,8 @@ CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator);
 
 CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state);
 
-CANARD_INTERNAL int computeTransferIDForwardDistance(uint8_t a,
-                                                     uint8_t b);
+CANARD_INTERNAL int16_t computeTransferIDForwardDistance(uint8_t a,
+                                                         uint8_t b);
 
 CANARD_INTERNAL void incrementTransferID(uint8_t* transfer_id);
 
