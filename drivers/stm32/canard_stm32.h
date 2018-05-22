@@ -51,7 +51,7 @@ extern "C"
  * which is a number from 1 to 27 inclusive. Seeing as the start bank cannot be set to 0, CAN2 has one filter less
  * to use.
  */
-#define CANARD_STM32_NUM_ACCEPTANCE_FILTERS                            14
+#define CANARD_STM32_NUM_ACCEPTANCE_FILTERS                            14U
 
 /**
  * The interface can be initialized in either of these modes.
@@ -128,8 +128,8 @@ typedef struct
  * @retval      0               Success
  * @retval      negative        Error
  */
-int canardSTM32Init(const CanardSTM32CANTimings* const timings,
-                    const CanardSTM32IfaceMode iface_mode);
+int16_t canardSTM32Init(const CanardSTM32CANTimings* const timings,
+                        const CanardSTM32IfaceMode iface_mode);
 
 /**
  * Pushes one frame into the TX buffer, if there is space.
@@ -140,7 +140,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
  * @retval      0               No space in the buffer
  * @retval      negative        Error
  */
-int canardSTM32Transmit(const CanardCANFrame* const frame);
+int16_t canardSTM32Transmit(const CanardCANFrame* const frame);
 
 /**
  * Reads one frame from the hardware RX FIFO, unless all FIFO are empty.
@@ -150,7 +150,7 @@ int canardSTM32Transmit(const CanardCANFrame* const frame);
  * @retval      0               The buffer is empty
  * @retval      negative        Error
  */
-int canardSTM32Receive(CanardCANFrame* const out_frame);
+int16_t canardSTM32Receive(CanardCANFrame* const out_frame);
 
 /**
  * Sets up acceptance filters according to the provided list of ID and masks.
@@ -163,11 +163,11 @@ int canardSTM32Receive(CanardCANFrame* const out_frame);
  * @retval      0               Success
  * @retval      negative        Error
  */
-int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
-                                          const unsigned num_filter_configs);
+int16_t canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
+                                              const uint8_t num_filter_configs);
 
 /**
- * Returns the runnning interface statistics.
+ * Returns the running interface statistics.
  */
 CanardSTM32Stats canardSTM32GetStats(void);
 
@@ -187,9 +187,9 @@ CanardSTM32Stats canardSTM32GetStats(void);
  * @retval negative     Solution could not be found for the provided inputs.
  */
 static inline
-int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
-                                 const uint32_t target_bitrate,
-                                 CanardSTM32CANTimings* const out_timings)
+int16_t canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
+                                     const uint32_t target_bitrate,
+                                     CanardSTM32CANTimings* const out_timings)
 {
     if (target_bitrate < 1000)
     {
@@ -202,8 +202,8 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
     /*
      * Hardware configuration
      */
-    static const int MaxBS1 = 16;
-    static const int MaxBS2 = 8;
+    static const uint8_t MaxBS1 = 16;
+    static const uint8_t MaxBS2 = 8;
 
     /*
      * Ref. "Automatic Baudrate Detection in CANopen Networks", U. Koppe, MicroControl GmbH & Co. KG
@@ -216,10 +216,10 @@ int canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      *   250  kbps      16      17
      *   125  kbps      16      17
      */
-    const int max_quanta_per_bit = (target_bitrate >= 1000000) ? 10 : 17;
+    const uint8_t max_quanta_per_bit = (uint8_t)((target_bitrate >= 1000000) ? 10 : 17);
     CANARD_ASSERT(max_quanta_per_bit <= (MaxBS1 + MaxBS2));
 
-    static const int MaxSamplePointLocationPermill = 900;
+    static const uint16_t MaxSamplePointLocationPermill = 900;
 
     /*
      * Computing (prescaler * BS):

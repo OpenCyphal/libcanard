@@ -37,8 +37,8 @@ static bool isFramePriorityHigher(uint32_t a, uint32_t b)
     const bool ext_b = (b & CANARD_CAN_FRAME_EFF) != 0;
     if (ext_a != ext_b)
     {
-        const uint32_t arb11_a = ext_a ? (clean_a >> 18) : clean_a;
-        const uint32_t arb11_b = ext_b ? (clean_b >> 18) : clean_b;
+        const uint32_t arb11_a = ext_a ? (clean_a >> 18U) : clean_a;
+        const uint32_t arb11_b = ext_b ? (clean_b >> 18U) : clean_b;
         if (arb11_a != arb11_b)
         {
             return arb11_a < arb11_b;
@@ -72,11 +72,11 @@ static uint32_t convertFrameIDCanardToRegister(const uint32_t id)
 
     if (id & CANARD_CAN_FRAME_EFF)
     {
-        out = ((id & CANARD_CAN_EXT_ID_MASK) << 3) | CANARD_STM32_CAN_TIR_IDE;
+        out = ((id & CANARD_CAN_EXT_ID_MASK) << 3U) | CANARD_STM32_CAN_TIR_IDE;
     }
     else
     {
-        out = ((id & CANARD_CAN_STD_ID_MASK) << 21);
+        out = ((id & CANARD_CAN_STD_ID_MASK) << 21U);
     }
 
     if (id & CANARD_CAN_FRAME_RTR)
@@ -99,11 +99,11 @@ static uint32_t convertFrameIDRegisterToCanard(const uint32_t id)
 
     if ((id & CANARD_STM32_CAN_RIR_IDE) == 0)
     {
-        out = (CANARD_CAN_STD_ID_MASK & (id >> 21));
+        out = (CANARD_CAN_STD_ID_MASK & (id >> 21U));
     }
     else
     {
-        out = (CANARD_CAN_EXT_ID_MASK & (id >> 3)) | CANARD_CAN_FRAME_EFF;
+        out = (CANARD_CAN_EXT_ID_MASK & (id >> 3U)) | CANARD_CAN_FRAME_EFF;
     }
 
     if ((id & CANARD_STM32_CAN_RIR_RTR) != 0)
@@ -125,9 +125,9 @@ static bool waitMSRINAKBitStateChange(volatile const CanardSTM32CANType* const b
      *  3 bit - inter frame space
      * This adds up to 11; therefore, it is not really necessary to wait longer than a few frame TX intervals.
      */
-    static const unsigned TimeoutMilliseconds = 1000;
+    static const uint16_t TimeoutMilliseconds = 1000;
 
-    for (unsigned wait_ack = 0; wait_ack < TimeoutMilliseconds; wait_ack++)
+    for (uint16_t wait_ack = 0; wait_ack < TimeoutMilliseconds; wait_ack++)
     {
         const bool state = (bxcan->MSR & CANARD_STM32_CAN_MSR_INAK) != 0;
         if (state == target_state)
@@ -165,8 +165,8 @@ static void processErrorStatus(void)
 }
 
 
-int canardSTM32Init(const CanardSTM32CANTimings* const timings,
-                    const CanardSTM32IfaceMode iface_mode)
+int16_t canardSTM32Init(const CanardSTM32CANTimings* const timings,
+                        const CanardSTM32IfaceMode iface_mode)
 {
     /*
      * Paranoia time.
@@ -223,10 +223,10 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
      */
     BXCAN->MCR = CANARD_STM32_CAN_MCR_ABOM | CANARD_STM32_CAN_MCR_AWUM | CANARD_STM32_CAN_MCR_INRQ;  // RM page 648
 
-    BXCAN->BTR = (((timings->max_resynchronization_jump_width - 1) &    3U) << 24) |
-                 (((timings->bit_segment_1 - 1)                    &   15U) << 16) |
-                 (((timings->bit_segment_2 - 1)                    &    7U) << 20) |
-                 ((timings->bit_rate_prescaler - 1)                & 1023U) |
+    BXCAN->BTR = (((timings->max_resynchronization_jump_width - 1U) &    3U) << 24U) |
+                 (((timings->bit_segment_1 - 1U)                    &   15U) << 16U) |
+                 (((timings->bit_segment_2 - 1U)                    &    7U) << 20U) |
+                 ((timings->bit_rate_prescaler - 1U)                & 1023U) |
                  ((iface_mode == CanardSTM32IfaceModeSilent) ? CANARD_STM32_CAN_BTR_SILM : 0);
 
     CANARD_ASSERT(0 == BXCAN->IER);             // Making sure the iterrupts are indeed disabled
@@ -246,12 +246,12 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
      * MCU within the STM32 family.
      */
     {
-        uint32_t fmr = CANARD_STM32_CAN1->FMR & 0xFFFFC0F1;
-        fmr |= CANARD_STM32_NUM_ACCEPTANCE_FILTERS << 8;                // CAN2 start bank = 14 (if CAN2 is present)
+        uint32_t fmr = CANARD_STM32_CAN1->FMR & 0xFFFFC0F1U;
+        fmr |= CANARD_STM32_NUM_ACCEPTANCE_FILTERS << 8U;                // CAN2 start bank = 14 (if CAN2 is present)
         CANARD_STM32_CAN1->FMR = fmr | CANARD_STM32_CAN_FMR_FINIT;
     }
 
-    CANARD_ASSERT(((CANARD_STM32_CAN1->FMR >> 8) & 0x3F) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
+    CANARD_ASSERT(((CANARD_STM32_CAN1->FMR >> 8U) & 0x3FU) == CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
 
     CANARD_STM32_CAN1->FM1R = 0;                                        // Indentifier Mask mode
     CANARD_STM32_CAN1->FS1R = 0x0FFFFFFF;                               // All 32-bit
@@ -278,7 +278,7 @@ int canardSTM32Init(const CanardSTM32CANTimings* const timings,
 }
 
 
-int canardSTM32Transmit(const CanardCANFrame* const frame)
+int16_t canardSTM32Transmit(const CanardCANFrame* const frame)
 {
     if (frame == NULL)
     {
@@ -366,14 +366,14 @@ int canardSTM32Transmit(const CanardCANFrame* const frame)
 
     mb->TDTR = frame->data_len;                         // DLC equals data length except in CAN FD
 
-    mb->TDHR = (((uint32_t)frame->data[7]) << 24) |
-               (((uint32_t)frame->data[6]) << 16) |
-               (((uint32_t)frame->data[5]) <<  8) |
-               (((uint32_t)frame->data[4]) <<  0);
-    mb->TDLR = (((uint32_t)frame->data[3]) << 24) |
-               (((uint32_t)frame->data[2]) << 16) |
-               (((uint32_t)frame->data[1]) <<  8) |
-               (((uint32_t)frame->data[0]) <<  0);
+    mb->TDHR = (((uint32_t)frame->data[7]) << 24U) |
+               (((uint32_t)frame->data[6]) << 16U) |
+               (((uint32_t)frame->data[5]) <<  8U) |
+               (((uint32_t)frame->data[4]) <<  0U);
+    mb->TDLR = (((uint32_t)frame->data[3]) << 24U) |
+               (((uint32_t)frame->data[2]) << 16U) |
+               (((uint32_t)frame->data[1]) <<  8U) |
+               (((uint32_t)frame->data[0]) <<  0U);
 
     mb->TIR = convertFrameIDCanardToRegister(frame->id) | CANARD_STM32_CAN_TIR_TXRQ;    // Go.
 
@@ -384,7 +384,7 @@ int canardSTM32Transmit(const CanardCANFrame* const frame)
 }
 
 
-int canardSTM32Receive(CanardCANFrame* const out_frame)
+int16_t canardSTM32Receive(CanardCANFrame* const out_frame)
 {
     if (out_frame == NULL)
     {
@@ -424,14 +424,14 @@ int canardSTM32Receive(CanardCANFrame* const out_frame)
             const uint32_t rdlr = mb->RDLR;
             const uint32_t rdhr = mb->RDHR;
 
-            out_frame->data[0] = (uint8_t)(0xFF & (rdlr >>  0));
-            out_frame->data[1] = (uint8_t)(0xFF & (rdlr >>  8));
-            out_frame->data[2] = (uint8_t)(0xFF & (rdlr >> 16));
-            out_frame->data[3] = (uint8_t)(0xFF & (rdlr >> 24));
-            out_frame->data[4] = (uint8_t)(0xFF & (rdhr >>  0));
-            out_frame->data[5] = (uint8_t)(0xFF & (rdhr >>  8));
-            out_frame->data[6] = (uint8_t)(0xFF & (rdhr >> 16));
-            out_frame->data[7] = (uint8_t)(0xFF & (rdhr >> 24));
+            out_frame->data[0] = (uint8_t)(0xFFU & (rdlr >>  0U));
+            out_frame->data[1] = (uint8_t)(0xFFU & (rdlr >>  8U));
+            out_frame->data[2] = (uint8_t)(0xFFU & (rdlr >> 16U));
+            out_frame->data[3] = (uint8_t)(0xFFU & (rdlr >> 24U));
+            out_frame->data[4] = (uint8_t)(0xFFU & (rdhr >>  0U));
+            out_frame->data[5] = (uint8_t)(0xFFU & (rdhr >>  8U));
+            out_frame->data[6] = (uint8_t)(0xFFU & (rdhr >> 16U));
+            out_frame->data[7] = (uint8_t)(0xFFU & (rdhr >> 24U));
 
             // Release FIFO entry we just read
             *RFxR[i] = CANARD_STM32_CAN_RFR_RFOM | CANARD_STM32_CAN_RFR_FOVR | CANARD_STM32_CAN_RFR_FULL;
@@ -446,8 +446,8 @@ int canardSTM32Receive(CanardCANFrame* const out_frame)
 }
 
 
-int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
-                                          const unsigned num_filter_configs)
+int16_t canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfiguration* const filter_configs,
+                                              const uint8_t num_filter_configs)
 {
     // Note that num_filter_configs = 0 is a valid configuration, which rejects all frames.
     if ((filter_configs == NULL) ||
@@ -466,7 +466,7 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
      * Having filters disabled we can update the configuration.
      * Register mapping: FR1 - ID, FR2 - Mask
      */
-    for (unsigned i = 0; i < num_filter_configs; i++)
+    for (uint8_t i = 0; i < num_filter_configs; i++)
     {
         /*
          * Converting the ID and the Mask into the representation that can be chewed by the hardware.
@@ -518,14 +518,14 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
 
         if ((cfg->id & CANARD_CAN_FRAME_EFF) || !(cfg->mask & CANARD_CAN_FRAME_EFF))
         {
-            id   = (cfg->id   & CANARD_CAN_EXT_ID_MASK) << 3;
-            mask = (cfg->mask & CANARD_CAN_EXT_ID_MASK) << 3;
+            id   = (cfg->id   & CANARD_CAN_EXT_ID_MASK) << 3U;
+            mask = (cfg->mask & CANARD_CAN_EXT_ID_MASK) << 3U;
             id |= CANARD_STM32_CAN_RIR_IDE;
         }
         else
         {
-            id   = (cfg->id   & CANARD_CAN_STD_ID_MASK) << 21;
-            mask = (cfg->mask & CANARD_CAN_STD_ID_MASK) << 21;
+            id   = (cfg->id   & CANARD_CAN_STD_ID_MASK) << 21U;
+            mask = (cfg->mask & CANARD_CAN_STD_ID_MASK) << 21U;
         }
 
         if (cfg->id & CANARD_CAN_FRAME_RTR)
@@ -546,9 +546,9 @@ int canardSTM32ConfigureAcceptanceFilters(const CanardSTM32AcceptanceFilterConfi
         /*
          * Applying the converted representation to the registers.
          */
-        const unsigned filter_index =
+        const uint8_t filter_index =
 #if CANARD_STM32_USE_CAN2
-            i + CANARD_STM32_NUM_ACCEPTANCE_FILTERS;
+            (uint8_t)(i + CANARD_STM32_NUM_ACCEPTANCE_FILTERS);
 #else
             i;
 #endif
