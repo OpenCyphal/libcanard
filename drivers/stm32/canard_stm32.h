@@ -10,7 +10,7 @@
 #define CANARD_STM32_H
 
 #include <canard.h>
-#include <string.h>
+#include <string.h>     // NOLINT
 
 
 #ifdef __cplusplus
@@ -196,7 +196,7 @@ int16_t canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
         return -CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE;
     }
 
-    CANARD_ASSERT(out_timings != NULL);
+    CANARD_ASSERT(out_timings != NULL);  // NOLINT
     memset(out_timings, 0, sizeof(*out_timings));
 
     /*
@@ -216,7 +216,7 @@ int16_t canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      *   250  kbps      16      17
      *   125  kbps      16      17
      */
-    const uint8_t max_quanta_per_bit = (uint8_t)((target_bitrate >= 1000000) ? 10 : 17);
+    const uint8_t max_quanta_per_bit = (uint8_t)((target_bitrate >= 1000000) ? 10 : 17);    // NOLINT
     CANARD_ASSERT(max_quanta_per_bit <= (MaxBS1 + MaxBS2));
 
     static const uint16_t MaxSamplePointLocationPermill = 900;
@@ -236,7 +236,7 @@ int16_t canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
     /*
      * Searching for such prescaler value so that the number of quanta per bit is highest.
      */
-    uint8_t bs1_bs2_sum = (uint8_t)(max_quanta_per_bit - 1);
+    uint8_t bs1_bs2_sum = (uint8_t)(max_quanta_per_bit - 1);    // NOLINT
 
     while ((prescaler_bs % (1U + bs1_bs2_sum)) != 0)
     {
@@ -272,12 +272,12 @@ int16_t canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
      *   - With rounding to nearest
      *   - With rounding to zero
      */
-    uint8_t bs1 = (uint8_t)(((7 * bs1_bs2_sum - 1) + 4) / 8);       // Trying rounding to nearest first
-    uint8_t bs2 = (uint8_t)(bs1_bs2_sum - bs1);
+    uint8_t bs1 = (uint8_t)(((7 * bs1_bs2_sum - 1) + 4) / 8);       // Trying rounding to nearest first  // NOLINT
+    uint8_t bs2 = (uint8_t)(bs1_bs2_sum - bs1);  // NOLINT
     CANARD_ASSERT(bs1_bs2_sum > bs1);
 
     {
-        const uint16_t sample_point_permill = (uint16_t)(1000U * (1U + bs1) / (1U + bs1 + bs2));
+        const uint16_t sample_point_permill = (uint16_t)(1000U * (1U + bs1) / (1U + bs1 + bs2));  // NOLINT
 
         if (sample_point_permill > MaxSamplePointLocationPermill)   // Strictly more!
         {
@@ -300,7 +300,7 @@ int16_t canardSTM32ComputeCANTimings(const uint32_t peripheral_clock_rate,
         !valid)
     {
         // This actually means that the algorithm has a logic error, hence assert(0).
-        CANARD_ASSERT(0);
+        CANARD_ASSERT(0);  // NOLINT
         return -CANARD_STM32_ERROR_UNSUPPORTED_BIT_RATE;
     }
 

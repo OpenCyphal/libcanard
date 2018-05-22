@@ -50,7 +50,7 @@ int16_t socketcanInit(SocketCANInstance* out_ins, const char* can_iface_name)
         goto fail0;
     }
 
-    const int fd = socket(PF_CAN, SOCK_RAW | SOCK_NONBLOCK, CAN_RAW);
+    const int fd = socket(PF_CAN, SOCK_RAW | SOCK_NONBLOCK, CAN_RAW);  // NOLINT
     if (fd < 0)
     {
         goto fail0;
