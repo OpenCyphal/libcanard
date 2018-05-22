@@ -58,11 +58,6 @@
 #define IS_END_OF_TRANSFER(x)                       ((bool)(((uint32_t)(x) >> 6U) & 0x1U))
 #define TOGGLE_BIT(x)                               ((bool)(((uint32_t)(x) >> 5U) & 0x1U))
 
-// This is needed to prevent usage of plain integral types (MISRA 3-9-2)
-#define int
-#define unsigned
-#define long
-
 
 struct CanardTxQueueItem
 {
