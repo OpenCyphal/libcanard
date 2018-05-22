@@ -366,7 +366,7 @@ static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
     // Transmitting
     for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&canard)) != NULL;)
     {
-        const int32_t tx_res = socketcanTransmit(socketcan, txf, 0);
+        const int16_t tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
         {
             canardPopTxQueue(&canard);
