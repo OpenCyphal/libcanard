@@ -52,7 +52,6 @@
 
 #define UNIQUE_ID_LENGTH_BYTES                                      16
 
-
 /*
  * Library instance.
  * In simple applications it makes sense to make it static, but it is not necessary.
@@ -95,7 +94,7 @@ static float getRandomFloat(void)
     if (!initialized)                   // This is not thread safe, but a race condition here is not harmful.
     {
         initialized = true;
-        srand((unsigned)time(NULL));
+        srand((uint32_t) time(NULL));
     }
     // coverity[dont_call]
     return (float)rand() / (float)RAND_MAX;
@@ -163,7 +162,7 @@ static void onTransferReceived(CanardInstance* ins,
         }
 
         // Copying the unique ID from the message
-        static const unsigned UniqueIDBitOffset = 8;
+        static const uint8_t UniqueIDBitOffset = 8;
         uint8_t received_unique_id[UNIQUE_ID_LENGTH_BYTES];
         uint8_t received_unique_id_len = 0;
         for (; received_unique_id_len < (transfer->payload_len - (UniqueIDBitOffset / 8U)); received_unique_id_len++)
@@ -181,7 +180,7 @@ static void onTransferReceived(CanardInstance* ins,
         if (memcmp(received_unique_id, my_unique_id, received_unique_id_len) != 0)
         {
             printf("Mismatching allocation response from %d:", transfer->source_node_id);
-            for (int i = 0; i < received_unique_id_len; i++)
+            for (uint8_t i = 0; i < received_unique_id_len; i++)
             {
                 printf(" %02x/%02x", received_unique_id[i], my_unique_id[i]);
             }
@@ -245,15 +244,15 @@ static void onTransferReceived(CanardInstance* ins,
         /*
          * Transmitting; in this case we don't have to release the payload because it's empty anyway.
          */
-        const int resp_res = canardRequestOrRespond(ins,
-                                                    transfer->source_node_id,
-                                                    UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE,
-                                                    UAVCAN_GET_NODE_INFO_DATA_TYPE_ID,
-                                                    &transfer->transfer_id,
-                                                    transfer->priority,
-                                                    CanardResponse,
-                                                    &buffer[0],
-                                                    (uint16_t)total_size);
+        const int16_t resp_res = canardRequestOrRespond(ins,
+                                                        transfer->source_node_id,
+                                                        UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE,
+                                                        UAVCAN_GET_NODE_INFO_DATA_TYPE_ID,
+                                                        &transfer->transfer_id,
+                                                        transfer->priority,
+                                                        CanardResponse,
+                                                        &buffer[0],
+                                                        (uint16_t)total_size);
         if (resp_res <= 0)
         {
             (void)fprintf(stderr, "Could not respond to GetNodeInfo; error %d\n", resp_res);
@@ -318,7 +317,7 @@ static void process1HzTasks(uint64_t timestamp_usec)
      */
     {
         const CanardPoolAllocatorStatistics stats = canardGetPoolAllocatorStatistics(&canard);
-        const unsigned peak_percent = 100U * stats.peak_usage_blocks / stats.capacity_blocks;
+        const uint16_t peak_percent = (uint16_t)(100U * stats.peak_usage_blocks / stats.capacity_blocks);
 
         printf("Memory pool stats: capacity %u blocks, usage %u blocks, peak usage %u blocks (%u%%)\n",
                stats.capacity_blocks, stats.current_usage_blocks, stats.peak_usage_blocks, peak_percent);
@@ -340,11 +339,15 @@ static void process1HzTasks(uint64_t timestamp_usec)
         uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE];
         makeNodeStatusMessage(buffer);
 
-        static uint8_t transfer_id;
+        static uint8_t transfer_id;  // Note that the transfer ID variable MUST BE STATIC (or heap-allocated)!
 
-        const int bc_res = canardBroadcast(&canard, UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE,
-                                           UAVCAN_NODE_STATUS_DATA_TYPE_ID, &transfer_id, CANARD_TRANSFER_PRIORITY_LOW,
-                                           buffer, UAVCAN_NODE_STATUS_MESSAGE_SIZE);
+        const int16_t bc_res = canardBroadcast(&canard,
+                                               UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE,
+                                               UAVCAN_NODE_STATUS_DATA_TYPE_ID,
+                                               &transfer_id,
+                                               CANARD_TRANSFER_PRIORITY_LOW,
+                                               buffer,
+                                               UAVCAN_NODE_STATUS_MESSAGE_SIZE);
         if (bc_res <= 0)
         {
             (void)fprintf(stderr, "Could not broadcast node status; error %d\n", bc_res);
@@ -358,12 +361,12 @@ static void process1HzTasks(uint64_t timestamp_usec)
 /**
  * Transmits all frames from the TX queue, receives up to one frame.
  */
-static void processTxRxOnce(SocketCANInstance* socketcan, int timeout_msec)
+static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
 {
     // Transmitting
     for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&canard)) != NULL;)
     {
-        const int tx_res = socketcanTransmit(socketcan, txf, 0);
+        const int16_t tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
         {
             canardPopTxQueue(&canard);
@@ -382,7 +385,7 @@ static void processTxRxOnce(SocketCANInstance* socketcan, int timeout_msec)
     // Receiving
     CanardCANFrame rx_frame;
     const uint64_t timestamp = getMonotonicTimestampUSec();
-    const int rx_res = socketcanReceive(socketcan, &rx_frame, timeout_msec);
+    const int16_t rx_res = socketcanReceive(socketcan, &rx_frame, timeout_msec);
     if (rx_res < 0)             // Failure - report
     {
         (void)fprintf(stderr, "Receive error %d, errno '%s'\n", rx_res, strerror(errno));
@@ -414,7 +417,7 @@ int main(int argc, char** argv)
      */
     SocketCANInstance socketcan;
     const char* const can_iface_name = argv[1];
-    int res = socketcanInit(&socketcan, can_iface_name);
+    int16_t res = socketcanInit(&socketcan, can_iface_name);
     if (res < 0)
     {
         (void)fprintf(stderr, "Failed to open CAN iface '%s'\n", can_iface_name);
@@ -483,13 +486,13 @@ int main(int argc, char** argv)
         memmove(&allocation_request[1], &my_unique_id[node_id_allocation_unique_id_offset], uid_size);
 
         // Broadcasting the request
-        const int bcast_res = canardBroadcast(&canard,
-                                              UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
-                                              UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
-                                              &node_id_allocation_transfer_id,
-                                              CANARD_TRANSFER_PRIORITY_LOW,
-                                              &allocation_request[0],
-                                              (uint16_t) (uid_size + 1));
+        const int16_t bcast_res = canardBroadcast(&canard,
+                                                  UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
+                                                  UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
+                                                  &node_id_allocation_transfer_id,
+                                                  CANARD_TRANSFER_PRIORITY_LOW,
+                                                  &allocation_request[0],
+                                                  (uint16_t) (uid_size + 1));
         if (bcast_res < 0)
         {
             (void)fprintf(stderr, "Could not broadcast dynamic node ID allocation request; error %d\n", bcast_res);

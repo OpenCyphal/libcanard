@@ -56,10 +56,10 @@ CANARD_INTERNAL CanardRxState* prependRxState(CanardInstance* ins,
 CANARD_INTERNAL CanardRxState* findRxState(CanardRxState* state,
                                            uint32_t transfer_descriptor);
 
-CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
-                                         CanardRxState* state,
-                                         const uint8_t* data,
-                                         uint8_t data_len);
+CANARD_INTERNAL int16_t bufferBlockPushBytes(CanardPoolAllocator* allocator,
+                                             CanardRxState* state,
+                                             const uint8_t* data,
+                                             uint8_t data_len);
 
 CANARD_INTERNAL CanardBufferBlock* createBufferBlock(CanardPoolAllocator* allocator);
 
@@ -86,12 +86,12 @@ CANARD_INTERNAL uint64_t releaseStatePayload(CanardInstance* ins,
                                              CanardRxState* rxstate);
 
 /// Returns the number of frames enqueued
-CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
-                                    uint32_t can_id,
-                                    uint8_t* transfer_id,
-                                    uint16_t crc,
-                                    const uint8_t* payload,
-                                    uint16_t payload_len);
+CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
+                                        uint32_t can_id,
+                                        uint8_t* transfer_id,
+                                        uint16_t crc,
+                                        const uint8_t* payload,
+                                        uint16_t payload_len);
 
 CANARD_INTERNAL void copyBitArray(const uint8_t* src,
                                   uint32_t src_offset,
@@ -103,10 +103,10 @@ CANARD_INTERNAL void copyBitArray(const uint8_t* src,
  * Moves specified bits from the scattered transfer storage to a specified contiguous buffer.
  * Returns the number of bits copied, or negated error code.
  */
-CANARD_INTERNAL int descatterTransferPayload(const CanardRxTransfer* transfer,
-                                             uint32_t bit_offset,
-                                             uint8_t bit_length,
-                                             void* output);
+CANARD_INTERNAL int16_t descatterTransferPayload(const CanardRxTransfer* transfer,
+                                                 uint32_t bit_offset,
+                                                 uint8_t bit_length,
+                                                 void* output);
 
 CANARD_INTERNAL bool isBigEndian(void);
 

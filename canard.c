@@ -54,9 +54,9 @@
 #define TRANSFER_ID_FROM_TAIL_BYTE(x)               ((uint8_t)((x) & 0x1FU))
 
 // The extra cast to unsigned is needed to squelch warnings from clang-tidy
-#define IS_START_OF_TRANSFER(x)                     ((bool)(((unsigned)(x) >> 7U) & 0x1U))
-#define IS_END_OF_TRANSFER(x)                       ((bool)(((unsigned)(x) >> 6U) & 0x1U))
-#define TOGGLE_BIT(x)                               ((bool)(((unsigned)(x) >> 5U) & 0x1U))
+#define IS_START_OF_TRANSFER(x)                     ((bool)(((uint32_t)(x) >> 7U) & 0x1U))
+#define IS_END_OF_TRANSFER(x)                       ((bool)(((uint32_t)(x) >> 6U) & 0x1U))
+#define TOGGLE_BIT(x)                               ((bool)(((uint32_t)(x) >> 5U) & 0x1U))
 
 
 struct CanardTxQueueItem
@@ -131,13 +131,13 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
     return ins->node_id;
 }
 
-int canardBroadcast(CanardInstance* ins,
-                    uint64_t data_type_signature,
-                    uint16_t data_type_id,
-                    uint8_t* inout_transfer_id,
-                    uint8_t priority,
-                    const void* payload,
-                    uint16_t payload_len)
+int16_t canardBroadcast(CanardInstance* ins,
+                        uint64_t data_type_signature,
+                        uint16_t data_type_id,
+                        uint8_t* inout_transfer_id,
+                        uint8_t priority,
+                        const void* payload,
+                        uint16_t payload_len)
 {
     if (payload == NULL && payload_len > 0)
     {
@@ -181,22 +181,22 @@ int canardBroadcast(CanardInstance* ins,
         }
     }
 
-    const int result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
+    const int16_t result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
 
     incrementTransferID(inout_transfer_id);
 
     return result;
 }
 
-int canardRequestOrRespond(CanardInstance* ins,
-                           uint8_t destination_node_id,
-                           uint64_t data_type_signature,
-                           uint8_t data_type_id,
-                           uint8_t* inout_transfer_id,
-                           uint8_t priority,
-                           CanardRequestResponse kind,
-                           const void* payload,
-                           uint16_t payload_len)
+int16_t canardRequestOrRespond(CanardInstance* ins,
+                               uint8_t destination_node_id,
+                               uint64_t data_type_signature,
+                               uint8_t data_type_id,
+                               uint8_t* inout_transfer_id,
+                               uint8_t priority,
+                               CanardRequestResponse kind,
+                               const void* payload,
+                               uint16_t payload_len)
 {
     if (payload == NULL && payload_len > 0)
     {
@@ -222,7 +222,7 @@ int canardRequestOrRespond(CanardInstance* ins,
         crc = crcAdd(crc, payload, payload_len);
     }
 
-    const int result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
+    const int16_t result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
 
     if (kind == CanardRequest)                      // Response Transfer ID must not be altered
     {
@@ -376,8 +376,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
         // take off the crc and store the payload
         rx_state->timestamp_usec = timestamp_usec;
-        const int ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data + 2,
-                                             (uint8_t) (frame->data_len - 3));
+        const int16_t ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data + 2,
+                                                 (uint8_t) (frame->data_len - 3));
         if (ret < 0)
         {
             releaseStatePayload(ins, rx_state);
@@ -390,8 +390,8 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
     }
     else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))    // Middle of a multi-frame transfer
     {
-        const int ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data,
-                                             (uint8_t) (frame->data_len - 1));
+        const int16_t ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data,
+                                                 (uint8_t) (frame->data_len - 1));
         if (ret < 0)
         {
             releaseStatePayload(ins, rx_state);
@@ -506,11 +506,11 @@ void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec
     }
 }
 
-int canardDecodeScalar(const CanardRxTransfer* transfer,
-                       uint32_t bit_offset,
-                       uint8_t bit_length,
-                       bool value_is_signed,
-                       void* out_value)
+int16_t canardDecodeScalar(const CanardRxTransfer* transfer,
+                           uint32_t bit_offset,
+                           uint8_t bit_length,
+                           bool value_is_signed,
+                           void* out_value)
 {
     if (transfer == NULL || out_value == NULL)
     {
@@ -547,7 +547,7 @@ int canardDecodeScalar(const CanardRxTransfer* transfer,
 
     memset(&storage, 0, sizeof(storage));   // This is important
 
-    const int result = descatterTransferPayload(transfer, bit_offset, bit_length, &storage.bytes[0]);
+    const int16_t result = descatterTransferPayload(transfer, bit_offset, bit_length, &storage.bytes[0]);
     if (result <= 0)
     {
         return result;
@@ -859,12 +859,12 @@ CANARD_INTERNAL void incrementTransferID(uint8_t* transfer_id)
     }
 }
 
-CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
-                                    uint32_t can_id,
-                                    uint8_t* transfer_id,
-                                    uint16_t crc,
-                                    const uint8_t* payload,
-                                    uint16_t payload_len)
+CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
+                                        uint32_t can_id,
+                                        uint8_t* transfer_id,
+                                        uint16_t crc,
+                                        const uint8_t* payload,
+                                        uint16_t payload_len)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT((can_id & CANARD_CAN_EXT_ID_MASK) == can_id);            // Flags must be cleared
@@ -879,7 +879,7 @@ CANARD_INTERNAL int enqueueTxFrames(CanardInstance* ins,
         return -CANARD_ERROR_INVALID_ARGUMENT;
     }
 
-    int result = 0;
+    int16_t result = 0;
 
     if (payload_len < CANARD_CAN_FRAME_MAX_DATA_LEN)                        // Single frame transfer
     {
@@ -1211,15 +1211,15 @@ CANARD_INTERNAL uint64_t releaseStatePayload(CanardInstance* ins, CanardRxState*
 /**
  * pushes data into the rx state. Fills the buffer head, then appends data to buffer blocks
  */
-CANARD_INTERNAL int bufferBlockPushBytes(CanardPoolAllocator* allocator,
-                                         CanardRxState* state,
-                                         const uint8_t* data,
-                                         uint8_t data_len)
+CANARD_INTERNAL int16_t bufferBlockPushBytes(CanardPoolAllocator* allocator,
+                                             CanardRxState* state,
+                                             const uint8_t* data,
+                                             uint8_t data_len)
 {
     uint16_t data_index = 0;
 
     // if head is not full, add data to head
-    if ((int) CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE - (int) state->payload_len > 0)
+    if ((CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE - state->payload_len) > 0)
     {
         for (uint16_t i = (uint16_t)state->payload_len;
              i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE && data_index < data_len;
@@ -1354,10 +1354,10 @@ void copyBitArray(const uint8_t* src, uint32_t src_offset, uint32_t src_len,
     }
 }
 
-CANARD_INTERNAL int descatterTransferPayload(const CanardRxTransfer* transfer,
-                                             uint32_t bit_offset,
-                                             uint8_t bit_length,
-                                             void* output)
+CANARD_INTERNAL int16_t descatterTransferPayload(const CanardRxTransfer* transfer,
+                                                 uint32_t bit_offset,
+                                                 uint8_t bit_length,
+                                                 void* output)
 {
     CANARD_ASSERT(transfer != 0);
 
@@ -1472,14 +1472,14 @@ CANARD_INTERNAL bool isBigEndian(void)
 #endif
 }
 
-CANARD_INTERNAL void swapByteOrder(void* data, unsigned size)
+CANARD_INTERNAL void swapByteOrder(void* data, size_t size)
 {
     CANARD_ASSERT(data != NULL);
 
     uint8_t* const bytes = (uint8_t*) data;
 
-    unsigned fwd = 0;
-    unsigned rev = size - 1;
+    size_t fwd = 0;
+    size_t rev = size - 1;
 
     while (fwd < rev)
     {
@@ -1497,7 +1497,7 @@ CANARD_INTERNAL void swapByteOrder(void* data, unsigned size)
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val, uint8_t byte)
 {
     crc_val ^= (uint16_t) ((uint16_t) (byte) << 8U);
-    for (int j = 0; j < 8; j++)
+    for (uint8_t j = 0; j < 8; j++)
     {
         if (crc_val & 0x8000U)
         {

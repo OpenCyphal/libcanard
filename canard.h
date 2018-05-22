@@ -355,14 +355,16 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins);
  * Pointer to the Transfer ID should point to a persistent variable (e.g. static or heap allocated, not on the stack);
  * it will be updated by the library after every transmission. The Transfer ID value cannot be shared between
  * transfers that have different descriptors! More on this in the transport layer specification.
+ *
+ * Returns the number of frames enqueued, or negative error code.
  */
-int canardBroadcast(CanardInstance* ins,            ///< Library instance
-                    uint64_t data_type_signature,   ///< See above
-                    uint16_t data_type_id,          ///< Refer to the specification
-                    uint8_t* inout_transfer_id,     ///< Pointer to a persistent variable containing the transfer ID
-                    uint8_t priority,               ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
-                    const void* payload,            ///< Transfer payload
-                    uint16_t payload_len);          ///< Length of the above, in bytes
+int16_t canardBroadcast(CanardInstance* ins,            ///< Library instance
+                        uint64_t data_type_signature,   ///< See above
+                        uint16_t data_type_id,          ///< Refer to the specification
+                        uint8_t* inout_transfer_id,     ///< Pointer to a persistent variable containing the transfer ID
+                        uint8_t priority,               ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
+                        const void* payload,            ///< Transfer payload
+                        uint16_t payload_len);          ///< Length of the above, in bytes
 
 /**
  * Sends a request or a response transfer.
@@ -378,16 +380,18 @@ int canardBroadcast(CanardInstance* ins,            ///< Library instance
  *
  * For Response transfers, the pointer to the Transfer ID will be treated as const (i.e. read-only), and normally it
  * should point to the transfer_id field of the structure CanardRxTransfer.
+ *
+ * Returns the number of frames enqueued, or negative error code.
  */
-int canardRequestOrRespond(CanardInstance* ins,             ///< Library instance
-                           uint8_t destination_node_id,     ///< Node ID of the server/client
-                           uint64_t data_type_signature,    ///< See above
-                           uint8_t data_type_id,            ///< Refer to the specification
-                           uint8_t* inout_transfer_id,      ///< Pointer to a persistent variable with the transfer ID
-                           uint8_t priority,                ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
-                           CanardRequestResponse kind,      ///< Refer to CanardRequestResponse
-                           const void* payload,             ///< Transfer payload
-                           uint16_t payload_len);           ///< Length of the above, in bytes
+int16_t canardRequestOrRespond(CanardInstance* ins,             ///< Library instance
+                               uint8_t destination_node_id,     ///< Node ID of the server/client
+                               uint64_t data_type_signature,    ///< See above
+                               uint8_t data_type_id,            ///< Refer to the specification
+                               uint8_t* inout_transfer_id,      ///< Pointer to a persistent variable with transfer ID
+                               uint8_t priority,                ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
+                               CanardRequestResponse kind,      ///< Refer to CanardRequestResponse
+                               const void* payload,             ///< Transfer payload
+                               uint16_t payload_len);           ///< Length of the above, in bytes
 
 /**
  * Returns a pointer to the top priority frame in the TX queue.
@@ -448,11 +452,11 @@ void canardCleanupStaleTransfers(CanardInstance* ins,
  *  | [33, 64]   | false           | uint64_t                                 |
  *  | [33, 64]   | true            | int64_t, or 64-bit float                 |
  */
-int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer where the data will be copied from
-                       uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
-                       uint8_t bit_length,                  ///< Length of the value, in bits; see the table
-                       bool value_is_signed,                ///< True if the value can be negative; see the table
-                       void* out_value);                    ///< Pointer to the output storage; see the table
+int16_t canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer where the data will be copied from
+                           uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
+                           uint8_t bit_length,                  ///< Length of the value, in bits; see the table
+                           bool value_is_signed,                ///< True if the value can be negative; see the table
+                           void* out_value);                    ///< Pointer to the output storage; see the table
 
 /**
  * This function can be used to encode values for later transmission in a UAVCAN transfer. It encodes a scalar value -
