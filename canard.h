@@ -235,7 +235,7 @@ struct CanardRxState
 
     uint8_t buffer_head[];
 };
-CANARD_STATIC_ASSERT(sizeof(CanardRxState) <= 28, "Invalid memory layout");
+CANARD_STATIC_ASSERT(offsetof(CanardRxState, buffer_head) <= 28, "Invalid memory layout");
 CANARD_STATIC_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE >= 4, "Invalid memory layout");
 
 /**
