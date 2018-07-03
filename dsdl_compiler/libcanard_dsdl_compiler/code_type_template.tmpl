@@ -13,6 +13,9 @@
 #define SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
 #endif
 
+#define ENABLE_TAO  ((uint8_t) 1)
+#define DISABLE_TAO ((uint8_t) 0)
+
 <!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array
 
  %if max_bitlen
@@ -34,7 +37,6 @@ uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf)
 
 /**
   * @brief ${type_name}Encode_internal
-  * @details [long description]
   * @param source : pointer to source data struct
   * @param msg_buf: pointer to msg storage
   * @param offset: bit offset to msg storage
@@ -86,6 +88,7 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
     canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '_len'))});
     offset += ${f.array_max_size_bit_len};
                 %endif
+
     // - Add array items
     for (c = 0; c < source->${'%s' % ((f.name + '_len'))}; c++)
     {
@@ -141,11 +144,38 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
   */
 int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
 {
-    for (uint32_t c = 0; c < sizeof(${type_name}); c++)
+    const int32_t offset = 0;
+    int32_t ret = 0;
+
+    /* Backward compatibility support for removing TAO
+     *  - first try to decode with TAO DISABLED
+     *  - if it fails fall back to TAO ENABLED
+     */
+    uint8_t tao = DISABLE_TAO;
+
+    while (1)
     {
-        ((uint8_t*)dest)[c] = 0x00;
+        // Clear the destination struct
+        for (uint32_t c = 0; c < sizeof(${type_name}); c++)
+        {
+            ((uint8_t*)dest)[c] = 0x00;
+        }
+
+        ret = ${type_name}Decode_internal(transfer, payload_len, dest, dyn_arr_buf, offset, tao);
+
+        if (ret >= 0)
+        {
+            break;
+        }
+
+        if (tao == ENABLE_TAO)
+        {
+            break;
+        }
+        tao = ENABLE_TAO;
     }
-    return ${type_name}Decode_internal(transfer, payload_len, dest, dyn_arr_buf, 0);
+
+    return ret;
 }
 
 /**
@@ -157,9 +187,10 @@ int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_le
   *                     ${type_name} dyn memory will point to dyn_arr_buf memory.
   *                     NULL will ignore dynamic arrays decoding.
   * @param offset: Call with 0, bit offset to msg storage
+  * @param tao: is tail array optimization used
   * @retval offset or ERROR value if < 0
   */
-int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset)
+int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
 {
     int32_t ret = 0;
     %if has_array
@@ -190,7 +221,7 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
                 %if f.last_item
                     %if f.bitlen > 7
     //  - Last item in struct & Root item & (Array Size > 8 bit), tail array optimization
-    if (payload_len)
+    if (payload_len && tao == ENABLE_TAO)
     {
         //  - Calculate Array length from MSG length
         dest->${'%s' % ((f.name + '_len'))} = ((payload_len * 8) - offset ) / ${f.bitlen}; // ${f.bitlen} bit array item size
@@ -221,15 +252,17 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
     }
     offset += ${f.array_max_size_bit_len};
                 %endif
+
     //  - Get Array
     if (dyn_arr_buf)
     {
         dest->${f.name} = (${f.cpp_type}*)*dyn_arr_buf;
     }
+
     for (c = 0; c < dest->${'%s' % ((f.name + '_len'))}; c++)
     {
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset);
+        offset += ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset, tao);
                     %else
         if (dyn_arr_buf)
         {
@@ -263,7 +296,7 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
     // Compound
-    offset = ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}, dyn_arr_buf, offset);
+    offset = ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}, dyn_arr_buf, offset, tao);
     if (offset < 0)
     {
         ret = offset;
@@ -309,7 +342,7 @@ int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_le
     return 0;
 }
 
-int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset)
+int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
 {
     return offset;
 }

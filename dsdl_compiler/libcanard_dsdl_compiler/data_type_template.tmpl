@@ -108,7 +108,7 @@ extern uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf);
 extern int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
 
 extern uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
-extern int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset);
+extern int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t use_tao);
  %else
 typedef struct
 {
@@ -118,7 +118,7 @@ typedef struct
 extern uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf);
 extern int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
 extern uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
-extern int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset);
+extern int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t use_tao);
  %endif
 <!--(end)-->
 
