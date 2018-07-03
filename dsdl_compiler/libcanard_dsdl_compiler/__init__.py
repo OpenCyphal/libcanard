@@ -181,7 +181,7 @@ def type_to_c_type(t):
         }[t.cast_mode]
         if t.kind == t.KIND_FLOAT:
             float_type = {
-                16: 'float16',
+                16: 'canard_float16',
                 32: 'float',
                 64: 'double',
             }[t.bitlen]
@@ -241,6 +241,7 @@ def type_to_c_type(t):
             'signedness':values['signedness'],
             'saturate':values['saturate'],
             'dynamic_array': t.mode == t.MODE_DYNAMIC,
+            'max_array_elements': t.max_size,
             }
     elif t.category == t.CATEGORY_COMPOUND:
         return {

@@ -12,18 +12,15 @@
 #include <stdint.h>
 #include "canard.h"
 
-#ifndef FLOAT16
-typedef uint16_t float16;
+#ifndef CANARD_FLOAT16
+#error "Please define CANARD_FLOAT16 to a relevant implementation for your platform, e.g. float or __fp16. See README.md for details"
 #else
-typedef FLOAT16 float16;
-#endif
-
-#ifndef SATURATE
-#define SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
+typedef CANARD_FLOAT16 canard_float16;
 #endif
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 % for inc in t.cpp_includes:
@@ -60,33 +57,41 @@ ${line}
     % endfor
 
   %if union
-typedef enum {
+typedef enum
+{
     % for idx,last,a in enum_last_value(fields):
     ${type_name.upper()}_${a.name.upper()}${',' if not last else ''}
     % endfor
 } ${type_name}_ENUM;
   %endif
 
-typedef struct {
+typedef struct
+{
     %if union:
     ${type_name}_ENUM union_tag;        // union_tag indicates what field the data structure is holding
 
-    union {
+    union
+    {
     %endif
   <!--(macro expand_attr_types)--> #! group_name, attrs
-    /* ${group_name} */
+    // ${group_name}
     % for a in attrs:
         %if a.type_category == t.CATEGORY_ARRAY
             %if a.dynamic_array == True
-    struct {
-        ${'uint8_t    %-26s // %s' % ((a.name + '_len;'), 'TODO what size this should be?' )}
+    struct
+    {
+                %if a.max_array_elements > 255
+        ${'uint16_t    %-26s // %s' % ((a.name + '_len;'), 'Dynamic array length')}
+                %else
+        ${'uint8_t    %-26s // %s' % ((a.name + '_len;'), 'Dynamic array length')}
+                %endif
         ${'%-10s %-26s // %s' % (a.cpp_type, ('*' + a.name + ';'), a.cpp_type_comment, )}
     };
             %else
     ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}
             %endif
         %elif a.type_category == t.CATEGORY_VOID:
-    /* ${a.cpp_type_comment} */
+    // ${a.cpp_type_comment}
         %else
     ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}
         %endif
@@ -98,15 +103,22 @@ typedef struct {
   %endif
 } ${type_name};
 
-extern uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
-extern uint32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, uint32_t offset);
+
+extern uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf);
+extern int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
+
+extern uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
+extern int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset);
  %else
-typedef struct {
+typedef struct
+{
     uint8_t empty;
 } ${type_name};
 
- extern uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
- extern uint32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, uint32_t offset);
+extern uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf);
+extern int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
+extern uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
+extern int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset);
  %endif
 <!--(end)-->
 
@@ -123,6 +135,6 @@ ${generate_primary_body(type_name=t.name_space_type_name, service='', max_bitlen
                         fields=t.fields, constants=t.constants, union=t.union, has_array=t.has_array)}
 % endif
 #ifdef __cplusplus
-} /* extern "C" */
+} // extern "C"
 #endif
 #endif // ${t.include_guard}

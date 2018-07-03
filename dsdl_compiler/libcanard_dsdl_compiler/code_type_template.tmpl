@@ -9,28 +9,50 @@
 #include "${t.header_filename}"
 #include "canard.h"
 
+#ifndef SATURATE
+#define SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
+#endif
+
 <!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array
 
  %if max_bitlen
+
 /**
   * @brief ${type_name}Encode
   * @param source : Pointer to source data struct
   * @param msg_buf: Pointer to msg storage
-  * @param offset: Call with 0, bit offset to msg storage
-  * @param root_item: Call with 1, this for internal use
-  * @retval returns message length as bytes (when root_item == 1)
+  * @retval returns message length as bytes
   */
-uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item) {
+uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf)
+{
+    uint32_t offset = 0;
+
+    offset = ${type_name}Encode_internal(source, msg_buf, offset, 1);
+
+    return (offset + 7 ) / 8;
+}
+
+/**
+  * @brief ${type_name}Encode_internal
+  * @details [long description]
+  * @param source : pointer to source data struct
+  * @param msg_buf: pointer to msg storage
+  * @param offset: bit offset to msg storage
+  * @param root_item: for detecting if TAO should be used
+  * @retval returns offset
+  */
+uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
+{
   %if union
-    /* Max Union Tag Value */
-    //assert(source->union_tag > ${(len(fields) - 1)});
+    // Max Union Tag Value
+    CANARD_ASSERT(source->union_tag <= ${(len(fields) - 1)});
   %endif
     %if has_array:
     uint32_t c = 0;
     %endif
 
     %if union:
-    /* Union Tag ${union} bits */
+    // Union Tag ${union} bits
     canardEncodeScalar(msg_buf, offset, ${union}, (void*)&source->union_tag); // ${union} bits
     offset += ${union};
     $!setvar("union_index", "0")!$
@@ -44,37 +66,40 @@ uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset
         %if f.type_category == t.CATEGORY_ARRAY
             %if f.dynamic_array == True
 
-    /* Dynamic Array (${f.name})*/
+    // Dynamic Array (${f.name})
                 %if f.last_item
                     %if f.bitlen < 8
     ${f.array_max_size_bit_len}
-    /*  - Add array length, last item, but bitlen < 8. */
+    //  - Add array length, last item, but bitlen < 8.
     canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '_len'))});
     offset += ${f.array_max_size_bit_len};
                     %else
-    if (! root_item) {
-        /* - Add array length */
+    if (! root_item)
+    {
+        // - Add array length
         canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '_len'))});
         offset += ${f.array_max_size_bit_len};
     }
                     %endif
                 %else
-    /* - Add array length */
+    // - Add array length
     canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '_len'))});
     offset += ${f.array_max_size_bit_len};
                 %endif
-    /* - Add array items */
-    for (c = 0; c < source->${'%s' % ((f.name + '_len'))}; c++) {
+    // - Add array items
+    for (c = 0; c < source->${'%s' % ((f.name + '_len'))}; c++)
+    {
                 %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}Encode((void*)&source->${f.name}[c], msg_buf, offset, 0);
+        offset += ${f.cpp_type}Encode_internal((void*)&source->${f.name}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)(source->${f.name} + c)); // ${f.max_size}
         offset += ${f.bitlen};
                 %endif
     }
             %else
-    /* Static array (${f.name}) */
-    for (c = 0; c < ${f.array_size}; c++) {
+    // Static array (${f.name})
+    for (c = 0; c < ${f.array_size}; c++)
+    {
         canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)(source->${f.name} + c)); // ${f.max_size}
         offset += ${f.bitlen};
     }
@@ -82,12 +107,12 @@ uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset
 
         %elif f.type_category == t.CATEGORY_VOID:
 
-    /* Void${f.bitlen} */
+    // Void${f.bitlen}
     offset += ${f.bitlen};
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
-    /* Compound */
-    offset = ${f.cpp_type}Encode((void*)&source->${f.name}, msg_buf, offset, 0);
+    // Compound
+    offset = ${f.cpp_type}Encode_internal((void*)&source->${f.name}, msg_buf, offset, 0);
         %else
             %if f.saturate
     source->${f.name} = SATURATE(source->${f.name}, ${f.max_size})
@@ -100,9 +125,6 @@ uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset
     }
      %endif
     % endfor
-    if (root_item) {
-        return (offset + 7 ) / 8;
-    }
 
     return offset;
 }
@@ -115,60 +137,107 @@ uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset
   * @param dyn_arr_buf: NULL or Pointer to memory storage to be used for dynamic arrays
   *                     ${type_name} dyn memory will point to dyn_arr_buf memory.
   *                     NULL will ignore dynamic arrays decoding.
-  * @param offset: Call with 0, bit offset to msg storage
-  * @retval
+  * @retval offset or ERROR value if < 0
   */
-uint32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, uint32_t offset) {
+int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+{
+    for (uint32_t c = 0; c < sizeof(${type_name}); c++)
+    {
+        ((uint8_t*)dest)[c] = 0x00;
+    }
+    return ${type_name}Decode_internal(transfer, payload_len, dest, dyn_arr_buf, 0);
+}
+
+/**
+  * @brief ${type_name}Decode_internal
+  * @param transfer: Pointer to CanardRxTransfer transfer
+  * @param payload_len: Payload message length
+  * @param dest: Pointer to destination struct
+  * @param dyn_arr_buf: NULL or Pointer to memory storage to be used for dynamic arrays
+  *                     ${type_name} dyn memory will point to dyn_arr_buf memory.
+  *                     NULL will ignore dynamic arrays decoding.
+  * @param offset: Call with 0, bit offset to msg storage
+  * @retval offset or ERROR value if < 0
+  */
+int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset)
+{
+    int32_t ret = 0;
     %if has_array
     uint32_t c = 0;
     %endif
 
     %if union:
-    /* Get Union Tag */
-    canardDecodeScalar(transfer, offset, ${union}, false, (void*)&dest->union_tag); // ${union}
+    // Get Union Tag
+    ret = canardDecodeScalar(transfer, offset, ${union}, false, (void*)&dest->union_tag); // ${union}
+    if (ret != ${union})
+    {
+        goto ${type_name}_error_exit;
+    }
     offset += ${union};
     $!setvar("union_index", "0")!$
     %endif
 
     % for f in fields:
      %if union:
-    ${'if' if not union_index else 'else if'} (dest->union_tag == ${union_index}) {
+    ${'if' if not union_index else 'else if'} (dest->union_tag == ${union_index})
+    {
       $!setvar("union_index", "union_index + 1")!$
      %endif
         %if f.type_category == t.CATEGORY_ARRAY
             %if f.dynamic_array == True
 
-    /* Dynamic Array (${f.name})*/
+    // Dynamic Array (${f.name})
                 %if f.last_item
                     %if f.bitlen > 7
-    /*  - Last item in struct & Root item & (Array Size > 8 bit), tail array optimization */
-    if (payload_len) {
-        /*  - Calculate Array length from MSG length */
+    //  - Last item in struct & Root item & (Array Size > 8 bit), tail array optimization
+    if (payload_len)
+    {
+        //  - Calculate Array length from MSG length
         dest->${'%s' % ((f.name + '_len'))} = ((payload_len * 8) - offset ) / ${f.bitlen}; // ${f.bitlen} bit array item size
-    } else {
-        /* - Array length ${f.array_max_size_bit_len} bits */
-        canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+    } else
+    {
+        // - Array length ${f.array_max_size_bit_len} bits
+        ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+        if (ret != ${f.array_max_size_bit_len})
+        {
+            goto ${type_name}_error_exit;
+        }
         offset += ${f.array_max_size_bit_len};
     }
                     %else
-    canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+    ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+    if (ret != ${f.array_max_size_bit_len})
+    {
+        goto ${type_name}_error_exit;
+    }
     offset += ${f.array_max_size_bit_len};
                     %endif
                 %else
-    /*  - Array length, not last item ${f.array_max_size_bit_len} bits*/
-    canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+    //  - Array length, not last item ${f.array_max_size_bit_len} bits
+    ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+    if (ret != ${f.array_max_size_bit_len})
+    {
+        goto ${type_name}_error_exit;
+    }
     offset += ${f.array_max_size_bit_len};
                 %endif
-    /*  - Get Array */
-    if (dyn_arr_buf) {
+    //  - Get Array
+    if (dyn_arr_buf)
+    {
         dest->${f.name} = (${f.cpp_type}*)*dyn_arr_buf;
     }
-    for (c = 0; c < dest->${'%s' % ((f.name + '_len'))}; c++) {
+    for (c = 0; c < dest->${'%s' % ((f.name + '_len'))}; c++)
+    {
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}Decode(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset);
+        offset += ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset);
                     %else
-        if (dyn_arr_buf) {
-            canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)*dyn_arr_buf); // ${f.max_size}
+        if (dyn_arr_buf)
+        {
+            ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)*dyn_arr_buf); // ${f.max_size}
+            if (ret != ${f.bitlen})
+            {
+                goto ${type_name}_error_exit;
+            }
             *dyn_arr_buf = (uint8_t *)(((${f.cpp_type}*)*dyn_arr_buf) + 1);
         }
         offset += ${f.bitlen};
@@ -176,23 +245,37 @@ uint32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_l
     }
             %else
 
-    /* Static array (${f.name}) */
-    for (c = 0; c < ${f.array_size}; c++) {
-        canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)(dest->${f.name} + c));
+    // Static array (${f.name})
+    for (c = 0; c < ${f.array_size}; c++)
+    {
+        ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)(dest->${f.name} + c));
+        if (ret != ${f.bitlen})
+        {
+            goto ${type_name}_error_exit;
+        }
         offset += ${f.bitlen};
     }
             %endif
         %elif f.type_category == t.CATEGORY_VOID:
 
-    /* Void${f.bitlen} */
+    // Void${f.bitlen}
     offset += ${f.bitlen};
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
-    /* Compound */
-    offset = ${f.cpp_type}Decode(transfer, 0, (void*)&dest->${f.name}, dyn_arr_buf, offset);
+    // Compound
+    offset = ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}, dyn_arr_buf, offset);
+    if (offset < 0)
+    {
+        ret = offset;
+        goto ${type_name}_error_exit;
+    }
         %else
 
-    canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
+    ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
+    if (ret != ${f.bitlen})
+    {
+        goto ${type_name}_error_exit;
+    }
     offset += ${f.bitlen};
         %endif
      %if union:
@@ -200,15 +283,34 @@ uint32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_l
      %endif
     % endfor
     return offset;
+
+${type_name}_error_exit:
+    if (ret < 0)
+    {
+        return ret;
+    } else
+    {
+        return -CANARD_ERROR_INTERNAL;
+    }
 }
  %else
-uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item) {
-    if (root_item) {
-        return (offset + 7 ) / 8;
-    }
+uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf)
+{
+    return 0;
+}
+
+uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
+{
     return offset;
 }
-uint32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, uint32_t offset) {
+
+int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+{
+    return 0;
+}
+
+int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset)
+{
     return offset;
 }
  %endif
