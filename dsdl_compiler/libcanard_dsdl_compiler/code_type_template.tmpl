@@ -21,29 +21,29 @@
  %if max_bitlen
 
 /**
-  * @brief ${type_name}Encode
+  * @brief ${type_name}_encode
   * @param source : Pointer to source data struct
   * @param msg_buf: Pointer to msg storage
   * @retval returns message length as bytes
   */
-uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf)
+uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf)
 {
     uint32_t offset = 0;
 
-    offset = ${type_name}Encode_internal(source, msg_buf, offset, 1);
+    offset = ${type_name}_encode_internal(source, msg_buf, offset, 1);
 
     return (offset + 7 ) / 8;
 }
 
 /**
-  * @brief ${type_name}Encode_internal
+  * @brief ${type_name}_encode_internal
   * @param source : pointer to source data struct
   * @param msg_buf: pointer to msg storage
   * @param offset: bit offset to msg storage
   * @param root_item: for detecting if TAO should be used
   * @retval returns offset
   */
-uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
+uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
 {
   %if union
     // Max Union Tag Value
@@ -100,7 +100,7 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
     for (c = 0; c < source->${'%s' % ((f.name + '_len'))}; c++)
     {
                 %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}Encode_internal((void*)&source->${f.name}[c], msg_buf, offset, 0);
+        offset += ${f.cpp_type}_encode_internal((void*)&source->${f.name}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)(source->${f.name} + c)); // ${f.max_size}
         offset += ${f.bitlen};
@@ -122,7 +122,7 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
     // Compound
-    offset = ${f.cpp_type}Encode_internal((void*)&source->${f.name}, msg_buf, offset, 0);
+    offset = ${f.cpp_type}_encode_internal((void*)&source->${f.name}, msg_buf, offset, 0);
         %elif f.type_category == t.CATEGORY_PRIMITIVE and f.cpp_type == "float" and f.bitlen == 16:
 
     // float16 special handling
@@ -150,7 +150,7 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
 }
 
 /**
-  * @brief ${type_name}Decode
+  * @brief ${type_name}_decode
   * @param transfer: Pointer to CanardRxTransfer transfer
   * @param payload_len: Payload message length
   * @param dest: Pointer to destination struct
@@ -159,7 +159,7 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
   *                     NULL will ignore dynamic arrays decoding.
   * @retval offset or ERROR value if < 0
   */
-int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
 {
     const int32_t offset = 0;
     int32_t ret = 0;
@@ -178,7 +178,7 @@ int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_le
             ((uint8_t*)dest)[c] = 0x00;
         }
 
-        ret = ${type_name}Decode_internal(transfer, payload_len, dest, dyn_arr_buf, offset, tao);
+        ret = ${type_name}_decode_internal(transfer, payload_len, dest, dyn_arr_buf, offset, tao);
 
         if (ret >= 0)
         {
@@ -196,7 +196,7 @@ int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_le
 }
 
 /**
-  * @brief ${type_name}Decode_internal
+  * @brief ${type_name}_decode_internal
   * @param transfer: Pointer to CanardRxTransfer transfer
   * @param payload_len: Payload message length
   * @param dest: Pointer to destination struct
@@ -207,7 +207,7 @@ int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_le
   * @param tao: is tail array optimization used
   * @retval offset or ERROR value if < 0
   */
-int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
+int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
 {
     int32_t ret = 0;
     %if has_array
@@ -286,7 +286,7 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
     for (c = 0; c < dest->${'%s' % ((f.name + '_len'))}; c++)
     {
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset, tao);
+        offset += ${f.cpp_type}_decode_internal(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset, tao);
                     %else
         if (dyn_arr_buf)
         {
@@ -320,7 +320,7 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
     // Compound
-    offset = ${f.cpp_type}Decode_internal(transfer, 0, (void*)&dest->${f.name}, dyn_arr_buf, offset, tao);
+    offset = ${f.cpp_type}_decode_internal(transfer, 0, (void*)&dest->${f.name}, dyn_arr_buf, offset, tao);
     if (offset < 0)
     {
         ret = offset;
@@ -366,22 +366,22 @@ ${type_name}_error_exit:
     }
 }
  %else
-uint32_t ${type_name}Encode(${type_name} *source, void *msg_buf)
+uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf)
 {
     return 0;
 }
 
-uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
+uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
 {
     return offset;
 }
 
-int32_t ${type_name}Decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
 {
     return 0;
 }
 
-int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
+int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
 {
     return offset;
 }
