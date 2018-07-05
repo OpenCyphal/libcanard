@@ -25,13 +25,8 @@ Include all or only selected message c-files to your compiler script (e.g. Makef
 NOTE: compiled *.o files can't be compiled into to flat "build" directory as some files in DSDL have the same name.
 
 ### Float16
-Generated structs in modules use canard_float16 type when specified float16 in DSDL. Canard_float16 has to be defined as CANARD_FLOAT16 to something e.g. __fp16.
-
-e.g. in Makefile
-
-`
-CFLAGS += -DCANARD_FLOAT16=__fp16
-`
+Generated structs in modules use float type when specified float16 in DSDL. Float is converted to float16 using libcanard's canardConvertNativeFloatToFloat16 when Encoding. Calling Decode function after receive will convert float16 to float, using libcanard's canardConvertFloat16ToNativeFloat function. 
+Canard conversion functions can be replaced to compiler casting if wanted, e.g. #define CANARD_USE_FLOAT16_CAST <your-float16> e.g. __fp16.
 
 ## Using generated modules
 

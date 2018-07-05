@@ -12,12 +12,6 @@
 #include <stdint.h>
 #include "canard.h"
 
-#ifndef CANARD_FLOAT16
-#error "Please define CANARD_FLOAT16 to a relevant implementation for your platform, e.g. float or __fp16. See README.md for details"
-#else
-typedef CANARD_FLOAT16 canard_float16;
-#endif
-
 #ifdef __cplusplus
 extern "C"
 {

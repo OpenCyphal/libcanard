@@ -16,7 +16,7 @@
 #define ENABLE_TAO  ((uint8_t) 1)
 #define DISABLE_TAO ((uint8_t) 0)
 
-<!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array
+<!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array, has_float16
 
  %if max_bitlen
 
@@ -51,6 +51,13 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
   %endif
     %if has_array:
     uint32_t c = 0;
+    %endif
+    %if has_float16:
+#ifndef CANARD_USE_FLOAT16_CAST
+    uint16_t tmp_float = 0;
+#else
+    CANARD_USE_FLOAT16_CAST tmp_float = 0;
+#endif
     %endif
 
     %if union:
@@ -116,6 +123,16 @@ uint32_t ${type_name}Encode_internal(${type_name} *source, void *msg_buf, uint32
 
     // Compound
     offset = ${f.cpp_type}Encode_internal((void*)&source->${f.name}, msg_buf, offset, 0);
+        %elif f.type_category == t.CATEGORY_PRIMITIVE and f.cpp_type == "float" and f.bitlen == 16:
+
+    // float16 special handling
+#ifndef CANARD_USE_FLOAT16_CAST
+    tmp_float = canardConvertNativeFloatToFloat16(source->${f.name});
+#else
+    tmp_float = (CANARD_USE_FLOAT16_CAST)source->${f.name};
+#endif
+    canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)&tmp_float); // ${f.max_size}
+    offset += ${f.bitlen};
         %else
             %if f.saturate
     source->${f.name} = SATURATE(source->${f.name}, ${f.max_size})
@@ -195,6 +212,13 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
     int32_t ret = 0;
     %if has_array
     uint32_t c = 0;
+    %endif
+    %if has_float16:
+#ifndef CANARD_USE_FLOAT16_CAST
+    uint16_t tmp_float = 0;
+#else
+    CANARD_USE_FLOAT16_CAST tmp_float = 0;
+#endif
     %endif
 
     %if union:
@@ -302,6 +326,21 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
         ret = offset;
         goto ${type_name}_error_exit;
     }
+        %elif f.type_category == t.CATEGORY_PRIMITIVE and f.cpp_type == "float" and f.bitlen == 16:
+
+    // float16 special handling
+    ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)&tmp_float);
+
+    if (ret != ${f.bitlen})
+    {
+        goto ${type_name}_error_exit;
+    }
+#ifndef CANARD_USE_FLOAT16_CAST
+    dest->${f.name} = canardConvertFloat16ToNativeFloat(tmp_float);
+#else
+    dest->${f.name} = (float)tmp_float;
+#endif
+    offset += ${f.bitlen};
         %else
 
     ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
@@ -352,12 +391,15 @@ int32_t ${type_name}Decode_internal(const CanardRxTransfer* transfer, uint16_t p
 % if t.kind == t.KIND_SERVICE:
 ${generate_primary_body(type_name=t.name_space_type_name+'Request', service='_REQUEST', max_bitlen=t.get_max_bitlen_request(), \
                                fields=t.request_fields, constants=t.request_constants, \
-                               union=t.request_union, has_array=t.request_has_array)}
+                               union=t.request_union, has_array=t.request_has_array, \
+                               has_float16=t.request_has_float16)}
 
 ${generate_primary_body(type_name=t.name_space_type_name+'Response', service='_RESPONSE', max_bitlen=t.get_max_bitlen_response(), \
                                fields=t.response_fields, constants=t.response_constants, \
-                               union=t.response_union, has_array=t.response_has_array)}
+                               union=t.response_union, has_array=t.response_has_array, \
+                               has_float16=t.response_has_float16)}
 % else:
 ${generate_primary_body(type_name=t.name_space_type_name, service='', max_bitlen=t.get_max_bitlen(), \
-                        fields=t.fields, constants=t.constants, union=t.union, has_array=t.has_array)}
+                        fields=t.fields, constants=t.constants, union=t.union, has_array=t.has_array, \
+                        has_float16=t.has_float16)}
 % endif

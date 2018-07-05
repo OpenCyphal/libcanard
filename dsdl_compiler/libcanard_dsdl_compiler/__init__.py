@@ -181,7 +181,7 @@ def type_to_c_type(t):
         }[t.cast_mode]
         if t.kind == t.KIND_FLOAT:
             float_type = {
-                16: 'canard_float16',
+                16: 'float',
                 32: 'float',
                 64: 'double',
             }[t.bitlen]
@@ -312,8 +312,16 @@ def generate_one_type(template_expander, t):
                 a.name = ''
         return has_array
 
+    def has_float16(attributes):
+        has_float16 = False
+        for a in attributes:
+            if a.type.category == t.CATEGORY_PRIMITIVE and a.type.kind == a.type.KIND_FLOAT and a.bitlen == 16:
+                has_float16 = True
+        return has_float16
+
     if t.kind == t.KIND_MESSAGE:
         t.has_array = inject_cpp_types(t.fields)
+        t.has_float16 = has_float16(t.fields)
         inject_cpp_types(t.constants)
         t.all_attributes = t.fields + t.constants
         t.union = t.union and len(t.fields)
@@ -321,8 +329,10 @@ def generate_one_type(template_expander, t):
             t.union = len(t.fields).bit_length()
     else:
         t.request_has_array = inject_cpp_types(t.request_fields)
+        t.request_has_float16 = has_float16(t.request_fields)
         inject_cpp_types(t.request_constants)
         t.response_has_array = inject_cpp_types(t.response_fields)
+        t.response_has_float16 = has_float16(t.response_fields)
         inject_cpp_types(t.response_constants)
         t.all_attributes = t.request_fields + t.request_constants + t.response_fields + t.response_constants
         t.request_union = t.request_union and len(t.request_fields)
