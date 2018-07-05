@@ -83,7 +83,14 @@ def get_name_space_prefix(t):
 
 def type_output_filename(t, extension = OUTPUT_HEADER_FILE_EXTENSION):
     assert t.category == t.CATEGORY_COMPOUND
-    return t.full_name.replace('.', os.path.sep) + '.' + extension
+    folder_name = t.full_name.split('.')[-2]
+    if extension == OUTPUT_CODE_FILE_EXTENSION:
+        name_list = t.full_name.split('.')
+        if len(folder_name):
+            name_list[-1] = str(folder_name) + '_' + str(name_list[-1])
+        return os.path.sep.join(name_list) + '.' + extension
+    else:
+        return t.full_name.replace('.', os.path.sep) + '.' + extension
 
 def makedirs(path):
     try:
