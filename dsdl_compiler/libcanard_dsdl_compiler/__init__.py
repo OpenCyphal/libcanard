@@ -39,7 +39,7 @@ class DsdlCompilerException(Exception):
 
 logger = logging.getLogger(__name__)
 
-def run(source_dirs, include_dirs, output_dir):
+def run(source_dirs, include_dirs, output_dir, header_only):
     '''
     This function takes a list of root namespace directories (containing DSDL definition files to parse), a
     possibly empty list of search directories (containing DSDL definition files that can be referenced from the types
@@ -55,6 +55,7 @@ def run(source_dirs, include_dirs, output_dir):
         include_dirs   List of root namespace directories with referenced types (possibly empty). This list is
                        automaitcally extended with source_dirs.
         output_dir     Output directory path. Will be created if doesn't exist.
+        header_only    Weather to generated as header only library.
     '''
     assert isinstance(source_dirs, list)
     assert isinstance(include_dirs, list)
@@ -65,7 +66,7 @@ def run(source_dirs, include_dirs, output_dir):
         die('No type definitions were found')
 
     logger.info('%d types total', len(types))
-    run_generator(types, output_dir)
+    run_generator(types, output_dir, header_only)
 
 # -----------------
 
@@ -113,7 +114,7 @@ def run_parser(source_dirs, search_dirs):
         die(ex)
     return types
 
-def run_generator(types, dest_dir):
+def run_generator(types, dest_dir, header_only):
     try:
         header_template_expander = make_template_expander(HEADER_TEMPLATE_FILENAME)
         code_template_expander = make_template_expander(CODE_TEMPLATE_FILENAME)
@@ -125,37 +126,37 @@ def run_generator(types, dest_dir):
             code_filename = os.path.join(dest_dir, type_output_filename(t, OUTPUT_CODE_FILE_EXTENSION))
             t.header_filename = type_output_filename(t, OUTPUT_HEADER_FILE_EXTENSION)
             t.name_space_prefix = get_name_space_prefix(t)
+            t.header_only = header_only
             header_text = generate_one_type(header_template_expander, t)
             code_text = generate_one_type(code_template_expander, t)
-            write_generated_data(header_path_file_name, header_text)
-            write_generated_data(code_filename, code_text)
+            write_generated_data(header_path_file_name, header_text, header_only)
+            if header_only:
+                code_text = "\r\n" + code_text
+                write_generated_data(header_path_file_name, code_text, header_only, True)
+            else:
+                write_generated_data(code_filename, code_text, header_only)
     except Exception as ex:
         logger.info('Generator failure', exc_info=True)
         die(ex)
 
-def write_generated_data(filename, data):
+def write_generated_data(filename, data, header_only, append_file=False):
     dirname = os.path.dirname(filename)
     makedirs(dirname)
 
-    # Lazy update - file will not be rewritten if its content is not going to change
-    if os.path.exists(filename):
-        with open(filename) as f:
-            existing_data = f.read()
-        if data == existing_data:
-            logger.info('Up to date [%s]', pretty_filename(filename))
-            return
-        logger.info('Rewriting [%s]', pretty_filename(filename))
-        os.remove(filename)
+    if append_file:
+        with open(filename, 'a') as f:
+            f.write(data)
     else:
-        logger.info('Creating [%s]', pretty_filename(filename))
+        if os.path.exists(filename):
+            os.remove(filename)
+        with open(filename, 'w') as f:
+            f.write(data)
 
-    # Full rewrite
-    with open(filename, 'w') as f:
-        f.write(data)
-    try:
-        os.chmod(filename, OUTPUT_FILE_PERMISSIONS)
-    except (OSError, IOError) as ex:
-        logger.warning('Failed to set permissions for %s: %s', pretty_filename(filename), ex)
+    if not header_only or header_only and append_file:
+        try:
+            os.chmod(filename, OUTPUT_FILE_PERMISSIONS)
+        except (OSError, IOError) as ex:
+            logger.warning('Failed to set permissions for %s: %s', pretty_filename(filename), ex)
 
 def expand_to_next_full(size):
     if size <= 8:

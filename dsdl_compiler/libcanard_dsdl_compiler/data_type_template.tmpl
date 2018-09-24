@@ -21,6 +21,15 @@ extern "C"
 #include <${inc}>
 % endfor
 
+
+<!--(macro storage_class)-->
+ %if t.header_only
+static inline
+ %else
+extern
+ %endif
+<!--(end)-->
+
 /******************************* Source text **********************************
 % for line in t.source_text.strip().splitlines():
 ${line}
@@ -97,22 +106,21 @@ typedef struct
   %endif
 } ${type_name};
 
+@!storage_class!@uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf);
+@!storage_class!@int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
 
-extern uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf);
-extern int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
-
-extern uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
-extern int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao);
+@!storage_class!@uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
+@!storage_class!@int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao);
  %else
 typedef struct
 {
     uint8_t empty;
 } ${type_name};
+@!storage_class!@uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf);
+@!storage_class!@int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
+@!storage_class!@uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
+@!storage_class!@int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao);
 
-extern uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf);
-extern int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf);
-extern uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item);
-extern int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao);
  %endif
 <!--(end)-->
 
@@ -128,7 +136,9 @@ ${generate_primary_body(type_name=t.name_space_type_name+'Response', service='_R
 ${generate_primary_body(type_name=t.name_space_type_name, service='', max_bitlen=t.get_max_bitlen(), \
                         fields=t.fields, constants=t.constants, union=t.union, has_array=t.has_array)}
 % endif
+%if not t.header_only
 #ifdef __cplusplus
 } // extern "C"
 #endif
 #endif // ${t.include_guard}
+%endif

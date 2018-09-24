@@ -43,6 +43,7 @@ Supported Python versions: 3.2+, 2.7.
 
 argparser = argparse.ArgumentParser(description=DESCRIPTION)
 argparser.add_argument('source_dir', nargs='+', help='source directory with DSDL definitions')
+argparser.add_argument('--header_only', '-ho', action='store_true', help='Generate as header only library')
 argparser.add_argument('--verbose', '-v', action='count', help='verbosity level (-v, -vv)')
 argparser.add_argument('--outdir', '-O', default=DEFAULT_OUTDIR, help='output directory, default %s' % DEFAULT_OUTDIR)
 argparser.add_argument('--incdir', '-I', default=[], action='append', help=
@@ -62,7 +63,7 @@ except KeyError:
 from libcanard_dsdl_compiler import run as dsdlc_run
 
 try:
-    dsdlc_run(args.source_dir, args.incdir, args.outdir)
+    dsdlc_run(args.source_dir, args.incdir, args.outdir, args.header_only)
 except Exception as ex:
     logging.error('Compiler failure', exc_info=True)
     die(str(ex))

@@ -5,9 +5,10 @@
  *
  * Source file: ${t.source_file}
  */
-
+%if not t.header_only
 #include "${t.header_filename}"
 #include "canard.h"
+%endif
 
 #ifndef SATURATE
 #define SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
@@ -19,21 +20,6 @@
 <!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array, has_float16
 
  %if max_bitlen
-
-/**
-  * @brief ${type_name}_encode
-  * @param source : Pointer to source data struct
-  * @param msg_buf: Pointer to msg storage
-  * @retval returns message length as bytes
-  */
-uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf)
-{
-    uint32_t offset = 0;
-
-    offset = ${type_name}_encode_internal(source, msg_buf, offset, 1);
-
-    return (offset + 7 ) / 8;
-}
 
 /**
   * @brief ${type_name}_encode_internal
@@ -150,49 +136,18 @@ uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint3
 }
 
 /**
-  * @brief ${type_name}_decode
-  * @param transfer: Pointer to CanardRxTransfer transfer
-  * @param payload_len: Payload message length
-  * @param dest: Pointer to destination struct
-  * @param dyn_arr_buf: NULL or Pointer to memory storage to be used for dynamic arrays
-  *                     ${type_name} dyn memory will point to dyn_arr_buf memory.
-  *                     NULL will ignore dynamic arrays decoding.
-  * @retval offset or ERROR value if < 0
+  * @brief ${type_name}_encode
+  * @param source : Pointer to source data struct
+  * @param msg_buf: Pointer to msg storage
+  * @retval returns message length as bytes
   */
-int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf)
 {
-    const int32_t offset = 0;
-    int32_t ret = 0;
+    uint32_t offset = 0;
 
-    /* Backward compatibility support for removing TAO
-     *  - first try to decode with TAO DISABLED
-     *  - if it fails fall back to TAO ENABLED
-     */
-    uint8_t tao = DISABLE_TAO;
+    offset = ${type_name}_encode_internal(source, msg_buf, offset, 1);
 
-    while (1)
-    {
-        // Clear the destination struct
-        for (uint32_t c = 0; c < sizeof(${type_name}); c++)
-        {
-            ((uint8_t*)dest)[c] = 0x00;
-        }
-
-        ret = ${type_name}_decode_internal(transfer, payload_len, dest, dyn_arr_buf, offset, tao);
-
-        if (ret >= 0)
-        {
-            break;
-        }
-
-        if (tao == ENABLE_TAO)
-        {
-            break;
-        }
-        tao = ENABLE_TAO;
-    }
-
-    return ret;
+    return (offset + 7 ) / 8;
 }
 
 /**
@@ -365,18 +320,59 @@ ${type_name}_error_exit:
         return -CANARD_ERROR_INTERNAL;
     }
 }
- %else
-uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf)
-{
-    return 0;
-}
 
+/**
+  * @brief ${type_name}_decode
+  * @param transfer: Pointer to CanardRxTransfer transfer
+  * @param payload_len: Payload message length
+  * @param dest: Pointer to destination struct
+  * @param dyn_arr_buf: NULL or Pointer to memory storage to be used for dynamic arrays
+  *                     ${type_name} dyn memory will point to dyn_arr_buf memory.
+  *                     NULL will ignore dynamic arrays decoding.
+  * @retval offset or ERROR value if < 0
+  */
+int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+{
+    const int32_t offset = 0;
+    int32_t ret = 0;
+
+    /* Backward compatibility support for removing TAO
+     *  - first try to decode with TAO DISABLED
+     *  - if it fails fall back to TAO ENABLED
+     */
+    uint8_t tao = DISABLE_TAO;
+
+    while (1)
+    {
+        // Clear the destination struct
+        for (uint32_t c = 0; c < sizeof(${type_name}); c++)
+        {
+            ((uint8_t*)dest)[c] = 0x00;
+        }
+
+        ret = ${type_name}_decode_internal(transfer, payload_len, dest, dyn_arr_buf, offset, tao);
+
+        if (ret >= 0)
+        {
+            break;
+        }
+
+        if (tao == ENABLE_TAO)
+        {
+            break;
+        }
+        tao = ENABLE_TAO;
+    }
+
+    return ret;
+}
+ %else
 uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint32_t offset, uint8_t root_item)
 {
     return offset;
 }
 
-int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+uint32_t ${type_name}_encode(${type_name} *source, void *msg_buf)
 {
     return 0;
 }
@@ -384,6 +380,11 @@ int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_l
 int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf, int32_t offset, uint8_t tao)
 {
     return offset;
+}
+
+int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name} *dest, uint8_t **dyn_arr_buf)
+{
+    return 0;
 }
  %endif
 <!--(end)-->
@@ -403,3 +404,9 @@ ${generate_primary_body(type_name=t.name_space_type_name, service='', max_bitlen
                         fields=t.fields, constants=t.constants, union=t.union, has_array=t.has_array, \
                         has_float16=t.has_float16)}
 % endif
+%if t.header_only
+#ifdef __cplusplus
+} // extern "C"
+#endif
+#endif // ${t.include_guard}
+%endif
