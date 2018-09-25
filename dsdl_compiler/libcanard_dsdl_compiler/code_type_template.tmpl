@@ -10,12 +10,12 @@
 #include "canard.h"
 %endif
 
-#ifndef _UAVCAN_INTERNAL_SATURATE
-#define _UAVCAN_INTERNAL_SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
+#ifndef CANARD_INTERNAL_SATURATE
+#define CANARD_INTERNAL_SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
 #endif
 
-#define _UAVCAN_INTERNAL_ENABLE_TAO  ((uint8_t) 1)
-#define _UAVCAN_INTERNAL_DISABLE_TAO ((uint8_t) 0)
+#define CANARD_INTERNAL_ENABLE_TAO  ((uint8_t) 1)
+#define CANARD_INTERNAL_DISABLE_TAO ((uint8_t) 0)
 
 <!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array, has_float16
 
@@ -121,7 +121,7 @@ uint32_t ${type_name}_encode_internal(${type_name} *source, void *msg_buf, uint3
     offset += ${f.bitlen};
         %else
             %if f.saturate
-    source->${f.name} = _UAVCAN_INTERNAL_SATURATE(source->${f.name}, ${f.max_size})
+    source->${f.name} = CANARD_INTERNAL_SATURATE(source->${f.name}, ${f.max_size})
             %endif
     canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)&source->${f.name}); // ${f.max_size}
     offset += ${f.bitlen};
@@ -200,7 +200,7 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
                 %if f.last_item
                     %if f.bitlen > 7
     //  - Last item in struct & Root item & (Array Size > 8 bit), tail array optimization
-    if (payload_len && tao == _UAVCAN_INTERNAL_ENABLE_TAO)
+    if (payload_len && tao == CANARD_INTERNAL_ENABLE_TAO)
     {
         //  - Calculate Array length from MSG length
         dest->${'%s' % ((f.name + '_len'))} = ((payload_len * 8) - offset ) / ${f.bitlen}; // ${f.bitlen} bit array item size
@@ -340,7 +340,7 @@ int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_l
      *  - first try to decode with TAO DISABLED
      *  - if it fails fall back to TAO ENABLED
      */
-    uint8_t tao = _UAVCAN_INTERNAL_DISABLE_TAO;
+    uint8_t tao = CANARD_INTERNAL_DISABLE_TAO;
 
     while (1)
     {
@@ -357,11 +357,11 @@ int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_l
             break;
         }
 
-        if (tao == _UAVCAN_INTERNAL_ENABLE_TAO)
+        if (tao == CANARD_INTERNAL_ENABLE_TAO)
         {
             break;
         }
-        tao = _UAVCAN_INTERNAL_ENABLE_TAO;
+        tao = CANARD_INTERNAL_ENABLE_TAO;
     }
 
     return ret;
