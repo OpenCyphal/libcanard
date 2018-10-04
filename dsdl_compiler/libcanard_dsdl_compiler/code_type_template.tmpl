@@ -204,7 +204,8 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
     {
         //  - Calculate Array length from MSG length
         dest->${'%s' % ((f.name + '_len'))} = ((payload_len * 8) - offset ) / ${f.bitlen}; // ${f.bitlen} bit array item size
-    } else
+    }
+    else
     {
         // - Array length ${f.array_max_size_bit_len} bits
         ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
@@ -315,7 +316,8 @@ ${type_name}_error_exit:
     if (ret < 0)
     {
         return ret;
-    } else
+    }
+    else
     {
         return -CANARD_ERROR_INTERNAL;
     }

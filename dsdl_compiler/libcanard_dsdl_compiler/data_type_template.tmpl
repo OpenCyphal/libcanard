@@ -88,7 +88,7 @@ typedef struct
                 %else
         ${'uint8_t    %-26s // %s' % ((a.name + '_len;'), 'Dynamic array length')}
                 %endif
-        ${'%-10s %-26s // %s' % (a.cpp_type, ('*' + a.name + ';'), a.cpp_type_comment, )}
+        ${'%-10s %-26s // %s' % ((a.cpp_type + '*'), (a.name + ';'), a.cpp_type_comment, )}
     };
             %else
     ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}
