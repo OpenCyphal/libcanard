@@ -1,68 +1,88 @@
-# UAVCAN DSDL compiler for the libcanard
+# DSDL compiler for libcanard
 
 ## Overview
-Libcanard_dsdlc is a tool to generate UAVCAN DSDL definitions to libcanard compatible message c-modules or to header only library with command line flag.
 
-Modules have: defines, enums, unions, structs, and encoding and decoding functions as defined in UAVCAN DSDL. Encoding and decoding functions use the decode and encode functions of libcanard for bit packing / unpacking.
+Libcanard_dsdlc is a tool for converting UAVCAN DSDL definitions into libcanard-compatible C source files or headers.
 
-In c there is no namespace, so all the generated #define and function names are long having full folder path included. This is made to prevent the collision with each other and to the rest of the system.
+Modules have: defines, enums, unions, structs, and encoding/decoding functions as defined in UAVCAN DSDL.
+Encoding and decoding functions use the encode and decode functions of libcanard for bit packing/unpacking.
 
-## Install & Integration
-To get libcanard from the git, make sure all the submodules are fetched too.
+In C there is no namespace, so all the generated `#define` and function names are long having full folder path included.
+This is made to prevent collisions with each other and with the rest of the system.
 
-`git submodules update --init --recursive`
+## Installation & integration
 
-### Generating and using library
+To get libcanard from git, make sure all the submodules are fetched too.
+
+```
+git submodules update --init --recursive
+```
+
+## Compilation
 
 ### When using c-modules
-`python3 libcanard_dsdlc --outdir <outdir> <dsdl-definition-uavcan-folder>`
 
-Include all or only selected message c-files to your compiler script (e.g. Makefile). Add include path to root of the <dsdl-generate-output-folder>.
+```
+python3 libcanard_dsdlc --outdir <outdir> <dsdl-definition-uavcan-folder>
+```
+
+Add all or only selected message C-files to your build script (e.g. Makefile).
+Add `<dsdl-generate-output-folder>` to your include paths.
 
 ### When using as header only library
-`python3 libcanard_dsdlc --header_only --outdir <outdir> <dsdl-definition-uavcan-folder>`
 
-Include wanted message header(s) into your code. Add include path to root of the <dsdl-generate-output-folder>.
+```
+python3 libcanard_dsdlc --header_only --outdir <outdir> <dsdl-definition-uavcan-folder>
+```
 
-### Float16
-Generated structs in modules use float type when specified float16 in DSDL. Float is converted to float16 using libcanard's canardConvertNativeFloatToFloat16 when Encoding. Calling Decode function after receive will convert float16 to float, using libcanard's canardConvertFloat16ToNativeFloat function. 
-Canard conversion functions can be replaced to compiler casting if wanted, e.g. #define CANARD_USE_FLOAT16_CAST <your-float16> e.g. __fp16.
+Include wanted message header(s) into your code.
+Add `<dsdl-generate-output-folder>` to your include paths.
+
+### Notes
+
+#### Float16
+
+Generated structs use the native `float` type for `float16`.
+The native `float` is converted to `float16` using libcanard's `canardConvertNativeFloatToFloat16()` when encoding.
+Calling decode function after reception will convert `float16` to the native `float` using the libcanard's
+`canardConvertFloat16ToNativeFloat()` function.
+Libcanard conversion functions can be replaced to compiler casting if wanted,
+e.g. `#define CANARD_USE_FLOAT16_CAST __fp16`.
 
 ## Using generated modules
 
-#### Encode NodeStatus-broadcast message
+### Encode NodeStatus message
+
 ```cpp
 #include "uavcan/protocol/NodeStatus.h"
- 
+
 /* Reserve memory and struct for messages */
 uint8_t packed_uavcan_msg_buf[UAVCAN_PROTOCOL_NODESTATUS_MAX_SIZE];
 /* MAX_SIZE comes from module header as pre-calculated */
 uavcan_protocol_NodeStatus msg;
 
 msg.uptime_sec = GetUptime();
-
 msg.health = UAVCAN_PROTOCOL_NODESTATUS_HEALTH_OK;
 msg.mode = UAVCAN_PROTOCOL_NODESTATUS_MODE_OPERATIONAL;
-
 msg.sub_mode = sub_mode;
 msg.vendor_specific_status_code = vendor_status_code;
 
-/* Encode filled struct to packed_uavcan_msg_buf, ready to be send */
-uint32_t len_of_packed_msg = uavcan_protocol_NodeStatusEncode(&msg,
-                             packed_uavcan_msg_buf);
+/* Encode the filled struct into packed_uavcan_msg_buf, ready to be sent */
+const uint32_t len_of_packed_msg = uavcan_protocol_NodeStatusEncode(&msg, packed_uavcan_msg_buf);
 
-canardBroadcast(&g_canard,
-                UAVCAN_PROTOCOL_NODESTATUS_SIGNATURE,
-                UAVCAN_PROTOCOL_NODESTATUS_ID,
-                &g_bc_node_status_transfer_id,
-                CANARD_TRANSFER_PRIORITY_MEDIUM,
-                packed_uavcan_msg_buf,
-                len_of_packed_msg);
+(void) canardBroadcast(&g_canard,
+                       UAVCAN_PROTOCOL_NODESTATUS_SIGNATURE,
+                       UAVCAN_PROTOCOL_NODESTATUS_ID,
+                       &g_bc_node_status_transfer_id,
+                       CANARD_TRANSFER_PRIORITY_MEDIUM,
+                       packed_uavcan_msg_buf,
+                       len_of_packed_msg);
 ```
 
-*Dynamic Array* all the dynamic arrays have also _len field, which contain the info of how many data items have been stored in to dynamic array pointer.
+Dynamic arrays also have the `_len` field,
+which specifies how many data items are accessible via the dynamic array pointer.
 
-#### Decode GetSet-request
+#### Decode GetSet request
 
 ```cpp
 /* include header */
@@ -70,29 +90,26 @@ canardBroadcast(&g_canard,
 
 #define GETSETREQ_NAME_MAX_SIZE 96 // max size needed for the dynamic arrays
 /* Reserve some memory for the dynamic arrays from the stack */
-uint8_t buff[GETSETREQ_NAME_MAX_SIZE]; 
-uint8_t *dyn_buf_ptr = buff;
+uint8_t buff[GETSETREQ_NAME_MAX_SIZE];
+uint8_t* dyn_buf_ptr = buff;
 
 /* Reserve struct */
 uavcan_protocol_param_GetSetRequest get_set_req;
 
-/* NOTE get_set_req struct will be cleared in Decode function first */
+/* NOTE get_set_req struct will be cleared in the Decode function first */
 uavcan_protocol_param_GetSetRequestDecode(transfer,
                                           (uint16_t)transfer->payload_len,
                                           &get_set_req,
                                           &dyn_buf_ptr);
 
-/* Now struct get_set_req "object" is ready to be used */
+/* Now the struct get_set_req "object" is ready to be used */
 ```
 
-*Dynamic Arrays* dyn_buf_ptr is a way to give allocated memory to *Decode function, to use that space to store dynamic arrays into it, and store the pointer to struct pointer. 
+`dyn_buf_ptr` is a way to give allocated memory to the Decode function,
+to use that space to store dynamic arrays into it, and store the pointer to struct pointer.
 
-NOTE: There is no check whether dynamic memory allocation is big enough.
+NOTE: There is no check whether dynamic memory allocation is sufficient.
 
 ## License
 
-Released under MIT license, check LICENSE
-
-
-
-
+Released under the MIT license, check the file LICENSE.
