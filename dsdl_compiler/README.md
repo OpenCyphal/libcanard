@@ -61,14 +61,14 @@ uint8_t packed_uavcan_msg_buf[UAVCAN_PROTOCOL_NODESTATUS_MAX_SIZE];
 /* MAX_SIZE comes from module header as pre-calculated */
 uavcan_protocol_NodeStatus msg;
 
-msg.uptime_sec = GetUptime();
+msg.uptime_sec = getUptime();
 msg.health = UAVCAN_PROTOCOL_NODESTATUS_HEALTH_OK;
 msg.mode = UAVCAN_PROTOCOL_NODESTATUS_MODE_OPERATIONAL;
 msg.sub_mode = sub_mode;
 msg.vendor_specific_status_code = vendor_status_code;
 
 /* Encode the filled struct into packed_uavcan_msg_buf, ready to be sent */
-const uint32_t len_of_packed_msg = uavcan_protocol_NodeStatusEncode(&msg, packed_uavcan_msg_buf);
+const uint32_t len_of_packed_msg = uavcan_protocol_NodeStatus_encode(&msg, packed_uavcan_msg_buf);
 
 (void) canardBroadcast(&g_canard,
                        UAVCAN_PROTOCOL_NODESTATUS_SIGNATURE,
@@ -97,10 +97,10 @@ uint8_t* dyn_buf_ptr = buff;
 uavcan_protocol_param_GetSetRequest get_set_req;
 
 /* NOTE get_set_req struct will be cleared in the Decode function first */
-uavcan_protocol_param_GetSetRequestDecode(transfer,
-                                          (uint16_t)transfer->payload_len,
-                                          &get_set_req,
-                                          &dyn_buf_ptr);
+(void) uavcan_protocol_param_GetSetRequest_decode(transfer,
+                                                  (uint16_t)transfer->payload_len,
+                                                  &get_set_req,
+                                                  &dyn_buf_ptr);
 
 /* Now the struct get_set_req "object" is ready to be used */
 ```
