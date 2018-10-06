@@ -5,9 +5,7 @@
 
 Minimal implementation of the UAVCAN protocol stack in C for resource constrained applications.
 
-Links:
-
-* **[DISCUSSION GROUP](https://groups.google.com/forum/#!forum/uavcan)**
+Get help on the **[UAVCAN Forum](https://forum.uavcan.org)**.
 
 ## Usage
 
