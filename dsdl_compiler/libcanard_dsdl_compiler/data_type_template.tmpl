@@ -59,6 +59,16 @@ ${line}
 #define ${'%-60s %10s' % (t.macro_name + '_' + a.name, a.init_expression, )} // ${a.init_expression}
     % endfor
 
+    % for a in fields:
+        %if a.type_category == t.CATEGORY_ARRAY
+            %if a.dynamic_array == True
+#define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_MAX_LENGTH')} ${a.type.max_size}
+            %else
+#define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_LENGTH')} ${a.type.max_size}  
+            %endif
+        %endif
+    % endfor
+
   %if union
 typedef enum
 {
