@@ -86,7 +86,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint3
     for (c = 0; c < source->${'%s' % ((f.name + '.len'))}; c++)
     {
                 %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}_encode_internal((void*)&source->${f.name}[c], msg_buf, offset, 0);
+        offset += ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)(source->${'%s' % ((f.name + '.data'))} + c));// ${f.max_size}
         offset += ${f.bitlen};
@@ -225,7 +225,7 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
                     %endif
                 %else
     //  - Array length, not last item ${f.array_max_size_bit_len} bits
-    ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '_len'))}); // ${f.max_size}
+    ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
     if (ret != ${f.array_max_size_bit_len})
     {
         goto ${type_name}_error_exit;
@@ -242,7 +242,7 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
     for (c = 0; c < dest->${'%s' % ((f.name + '.len'))}; c++)
     {
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}_decode_internal(transfer, 0, (void*)&dest->${f.name}[c], dyn_arr_buf, offset, tao);
+        offset += ${f.cpp_type}_decode_internal(transfer, 0, (void*)&dest->${'%s' % ((f.name + '.data'))}[c], dyn_arr_buf, offset, tao);
                     %else
         if (dyn_arr_buf)
         {
