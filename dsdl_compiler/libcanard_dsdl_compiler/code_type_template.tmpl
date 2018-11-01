@@ -14,6 +14,11 @@
 #define CANARD_INTERNAL_SATURATE(x, max) ( ((x) > max) ? max : ( (-(x) > max) ? (-max) : (x) ) );
 #endif
 
+#ifndef CANARD_INTERNAL_SATURATE_UNSIGNED
+#define CANARD_INTERNAL_SATURATE_UNSIGNED(x, max) ( ((x) > max) ? max : (x) );
+#endif
+
+
 #define CANARD_INTERNAL_ENABLE_TAO  ((uint8_t) 1)
 #define CANARD_INTERNAL_DISABLE_TAO ((uint8_t) 0)
 
@@ -127,7 +132,11 @@ uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint3
     offset += ${f.bitlen};
         %else
             %if f.saturate
+              %if f.signedness == 'true'
     source->${f.name} = CANARD_INTERNAL_SATURATE(source->${f.name}, ${f.max_size})
+              %else
+    source->${f.name} = CANARD_INTERNAL_SATURATE_UNSIGNED(source->${f.name}, ${f.max_size})
+              %endif
             %endif
     canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)&source->${f.name}); // ${f.max_size}
     offset += ${f.bitlen};
