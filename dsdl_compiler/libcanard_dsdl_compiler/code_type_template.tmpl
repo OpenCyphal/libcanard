@@ -17,6 +17,12 @@
 #define CANARD_INTERNAL_ENABLE_TAO  ((uint8_t) 1)
 #define CANARD_INTERNAL_DISABLE_TAO ((uint8_t) 0)
 
+#if defined(__GNUC__)
+# define CANARD_MAYBE_UNUSED(x) x __attribute__((unused))
+#else
+# define CANARD_MAYBE_UNUSED(x) x
+#endif
+
 <!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array, has_float16
 
  %if max_bitlen
@@ -29,7 +35,7 @@
   * @param root_item: for detecting if TAO should be used
   * @retval returns offset
   */
-uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint32_t offset, uint8_t root_item)
+uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint32_t offset, uint8_t CANARD_MAYBE_UNUSED(root_item))
 {
   %if union
     // Max Union Tag Value
@@ -162,7 +168,7 @@ uint32_t ${type_name}_encode(${type_name}* source, void* msg_buf)
   * @param tao: is tail array optimization used
   * @retval offset or ERROR value if < 0
   */
-int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name}* dest, uint8_t** dyn_arr_buf, int32_t offset, uint8_t tao)
+int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t CANARD_MAYBE_UNUSED(payload_len), ${type_name}* dest, uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf), int32_t offset, uint8_t CANARD_MAYBE_UNUSED(tao))
 {
     int32_t ret = 0;
     %if has_array
@@ -369,22 +375,22 @@ int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_l
     return ret;
 }
  %else
-uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint32_t offset, uint8_t root_item)
+uint32_t ${type_name}_encode_internal(${type_name}* CANARD_MAYBE_UNUSED(source), void* CANARD_MAYBE_UNUSED(msg_buf), uint32_t offset, uint8_t CANARD_MAYBE_UNUSED(root_item))
 {
     return offset;
 }
 
-uint32_t ${type_name}_encode(${type_name}* source, void* msg_buf)
+uint32_t ${type_name}_encode(${type_name}* CANARD_MAYBE_UNUSED(source), void* CANARD_MAYBE_UNUSED(msg_buf))
 {
     return 0;
 }
 
-int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name}* dest, uint8_t** dyn_arr_buf, int32_t offset, uint8_t tao)
+int32_t ${type_name}_decode_internal(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer), uint16_t CANARD_MAYBE_UNUSED(payload_len), ${type_name}* CANARD_MAYBE_UNUSED(dest), uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf), int32_t offset, uint8_t CANARD_MAYBE_UNUSED(tao))
 {
     return offset;
 }
 
-int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name}* dest, uint8_t** dyn_arr_buf)
+int32_t ${type_name}_decode(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer), uint16_t CANARD_MAYBE_UNUSED(payload_len), ${type_name}* CANARD_MAYBE_UNUSED(dest), uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf))
 {
     return 0;
 }
