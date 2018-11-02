@@ -56,7 +56,7 @@ ${line}
 
 // Constants
     % for a in constants:
-#define ${'%-60s %10s' % (t.macro_name + '_' + a.name, a.init_expression, )} // ${a.init_expression}
+#define ${'%-60s %10s' % (t.macro_name + service + '_' + a.name, a.init_expression, )} // ${a.init_expression}
     % endfor
 
     % for a in fields:
