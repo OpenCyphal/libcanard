@@ -39,7 +39,10 @@
   * @param root_item: for detecting if TAO should be used
   * @retval returns offset
   */
-uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint32_t offset, uint8_t CANARD_MAYBE_UNUSED(root_item))
+uint32_t ${type_name}_encode_internal(${type_name}* source,
+  void* msg_buf,
+  uint32_t offset,
+  uint8_t CANARD_MAYBE_UNUSED(root_item))
 {
   %if union
     // Max Union Tag Value
@@ -98,7 +101,10 @@ uint32_t ${type_name}_encode_internal(${type_name}* source, void* msg_buf, uint3
                 %if f.cpp_type_category == t.CATEGORY_COMPOUND:
         offset += ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
-        canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)(source->${'%s' % ((f.name + '.data'))} + c));// ${f.max_size}
+        canardEncodeScalar(msg_buf,
+                           offset,
+                           ${f.bitlen},
+                           (void*)(source->${'%s' % ((f.name + '.data'))} + c));// ${f.max_size}
         offset += ${f.bitlen};
                 %endif
     }
@@ -176,7 +182,13 @@ uint32_t ${type_name}_encode(${type_name}* source, void* msg_buf)
   * @param tao: is tail array optimization used
   * @retval offset or ERROR value if < 0
   */
-int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t CANARD_MAYBE_UNUSED(payload_len), ${type_name}* dest, uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf), int32_t offset, uint8_t CANARD_MAYBE_UNUSED(tao))
+int32_t ${type_name}_decode_internal(
+  const CanardRxTransfer* transfer,
+  uint16_t CANARD_MAYBE_UNUSED(payload_len),
+  ${type_name}* dest,
+  uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf),
+  int32_t offset,
+  uint8_t CANARD_MAYBE_UNUSED(tao))
 {
     int32_t ret = 0;
     %if has_array
@@ -222,7 +234,11 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
     else
     {
         // - Array length ${f.array_max_size_bit_len} bits
-        ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
+        ret = canardDecodeScalar(transfer,
+                                 offset,
+                                 ${f.array_max_size_bit_len},
+                                 false,
+                                 (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
         if (ret != ${f.array_max_size_bit_len})
         {
             goto ${type_name}_error_exit;
@@ -230,7 +246,11 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
         offset += ${f.array_max_size_bit_len};
     }
                     %else
-    ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
+    ret = canardDecodeScalar(transfer,
+                             offset,
+                             ${f.array_max_size_bit_len},
+                             false,
+                             (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
     if (ret != ${f.array_max_size_bit_len})
     {
         goto ${type_name}_error_exit;
@@ -239,7 +259,11 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
                     %endif
                 %else
     //  - Array length, not last item ${f.array_max_size_bit_len} bits
-    ret = canardDecodeScalar(transfer, offset, ${f.array_max_size_bit_len}, false, (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
+    ret = canardDecodeScalar(transfer,
+                             offset,
+                             ${f.array_max_size_bit_len},
+                             false,
+                             (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
     if (ret != ${f.array_max_size_bit_len})
     {
         goto ${type_name}_error_exit;
@@ -256,11 +280,20 @@ int32_t ${type_name}_decode_internal(const CanardRxTransfer* transfer, uint16_t 
     for (c = 0; c < dest->${'%s' % ((f.name + '.len'))}; c++)
     {
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}_decode_internal(transfer, 0, (void*)&dest->${'%s' % ((f.name + '.data'))}[c], dyn_arr_buf, offset, tao);
+        offset += ${f.cpp_type}_decode_internal(transfer,
+                                                0,
+                                                (void*)&dest->${'%s' % ((f.name + '.data'))}[c],
+                                                dyn_arr_buf,
+                                                offset,
+                                                tao);
                     %else
         if (dyn_arr_buf)
         {
-            ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)*dyn_arr_buf); // ${f.max_size}
+            ret = canardDecodeScalar(transfer,
+                                     offset,
+                                     ${f.bitlen},
+                                     ${f.signedness},
+                                     (void*)*dyn_arr_buf); // ${f.max_size}
             if (ret != ${f.bitlen})
             {
                 goto ${type_name}_error_exit;
@@ -347,7 +380,10 @@ ${type_name}_error_exit:
   *                     NULL will ignore dynamic arrays decoding.
   * @retval offset or ERROR value if < 0
   */
-int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_len, ${type_name}* dest, uint8_t** dyn_arr_buf)
+int32_t ${type_name}_decode(const CanardRxTransfer* transfer,
+  uint16_t payload_len,
+  ${type_name}* dest,
+  uint8_t** dyn_arr_buf)
 {
     const int32_t offset = 0;
     int32_t ret = 0;
@@ -383,7 +419,10 @@ int32_t ${type_name}_decode(const CanardRxTransfer* transfer, uint16_t payload_l
     return ret;
 }
  %else
-uint32_t ${type_name}_encode_internal(${type_name}* CANARD_MAYBE_UNUSED(source), void* CANARD_MAYBE_UNUSED(msg_buf), uint32_t offset, uint8_t CANARD_MAYBE_UNUSED(root_item))
+uint32_t ${type_name}_encode_internal(${type_name}* CANARD_MAYBE_UNUSED(source),
+  void* CANARD_MAYBE_UNUSED(msg_buf),
+  uint32_t offset,
+  uint8_t CANARD_MAYBE_UNUSED(root_item))
 {
     return offset;
 }
@@ -393,12 +432,20 @@ uint32_t ${type_name}_encode(${type_name}* CANARD_MAYBE_UNUSED(source), void* CA
     return 0;
 }
 
-int32_t ${type_name}_decode_internal(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer), uint16_t CANARD_MAYBE_UNUSED(payload_len), ${type_name}* CANARD_MAYBE_UNUSED(dest), uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf), int32_t offset, uint8_t CANARD_MAYBE_UNUSED(tao))
+int32_t ${type_name}_decode_internal(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer),
+  uint16_t CANARD_MAYBE_UNUSED(payload_len),
+  ${type_name}* CANARD_MAYBE_UNUSED(dest),
+  uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf),
+  int32_t offset,
+  uint8_t CANARD_MAYBE_UNUSED(tao))
 {
     return offset;
 }
 
-int32_t ${type_name}_decode(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer), uint16_t CANARD_MAYBE_UNUSED(payload_len), ${type_name}* CANARD_MAYBE_UNUSED(dest), uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf))
+int32_t ${type_name}_decode(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer),
+  uint16_t CANARD_MAYBE_UNUSED(payload_len),
+  ${type_name}* CANARD_MAYBE_UNUSED(dest),
+  uint8_t** CANARD_MAYBE_UNUSED(dyn_arr_buf))
 {
     return 0;
 }
@@ -406,12 +453,14 @@ int32_t ${type_name}_decode(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer
 <!--(end)-->
 
 % if t.kind == t.KIND_SERVICE:
-${generate_primary_body(type_name=t.name_space_type_name+'Request', service='_REQUEST', max_bitlen=t.get_max_bitlen_request(), \
+${generate_primary_body(type_name=t.name_space_type_name+'Request',\
+                               service='_REQUEST', imax_bitlen=t.get_max_bitlen_request(), \
                                fields=t.request_fields, constants=t.request_constants, \
                                union=t.request_union, has_array=t.request_has_array, \
                                has_float16=t.request_has_float16)}
 
-${generate_primary_body(type_name=t.name_space_type_name+'Response', service='_RESPONSE', max_bitlen=t.get_max_bitlen_response(), \
+${generate_primary_body(type_name=t.name_space_type_name+'Response',\
+                               service='_RESPONSE', max_bitlen=t.get_max_bitlen_response(), \
                                fields=t.response_fields, constants=t.response_constants, \
                                union=t.response_union, has_array=t.response_has_array, \
                                has_float16=t.response_has_float16)}
