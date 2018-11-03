@@ -454,7 +454,7 @@ int32_t ${type_name}_decode(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer
 
 % if t.kind == t.KIND_SERVICE:
 ${generate_primary_body(type_name=t.name_space_type_name+'Request',\
-                               service='_REQUEST', imax_bitlen=t.get_max_bitlen_request(), \
+                               service='_REQUEST', max_bitlen=t.get_max_bitlen_request(), \
                                fields=t.request_fields, constants=t.request_constants, \
                                union=t.request_union, has_array=t.request_has_array, \
                                has_float16=t.request_has_float16)}
