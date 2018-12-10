@@ -30,6 +30,8 @@ and you're ready to roll.
 Also you may want to use one of the available drivers for various CAN backends
 that are distributed with Libcanard - check out the `drivers/` directory to find out more.
 
+If you wish to override some of the default options, e.g., assert macros' definition, use the `-D CANARD_ENABLE_CUSTOM_BUILD_CONFIG` flag and provide your implementation in a file named `canard_build_config.h`. 
+
 Example for Make:
 
 ```make
