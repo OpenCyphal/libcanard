@@ -33,7 +33,7 @@
 #include <assert.h>
 
 /// Build configuration header. Use it to provide your overrides.
-#if CANARD_ENABLE_CUSTOM_BUILD_CONFIG
+#if defined(CANARD_ENABLE_CUSTOM_BUILD_CONFIG) && CANARD_ENABLE_CUSTOM_BUILD_CONFIG
 # include "canard_build_config.h"
 #endif
 
