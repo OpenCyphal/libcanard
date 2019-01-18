@@ -28,7 +28,6 @@ except NameError:
 
 OUTPUT_HEADER_FILE_EXTENSION = 'h'
 OUTPUT_CODE_FILE_EXTENSION = 'c'
-OUTPUT_FILE_PERMISSIONS = 0o444  # Read only for all
 HEADER_TEMPLATE_FILENAME = os.path.join(os.path.dirname(__file__), 'data_type_template.tmpl')
 CODE_TEMPLATE_FILENAME = os.path.join(os.path.dirname(__file__), 'code_type_template.tmpl')
 
@@ -151,12 +150,6 @@ def write_generated_data(filename, data, header_only, append_file=False):
             os.remove(filename)
         with open(filename, 'w') as f:
             f.write(data)
-
-    if not header_only or header_only and append_file:
-        try:
-            os.chmod(filename, OUTPUT_FILE_PERMISSIONS)
-        except (OSError, IOError) as ex:
-            logger.warning('Failed to set permissions for %s: %s', pretty_filename(filename), ex)
 
 def expand_to_next_full(size):
     if size <= 8:
