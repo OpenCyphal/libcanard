@@ -11,6 +11,7 @@ So far this driver has been tested at least with the following MCU:
 
 * STM32F105 - both CAN1 and CAN2
 * STM32F446
+* STM32F303 - Only CAN1 verified
 * Please extend this list if you used it with other MCU.
 
 ## Features
