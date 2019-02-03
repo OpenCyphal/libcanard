@@ -217,7 +217,7 @@ def type_to_c_type(t):
                     'post_cpp_type':'',
                     'cpp_type_comment':'bit len %d' % (t.bitlen, ),
                     'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, False),
+                    'max_size':get_max_size(t.bitlen, True),
                     'signedness':signedness,
                     'saturate':saturate}
             else:
