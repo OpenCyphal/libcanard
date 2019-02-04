@@ -199,7 +199,7 @@ int32_t ${type_name}_decode_internal(
 
     %if union:
     // Get Union Tag
-    ret = canardDecodeScalar(transfer, offset, ${union}, false, (void*)&dest->union_tag); // ${union}
+    ret = canardDecodeScalar(transfer, (uint32_t)offset, ${union}, false, (void*)&dest->union_tag); // ${union}
     if (ret != ${union})
     {
         goto ${type_name}_error_exit;
@@ -230,7 +230,7 @@ int32_t ${type_name}_decode_internal(
     {
         // - Array length ${f.array_max_size_bit_len} bits
         ret = canardDecodeScalar(transfer,
-                                 offset,
+                                 (uint32_t)offset,
                                  ${f.array_max_size_bit_len},
                                  false,
                                  (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
@@ -242,7 +242,7 @@ int32_t ${type_name}_decode_internal(
     }
                     %else
     ret = canardDecodeScalar(transfer,
-                             offset,
+                             (uint32_t)offset,
                              ${f.array_max_size_bit_len},
                              false,
                              (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
@@ -255,7 +255,7 @@ int32_t ${type_name}_decode_internal(
                 %else
     //  - Array length, not last item ${f.array_max_size_bit_len} bits
     ret = canardDecodeScalar(transfer,
-                             offset,
+                             (uint32_t)offset,
                              ${f.array_max_size_bit_len},
                              false,
                              (void*)&dest->${'%s' % ((f.name + '.len'))}); // ${f.max_size}
@@ -284,7 +284,7 @@ int32_t ${type_name}_decode_internal(
         if (dyn_arr_buf)
         {
             ret = canardDecodeScalar(transfer,
-                                     offset,
+                                     (uint32_t)offset,
                                      ${f.bitlen},
                                      ${f.signedness},
                                      (void*)*dyn_arr_buf); // ${f.max_size}
@@ -302,7 +302,7 @@ int32_t ${type_name}_decode_internal(
     // Static array (${f.name})
     for (c = 0; c < ${f.array_size}; c++)
     {
-        ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)(dest->${f.name} + c));
+        ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)(dest->${f.name} + c));
         if (ret != ${f.bitlen})
         {
             goto ${type_name}_error_exit;
@@ -326,7 +326,7 @@ int32_t ${type_name}_decode_internal(
         %elif f.type_category == t.CATEGORY_PRIMITIVE and f.cpp_type == "float" and f.bitlen == 16:
 
     // float16 special handling
-    ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)&tmp_float);
+    ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&tmp_float);
 
     if (ret != ${f.bitlen})
     {
@@ -340,7 +340,7 @@ int32_t ${type_name}_decode_internal(
     offset += ${f.bitlen};
         %else
 
-    ret = canardDecodeScalar(transfer, offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
+    ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
     if (ret != ${f.bitlen})
     {
         goto ${type_name}_error_exit;
