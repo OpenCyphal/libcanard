@@ -9,6 +9,7 @@ In theory, the entire family of STM32 should be supported by this driver,
 since they all share the same CAN controller IP known as bxCAN.
 So far this driver has been tested at least with the following MCU:
 
+* STM32F091
 * STM32F105 - both CAN1 and CAN2
 * STM32F446
 * STM32F303 - Only CAN1 verified
