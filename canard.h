@@ -65,12 +65,24 @@ extern "C" {
 #endif
 
 /// Error code definitions; inverse of these values may be returned from API calls.
-#define CANARD_OK                                   0
-// Value 1 is omitted intentionally, since -1 is often used in 3rd party code
-#define CANARD_ERROR_INVALID_ARGUMENT               2
-#define CANARD_ERROR_OUT_OF_MEMORY                  3
-#define CANARD_ERROR_NODE_ID_NOT_SET                4
-#define CANARD_ERROR_INTERNAL                       9
+typedef enum{
+    CANARD_OK                                      = 0,
+// Value 1 is omitted intentionally, since -1 i    =s often used in 3rd party code
+    CANARD_ERROR_INVALID_ARGUMENT                  = 2,
+    CANARD_ERROR_OUT_OF_MEMORY                     = 3,
+    CANARD_ERROR_NODE_ID_NOT_SET                   = 4,
+    CANARD_ERROR_INTERNAL                          = 9,
+// Error codes for Rx handler    =
+    CANARD_ERROR_RX_INCOMPATIBLE_PACKET            = 10,
+    CANARD_ERROR_RX_WRONG_ADDRESS                  = 11,
+    CANARD_ERROR_RX_NOT_WANTED                     = 12,
+    CANARD_ERROR_RX_NO_STATE                       = 13,
+    CANARD_ERROR_RX_MISSED_START                   = 14,
+    CANARD_ERROR_RX_WRONG_TOGGLE                   = 15,
+    CANARD_ERROR_RX_UNEXPECTED_TID                 = 16,
+    CANARD_ERROR_RX_SHORT_FRAME                    = 17,
+    CANARD_ERROR_RX_BAD_CRC                        = 18
+}CanardError;
 
 /// The size of a memory block in bytes.
 #define CANARD_MEM_BLOCK_SIZE                       32U
@@ -417,8 +429,10 @@ void canardPopTxQueue(CanardInstance* ins);
 /**
  * Processes a received CAN frame with a timestamp.
  * The application will call this function when it receives a new frame from the CAN bus.
+ * 
+ * Return value will report any errors in decoding packets.
  */
-void canardHandleRxFrame(CanardInstance* ins,
+int16_t canardHandleRxFrame(CanardInstance* ins,
                          const CanardCANFrame* frame,
                          uint64_t timestamp_usec);
 
