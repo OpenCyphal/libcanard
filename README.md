@@ -1,7 +1,7 @@
 # Libcanard
+[![Forum](https://img.shields.io/discourse/https/forum.uavcan.org/users.svg)](https://forum.uavcan.org)
 [![Build Status](https://travis-ci.org/UAVCAN/libcanard.svg?branch=master)](https://travis-ci.org/UAVCAN/libcanard)
 [![Coverity Scan](https://scan.coverity.com/projects/uavcan-libcanard/badge.svg)](https://scan.coverity.com/projects/uavcan-libcanard)
-[![Gitter](https://img.shields.io/badge/gitter-join%20chat-green.svg)](https://gitter.im/UAVCAN/general)
 
 Minimal implementation of the UAVCAN protocol stack in C for resource constrained applications.
 
@@ -29,6 +29,11 @@ and you're ready to roll.
 
 Also you may want to use one of the available drivers for various CAN backends
 that are distributed with Libcanard - check out the `drivers/` directory to find out more.
+
+If you wish to override some of the default options, e.g., assert macros' definition,
+define the macro `CANARD_ENABLE_CUSTOM_BUILD_CONFIG` as a non-zero value
+(e.g. for GCC or Clang: `-DCANARD_ENABLE_CUSTOM_BUILD_CONFIG=1`)
+and provide your implementation in a file named `canard_build_config.h`.
 
 Example for Make:
 

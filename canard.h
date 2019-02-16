@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 UAVCAN Team
+ * Copyright (c) 2016-2018 UAVCAN Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,11 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <assert.h>
+
+/// Build configuration header. Use it to provide your overrides.
+#if defined(CANARD_ENABLE_CUSTOM_BUILD_CONFIG) && CANARD_ENABLE_CUSTOM_BUILD_CONFIG
+# include "canard_build_config.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
