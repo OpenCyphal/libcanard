@@ -4,3 +4,6 @@
 [submodule "dsdl_compiler/pyuavcan"]
 	path = dsdl_compiler/pyuavcan
 	url = https://github.com/UAVCAN/pyuavcan
+[submodule "dsdl_compiler/pydsdl"]
+	path = dsdl_compiler/pydsdl
+	url = https://github.com/UAVCAN/pydsdl.git

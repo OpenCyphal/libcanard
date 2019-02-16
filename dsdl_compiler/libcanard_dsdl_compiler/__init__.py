@@ -18,13 +18,18 @@ It is based on the DSDL parsing package from pyuavcan.
 from __future__ import division, absolute_import, print_function, unicode_literals
 import sys, os, logging, errno, re
 from .pyratemp import Template
-from uavcan import dsdl
+
+from pydsdl import parse_namespace
+from pydsdl.parse_error import ParseError
+from pydsdl.data_type import StructureType, ServiceType, CompoundType, PrimitiveType,  \
+            FloatType, UnsignedIntegerType, SignedIntegerType, BooleanType, ArrayType, \
+            DynamicArrayType, StaticArrayType, VoidType, UnionType
 
 # Python 2.7 compatibility
-try:
-    str = unicode
-except NameError:
-    pass
+# try:
+#     str = unicode
+# except NameError:
+#     pass
 
 OUTPUT_HEADER_FILE_EXTENSION = 'h'
 OUTPUT_CODE_FILE_EXTENSION = 'c'
@@ -60,13 +65,14 @@ def run(source_dirs, include_dirs, output_dir, header_only):
     assert isinstance(source_dirs, list)
     assert isinstance(include_dirs, list)
     output_dir = str(output_dir)
+    for source_dir in source_dirs:
 
-    types = run_parser(source_dirs, include_dirs + source_dirs)
-    if not types:
-        die('No type definitions were found')
+        types = run_parser(source_dir, include_dirs + source_dirs)
+        if not types:
+            die('No type definitions were found')
 
-    logger.info('%d types total', len(types))
-    run_generator(types, output_dir, header_only)
+        logger.info('%d types total', len(types))
+        run_generator(types, output_dir, header_only)
 
 # -----------------
 
@@ -83,7 +89,7 @@ def get_name_space_prefix(t):
     return t.full_name.replace('.', '_')
 
 def type_output_filename(t, extension = OUTPUT_HEADER_FILE_EXTENSION):
-    assert t.category == t.CATEGORY_COMPOUND
+    assert isinstance(t, CompoundType)
     folder_name = t.full_name.split('.')[-2]
     if extension == OUTPUT_CODE_FILE_EXTENSION:
         name_list = t.full_name.split('.')
@@ -108,8 +114,8 @@ def die(text):
 
 def run_parser(source_dirs, search_dirs):
     try:
-        types = dsdl.parse_namespaces(source_dirs, search_dirs)
-    except dsdl.DsdlException as ex:
+        types = parse_namespace(source_dirs, search_dirs)
+    except ParseError as ex:
         logger.info('Parser failure', exc_info=True)
         die(ex)
     return types
@@ -178,93 +184,101 @@ def strip_name(name):
     return name.split('.')[-1]
 
 def type_to_c_type(t):
-    if t.category == t.CATEGORY_PRIMITIVE:
+    if isinstance(t, PrimitiveType):
         saturate = {
-            t.CAST_MODE_SATURATED: True,
-            t.CAST_MODE_TRUNCATED: False,
+            t.CastMode.SATURATED: True,
+            t.CastMode.TRUNCATED: False,
         }[t.cast_mode]
         cast_mode = {
-            t.CAST_MODE_SATURATED: 'Saturate',
-            t.CAST_MODE_TRUNCATED: 'Truncate',
+            t.CastMode.SATURATED: 'Saturate',
+            t.CastMode.TRUNCATED: 'Truncate',
         }[t.cast_mode]
-        if t.kind == t.KIND_FLOAT:
+        if isinstance(t, FloatType):
             float_type = {
                 16: 'float',
                 32: 'float',
                 64: 'double',
-            }[t.bitlen]
+            }[t.bit_length]
             return {'cpp_type':'%s' % (float_type),
                     'post_cpp_type':'',
-                    'cpp_type_comment':'float%d %s' % (t.bitlen, cast_mode, ),
-                    'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, False),
+                    'cpp_type_comment':'float%d %s' % (t.bit_length, cast_mode, ),
+                    'bitlen':t.bit_length,
+                    'max_size':get_max_size(t.bit_length, False),
                     'signedness':'false',
                     'saturate':False} # do not saturate floats
         else:
+            assert isinstance(t, (BooleanType, UnsignedIntegerType, SignedIntegerType))
             c_type = {
-                t.KIND_BOOLEAN: 'bool',
-                t.KIND_UNSIGNED_INT: 'uint',
-                t.KIND_SIGNED_INT: 'int',
-            }[t.kind]
+                BooleanType: 'bool',
+                UnsignedIntegerType: 'uint',
+                SignedIntegerType: 'int',
+            }[type(t)]
             signedness = {
-                t.KIND_BOOLEAN: 'false',
-                t.KIND_UNSIGNED_INT: 'false',
-                t.KIND_SIGNED_INT: 'true',
-            }[t.kind]
+                BooleanType: 'false',
+                UnsignedIntegerType: 'false',
+                SignedIntegerType: 'true',
+            }[type(t)]
 
-            if t.kind == t.KIND_BOOLEAN:
+            if isinstance(t, BooleanType):
                 return {'cpp_type':'%s' % (c_type),
                     'post_cpp_type':'',
-                    'cpp_type_comment':'bit len %d' % (t.bitlen, ),
-                    'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, False),
+                    'cpp_type_comment':'bit len %d' % (t.bit_length, ),
+                    'bitlen':t.bit_length,
+                    'max_size':get_max_size(t.bit_length, False),
                     'signedness':signedness,
                     'saturate':saturate}
             else:
                 if saturate:
                     # Do not staturate if struct field length is equal bitlen
-                    if (expand_to_next_full(t.bitlen) == t.bitlen):
+                    if (expand_to_next_full(t.bit_length) == t.bit_length):
                         saturate = False
-                return {'cpp_type':'%s%d_t' % (c_type, expand_to_next_full(t.bitlen)),
+                return {'cpp_type':'%s%d_t' % (c_type, expand_to_next_full(t.bit_length)),
                     'post_cpp_type':'',
-                    'cpp_type_comment':'bit len %d' % (t.bitlen, ),
-                    'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, t.kind == t.KIND_UNSIGNED_INT),
+                    'cpp_type_comment':'bit len %d' % (t.bit_length, ),
+                    'bitlen':t.bit_length,
+                    'max_size':get_max_size(t.bit_length, signedness == True),
                     'signedness':signedness,
                     'saturate':saturate}
 
-    elif t.category == t.CATEGORY_ARRAY:
-        values = type_to_c_type(t.value_type)
+    elif isinstance(t, ArrayType):
+        assert isinstance(t, (DynamicArrayType, StaticArrayType))
+        values = type_to_c_type(t.element_type)
         mode = {
-            t.MODE_STATIC: 'Static Array',
-            t.MODE_DYNAMIC: 'Dynamic Array',
-        }[t.mode]
+            StaticArrayType: 'Static Array',
+            DynamicArrayType: 'Dynamic Array',
+        }[type(t)]
+
+        if isinstance(t, DynamicArrayType):
+            max_size = t.max_size
+        else:
+            max_size = t.size 
+        
         return {'cpp_type':'%s' % (values['cpp_type'], ),
-            'cpp_type_category': t.value_type.category,
-            'post_cpp_type':'[%d]' % (t.max_size,),
-            'cpp_type_comment':'%s %dbit[%d] max items' % (mode, values['bitlen'], t.max_size, ),
+            'cpp_type_category': type(t),
+            'post_cpp_type':'[%d]' % (max_size,),
+            'cpp_type_comment':'%s %dbit[%d] max items' % (mode, values['bitlen'], max_size, ),
             'bitlen':values['bitlen'],
-            'array_max_size_bit_len':t.max_size.bit_length(),
+            'array_max_size_bit_len':max_size.bit_length(),
             'max_size':values['max_size'],
             'signedness':values['signedness'],
             'saturate':values['saturate'],
-            'dynamic_array': t.mode == t.MODE_DYNAMIC,
-            'max_array_elements': t.max_size,
+            'dynamic_array': isinstance(t, DynamicArrayType),
+            'max_array_elements': max_size,
             }
-    elif t.category == t.CATEGORY_COMPOUND:
+    elif isinstance(t, CompoundType):
         return {
             'cpp_type':t.full_name.replace('.','_'),
             'post_cpp_type':'',
             'cpp_type_comment':'',
-            'bitlen':t.get_max_bitlen(),
+            'bitlen':t.bit_length_range.max,
             'max_size':0,
             'signedness':'false',
             'saturate':False}
-    elif t.category == t.CATEGORY_VOID:
+    elif isinstance(t, VoidType):
         return {'cpp_type':'',
             'post_cpp_type':'',
-            'cpp_type_comment':'void%d' % t.bitlen,
-            'bitlen':t.bitlen,
+            'cpp_type_comment':'void%d' % t.bit_length,
+            'bitlen':t.bit_length,
             'max_size':0,
             'signedness':'false',
             'saturate':False}
@@ -280,19 +294,19 @@ def generate_one_type(template_expander, t):
     # Dependencies (no duplicates)
     def fields_includes(fields):
         def detect_include(t):
-            if t.category == t.CATEGORY_COMPOUND:
+            if isinstance(t, CompoundType):
                 return type_output_filename(t)
-            if t.category == t.CATEGORY_ARRAY:
-                return detect_include(t.value_type)
-        return list(sorted(set(filter(None, [detect_include(x.type) for x in fields]))))
+            if isinstance(t, ArrayType):
+                return detect_include(t.element_type)
+        return list(sorted(set(filter(None, [detect_include(x.data_type) for x in fields]))))
 
-    if t.kind == t.KIND_MESSAGE:
+    if isinstance(t, (StructureType, UnionType)):
         t.cpp_includes = fields_includes(t.fields)
     else:
-        t.cpp_includes = fields_includes(t.request_fields + t.response_fields)
+        t.cpp_includes = fields_includes(t.request_type.fields + t.response_type.fields)
 
     t.cpp_namespace_components = t.full_name.split('.')[:-1]
-    t.has_default_dtid = t.default_dtid is not None
+    # t.has_default_dtid = t.default_dtid is not None
 
     # Attribute types
     def inject_cpp_types(attributes):
@@ -305,46 +319,45 @@ def generate_one_type(template_expander, t):
             if (count == length):
                 a.last_item = True
 
-            data = type_to_c_type(a.type)
+            data = type_to_c_type(a.data_type)
             for key, value in data.items():
                 setattr(a, key, value)
 
-            if a.type.category == t.CATEGORY_ARRAY:
-                a.array_size = a.type.max_size
+            if isinstance(a.data_type, ArrayType):
+                a.array_size = a.max_size
                 has_array = True
 
-            a.type_category = a.type.category
-            a.void = a.type.category == a.type.CATEGORY_VOID
+            a.void = isinstance(a.data_type, VoidType)
             if a.void:
                 assert not a.name
-                a.name = ''
+                # a.name = ''
         return has_array
 
     def has_float16(attributes):
         has_float16 = False
         for a in attributes:
-            if a.type.category == t.CATEGORY_PRIMITIVE and a.type.kind == a.type.KIND_FLOAT and a.bitlen == 16:
+            if isinstance(a, FloatType) and a.bitlen[0] == 16: # TODO: Fixme
                 has_float16 = True
         return has_float16
 
-    if t.kind == t.KIND_MESSAGE:
+    if isinstance(t, (StructureType, UnionType)):
         t.has_array = inject_cpp_types(t.fields)
         t.has_float16 = has_float16(t.fields)
         inject_cpp_types(t.constants)
         t.all_attributes = t.fields + t.constants
-        t.union = t.union and len(t.fields)
+        t.union = isinstance(t, UnionType)
         if t.union:
             t.union = len(t.fields).bit_length()
     else:
-        t.request_has_array = inject_cpp_types(t.request_fields)
-        t.request_has_float16 = has_float16(t.request_fields)
-        inject_cpp_types(t.request_constants)
-        t.response_has_array = inject_cpp_types(t.response_fields)
-        t.response_has_float16 = has_float16(t.response_fields)
-        inject_cpp_types(t.response_constants)
-        t.all_attributes = t.request_fields + t.request_constants + t.response_fields + t.response_constants
-        t.request_union = t.request_union and len(t.request_fields)
-        t.response_union = t.response_union and len(t.response_fields)
+        t.request_has_array = inject_cpp_types(t.request_type.fields)
+        t.request_has_float16 = has_float16(t.request_type.fields)
+        inject_cpp_types(t.request_type.constants)
+        t.response_has_array = inject_cpp_types(t.response_type.fields)
+        t.response_has_float16 = has_float16(t.response_type.fields)
+        inject_cpp_types(t.response_type.constants)
+        t.all_attributes = t.request_type.fields + t.request_type.constants + t.response_type.fields + t.response_type.constants
+        t.request_union = isinstance(t.request_type, UnionType) and len(t.request_type.fields)
+        t.response_union = isinstance(t.response_type, UnionType) and len(t.response_fields)
         if t.request_union:
             t.request_union = len(t.request_fields).bit_length()
         if t.response_union:
@@ -353,33 +366,54 @@ def generate_one_type(template_expander, t):
     # Constant properties
     def inject_constant_info(constants):
         for c in constants:
-            if c.type.kind == c.type.KIND_FLOAT:
-                float(c.string_value)  # Making sure that this is a valid float literal
-                c.cpp_value = c.string_value
+            if isinstance(c.data_type, FloatType):
+                float(c.value)  # Making sure that this is a valid float literal
+                c.cpp_value = c.value
             else:
-                int(c.string_value)  # Making sure that this is a valid integer literal
-                c.cpp_value = c.string_value
-                if c.type.kind == c.type.KIND_UNSIGNED_INT:
+                int(c.value)  # Making sure that this is a valid integer literal
+                c.cpp_value = c.value
+                if isinstance(c, UnsignedIntegerType):
                     c.cpp_value += 'U'
 
-    if t.kind == t.KIND_MESSAGE:
+    if isinstance(t, (StructureType, UnionType)):
         inject_constant_info(t.constants)
     else:
-        inject_constant_info(t.request_constants)
-        inject_constant_info(t.response_constants)
+        inject_constant_info(t.request_type.constants)
+        inject_constant_info(t.response_type.constants)
 
     # Data type kind
+    assert isinstance(t, (StructureType, UnionType, ServiceType))
     t.cpp_kind = {
-        t.KIND_MESSAGE: '::uavcan::DataTypeKindMessage',
-        t.KIND_SERVICE: '::uavcan::DataTypeKindService',
-    }[t.kind]
+        StructureType:  '::uavcan::DataTypeKindMessage',
+        UnionType:      '::uavcan::DataTypeKindMessage',
+        ServiceType:    '::uavcan::DataTypeKindService',
+    }[type(t)]
 
     # Generation
-    text = template_expander(t=t)  # t for Type
+    text = template_expander(t=t, **eval_allowed_locals())  # t for Type
     text = '\n'.join(x.rstrip() for x in text.splitlines())
     text = text.replace('\n\n\n\n\n', '\n\n').replace('\n\n\n\n', '\n\n').replace('\n\n\n', '\n\n')
     text = text.replace('{\n\n ', '{\n ')
     return text
+
+def eval_allowed_locals():
+    safe_pydsdl = {
+        "StructureType":        StructureType, 
+        "ServiceType":          ServiceType, 
+        "CompoundType":         CompoundType, 
+        "PrimitiveType":        PrimitiveType,
+        "FloatType":            FloatType, 
+        "UnsignedIntegerType":  UnsignedIntegerType, 
+        "SignedIntegerType":    SignedIntegerType, 
+        "BooleanType":          BooleanType, 
+        "ArrayType":            ArrayType,
+        "DynamicArrayType":     DynamicArrayType, 
+        "StaticArrayType":      StaticArrayType, 
+        "VoidType":             VoidType, 
+        "UnionType":            UnionType
+    }
+
+    return safe_pydsdl
 
 def make_template_expander(filename):
     '''
