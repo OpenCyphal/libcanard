@@ -26,10 +26,10 @@ from pydsdl.data_type import StructureType, ServiceType, CompoundType, Primitive
             DynamicArrayType, StaticArrayType, VoidType, UnionType
 
 # Python 2.7 compatibility
-# try:
-#     str = unicode
-# except NameError:
-#     pass
+try:
+    str = unicode
+except NameError:
+    pass
 
 OUTPUT_HEADER_FILE_EXTENSION = 'h'
 OUTPUT_CODE_FILE_EXTENSION = 'c'
@@ -306,7 +306,6 @@ def generate_one_type(template_expander, t):
         t.cpp_includes = fields_includes(t.request_type.fields + t.response_type.fields)
 
     t.cpp_namespace_components = t.full_name.split('.')[:-1]
-    # t.has_default_dtid = t.default_dtid is not None
 
     # Attribute types
     def inject_cpp_types(attributes):
@@ -328,9 +327,6 @@ def generate_one_type(template_expander, t):
                 has_array = True
 
             a.void = isinstance(a.data_type, VoidType)
-            if a.void:
-                assert not a.name
-                # a.name = ''
         return has_array
 
     def has_float16(attributes):
