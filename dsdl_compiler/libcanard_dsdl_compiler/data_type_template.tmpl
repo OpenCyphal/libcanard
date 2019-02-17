@@ -54,10 +54,10 @@ ${line}
     % endfor
 
     % for a in fields:
-        %if isinstance(a, DynamicArrayType)
-#define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_MAX_LENGTH')} ${a.bit_length_range.max}
-        %elif isinstance(a, StaticArrayType)
-#define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_LENGTH')} ${a.bit_length_range.max}  
+        %if isinstance(a.data_type, DynamicArrayType)
+#define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_MAX_LENGTH')} ${a.max_array_elements}
+        %elif isinstance(a.data_type, StaticArrayType)
+#define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_LENGTH')} ${a.max_array_elements}  
         %endif
     % endfor
 
@@ -81,8 +81,8 @@ typedef struct
   <!--(macro expand_attr_types)--> #! group_name, attrs
     // ${group_name}
     % for a in attrs:
-        %if isinstance(a, DynamicArrayType)
-            %if a.dynamic_array == True
+        %if isinstance(a.data_type, ArrayType)
+            %if isinstance(a.data_type, DynamicArrayType)
     struct
     {
                 %if a.max_array_elements > 255
@@ -95,7 +95,7 @@ typedef struct
             %else
     ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}
             %endif
-        %elif isinstance(a, VoidType):
+        %elif isinstance(a.data_type, VoidType):
     // ${a.cpp_type_comment}
         %else
     ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}

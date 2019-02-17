@@ -68,8 +68,8 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     ${'if' if not union_index else 'else if'} (source->union_tag == ${union_index}) {
       $!setvar("union_index", "union_index + 1")!$
      %endif
-        %if isinstance(f, ArrayType)
-            %if f.dynamic_array == True
+        %if isinstance(f.data_type, ArrayType)
+            %if isinstance(f.data_type, DynamicArrayType)
 
     // Dynamic Array (${f.name})
                 %if f.last_item
@@ -95,7 +95,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     // - Add array items
     for (c = 0; c < source->${'%s' % ((f.name + '.len'))}; c++)
     {
-                %if isinstance(f, CompoundType)
+                %if isinstance(f.data_type.element_type, CompoundType)
         offset += ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf,
@@ -114,15 +114,15 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     }
             %endif
 
-        %elif isinstance(f, VoidType)
+        %elif isinstance(f.data_type, VoidType)
 
     // Void${f.bitlen}
     offset += ${f.bitlen};
-        %elif isinstance(f, CompoundType)
+        %elif isinstance(f.data_type, CompoundType)
 
     // Compound
     offset = ${f.cpp_type}_encode_internal(&source->${f.name}, msg_buf, offset, 0);
-        %elif isinstance(f, FloatType) and f.bitlen == 16:
+        %elif isinstance(f.data_type, FloatType) and f.bitlen == 16:
 
     // float16 special handling
 #ifndef CANARD_USE_FLOAT16_CAST
@@ -214,7 +214,7 @@ int32_t ${type_name}_decode_internal(
     {
       $!setvar("union_index", "union_index + 1")!$
      %endif
-        %if isinstance(f, ArrayType)
+        %if isinstance(f.data_type, ArrayType)
             %if f.dynamic_array == True
 
     // Dynamic Array (${f.name})
@@ -274,7 +274,7 @@ int32_t ${type_name}_decode_internal(
 
     for (c = 0; c < dest->${'%s' % ((f.name + '.len'))}; c++)
     {
-                    %if isinstance(f, CompoundType)
+                    %if isinstance(f.data_type.element_type, CompoundType)
         offset += ${f.cpp_type}_decode_internal(transfer,
                                                 0,
                                                 (void*)&dest->${'%s' % ((f.name + '.data'))}[c],
@@ -310,11 +310,11 @@ int32_t ${type_name}_decode_internal(
         offset += ${f.bitlen};
     }
             %endif
-        %elif isinstance(f, VoidType)
+        %elif isinstance(f.data_type, VoidType)
 
     // Void${f.bitlen}
     offset += ${f.bitlen};
-        %elif isinstance(f, CompoundType)
+        %elif isinstance(f.data_type, CompoundType)
 
     // Compound
     offset = ${f.cpp_type}_decode_internal(transfer, 0, &dest->${f.name}, dyn_arr_buf, offset);
@@ -323,7 +323,7 @@ int32_t ${type_name}_decode_internal(
         ret = offset;
         goto ${type_name}_error_exit;
     }
-        %elif isinstance(f, FloatType) and f.bitlen == 16:
+        %elif isinstance(f.data_type, FloatType) and f.bitlen == 16:
 
     // float16 special handling
     ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&tmp_float);

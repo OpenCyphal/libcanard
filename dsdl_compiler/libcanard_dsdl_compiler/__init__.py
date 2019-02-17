@@ -236,7 +236,7 @@ def type_to_c_type(t):
                     'post_cpp_type':'',
                     'cpp_type_comment':'bit len %d' % (t.bit_length, ),
                     'bitlen':t.bit_length,
-                    'max_size':get_max_size(t.bit_length, signedness == True),
+                    'max_size':get_max_size(t.bit_length, signedness == 'false'),
                     'signedness':signedness,
                     'saturate':saturate}
 
@@ -324,7 +324,7 @@ def generate_one_type(template_expander, t):
                 setattr(a, key, value)
 
             if isinstance(a.data_type, ArrayType):
-                a.array_size = a.max_size
+                a.array_size = a.max_array_elements
                 has_array = True
 
             a.void = isinstance(a.data_type, VoidType)
@@ -336,7 +336,7 @@ def generate_one_type(template_expander, t):
     def has_float16(attributes):
         has_float16 = False
         for a in attributes:
-            if isinstance(a, FloatType) and a.bitlen[0] == 16: # TODO: Fixme
+            if isinstance(a.data_type, FloatType) and a.bitlen == 16: # TODO: Fixme
                 has_float16 = True
         return has_float16
 
