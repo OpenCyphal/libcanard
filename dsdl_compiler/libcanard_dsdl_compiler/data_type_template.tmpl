@@ -17,7 +17,7 @@ extern "C"
 {
 #endif
 
-% for inc in t.cpp_includes:
+% for inc in t.c_includes:
 #include <${inc}>
 % endfor
 
@@ -38,9 +38,14 @@ ${line}
 
 
 %if t.fixed_port_id != None:
-#define ${'%-50s' % (t.macro_name + '_ID')} ${t.fixed_port_id}
+    %if isinstance(t, ServiceType):
+#define ${'%-50s' % (t.macro_name + '_FIXED_SERVICE_ID')} ${t.fixed_port_id}
+    %else
+#define ${'%-50s' % (t.macro_name + '_FIXED_SUBJECT_ID')} ${t.fixed_port_id}
+    %endif
+
 %endif
-#define ${'%-50s' % (t.macro_name + '_NAME')} "${t.full_name}"
+#define ${'%-50s' % (t.macro_name + '_NAME')} "${t.full_version_name}"
 
 <!--(macro generate_primary_body)--> #! type_name, service, max_bitlen, fields, constants, union, has_array
 
@@ -90,15 +95,15 @@ typedef struct
                 %else
         ${'uint8_t    %-26s // %s' % (('len;'), 'Dynamic array length')}
                 %endif
-        ${'%-10s %-26s // %s' % ((a.cpp_type + '*'), ('data;'), a.cpp_type_comment, )}
+        ${'%-10s %-26s // %s' % ((a.c_type + '*'), ('data;'), a.c_type_comment, )}
     } ${a.name};
             %else
-    ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}
+    ${'%-10s %-30s // %s' % (a.c_type, (a.name + a.post_c_type + ';'), a.c_type_comment, )}
             %endif
         %elif isinstance(a.data_type, VoidType):
-    // ${a.cpp_type_comment}
+    // ${a.c_type_comment}
         %else
-    ${'%-10s %-30s // %s' % (a.cpp_type, (a.name + a.post_cpp_type + ';'), a.cpp_type_comment, )}
+    ${'%-10s %-30s // %s' % (a.c_type, (a.name + a.post_c_type + ';'), a.c_type_comment, )}
         %endif
     % endfor
   <!--(end)-->
@@ -127,11 +132,16 @@ typedef struct
 <!--(end)-->
 
 % if isinstance(t, ServiceType):
-${generate_primary_body(type_name=t.name_space_type_name+'Request', service='_REQUEST', max_bitlen=t.request_type.bit_length_range.max, \
+
+/********************************* Request ***********************************/
+
+${generate_primary_body(type_name=t.name_space_type_name+'Request' + '_' + t.version_name.replace('.', '_'), service='_REQUEST', max_bitlen=t.request_type.bit_length_range.max, \
                                fields=t.request_type.fields, constants=t.request_type.constants, \
                                union=t.request_union, has_array=t.request_has_array)}
 
-${generate_primary_body(type_name=t.name_space_type_name+'Response', service='_RESPONSE', max_bitlen=t.response_type.bit_length_range.max, \
+/********************************* Response **********************************/
+
+${generate_primary_body(type_name=t.name_space_type_name+'Response' + '_' + t.version_name.replace('.', '_'), service='_RESPONSE', max_bitlen=t.response_type.bit_length_range.max, \
                                fields=t.response_type.fields, constants=t.response_type.constants, \
                                union=t.response_union, has_array=t.response_has_array)}
 % else:

@@ -96,7 +96,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     for (c = 0; c < source->${'%s' % ((f.name + '.len'))}; c++)
     {
                 %if isinstance(f.data_type.element_type, CompoundType)
-        offset += ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
+        offset += ${f.c_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf,
                            offset,
@@ -121,7 +121,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
         %elif isinstance(f.data_type, CompoundType)
 
     // Compound
-    offset = ${f.cpp_type}_encode_internal(&source->${f.name}, msg_buf, offset, 0);
+    offset = ${f.c_type}_encode_internal(&source->${f.name}, msg_buf, offset, 0);
         %elif isinstance(f.data_type, FloatType) and f.bitlen == 16:
 
     // float16 special handling
@@ -269,13 +269,13 @@ int32_t ${type_name}_decode_internal(
     //  - Get Array
     if (dyn_arr_buf)
     {
-        dest->${'%s' % ((f.name + '.data'))} = (${f.cpp_type}*)*dyn_arr_buf;
+        dest->${'%s' % ((f.name + '.data'))} = (${f.c_type}*)*dyn_arr_buf;
     }
 
     for (c = 0; c < dest->${'%s' % ((f.name + '.len'))}; c++)
     {
                     %if isinstance(f.data_type.element_type, CompoundType)
-        offset += ${f.cpp_type}_decode_internal(transfer,
+        offset += ${f.c_type}_decode_internal(transfer,
                                                 0,
                                                 (void*)&dest->${'%s' % ((f.name + '.data'))}[c],
                                                 dyn_arr_buf,
@@ -292,7 +292,7 @@ int32_t ${type_name}_decode_internal(
             {
                 goto ${type_name}_error_exit;
             }
-            *dyn_arr_buf = (uint8_t*)(((${f.cpp_type}*)*dyn_arr_buf) + 1);
+            *dyn_arr_buf = (uint8_t*)(((${f.c_type}*)*dyn_arr_buf) + 1);
         }
         offset += ${f.bitlen};
                     %endif
@@ -317,7 +317,7 @@ int32_t ${type_name}_decode_internal(
         %elif isinstance(f.data_type, CompoundType)
 
     // Compound
-    offset = ${f.cpp_type}_decode_internal(transfer, 0, &dest->${f.name}, dyn_arr_buf, offset);
+    offset = ${f.c_type}_decode_internal(transfer, 0, &dest->${f.name}, dyn_arr_buf, offset);
     if (offset < 0)
     {
         ret = offset;
@@ -426,13 +426,13 @@ int32_t ${type_name}_decode(const CanardRxTransfer* CANARD_MAYBE_UNUSED(transfer
 <!--(end)-->
 
 % if isinstance(t, ServiceType):
-${generate_primary_body(type_name=t.name_space_type_name+'Request', \
+${generate_primary_body(type_name=t.name_space_type_name+'Request' + '_' + t.version_name.replace('.', '_'), \
                                service='_REQUEST', max_bitlen=t.request_type.bit_length_range.max, \
                                fields=t.request_type.fields, constants=t.request_type.constants, \
                                union=t.request_union, has_array=t.request_has_array, \
                                has_float16=t.request_has_float16)}
 
-${generate_primary_body(type_name=t.name_space_type_name+'Response', \
+${generate_primary_body(type_name=t.name_space_type_name+'Response' + '_' + t.version_name.replace('.', '_'), \
                                service='_RESPONSE', max_bitlen=t.response_type.bit_length_range.max, \
                                fields=t.response_type.fields, constants=t.response_type.constants, \
                                union=t.response_union, has_array=t.response_has_array, \

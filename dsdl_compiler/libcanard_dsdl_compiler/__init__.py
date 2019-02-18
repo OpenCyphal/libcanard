@@ -10,12 +10,11 @@
 
 '''
 This module implements the core functionality of the UAVCAN DSDL compiler for libcanard.
-Supported Python versions: 3.2+, 2.7.
+Supported Python versions: 3.5+
 It accepts a list of root namespaces and produces the set of C header files and souce files for libcanard.
 It is based on the DSDL parsing package from pyuavcan.
 '''
 
-from __future__ import division, absolute_import, print_function, unicode_literals
 import sys, os, logging, errno, re
 from .pyratemp import Template
 
@@ -25,11 +24,6 @@ from pydsdl.data_type import StructureType, ServiceType, CompoundType, Primitive
             FloatType, UnsignedIntegerType, SignedIntegerType, BooleanType, ArrayType, \
             DynamicArrayType, StaticArrayType, VoidType, UnionType
 
-# Python 2.7 compatibility
-try:
-    str = unicode
-except NameError:
-    pass
 
 OUTPUT_HEADER_FILE_EXTENSION = 'h'
 OUTPUT_CODE_FILE_EXTENSION = 'c'
@@ -65,6 +59,7 @@ def run(source_dirs, include_dirs, output_dir, header_only):
     assert isinstance(source_dirs, list)
     assert isinstance(include_dirs, list)
     output_dir = str(output_dir)
+
     for source_dir in source_dirs:
 
         types = run_parser(source_dir, include_dirs + source_dirs)
@@ -86,18 +81,20 @@ def pretty_filename(filename):
 
 # get the CamelCase prefix from the current filename
 def get_name_space_prefix(t):
-    return t.full_name.replace('.', '_')
+    if isinstance(t, ServiceType):
+        return t.full_name.replace('.', '_')
+    else:
+        return (t.full_name + '_' + get_version_string(t)).replace('.', '_')
+
 
 def type_output_filename(t, extension = OUTPUT_HEADER_FILE_EXTENSION):
     assert isinstance(t, CompoundType)
-    folder_name = t.full_name.split('.')[-2]
+    name_list = t.full_name.split('.')
     if extension == OUTPUT_CODE_FILE_EXTENSION:
-        name_list = t.full_name.split('.')
-        if len(folder_name):
-            name_list[-1] = str(folder_name) + '_' + str(name_list[-1])
-        return os.path.sep.join(name_list) + '.' + extension
-    else:
-        return t.full_name.replace('.', os.path.sep) + '.' + extension
+        if len(name_list[-2]):
+            name_list[-1] = "_".join(name_list[-2:])
+
+    return os.path.sep.join(name_list) + '.'.join(['', get_version_string(t), extension])
 
 def makedirs(path):
     try:
@@ -108,6 +105,13 @@ def makedirs(path):
     except OSError as ex:
         if ex.errno != errno.EEXIST:  # http://stackoverflow.com/questions/12468022
             raise
+
+def get_version_string(t):
+    return '.'.join([str(t.version.major), str(t.version.minor)])
+
+def create_full_version_name(t):
+    setattr(t, "version_name", get_version_string(t))
+    setattr(t, "full_version_name", t.full_name + '.' + t.version_name)
 
 def die(text):
     raise DsdlCompilerException(str(text))
@@ -127,11 +131,11 @@ def run_generator(types, dest_dir, header_only):
         dest_dir = os.path.abspath(dest_dir)  # Removing '..'
         makedirs(dest_dir)
         for t in types:
-            logger.info('Generating type %s', t.full_name)
+            create_full_version_name(t)
+            logger.info('Generating type %s', t.full_version_name)
             header_path_file_name = os.path.join(dest_dir, type_output_filename(t, OUTPUT_HEADER_FILE_EXTENSION))
             code_filename = os.path.join(dest_dir, type_output_filename(t, OUTPUT_CODE_FILE_EXTENSION))
             t.header_filename = type_output_filename(t, OUTPUT_HEADER_FILE_EXTENSION)
-            t.name_space_prefix = get_name_space_prefix(t)
             t.header_only = header_only
             header_text = generate_one_type(header_template_expander, t)
             code_text = generate_one_type(code_template_expander, t)
@@ -180,9 +184,6 @@ def get_max_size(bits, unsigned):
     else:
         return (2 ** (bits-1)) -1
 
-def strip_name(name):
-    return name.split('.')[-1]
-
 def type_to_c_type(t):
     if isinstance(t, PrimitiveType):
         saturate = {
@@ -199,9 +200,9 @@ def type_to_c_type(t):
                 32: 'float',
                 64: 'double',
             }[t.bit_length]
-            return {'cpp_type':'%s' % (float_type),
-                    'post_cpp_type':'',
-                    'cpp_type_comment':'float%d %s' % (t.bit_length, cast_mode, ),
+            return {'c_type':'%s' % (float_type),
+                    'post_c_type':'',
+                    'c_type_comment':'float%d %s' % (t.bit_length, cast_mode, ),
                     'bitlen':t.bit_length,
                     'max_size':get_max_size(t.bit_length, False),
                     'signedness':'false',
@@ -220,9 +221,9 @@ def type_to_c_type(t):
             }[type(t)]
 
             if isinstance(t, BooleanType):
-                return {'cpp_type':'%s' % (c_type),
-                    'post_cpp_type':'',
-                    'cpp_type_comment':'bit len %d' % (t.bit_length, ),
+                return {'c_type':'%s' % (c_type),
+                    'post_c_type':'',
+                    'c_type_comment':'bit len %d' % (t.bit_length, ),
                     'bitlen':t.bit_length,
                     'max_size':get_max_size(t.bit_length, True),
                     'signedness':signedness,
@@ -232,9 +233,9 @@ def type_to_c_type(t):
                     # Do not staturate if struct field length is equal bitlen
                     if (expand_to_next_full(t.bit_length) == t.bit_length):
                         saturate = False
-                return {'cpp_type':'%s%d_t' % (c_type, expand_to_next_full(t.bit_length)),
-                    'post_cpp_type':'',
-                    'cpp_type_comment':'bit len %d' % (t.bit_length, ),
+                return {'c_type':'%s%d_t' % (c_type, expand_to_next_full(t.bit_length)),
+                    'post_c_type':'',
+                    'c_type_comment':'bit len %d' % (t.bit_length, ),
                     'bitlen':t.bit_length,
                     'max_size':get_max_size(t.bit_length, signedness == 'false'),
                     'signedness':signedness,
@@ -253,10 +254,10 @@ def type_to_c_type(t):
         else:
             max_size = t.size 
         
-        return {'cpp_type':'%s' % (values['cpp_type'], ),
-            'cpp_type_category': type(t),
-            'post_cpp_type':'[%d]' % (max_size,),
-            'cpp_type_comment':'%s %dbit[%d] max items' % (mode, values['bitlen'], max_size, ),
+        return {'c_type':'%s' % (values['c_type'], ),
+            'c_type_category': type(t),
+            'post_c_type':'[%d]' % (max_size,),
+            'c_type_comment':'%s %dbit[%d] max items' % (mode, values['bitlen'], max_size, ),
             'bitlen':values['bitlen'],
             'array_max_size_bit_len':max_size.bit_length(),
             'max_size':values['max_size'],
@@ -267,17 +268,17 @@ def type_to_c_type(t):
             }
     elif isinstance(t, CompoundType):
         return {
-            'cpp_type':t.full_name.replace('.','_'),
-            'post_cpp_type':'',
-            'cpp_type_comment':'',
+            'c_type':(t.full_name + '_' + get_version_string(t)).replace('.','_'),
+            'post_c_type':'',
+            'c_type_comment':'',
             'bitlen':t.bit_length_range.max,
             'max_size':0,
             'signedness':'false',
             'saturate':False}
     elif isinstance(t, VoidType):
-        return {'cpp_type':'',
-            'post_cpp_type':'',
-            'cpp_type_comment':'void%d' % t.bit_length,
+        return {'c_type':'',
+            'post_c_type':'',
+            'c_type_comment':'void%d' % t.bit_length,
             'bitlen':t.bit_length,
             'max_size':0,
             'signedness':'false',
@@ -287,9 +288,12 @@ def type_to_c_type(t):
 
 def generate_one_type(template_expander, t):
     t.name_space_type_name = get_name_space_prefix(t)
-    t.cpp_full_type_name = '::' + t.full_name.replace('.', '::')
-    t.include_guard = '__' + t.full_name.replace('.', '_').upper()
-    t.macro_name = t.full_name.replace('.', '_').upper()
+
+    t.include_guard = '__' + t.full_version_name.replace('.', '_').upper()
+    t.macro_name = t.full_version_name.replace('.', '_').upper()
+
+    # Save source file text to add it in header files
+    setattr(t, "source_file_text", open(t.source_file_path, "r").read())
 
     # Dependencies (no duplicates)
     def fields_includes(fields):
@@ -301,14 +305,12 @@ def generate_one_type(template_expander, t):
         return list(sorted(set(filter(None, [detect_include(x.data_type) for x in fields]))))
 
     if isinstance(t, (StructureType, UnionType)):
-        t.cpp_includes = fields_includes(t.fields)
+        t.c_includes = fields_includes(t.fields)
     else:
-        t.cpp_includes = fields_includes(t.request_type.fields + t.response_type.fields)
-
-    t.cpp_namespace_components = t.full_name.split('.')[:-1]
+        t.c_includes = fields_includes(t.request_type.fields + t.response_type.fields)
 
     # Attribute types
-    def inject_cpp_types(attributes):
+    def inject_c_types(attributes):
         length = len(attributes)
         count = 0
         has_array = False
@@ -332,58 +334,32 @@ def generate_one_type(template_expander, t):
     def has_float16(attributes):
         has_float16 = False
         for a in attributes:
-            if isinstance(a.data_type, FloatType) and a.bitlen == 16: # TODO: Fixme
+            if isinstance(a.data_type, FloatType) and a.bitlen == 16:
                 has_float16 = True
         return has_float16
 
     if isinstance(t, (StructureType, UnionType)):
-        t.has_array = inject_cpp_types(t.fields)
+        t.has_array = inject_c_types(t.fields)
         t.has_float16 = has_float16(t.fields)
-        inject_cpp_types(t.constants)
+        inject_c_types(t.constants)
         t.all_attributes = t.fields + t.constants
         t.union = isinstance(t, UnionType)
         if t.union:
-            t.union = len(t.fields).bit_length()
+            t.union = (len(t.fields) - 1).bit_length()
     else:
-        t.request_has_array = inject_cpp_types(t.request_type.fields)
+        t.request_has_array = inject_c_types(t.request_type.fields)
         t.request_has_float16 = has_float16(t.request_type.fields)
-        inject_cpp_types(t.request_type.constants)
-        t.response_has_array = inject_cpp_types(t.response_type.fields)
+        inject_c_types(t.request_type.constants)
+        t.response_has_array = inject_c_types(t.response_type.fields)
         t.response_has_float16 = has_float16(t.response_type.fields)
-        inject_cpp_types(t.response_type.constants)
+        inject_c_types(t.response_type.constants)
         t.all_attributes = t.request_type.fields + t.request_type.constants + t.response_type.fields + t.response_type.constants
         t.request_union = isinstance(t.request_type, UnionType) and len(t.request_type.fields)
         t.response_union = isinstance(t.response_type, UnionType) and len(t.response_fields)
         if t.request_union:
-            t.request_union = len(t.request_fields).bit_length()
+            t.request_union = (len(t.request_fields) - 1).bit_length()
         if t.response_union:
-            t.response_union = len(t.response_fields).bit_length()
-
-    # Constant properties
-    def inject_constant_info(constants):
-        for c in constants:
-            if isinstance(c.data_type, FloatType):
-                float(c.value)  # Making sure that this is a valid float literal
-                c.cpp_value = c.value
-            else:
-                int(c.value)  # Making sure that this is a valid integer literal
-                c.cpp_value = c.value
-                if isinstance(c, UnsignedIntegerType):
-                    c.cpp_value += 'U'
-
-    if isinstance(t, (StructureType, UnionType)):
-        inject_constant_info(t.constants)
-    else:
-        inject_constant_info(t.request_type.constants)
-        inject_constant_info(t.response_type.constants)
-
-    # Data type kind
-    assert isinstance(t, (StructureType, UnionType, ServiceType))
-    t.cpp_kind = {
-        StructureType:  '::uavcan::DataTypeKindMessage',
-        UnionType:      '::uavcan::DataTypeKindMessage',
-        ServiceType:    '::uavcan::DataTypeKindService',
-    }[type(t)]
+            t.response_union = (len(t.response_fields) - 1).bit_length()
 
     # Generation
     text = template_expander(t=t, **eval_allowed_locals())  # t for Type
