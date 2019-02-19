@@ -13,15 +13,15 @@
 from __future__ import division, absolute_import, print_function, unicode_literals
 import os, sys, logging, argparse
 
-# This trickery allows to use the compiler even if pyuavcan is not installed in the system.
+# This trickery allows to use the compiler even if pydsdl is not installed in the system.
 # This is extremely important, as it makes the compiler (and therefore libcanard in general)
 # totally dependency-free, except for the Python interpreter itself.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-LOCAL_PYUAVCAN_DIR = os.path.join(SCRIPT_DIR, 'pyuavcan')
-RUNNING_FROM_SRC_DIR = os.path.isdir(LOCAL_PYUAVCAN_DIR)
+LOCAL_PYDSDL_DIR = os.path.join(SCRIPT_DIR, 'pydsdl')
+RUNNING_FROM_SRC_DIR = os.path.isdir(LOCAL_PYDSDL_DIR)
 if RUNNING_FROM_SRC_DIR:
     sys.path.insert(0, SCRIPT_DIR)
-    sys.path.insert(0, LOCAL_PYUAVCAN_DIR)
+    sys.path.insert(0, LOCAL_PYDSDL_DIR)
 
 def configure_logging(verbosity):
     fmt = '%(message)s'
