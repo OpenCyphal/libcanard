@@ -38,7 +38,7 @@ class DsdlCompilerException(Exception):
 
 logger = logging.getLogger(__name__)
 
-def run(source_dirs, include_dirs, output_dir, header_only):
+def run(source_dirs, include_dirs, output_dir, header_only, allow_unregulated_fixed_port_id):
     '''
     This function takes a list of root namespace directories (containing DSDL definition files to parse), a
     possibly empty list of search directories (containing DSDL definition files that can be referenced from the types
@@ -50,19 +50,21 @@ def run(source_dirs, include_dirs, output_dir, header_only):
     files.
 
     Args:
-        source_dirs    List of root namespace directories to parse.
-        include_dirs   List of root namespace directories with referenced types (possibly empty). This list is
-                       automaitcally extended with source_dirs.
-        output_dir     Output directory path. Will be created if doesn't exist.
-        header_only    Weather to generated as header only library.
+        source_dirs                         List of root namespace directories to parse.
+        include_dirs                        List of root namespace directories with referenced types (possibly empty). This list is
+                                            automaitcally extended with source_dirs.
+        output_dir                          Output directory path. Will be created if doesn't exist.
+        header_only                         Weather to generated as header only library.
+        allow_unregulated_fixed_port_id     Do not reject unregulated fixed port identifiers.
+                                            This is a dangerous feature that must not be used unless you understand the
+                                            risks. The background information is provided in the UAVCAN specification.
     '''
     assert isinstance(source_dirs, list)
     assert isinstance(include_dirs, list)
     output_dir = str(output_dir)
 
     for source_dir in source_dirs:
-
-        types = run_parser(source_dir, include_dirs + source_dirs)
+        types = run_parser(source_dir, include_dirs + source_dirs, allow_unregulated_fixed_port_id)
         if not types:
             die('No type definitions were found')
 
@@ -116,9 +118,9 @@ def create_full_version_name(t):
 def die(text):
     raise DsdlCompilerException(str(text))
 
-def run_parser(source_dirs, search_dirs):
+def run_parser(source_dirs, search_dirs, allow_unregulated_fixed_port_id):
     try:
-        types = parse_namespace(source_dirs, search_dirs)
+        types = parse_namespace(source_dirs, search_dirs, allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
     except ParseError as ex:
         logger.info('Parser failure', exc_info=True)
         die(ex)
@@ -357,9 +359,9 @@ def generate_one_type(template_expander, t):
         t.request_union = isinstance(t.request_type, UnionType) and len(t.request_type.fields)
         t.response_union = isinstance(t.response_type, UnionType) and len(t.response_fields)
         if t.request_union:
-            t.request_union = (len(t.request_fields) - 1).bit_length()
+            t.request_union = (len(t.request_type.fields) - 1).bit_length()
         if t.response_union:
-            t.response_union = (len(t.response_fields) - 1).bit_length()
+            t.response_union = (len(t.response_type.fields) - 1).bit_length()
 
     # Generation
     text = template_expander(t=t, **eval_allowed_locals())  # t for Type
