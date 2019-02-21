@@ -317,7 +317,7 @@ int32_t ${type_name}_decode_internal(
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
     // Compound
-    offset = ${f.cpp_type}_decode_internal(transfer, 0, &dest->${f.name}, dyn_arr_buf, offset);
+    offset = ${f.cpp_type}_decode_internal(transfer, transfer_len, &dest->${f.name}, dyn_arr_buf, offset);
     if (offset < 0)
     {
         ret = offset;
