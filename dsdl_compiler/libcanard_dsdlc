@@ -49,6 +49,10 @@ argparser.add_argument('--outdir', '-O', default=DEFAULT_OUTDIR, help='output di
 argparser.add_argument('--incdir', '-I', default=[], action='append', help=
 '''nested type namespaces, one path per argument. Can be also specified through the environment variable
 UAVCAN_DSDL_INCLUDE_PATH, where the path entries are separated by colons ":"''')
+argparser.add_argument('--allow_unregulated_fixed_port_id', '-A', default=False, action="store_true", help=
+'''Do not reject unregulated fixed port identifiers.
+This is a dangerous feature that must not be used unless you understand the
+risks. The background information is provided in the UAVCAN specification.''')
 args = argparser.parse_args()
 
 configure_logging(args.verbose)
@@ -63,7 +67,7 @@ except KeyError:
 from libcanard_dsdl_compiler import run as dsdlc_run
 
 try:
-    dsdlc_run(args.source_dir, args.incdir, args.outdir, args.header_only)
+    dsdlc_run(args.source_dir, args.incdir, args.outdir, args.header_only, args.allow_unregulated_fixed_port_id)
 except Exception as ex:
     logging.error('Compiler failure', exc_info=True)
     die(str(ex))
