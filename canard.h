@@ -429,10 +429,10 @@ void canardPopTxQueue(CanardInstance* ins);
 /**
  * Processes a received CAN frame with a timestamp.
  * The application will call this function when it receives a new frame from the CAN bus.
- * 
+ *
  * Return value will report any errors in decoding packets.
  */
-int16_t canardHandleRxFrame(CanardInstance* ins,
+CanardError canardHandleRxFrame(CanardInstance* ins,
                          const CanardCANFrame* frame,
                          uint64_t timestamp_usec);
 
