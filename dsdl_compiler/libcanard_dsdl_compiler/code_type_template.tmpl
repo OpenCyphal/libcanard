@@ -317,7 +317,7 @@ int32_t ${type_name}_decode_internal(
         %elif isinstance(f.data_type, CompoundType)
 
     // Compound
-    offset = ${f.c_type}_decode_internal(transfer, 0, &dest->${f.name}, dyn_arr_buf, offset);
+    offset = ${f.c_type}_decode_internal(transfer, payload_len, &dest->${f.name}, dyn_arr_buf, offset);
     if (offset < 0)
     {
         ret = offset;

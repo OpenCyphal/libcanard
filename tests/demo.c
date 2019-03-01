@@ -56,21 +56,21 @@
  * Library instance.
  * In simple applications it makes sense to make it static, but it is not necessary.
  */
-static CanardInstance canard;                       ///< The library instance
-static uint8_t canard_memory_pool[1024];            ///< Arena for memory allocation, used by the library
+static CanardInstance g_canard;                     ///< The library instance
+static uint8_t g_canard_memory_pool[1024];          ///< Arena for memory allocation, used by the library
 
 /*
  * Variables used for dynamic node ID allocation.
  * RTFM at http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
  */
-static uint64_t send_next_node_id_allocation_request_at;    ///< When the next node ID allocation request should be sent
-static uint8_t node_id_allocation_unique_id_offset;         ///< Depends on the stage of the next request
+static uint64_t g_send_next_node_id_allocation_request_at;  ///< When the next node ID allocation request should be sent
+static uint8_t g_node_id_allocation_unique_id_offset;       ///< Depends on the stage of the next request
 
 /*
  * Node status variables
  */
-static uint8_t node_health = UAVCAN_NODE_HEALTH_OK;
-static uint8_t node_mode   = UAVCAN_NODE_MODE_INITIALIZATION;
+static uint8_t g_node_health = UAVCAN_NODE_HEALTH_OK;
+static uint8_t g_node_mode   = UAVCAN_NODE_MODE_INITIALIZATION;
 
 
 static uint64_t getMonotonicTimestampUSec(void)
@@ -130,8 +130,8 @@ static void makeNodeStatusMessage(uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE
      * encode the values manually.
      */
     canardEncodeScalar(buffer,  0, 32, &uptime_sec);
-    canardEncodeScalar(buffer, 32,  2, &node_health);
-    canardEncodeScalar(buffer, 34,  3, &node_mode);
+    canardEncodeScalar(buffer, 32,  2, &g_node_health);
+    canardEncodeScalar(buffer, 34,  3, &g_node_mode);
 }
 
 
@@ -150,14 +150,14 @@ static void onTransferReceived(CanardInstance* ins,
         (transfer->data_type_id == UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID))
     {
         // Rule C - updating the randomized time interval
-        send_next_node_id_allocation_request_at =
+        g_send_next_node_id_allocation_request_at =
             getMonotonicTimestampUSec() + UAVCAN_NODE_ID_ALLOCATION_REQUEST_DELAY_OFFSET_USEC +
             (uint64_t)(getRandomFloat() * UAVCAN_NODE_ID_ALLOCATION_RANDOM_TIMEOUT_RANGE_USEC);
 
         if (transfer->source_node_id == CANARD_BROADCAST_NODE_ID)
         {
             puts("Allocation request from another allocatee");
-            node_id_allocation_unique_id_offset = 0;
+            g_node_id_allocation_unique_id_offset = 0;
             return;
         }
 
@@ -185,18 +185,18 @@ static void onTransferReceived(CanardInstance* ins,
                 printf(" %02x/%02x", received_unique_id[i], my_unique_id[i]);
             }
             puts("");
-            node_id_allocation_unique_id_offset = 0;
+            g_node_id_allocation_unique_id_offset = 0;
             return;         // No match, return
         }
 
         if (received_unique_id_len < UNIQUE_ID_LENGTH_BYTES)
         {
             // The allocator has confirmed part of unique ID, switching to the next stage and updating the timeout.
-            node_id_allocation_unique_id_offset = received_unique_id_len;
-            send_next_node_id_allocation_request_at -= UAVCAN_NODE_ID_ALLOCATION_REQUEST_DELAY_OFFSET_USEC;
+            g_node_id_allocation_unique_id_offset = received_unique_id_len;
+            g_send_next_node_id_allocation_request_at -= UAVCAN_NODE_ID_ALLOCATION_REQUEST_DELAY_OFFSET_USEC;
 
             printf("Matching allocation response from %d offset %d\n",
-                   transfer->source_node_id, node_id_allocation_unique_id_offset);
+                   transfer->source_node_id, g_node_id_allocation_unique_id_offset);
         }
         else
         {
@@ -310,13 +310,13 @@ static void process1HzTasks(uint64_t timestamp_usec)
     /*
      * Purging transfers that are no longer transmitted. This will occasionally free up some memory.
      */
-    canardCleanupStaleTransfers(&canard, timestamp_usec);
+    canardCleanupStaleTransfers(&g_canard, timestamp_usec);
 
     /*
      * Printing the memory usage statistics.
      */
     {
-        const CanardPoolAllocatorStatistics stats = canardGetPoolAllocatorStatistics(&canard);
+        const CanardPoolAllocatorStatistics stats = canardGetPoolAllocatorStatistics(&g_canard);
         const uint16_t peak_percent = (uint16_t)(100U * stats.peak_usage_blocks / stats.capacity_blocks);
 
         printf("Memory pool stats: capacity %u blocks, usage %u blocks, peak usage %u blocks (%u%%)\n",
@@ -341,7 +341,7 @@ static void process1HzTasks(uint64_t timestamp_usec)
 
         static uint8_t transfer_id;  // Note that the transfer ID variable MUST BE STATIC (or heap-allocated)!
 
-        const int16_t bc_res = canardBroadcast(&canard,
+        const int16_t bc_res = canardBroadcast(&g_canard,
                                                UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE,
                                                UAVCAN_NODE_STATUS_DATA_TYPE_ID,
                                                &transfer_id,
@@ -354,7 +354,7 @@ static void process1HzTasks(uint64_t timestamp_usec)
         }
     }
 
-    node_mode = UAVCAN_NODE_MODE_OPERATIONAL;
+    g_node_mode = UAVCAN_NODE_MODE_OPERATIONAL;
 }
 
 
@@ -364,17 +364,17 @@ static void process1HzTasks(uint64_t timestamp_usec)
 static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
 {
     // Transmitting
-    for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&canard)) != NULL;)
+    for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&g_canard)) != NULL;)
     {
         const int16_t tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
         {
-            canardPopTxQueue(&canard);
+            canardPopTxQueue(&g_canard);
             (void)fprintf(stderr, "Transmit error %d, frame dropped, errno '%s'\n", tx_res, strerror(errno));
         }
         else if (tx_res > 0)    // Success - just drop the frame
         {
-            canardPopTxQueue(&canard);
+            canardPopTxQueue(&g_canard);
         }
         else                    // Timeout - just exit and try again later
         {
@@ -392,7 +392,7 @@ static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
     }
     else if (rx_res > 0)        // Success - process the frame
     {
-        canardHandleRxFrame(&canard, &rx_frame, timestamp);
+        canardHandleRxFrame(&g_canard, &rx_frame, timestamp);
     }
     else
     {
@@ -427,32 +427,37 @@ int main(int argc, char** argv)
     /*
      * Initializing the Libcanard instance.
      */
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool), onTransferReceived, shouldAcceptTransfer, NULL);
+    canardInit(&g_canard,
+               g_canard_memory_pool,
+               sizeof(g_canard_memory_pool),
+               onTransferReceived,
+               shouldAcceptTransfer,
+               NULL);
 
     /*
      * Performing the dynamic node ID allocation procedure.
      */
     static const uint8_t PreferredNodeID = CANARD_BROADCAST_NODE_ID;    ///< This can be made configurable, obviously
 
-    node_id_allocation_unique_id_offset = 0;
+    g_node_id_allocation_unique_id_offset = 0;
 
     uint8_t node_id_allocation_transfer_id = 0;
 
-    while (canardGetLocalNodeID(&canard) == CANARD_BROADCAST_NODE_ID)
+    while (canardGetLocalNodeID(&g_canard) == CANARD_BROADCAST_NODE_ID)
     {
         puts("Waiting for dynamic node ID allocation...");
 
-        send_next_node_id_allocation_request_at =
+        g_send_next_node_id_allocation_request_at =
             getMonotonicTimestampUSec() + UAVCAN_NODE_ID_ALLOCATION_REQUEST_DELAY_OFFSET_USEC +
             (uint64_t)(getRandomFloat() * UAVCAN_NODE_ID_ALLOCATION_RANDOM_TIMEOUT_RANGE_USEC);
 
-        while ((getMonotonicTimestampUSec() < send_next_node_id_allocation_request_at) &&
-               (canardGetLocalNodeID(&canard) == CANARD_BROADCAST_NODE_ID))
+        while ((getMonotonicTimestampUSec() < g_send_next_node_id_allocation_request_at) &&
+               (canardGetLocalNodeID(&g_canard) == CANARD_BROADCAST_NODE_ID))
         {
             processTxRxOnce(&socketcan, 1);
         }
 
-        if (canardGetLocalNodeID(&canard) != CANARD_BROADCAST_NODE_ID)
+        if (canardGetLocalNodeID(&g_canard) != CANARD_BROADCAST_NODE_ID)
         {
             break;
         }
@@ -462,7 +467,7 @@ int main(int argc, char** argv)
         uint8_t allocation_request[CANARD_CAN_FRAME_MAX_DATA_LEN - 1];
         allocation_request[0] = (uint8_t)(PreferredNodeID << 1U);
 
-        if (node_id_allocation_unique_id_offset == 0)
+        if (g_node_id_allocation_unique_id_offset == 0)
         {
             allocation_request[0] |= 1;     // First part of unique ID
         }
@@ -471,22 +476,22 @@ int main(int argc, char** argv)
         readUniqueID(my_unique_id);
 
         static const uint8_t MaxLenOfUniqueIDInRequest = 6;
-        uint8_t uid_size = (uint8_t)(UNIQUE_ID_LENGTH_BYTES - node_id_allocation_unique_id_offset);
+        uint8_t uid_size = (uint8_t)(UNIQUE_ID_LENGTH_BYTES - g_node_id_allocation_unique_id_offset);
         if (uid_size > MaxLenOfUniqueIDInRequest)
         {
             uid_size = MaxLenOfUniqueIDInRequest;
         }
 
         // Paranoia time
-        assert(node_id_allocation_unique_id_offset < UNIQUE_ID_LENGTH_BYTES);
+        assert(g_node_id_allocation_unique_id_offset < UNIQUE_ID_LENGTH_BYTES);
         assert(uid_size <= MaxLenOfUniqueIDInRequest);
         assert(uid_size > 0);
-        assert((uid_size + node_id_allocation_unique_id_offset) <= UNIQUE_ID_LENGTH_BYTES);
+        assert((uid_size + g_node_id_allocation_unique_id_offset) <= UNIQUE_ID_LENGTH_BYTES);
 
-        memmove(&allocation_request[1], &my_unique_id[node_id_allocation_unique_id_offset], uid_size);
+        memmove(&allocation_request[1], &my_unique_id[g_node_id_allocation_unique_id_offset], uid_size);
 
         // Broadcasting the request
-        const int16_t bcast_res = canardBroadcast(&canard,
+        const int16_t bcast_res = canardBroadcast(&g_canard,
                                                   UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
                                                   UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
                                                   &node_id_allocation_transfer_id,
@@ -499,10 +504,10 @@ int main(int argc, char** argv)
         }
 
         // Preparing for timeout; if response is received, this value will be updated from the callback.
-        node_id_allocation_unique_id_offset = 0;
+        g_node_id_allocation_unique_id_offset = 0;
     }
 
-    printf("Dynamic node ID allocation complete [%d]\n", canardGetLocalNodeID(&canard));
+    printf("Dynamic node ID allocation complete [%d]\n", canardGetLocalNodeID(&g_canard));
 
     /*
      * Running the main loop.
