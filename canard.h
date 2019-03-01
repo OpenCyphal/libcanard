@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 UAVCAN Team
+ * Copyright (c) 2016-2019 UAVCAN Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -429,8 +429,8 @@ void canardPopTxQueue(CanardInstance* ins);
  * Return value will report any errors in decoding packets.
  */
 int16_t canardHandleRxFrame(CanardInstance* ins,
-                         const CanardCANFrame* frame,
-                         uint64_t timestamp_usec);
+                            const CanardCANFrame* frame,
+                            uint64_t timestamp_usec);
 
 /**
  * Traverses the list of transfers and removes those that were last updated more than timeout_usec microseconds ago.
