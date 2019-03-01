@@ -248,7 +248,7 @@ void canardPopTxQueue(CanardInstance* ins)
     freeBlock(&ins->allocator, item);
 }
 
-void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec)
+int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec)
 {
     const CanardTransferType transfer_type = extractTransferType(frame->id);
     const uint8_t destination_node_id = (transfer_type == CanardTransferTypeBroadcast) ?
@@ -262,13 +262,13 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         (frame->id & CANARD_CAN_FRAME_ERR) != 0 ||
         (frame->data_len < 1))
     {
-        return;     // Unsupported frame, not UAVCAN - ignore
+        return -CANARD_ERROR_RX_INCOMPATIBLE_PACKET;
     }
 
     if (transfer_type != CanardTransferTypeBroadcast &&
         destination_node_id != canardGetLocalNodeID(ins))
     {
-        return;     // Address mismatch
+        return -CANARD_ERROR_RX_WRONG_ADDRESS;
     }
 
     const uint8_t priority = PRIORITY_FROM_ID(frame->id);
@@ -291,14 +291,14 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
             if(rx_state == NULL)
             {
-                return; // No allocator room for this frame
+                return -CANARD_ERROR_OUT_OF_MEMORY;
             }
 
             rx_state->calculated_crc = crcAddSignature(0xFFFFU, data_type_signature);
         }
         else
         {
-            return;     // The application doesn't want this transfer
+            return -CANARD_ERROR_RX_NOT_WANTED;
         }
     }
     else
@@ -307,7 +307,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
 
         if (rx_state == NULL)
         {
-            return;
+            return -CANARD_ERROR_RX_MISSED_START;
         }
     }
 
@@ -330,10 +330,10 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         rx_state->transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte);
         rx_state->next_toggle = 0;
         releaseStatePayload(ins, rx_state);
-        if (!IS_START_OF_TRANSFER(tail_byte)) // missed the first frame
+        if (!IS_START_OF_TRANSFER(tail_byte))
         {
             rx_state->transfer_id++;
-            return;
+            return -CANARD_ERROR_RX_MISSED_START;
         }
     }
 
@@ -354,24 +354,24 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         ins->on_reception(ins, &rx_transfer);
 
         prepareForNextTransfer(rx_state);
-        return;
+        return CANARD_OK;
     }
 
     if (TOGGLE_BIT(tail_byte) != rx_state->next_toggle)
     {
-        return; // wrong toggle
+        return -CANARD_ERROR_RX_WRONG_TOGGLE;
     }
 
     if (TRANSFER_ID_FROM_TAIL_BYTE(tail_byte) != rx_state->transfer_id)
     {
-        return; // unexpected tid
+        return -CANARD_ERROR_RX_UNEXPECTED_TID;
     }
 
     if (IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))      // Beginning of multi frame transfer
     {
         if (frame->data_len <= 3)
         {
-            return;     // Not enough data
+            return -CANARD_ERROR_RX_SHORT_FRAME;
         }
 
         // take off the crc and store the payload
@@ -382,7 +382,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         {
             releaseStatePayload(ins, rx_state);
             prepareForNextTransfer(rx_state);
-            return;
+            return CANARD_ERROR_OUT_OF_MEMORY;
         }
         rx_state->payload_crc = (uint16_t)(((uint16_t) frame->data[0]) | (uint16_t)((uint16_t) frame->data[1] << 8U));
         rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
@@ -396,7 +396,7 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         {
             releaseStatePayload(ins, rx_state);
             prepareForNextTransfer(rx_state);
-            return;
+            return CANARD_ERROR_OUT_OF_MEMORY;
         }
         rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
                                           frame->data, (uint8_t)(frame->data_len - 1));
@@ -468,10 +468,19 @@ void canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint6
         // Making sure the payload is released even if the application didn't bother with it
         canardReleaseRxTransferPayload(ins, &rx_transfer);
         prepareForNextTransfer(rx_state);
-        return;
+
+        if (rx_state->calculated_crc == rx_state->payload_crc)
+        {
+            return CANARD_OK;
+        }
+        else
+        {
+            return CANARD_ERROR_RX_BAD_CRC;
+        }
     }
 
     rx_state->next_toggle = rx_state->next_toggle ? 0 : 1;
+    return CANARD_OK;
 }
 
 void canardCleanupStaleTransfers(CanardInstance* ins, uint64_t current_time_usec)
@@ -1120,7 +1129,7 @@ CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins, uint32_t tr
     if (states == NULL) // initialize CanardRxStates
     {
         states = createRxState(&ins->allocator, transfer_descriptor);
-        
+
         if(states == NULL)
         {
             return NULL;
