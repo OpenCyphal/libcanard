@@ -26,7 +26,7 @@
 #include <canard.h>
 
 //Independent implementation of ID layout from https://uavcan.org/Specification/4._CAN_bus_transport_layer/
-#define CONSTRUCT_PRIO(prio)        (((prio) & 0x1F) << 23)
+#define CONSTRUCT_PRIO(prio)        (((prio) & 0x1F) << 24)
 #define CONSTRUCT_MTID(mtid)        (((mtid) & 0xFFFF) << 8)
 #define CONSTRUCT_SID(sid)          (((sid)  & 0x7F))
 #define CONSTRUCT_DISC(disc)        (((disc) & 0x3FFF) << 10)
