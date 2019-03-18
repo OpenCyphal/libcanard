@@ -16,7 +16,10 @@ It is based on the DSDL parsing package from pyuavcan.
 '''
 
 from __future__ import division, absolute_import, print_function, unicode_literals
-import sys, os, logging, errno, re
+import os
+import logging
+import errno
+import re
 from .pyratemp import Template
 from uavcan import dsdl
 
@@ -32,12 +35,16 @@ OUTPUT_FILE_PERMISSIONS = 0o444  # Read only for all
 HEADER_TEMPLATE_FILENAME = os.path.join(os.path.dirname(__file__), 'data_type_template.tmpl')
 CODE_TEMPLATE_FILENAME = os.path.join(os.path.dirname(__file__), 'code_type_template.tmpl')
 
+
 __all__ = ['run', 'logger', 'DsdlCompilerException']
+
 
 class DsdlCompilerException(Exception):
     pass
 
+
 logger = logging.getLogger(__name__)
+
 
 def run(source_dirs, include_dirs, output_dir, header_only):
     '''
@@ -70,6 +77,7 @@ def run(source_dirs, include_dirs, output_dir, header_only):
 
 # -----------------
 
+
 def pretty_filename(filename):
     try:
         a = os.path.abspath(filename)
@@ -78,11 +86,13 @@ def pretty_filename(filename):
     except ValueError:
         return filename
 
+
 # get the CamelCase prefix from the current filename
 def get_name_space_prefix(t):
     return t.full_name.replace('.', '_')
 
-def type_output_filename(t, extension = OUTPUT_HEADER_FILE_EXTENSION):
+
+def type_output_filename(t, extension=OUTPUT_HEADER_FILE_EXTENSION):
     assert t.category == t.CATEGORY_COMPOUND
     folder_name = t.full_name.split('.')[-2]
     if extension == OUTPUT_CODE_FILE_EXTENSION:
@@ -92,6 +102,7 @@ def type_output_filename(t, extension = OUTPUT_HEADER_FILE_EXTENSION):
         return os.path.sep.join(name_list) + '.' + extension
     else:
         return t.full_name.replace('.', os.path.sep) + '.' + extension
+
 
 def makedirs(path):
     try:
@@ -103,8 +114,10 @@ def makedirs(path):
         if ex.errno != errno.EEXIST:  # http://stackoverflow.com/questions/12468022
             raise
 
+
 def die(text):
     raise DsdlCompilerException(str(text))
+
 
 def run_parser(source_dirs, search_dirs):
     try:
@@ -113,6 +126,7 @@ def run_parser(source_dirs, search_dirs):
         logger.info('Parser failure', exc_info=True)
         die(ex)
     return types
+
 
 def run_generator(types, dest_dir, header_only):
     try:
@@ -139,6 +153,7 @@ def run_generator(types, dest_dir, header_only):
         logger.info('Generator failure', exc_info=True)
         die(ex)
 
+
 def write_generated_data(filename, data, header_only, append_file=False):
     dirname = os.path.dirname(filename)
     makedirs(dirname)
@@ -158,6 +173,7 @@ def write_generated_data(filename, data, header_only, append_file=False):
         except (OSError, IOError) as ex:
             logger.warning('Failed to set permissions for %s: %s', pretty_filename(filename), ex)
 
+
 def expand_to_next_full(size):
     if size <= 8:
         return 8
@@ -165,17 +181,20 @@ def expand_to_next_full(size):
         return 16
     elif size <= 32:
         return 32
-    elif size <=64:
+    elif size <= 64:
         return 64
+
 
 def get_max_size(bits, unsigned):
     if unsigned:
-        return (2 ** bits) -1
+        return (2 ** bits) - 1
     else:
-        return (2 ** (bits-1)) -1
+        return (2 ** (bits - 1)) - 1
+
 
 def strip_name(name):
     return name.split('.')[-1]
+
 
 def type_to_c_type(t):
     if t.category == t.CATEGORY_PRIMITIVE:
@@ -193,13 +212,14 @@ def type_to_c_type(t):
                 32: 'float',
                 64: 'double',
             }[t.bitlen]
-            return {'cpp_type':'%s' % (float_type),
-                    'post_cpp_type':'',
-                    'cpp_type_comment':'float%d %s' % (t.bitlen, cast_mode, ),
-                    'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, False),
-                    'signedness':'false',
-                    'saturate':False} # do not saturate floats
+            return {
+                'cpp_type': '%s' % (float_type),
+                'post_cpp_type': '',
+                'cpp_type_comment': 'float%d %s' % (t.bitlen, cast_mode, ),
+                'bitlen': t.bitlen,
+                'max_size': get_max_size(t.bitlen, False),
+                'signedness': 'false',
+                'saturate': False}  # do not saturate floats
         else:
             c_type = {
                 t.KIND_BOOLEAN: 'bool',
@@ -213,25 +233,27 @@ def type_to_c_type(t):
             }[t.kind]
 
             if t.kind == t.KIND_BOOLEAN:
-                return {'cpp_type':'%s' % (c_type),
-                    'post_cpp_type':'',
-                    'cpp_type_comment':'bit len %d' % (t.bitlen, ),
-                    'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, True),
-                    'signedness':signedness,
-                    'saturate':saturate}
+                return {
+                    'cpp_type': '%s' % (c_type),
+                    'post_cpp_type': '',
+                    'cpp_type_comment': 'bit len %d' % (t.bitlen, ),
+                    'bitlen': t.bitlen,
+                    'max_size': get_max_size(t.bitlen, True),
+                    'signedness': signedness,
+                    'saturate': saturate}
             else:
                 if saturate:
                     # Do not staturate if struct field length is equal bitlen
                     if (expand_to_next_full(t.bitlen) == t.bitlen):
                         saturate = False
-                return {'cpp_type':'%s%d_t' % (c_type, expand_to_next_full(t.bitlen)),
-                    'post_cpp_type':'',
-                    'cpp_type_comment':'bit len %d' % (t.bitlen, ),
-                    'bitlen':t.bitlen,
-                    'max_size':get_max_size(t.bitlen, t.kind == t.KIND_UNSIGNED_INT),
-                    'signedness':signedness,
-                    'saturate':saturate}
+                return {
+                    'cpp_type': '%s%d_t' % (c_type, expand_to_next_full(t.bitlen)),
+                    'post_cpp_type': '',
+                    'cpp_type_comment': 'bit len %d' % (t.bitlen, ),
+                    'bitlen': t.bitlen,
+                    'max_size': get_max_size(t.bitlen, t.kind == t.KIND_UNSIGNED_INT),
+                    'signedness': signedness,
+                    'saturate': saturate}
 
     elif t.category == t.CATEGORY_ARRAY:
         values = type_to_c_type(t.value_type)
@@ -239,39 +261,41 @@ def type_to_c_type(t):
             t.MODE_STATIC: 'Static Array',
             t.MODE_DYNAMIC: 'Dynamic Array',
         }[t.mode]
-        return {'cpp_type':'%s' % (values['cpp_type'], ),
+        return {
+            'cpp_type': '%s' % (values['cpp_type'], ),
             'cpp_type_category': t.value_type.category,
-            'post_cpp_type':'[%d]' % (t.max_size,),
-            'cpp_type_comment':'%s %dbit[%d] max items' % (mode, values['bitlen'], t.max_size, ),
-            'bitlen':values['bitlen'],
-            'array_max_size_bit_len':t.max_size.bit_length(),
-            'max_size':values['max_size'],
-            'signedness':values['signedness'],
-            'saturate':values['saturate'],
+            'post_cpp_type': '[%d]' % (t.max_size,),
+            'cpp_type_comment': '%s %dbit[%d] max items' % (mode, values['bitlen'], t.max_size, ),
+            'bitlen': values['bitlen'],
+            'array_max_size_bit_len': t.max_size.bit_length(),
+            'max_size': values['max_size'],
+            'signedness': values['signedness'],
+            'saturate': values['saturate'],
             'dynamic_array': t.mode == t.MODE_DYNAMIC,
-            'max_array_elements': t.max_size,
-            }
+            'max_array_elements': t.max_size}
     elif t.category == t.CATEGORY_COMPOUND:
         return {
-            'cpp_type':t.full_name.replace('.','_'),
-            'post_cpp_type':'',
-            'cpp_type_comment':'',
-            'bitlen':t.get_max_bitlen(),
-            'max_size':0,
-            'signedness':'false',
-            'saturate':False}
+            'cpp_type': t.full_name.replace('.', '_'),
+            'post_cpp_type': '',
+            'cpp_type_comment': '',
+            'bitlen': t.get_max_bitlen(),
+            'max_size': 0,
+            'signedness': 'false',
+            'saturate': False}
     elif t.category == t.CATEGORY_VOID:
-        return {'cpp_type':'',
-            'post_cpp_type':'',
-            'cpp_type_comment':'void%d' % t.bitlen,
-            'bitlen':t.bitlen,
-            'max_size':0,
-            'signedness':'false',
-            'saturate':False}
+        return {
+            'cpp_type': '',
+            'post_cpp_type': '',
+            'cpp_type_comment': 'void%d' % t.bitlen,
+            'bitlen': t.bitlen,
+            'max_size': 0,
+            'signedness': 'false',
+            'saturate': False}
     else:
         raise DsdlCompilerException('Unknown type category: %s' % t.category)
 
-def generate_one_type(template_expander, t):
+
+def generate_one_type(template_expander, t):  # noqa: C901 (flake8 doesn't understand nested complexity..)
     t.name_space_type_name = get_name_space_prefix(t)
     t.cpp_full_type_name = '::' + t.full_name.replace('.', '::')
     t.include_guard = '__' + t.full_name.replace('.', '_').upper()
@@ -381,6 +405,7 @@ def generate_one_type(template_expander, t):
     text = text.replace('{\n\n ', '{\n ')
     return text
 
+
 def make_template_expander(filename):
     '''
     Templating is based on pyratemp (http://www.simple-is-better.org/template/pyratemp.html).
@@ -432,6 +457,7 @@ def make_template_expander(filename):
     def expand(**args):
         # This function adds one indentation level (4 spaces); it will be used from the template
         args['indent'] = lambda text, idnt = '    ': idnt + text.replace('\n', '\n' + idnt)
+
         # This function works like enumerate(), telling you whether the current item is the last one
         def enum_last_value(iterable, start=0):
             it = iter(iterable)
@@ -442,6 +468,7 @@ def make_template_expander(filename):
                 last = val
                 count += 1
             yield count, True, last
+
         args['enum_last_value'] = enum_last_value
         return template(**args)
 
