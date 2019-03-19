@@ -96,7 +96,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     for (c = 0; c < source->${'%s' % ((f.name + '.len'))}; c++)
     {
                 %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
+        offset += ${f.cpp_type}_encode_internal(&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf,
                            offset,
@@ -277,7 +277,7 @@ int32_t ${type_name}_decode_internal(
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
         offset += ${f.cpp_type}_decode_internal(transfer,
                                                 0,
-                                                (void*)&dest->${'%s' % ((f.name + '.data'))}[c],
+                                                &dest->${'%s' % ((f.name + '.data'))}[c],
                                                 dyn_arr_buf,
                                                 offset);
                     %else
