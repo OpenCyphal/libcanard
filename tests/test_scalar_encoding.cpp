@@ -112,27 +112,27 @@ TEST_CASE("ScalarDecode, MultiFrame")
     /*
      * Configuring allocator
      */
-    CanardPoolAllocatorBlock allocator_blocks[2];
+    uint8_t buffer[2*32];
     CanardPoolAllocator allocator;
-    initPoolAllocator(&allocator, &allocator_blocks[0], 2);
+    initPoolAllocator(&allocator, 32, &buffer, 2*32);
 
     /*
      * Configuring the transfer object
      */
     auto transfer = CanardRxTransfer();
 
-    uint8_t head[CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE];
+    uint8_t head[CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32)];
     for (auto& x : head)
     {
         x = 0b10100101;
     }
-    static_assert(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE == 6, "Assumption is not met, are we on a 32-bit x86 machine?");
+    static_assert(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32) == 6, "Assumption is not met, are we on a 32-bit x86 machine?");
 
     auto middle_a = createBufferBlock(&allocator);
     auto middle_b = createBufferBlock(&allocator);
 
-    std::fill_n(&middle_a->data[0], CANARD_BUFFER_BLOCK_DATA_SIZE, 0b01011010);
-    std::fill_n(&middle_b->data[0], CANARD_BUFFER_BLOCK_DATA_SIZE, 0b11001100);
+    std::fill_n(&middle_a->data[0], CANARD_BUFFER_BLOCK_DATA_SIZE(32), 0b01011010);
+    std::fill_n(&middle_b->data[0], CANARD_BUFFER_BLOCK_DATA_SIZE(32), 0b11001100);
 
     middle_a->next = middle_b;
     middle_b->next = nullptr;
@@ -150,7 +150,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
     transfer.payload_tail   = &tail[0];
 
     transfer.payload_len =
-        uint16_t(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE + CANARD_BUFFER_BLOCK_DATA_SIZE * 2 + sizeof(tail));
+        uint16_t(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32) + CANARD_BUFFER_BLOCK_DATA_SIZE(32) * 2 + sizeof(tail));
 
     std::cout << "Payload size: " << transfer.payload_len << std::endl;
 
@@ -161,8 +161,8 @@ TEST_CASE("ScalarDecode, MultiFrame")
     REQUIRE(0b01011010 == read<uint8_t>(&transfer, 4, 8));
     REQUIRE(0b00000101 == read<uint8_t>(&transfer, 4, 4));
 
-    REQUIRE_FALSE(read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8, 1));
-    REQUIRE(read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + 1, 1));
+    REQUIRE_FALSE(read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32) * 8, 1));
+    REQUIRE(read<bool>(&transfer, CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32) * 8 + 1, 1));
 
     // 64 from beginning, 48 bits from head, 16 bits from the middle
     REQUIRE(0b0101101001011010101001011010010110100101101001011010010110100101ULL == read<uint64_t>(&transfer, 0, 64));
@@ -170,7 +170,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
     // 64 from two middle blocks, 32 from the first, 32 from the second
     REQUIRE(0b1100110011001100110011001100110001011010010110100101101001011010ULL ==
             read<uint64_t>(&transfer,
-                           CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32, 64));
+                           CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32) * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE(32) * 8 - 32, 64));
 
     // Last 64
     REQUIRE(0b0100010000110011001000100001000111001100110011001100110011001100ULL ==
@@ -180,7 +180,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
      * Testing without the middle
      */
     transfer.payload_middle = nullptr;
-    transfer.payload_len = uint16_t(transfer.payload_len - CANARD_BUFFER_BLOCK_DATA_SIZE * 2U);
+    transfer.payload_len = uint16_t(transfer.payload_len - CANARD_BUFFER_BLOCK_DATA_SIZE(32) * 2U);
 
     // Last 64
     REQUIRE(0b0100010000110011001000100001000110100101101001011010010110100101ULL ==

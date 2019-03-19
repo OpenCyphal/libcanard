@@ -133,8 +133,9 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
  * @param [in] buf_len The number of blocks in buf.
  */
 CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
-                                       CanardPoolAllocatorBlock* buf,
-                                       uint16_t buf_len);
+                                       size_t block_size,
+                                       void* buf,
+                                       size_t buf_len);
 
 /**
  * Allocates a block from the given pool allocator.

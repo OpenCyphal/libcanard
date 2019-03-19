@@ -92,10 +92,10 @@ extern "C" {
 #define CANARD_MAX_NODE_ID                          127
 
 /// Refer to the type CanardRxTransfer
-#define CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE      (CANARD_MEM_BLOCK_SIZE - offsetof(CanardRxState, buffer_head))
+#define CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(block_size)  (block_size - offsetof(CanardRxState, buffer_head))
 
 /// Refer to the type CanardBufferBlock
-#define CANARD_BUFFER_BLOCK_DATA_SIZE               (CANARD_MEM_BLOCK_SIZE - offsetof(CanardBufferBlock, data))
+#define CANARD_BUFFER_BLOCK_DATA_SIZE(block_size)           (block_size - offsetof(CanardBufferBlock, data))
 
 /// Refer to canardCleanupStaleTransfers() for details.
 #define CANARD_RECOMMENDED_STALE_TRANSFER_CLEANUP_INTERVAL_USEC     1000000U
@@ -189,11 +189,10 @@ typedef void (* CanardOnTransferReception)(CanardInstance* ins,                 
  * INTERNAL DEFINITION, DO NOT USE DIRECTLY.
  * A memory block used in the memory block allocator.
  */
-typedef union CanardPoolAllocatorBlock_u
+typedef struct CanardPoolAllocatorFreeBlock_u
 {
-    char bytes[CANARD_MEM_BLOCK_SIZE];
-    union CanardPoolAllocatorBlock_u* next;
-} CanardPoolAllocatorBlock;
+    struct CanardPoolAllocatorFreeBlock_u* next;
+} CanardPoolAllocatorFreeBlock;
 
 /**
  * This structure provides usage statistics of the memory pool allocator.
@@ -211,8 +210,9 @@ typedef struct
  */
 typedef struct
 {
-    CanardPoolAllocatorBlock* free_list;
+    CanardPoolAllocatorFreeBlock* free_list;
     CanardPoolAllocatorStatistics statistics;
+    size_t block_size;
 } CanardPoolAllocator;
 
 /**
@@ -249,7 +249,7 @@ struct CanardRxState
     uint8_t buffer_head[];
 };
 CANARD_STATIC_ASSERT(offsetof(CanardRxState, buffer_head) <= 28, "Invalid memory layout");
-CANARD_STATIC_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE >= 4, "Invalid memory layout");
+CANARD_STATIC_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE) >= 4, "Invalid memory layout");
 
 /**
  * This is the core structure that keeps all of the states and allocated resources of the library instance.
@@ -310,6 +310,8 @@ struct CanardRxTransfer
     const uint8_t* payload_tail;            ///< Last bytes of multi-frame transfers. Always NULL for single-frame
                                             ///< transfers.
     uint16_t payload_len;                   ///< Effective length of the payload in bytes.
+
+    uint16_t block_size;                    ///< Block size in use by the allocator.
 
     /**
      * These fields identify the transfer for the application.
@@ -530,7 +532,7 @@ uint16_t canardConvertNativeFloatToFloat16(float value);
 float canardConvertFloat16ToNativeFloat(uint16_t value);
 
 /// Abort the build if the current platform is not supported.
-CANARD_STATIC_ASSERT(((uint32_t)CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) < 32,
+CANARD_STATIC_ASSERT(((uint32_t)CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE)) < 32,
                      "Platforms where sizeof(void*) > 4 are not supported. "
                      "On AMD64 use 32-bit mode (e.g. GCC flag -m32).");
 

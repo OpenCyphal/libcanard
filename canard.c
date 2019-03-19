@@ -84,7 +84,7 @@ void canardInit(CanardInstance* out_ins,
      * If your application fails here, make sure it's not built in 64-bit mode.
      * Refer to the design documentation for more info.
      */
-    CANARD_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE >= 6);
+    CANARD_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE) >= 6);
 
     memset(out_ins, 0, sizeof(*out_ins));
 
@@ -95,13 +95,12 @@ void canardInit(CanardInstance* out_ins,
     out_ins->tx_queue = NULL;
     out_ins->user_reference = user_reference;
 
-    size_t pool_capacity = mem_arena_size / CANARD_MEM_BLOCK_SIZE;
-    if (pool_capacity > 0xFFFFU)
-    {
-        pool_capacity = 0xFFFFU;
-    }
-
-    initPoolAllocator(&out_ins->allocator, mem_arena, (uint16_t)pool_capacity);
+    /*
+     * For now CANARD_MEM_BLOCK_SIZE is always used. 
+     * When other transport protocols are support,
+     * different block size must be used depending on data length capabilities.
+     */
+    initPoolAllocator(&out_ins->allocator, CANARD_MEM_BLOCK_SIZE, mem_arena, mem_arena_size);
 }
 
 void* canardGetUserReference(CanardInstance* ins)
@@ -348,7 +347,8 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
             .transfer_type = (uint8_t)transfer_type,
             .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),
             .priority = priority,
-            .source_node_id = source_node_id
+            .source_node_id = source_node_id,
+            .block_size = (uint16_t)ins->allocator.block_size
         };
 
         ins->on_reception(ins, &rx_transfer);
@@ -407,11 +407,11 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
 
         uint8_t tail_offset = 0;
 
-        if (rx_state->payload_len < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE)
+        if (rx_state->payload_len < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(ins->allocator.block_size))
         {
             // Copy the beginning of the frame into the head, point the tail pointer to the remainder
             for (size_t i = rx_state->payload_len;
-                 (i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) && (tail_offset < frame_payload_size);
+                 (i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(ins->allocator.block_size)) && (tail_offset < frame_payload_size);
                  i++, tail_offset++)
             {
                 rx_state->buffer_head[i] = frame->data[tail_offset];
@@ -423,19 +423,19 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
             CanardBufferBlock* block = rx_state->buffer_blocks;
             if (block != NULL)          // If there's no middle, that's fine, we'll use only head and tail
             {
-                size_t offset = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE;    // Payload offset of the first block
+                size_t offset = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(ins->allocator.block_size);    // Payload offset of the first block
                 while (block->next != NULL)
                 {
                     block = block->next;
-                    offset += CANARD_BUFFER_BLOCK_DATA_SIZE;
+                    offset += CANARD_BUFFER_BLOCK_DATA_SIZE(ins->allocator.block_size);
                 }
                 CANARD_ASSERT(block != NULL);
 
                 const size_t offset_within_block = rx_state->payload_len - offset;
-                CANARD_ASSERT(offset_within_block < CANARD_BUFFER_BLOCK_DATA_SIZE);
+                CANARD_ASSERT(offset_within_block < CANARD_BUFFER_BLOCK_DATA_SIZE(ins->allocator.block_size));
 
                 for (size_t i = offset_within_block;
-                     (i < CANARD_BUFFER_BLOCK_DATA_SIZE) && (tail_offset < frame_payload_size);
+                     (i < CANARD_BUFFER_BLOCK_DATA_SIZE(ins->allocator.block_size)) && (tail_offset < frame_payload_size);
                      i++, tail_offset++)
                 {
                     block->data[i] = frame->data[tail_offset];
@@ -453,7 +453,8 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
             .transfer_type = (uint8_t)transfer_type,
             .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),
             .priority = priority,
-            .source_node_id = source_node_id
+            .source_node_id = source_node_id,
+            .block_size = (uint16_t)ins->allocator.block_size
         };
 
         rx_state->buffer_blocks = NULL;     // Block list ownership has been transferred to rx_transfer!
@@ -1228,10 +1229,10 @@ CANARD_INTERNAL int16_t bufferBlockPushBytes(CanardPoolAllocator* allocator,
     uint16_t data_index = 0;
 
     // if head is not full, add data to head
-    if ((CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE - state->payload_len) > 0)
+    if ((CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(allocator->block_size) - state->payload_len) > 0)
     {
         for (uint16_t i = (uint16_t)state->payload_len;
-             i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE && data_index < data_len;
+             i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(allocator->block_size) && data_index < data_len;
              i++, data_index++)
         {
             state->buffer_head[i] = data[data_index];
@@ -1245,7 +1246,7 @@ CANARD_INTERNAL int16_t bufferBlockPushBytes(CanardPoolAllocator* allocator,
     } // head is full.
 
     uint16_t index_at_nth_block =
-        (uint16_t)(((state->payload_len) - CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) % CANARD_BUFFER_BLOCK_DATA_SIZE);
+        (uint16_t)(((state->payload_len) - CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(allocator->block_size)) % CANARD_BUFFER_BLOCK_DATA_SIZE(allocator->block_size));
 
     // get to current block
     CanardBufferBlock* block = NULL;
@@ -1276,8 +1277,8 @@ CANARD_INTERNAL int16_t bufferBlockPushBytes(CanardPoolAllocator* allocator,
         }
 
         const uint16_t num_buffer_blocks =
-            (uint16_t) (((((uint32_t)state->payload_len + data_len) - CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) /
-                         CANARD_BUFFER_BLOCK_DATA_SIZE) + 1U);
+            (uint16_t) (((((uint32_t)state->payload_len + data_len) - CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(allocator->block_size)) /
+                         CANARD_BUFFER_BLOCK_DATA_SIZE(allocator->block_size)) + 1U);
 
         if (num_buffer_blocks > nth_block && index_at_nth_block == 0)
         {
@@ -1294,7 +1295,7 @@ CANARD_INTERNAL int16_t bufferBlockPushBytes(CanardPoolAllocator* allocator,
     while (data_index < data_len)
     {
         for (uint16_t i = index_at_nth_block;
-             i < CANARD_BUFFER_BLOCK_DATA_SIZE && data_index < data_len;
+             i < CANARD_BUFFER_BLOCK_DATA_SIZE(allocator->block_size) && data_index < data_len;
              i++, data_index++)
         {
             block->data[i] = data[data_index];
@@ -1394,10 +1395,10 @@ CANARD_INTERNAL int16_t descatterTransferPayload(const CanardRxTransfer* transfe
         uint8_t remaining_bit_length = bit_length;
 
         // Reading head
-        if (input_bit_offset < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8)
+        if (input_bit_offset < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(transfer->block_size) * 8)
         {
             const uint8_t amount = (uint8_t)MIN(remaining_bit_length,
-                                                CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8U - input_bit_offset);
+                                                CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(transfer->block_size) * 8U - input_bit_offset);
 
             copyBitArray(&transfer->payload_head[0], input_bit_offset, amount, (uint8_t*) output, 0);
 
@@ -1407,14 +1408,14 @@ CANARD_INTERNAL int16_t descatterTransferPayload(const CanardRxTransfer* transfe
         }
 
         // Reading middle
-        uint32_t remaining_bits = transfer->payload_len * 8U - CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8U;
-        uint32_t block_bit_offset = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8U;
+        uint32_t remaining_bits = transfer->payload_len * 8U - CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(transfer->block_size) * 8U;
+        uint32_t block_bit_offset = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(transfer->block_size) * 8U;
         const CanardBufferBlock* block = transfer->payload_middle;
 
         while ((block != NULL) && (remaining_bit_length > 0))
         {
             CANARD_ASSERT(remaining_bits > 0);
-            const uint32_t block_end_bit_offset = block_bit_offset + MIN(CANARD_BUFFER_BLOCK_DATA_SIZE * 8,
+            const uint32_t block_end_bit_offset = block_bit_offset + MIN(CANARD_BUFFER_BLOCK_DATA_SIZE(transfer->block_size) * 8,
                                                                          remaining_bits);
 
             // Perform copy if we've reached the requested offset, otherwise jump over this block and try next
@@ -1542,20 +1543,24 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val, const uint8_t* bytes, size_t l
  *  Pool Allocator functions
  */
 CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
-                                       CanardPoolAllocatorBlock* buf,
-                                       uint16_t buf_len)
+                                       size_t block_size,
+                                       void* buf,
+                                       size_t buf_len)
 {
     size_t current_index = 0;
-    CanardPoolAllocatorBlock** current_block = &(allocator->free_list);
-    while (current_index < buf_len)
+    size_t capacity_blocks = buf_len/block_size;
+    CanardPoolAllocatorFreeBlock** current_block = &(allocator->free_list);
+    while (current_index < capacity_blocks)
     {
-        *current_block = &buf[current_index];
+        *current_block = (CanardPoolAllocatorFreeBlock*) ((size_t)buf + current_index*block_size);
         current_block = &((*current_block)->next);
         current_index++;
     }
     *current_block = NULL;
 
-    allocator->statistics.capacity_blocks = buf_len;
+    allocator->block_size = (uint16_t)block_size;
+
+    allocator->statistics.capacity_blocks = (uint16_t)capacity_blocks;
     allocator->statistics.current_usage_blocks = 0;
     allocator->statistics.peak_usage_blocks = 0;
 }
@@ -1584,7 +1589,7 @@ CANARD_INTERNAL void* allocateBlock(CanardPoolAllocator* allocator)
 
 CANARD_INTERNAL void freeBlock(CanardPoolAllocator* allocator, void* p)
 {
-    CanardPoolAllocatorBlock* block = (CanardPoolAllocatorBlock*) p;
+    CanardPoolAllocatorFreeBlock* block = (CanardPoolAllocatorFreeBlock*) p;
 
     block->next = allocator->free_list;
     allocator->free_list = block;
