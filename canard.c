@@ -25,6 +25,7 @@
  */
 
 #include "canard_internals.h"
+#include "canard_can.h"
 #include <string.h>
 
 
@@ -62,7 +63,26 @@
 struct CanardTxQueueItem
 {
     CanardTxQueueItem* next;
-    CanardCANFrame frame;
+
+    /* Using structs with flexible array members as members in other structs are not technically correct in C.
+     * However, it is very practical. And in this case will work out fine due to being the last member also in the flattened out struct.
+     */
+    #ifdef __GNUC__
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wpedantic"
+    #endif
+    #ifdef __clang__
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wpedantic"
+    #endif
+    CanardTransportFrame frame;
+    #ifdef __GNUC__
+        #pragma GCC diagnostic pop
+    #endif
+    #ifdef __clang__
+        #pragma clang diagnostic pop
+    #endif
+
 };
 
 
@@ -70,6 +90,7 @@ struct CanardTxQueueItem
  * API functions
  */
 void canardInit(CanardInstance* out_ins,
+                CanardTransportProtocol transport_protocol,
                 void* mem_arena,
                 size_t mem_arena_size,
                 CanardOnTransferReception on_reception,
@@ -84,10 +105,11 @@ void canardInit(CanardInstance* out_ins,
      * If your application fails here, make sure it's not built in 64-bit mode.
      * Refer to the design documentation for more info.
      */
-    CANARD_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE) >= 6);
+    CANARD_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE_BASE) >= 2);
 
     memset(out_ins, 0, sizeof(*out_ins));
 
+    out_ins->transport_protocol = transport_protocol;
     out_ins->node_id = CANARD_BROADCAST_NODE_ID;
     out_ins->on_reception = on_reception;
     out_ins->should_accept = should_accept;
@@ -95,12 +117,18 @@ void canardInit(CanardInstance* out_ins,
     out_ins->tx_queue = NULL;
     out_ins->user_reference = user_reference;
 
-    /*
-     * For now CANARD_MEM_BLOCK_SIZE is always used. 
-     * When other transport protocols are support,
-     * different block size must be used depending on data length capabilities.
-     */
-    initPoolAllocator(&out_ins->allocator, CANARD_MEM_BLOCK_SIZE, mem_arena, mem_arena_size);
+    size_t block_size;
+
+    switch (transport_protocol)
+    {
+        case CanardTransportProtocolCAN:
+        {
+            block_size = CANARD_MEM_BLOCK_SIZE_BASE + CANARD_CAN_FRAME_MAX_DATA_LEN;
+            break;
+        };
+    };
+
+    initPoolAllocator(&out_ins->allocator, block_size, mem_arena, mem_arena_size);
 }
 
 void* canardGetUserReference(CanardInstance* ins)
@@ -231,13 +259,17 @@ int16_t canardRequestOrRespond(CanardInstance* ins,
     return result;
 }
 
-const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins)
+int16_t canardPeekTxQueue(const CanardInstance* ins, CanardTransportFrame** frame)
 {
     if (ins->tx_queue == NULL)
     {
-        return NULL;
+        *frame = NULL;
+    } 
+    else 
+    {
+        *frame = &ins->tx_queue->frame;
     }
-    return &ins->tx_queue->frame;
+    return 0;
 }
 
 void canardPopTxQueue(CanardInstance* ins)
@@ -247,7 +279,7 @@ void canardPopTxQueue(CanardInstance* ins)
     freeBlock(&ins->allocator, item);
 }
 
-int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec)
+int16_t canardHandleRxFrame(CanardInstance* ins, const CanardTransportFrame* frame, uint64_t timestamp_usec)
 {
     const CanardTransferType transfer_type = extractTransferType(frame->id);
     const uint8_t destination_node_id = (transfer_type == CanardTransferTypeBroadcast) ?
@@ -879,6 +911,17 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT((can_id & CANARD_CAN_EXT_ID_MASK) == can_id);            // Flags must be cleared
 
+    uint8_t max_data_len;
+
+    switch (ins->transport_protocol)
+    {
+        case CanardTransportProtocolCAN:
+        {
+            max_data_len = CANARD_CAN_FRAME_MAX_DATA_LEN;
+            break;
+        };
+    };
+
     if (transfer_id == NULL)
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
@@ -891,7 +934,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
 
     int16_t result = 0;
 
-    if (payload_len < CANARD_CAN_FRAME_MAX_DATA_LEN)                        // Single frame transfer
+    if (payload_len < max_data_len)                        // Single frame transfer
     {
         CanardTxQueueItem* queue_item = createTxItem(&ins->allocator);
         if (queue_item == NULL)
@@ -937,7 +980,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
                 i = 0;
             }
 
-            for (; i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index < payload_len; i++, data_index++)
+            for (; i < (max_data_len - 1) && data_index < payload_len; i++, data_index++)
             {
                 queue_item->frame.data[i] = payload[data_index];
             }

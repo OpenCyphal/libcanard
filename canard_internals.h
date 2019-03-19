@@ -93,6 +93,13 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
                                         const uint8_t* payload,
                                         uint16_t payload_len);
 
+int16_t canardPeekTxQueue(const CanardInstance* ins, 
+                          CanardTransportFrame** frame);
+
+int16_t canardHandleRxFrame(CanardInstance* ins,
+                            const CanardTransportFrame* frame,
+                            uint64_t timestamp_usec);
+
 CANARD_INTERNAL void copyBitArray(const uint8_t* src,
                                   uint32_t src_offset,
                                   uint32_t src_len,

@@ -43,6 +43,7 @@ file(GLOB tests_src
 message(STATUS "Unit test source files: ${tests_src}")
 add_executable(run_tests
                ${tests_src}
+               ../canard_can.c
                ../canard.c)
 target_link_libraries(run_tests
                       pthread)
@@ -55,6 +56,7 @@ exec_program("git"
 
 add_executable(demo
                demo.c
+               ../canard_can.c
                ../canard.c
                ../drivers/socketcan/socketcan.c)
 

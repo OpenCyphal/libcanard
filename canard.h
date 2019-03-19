@@ -70,6 +70,7 @@ extern "C" {
 #define CANARD_ERROR_INVALID_ARGUMENT                  2
 #define CANARD_ERROR_OUT_OF_MEMORY                     3
 #define CANARD_ERROR_NODE_ID_NOT_SET                   4
+#define CANARD_ERROR_INCOMPATIBLE_TRANSPORT_PROTOCOL   5
 #define CANARD_ERROR_INTERNAL                          9
 #define CANARD_ERROR_RX_INCOMPATIBLE_PACKET            10
 #define CANARD_ERROR_RX_WRONG_ADDRESS                  11
@@ -81,10 +82,7 @@ extern "C" {
 #define CANARD_ERROR_RX_BAD_CRC                        17
 
 /// The size of a memory block in bytes.
-#define CANARD_MEM_BLOCK_SIZE                       32U
-
-/// This will be changed when the support for CAN FD is added
-#define CANARD_CAN_FRAME_MAX_DATA_LEN               8U
+#define CANARD_MEM_BLOCK_SIZE_BASE                     24U
 
 /// Node ID values. Refer to the specification for more info.
 #define CANARD_BROADCAST_NODE_ID                    0
@@ -107,7 +105,7 @@ extern "C" {
 #define CANARD_TRANSFER_PRIORITY_LOW                24
 #define CANARD_TRANSFER_PRIORITY_LOWEST             31
 
-/// Related to CanardCANFrame
+/// Related to CanardTransportFrame
 #define CANARD_CAN_EXT_ID_MASK                      0x1FFFFFFFU
 #define CANARD_CAN_STD_ID_MASK                      0x000007FFU
 #define CANARD_CAN_FRAME_EFF                        (1UL << 31U)         ///< Extended frame format
@@ -118,8 +116,13 @@ extern "C" {
 #define CANARD_MAX_TRANSFER_PAYLOAD_LEN             ((1U << CANARD_TRANSFER_PAYLOAD_LEN_BITS) - 1U)
 
 
+typedef enum
+{
+    CanardTransportProtocolCAN = 0,
+} CanardTransportProtocol;
+
 /**
- * This data type holds a standard CAN 2.0B data frame with 29-bit ID.
+ * A pointer of this type represents one of the available transport frames
  */
 typedef struct
 {
@@ -130,9 +133,11 @@ typedef struct
      *  - CANARD_CAN_FRAME_ERR
      */
     uint32_t id;
-    uint8_t data[CANARD_CAN_FRAME_MAX_DATA_LEN];
     uint8_t data_len;
-} CanardCANFrame;
+
+    /* The size of data depends on the transport frame in use */
+    uint8_t data[];
+} CanardTransportFrame;
 
 /**
  * Transfer types are defined by the UAVCAN specification.
@@ -249,7 +254,6 @@ struct CanardRxState
     uint8_t buffer_head[];
 };
 CANARD_STATIC_ASSERT(offsetof(CanardRxState, buffer_head) <= 28, "Invalid memory layout");
-CANARD_STATIC_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE) >= 4, "Invalid memory layout");
 
 /**
  * This is the core structure that keeps all of the states and allocated resources of the library instance.
@@ -257,6 +261,7 @@ CANARD_STATIC_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZ
  */
 struct CanardInstance
 {
+    CanardTransportProtocol transport_protocol;     ///< The transport protocol this node is compatible with
     uint8_t node_id;                                ///< Local node ID; may be zero if the node is anonymous
 
     CanardShouldAcceptTransfer should_accept;       ///< Function to decide whether the application wants this transfer
@@ -332,6 +337,7 @@ struct CanardRxTransfer
  * the function canardGetPoolAllocatorStatistics().
  */
 void canardInit(CanardInstance* out_ins,                    ///< Uninitialized library instance
+                CanardTransportProtocol transport_protocol, ///< The transport protocol this node is going to be used with
                 void* mem_arena,                            ///< Raw memory chunk used for dynamic allocation
                 size_t mem_arena_size,                      ///< Size of the above, in bytes
                 CanardOnTransferReception on_reception,     ///< Callback, see CanardOnTransferReception
@@ -408,13 +414,6 @@ int16_t canardRequestOrRespond(CanardInstance* ins,             ///< Library ins
                                const void* payload,             ///< Transfer payload
                                uint16_t payload_len);           ///< Length of the above, in bytes
 
-/**
- * Returns a pointer to the top priority frame in the TX queue.
- * Returns NULL if the TX queue is empty.
- * The application will call this function after canardBroadcast() or canardRequestOrRespond() to transmit generated
- * frames over the CAN bus.
- */
-const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
 
 /**
  * Removes the top priority frame from the TX queue.
@@ -423,16 +422,6 @@ const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins);
  * is NOT allowed, because it may change the frame at the top of the TX queue.
  */
 void canardPopTxQueue(CanardInstance* ins);
-
-/**
- * Processes a received CAN frame with a timestamp.
- * The application will call this function when it receives a new frame from the CAN bus.
- *
- * Return value will report any errors in decoding packets.
- */
-int16_t canardHandleRxFrame(CanardInstance* ins,
-                            const CanardCANFrame* frame,
-                            uint64_t timestamp_usec);
 
 /**
  * Traverses the list of transfers and removes those that were last updated more than timeout_usec microseconds ago.
@@ -532,7 +521,7 @@ uint16_t canardConvertNativeFloatToFloat16(float value);
 float canardConvertFloat16ToNativeFloat(uint16_t value);
 
 /// Abort the build if the current platform is not supported.
-CANARD_STATIC_ASSERT(((uint32_t)CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(CANARD_MEM_BLOCK_SIZE)) < 32,
+CANARD_STATIC_ASSERT(sizeof(void*) <= 4,
                      "Platforms where sizeof(void*) > 4 are not supported. "
                      "On AMD64 use 32-bit mode (e.g. GCC flag -m32).");
 

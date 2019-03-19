@@ -24,6 +24,7 @@
 
 #include <catch.hpp>
 #include <canard.h>
+#include <canard_can.h>
 
 //Independent implementation of ID layout from https://uavcan.org/Specification/4._CAN_bus_transport_layer/
 #define CONSTRUCT_PRIO(prio)        (((prio) & 0x1F) << 24)
@@ -102,42 +103,42 @@ TEST_CASE("canardHandleRxFrame incompatible packet handling, Correctness")
     //Setup frame data to be single frame transfer
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 0, 0);
 
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCAN, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     g_should_accept = true;
 
     //Frame with good RTR/ERR/data_len bad EFF
     frame.id = 0;
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_INCOMPATIBLE_PACKET == err);
 
     //Frame with good EFF/ERR/data_len, bad RTR
     frame.id = 0 | CANARD_CAN_FRAME_RTR | CANARD_CAN_FRAME_EFF;
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_INCOMPATIBLE_PACKET == err);
 
     //Frame with good EFF/RTR/data_len, bad ERR
     frame.id = 0 | CANARD_CAN_FRAME_ERR | CANARD_CAN_FRAME_EFF;
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_INCOMPATIBLE_PACKET == err);
 
     //Frame with good EFF/RTR/ERR, bad data_len
     frame.id = 0 | CANARD_CAN_FRAME_EFF;
     frame.data_len = 0;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_INCOMPATIBLE_PACKET == err);
 
     //Frame with good EFF/RTR/ERR/data_len
     frame.id = 0 | CANARD_CAN_FRAME_EFF;
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 }
 
-TEST_CASE("canardHandleRxFrame wrong address handling, Correctness")
+TEST_CASE("canardCANHandleRxFrame wrong address handling, Correctness")
 {
     uint8_t canard_memory_pool[1024];
     CanardInstance canard;
@@ -148,7 +149,7 @@ TEST_CASE("canardHandleRxFrame wrong address handling, Correctness")
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 0, 0);
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCAN, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
     g_should_accept = true;
@@ -156,18 +157,18 @@ TEST_CASE("canardHandleRxFrame wrong address handling, Correctness")
     //Send package with ID 24, should not be wanted
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 24, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_WRONG_ADDRESS == err);
 
     //Send package with ID 20, should be OK
     frame.id = 0 | CANARD_CAN_FRAME_EFF;            //Set EFF
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 }
 
-TEST_CASE("canardHandleRxFrame shouldAccept handling, Correctness")
+TEST_CASE("canardCANHandleRxFrame shouldAccept handling, Correctness")
 {
     uint8_t canard_memory_pool[1024];
     CanardInstance canard;
@@ -178,7 +179,7 @@ TEST_CASE("canardHandleRxFrame shouldAccept handling, Correctness")
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 0, 0);
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCAN, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -186,14 +187,14 @@ TEST_CASE("canardHandleRxFrame shouldAccept handling, Correctness")
     g_should_accept = false;
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_NOT_WANTED == err);
 
     //Send packet, accept
     g_should_accept = true;
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 }
 
@@ -207,7 +208,7 @@ TEST_CASE("canardHandleRxFrame no state handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCAN, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -215,21 +216,21 @@ TEST_CASE("canardHandleRxFrame no state handling, Correctness")
     frame.data[0] = CONSTRUCT_TAIL_BYTE(0, 0, 0, 0);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 
     //End of packet, should fail
     frame.data[0] = CONSTRUCT_TAIL_BYTE(0, 1, 0, 0);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 
     //1 Frame packet, should pass
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 0, 0);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a start packet, should pass
@@ -237,33 +238,33 @@ TEST_CASE("canardHandleRxFrame no state handling, Correctness")
 
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a middle packet, from the same ID, but don't toggle
     frame.data[0] = CONSTRUCT_TAIL_BYTE(0, 0, 0, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 1;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_WRONG_TOGGLE == err);
 
     //Send a middle packet, toggle, but use wrong ID
     frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 2);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_UNEXPECTED_TID == err);
 
     //Send a middle packet, toggle, and use correct ID
     frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
 }
 
-TEST_CASE("canardHandleRxFrame missed start handling, Correctness")
+TEST_CASE("canardCANHandleRxFrame missed start handling, Correctness")
 {
     uint8_t canard_memory_pool[1024];
     CanardInstance canard;
@@ -273,7 +274,7 @@ TEST_CASE("canardHandleRxFrame missed start handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCAN, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -282,35 +283,35 @@ TEST_CASE("canardHandleRxFrame missed start handling, Correctness")
 
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a middle packet, toggle, and use correct ID - but timeout
     frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
-    err = canardHandleRxFrame(&canard, &frame, 4000000);
+    err = canardCANHandleRxFrame(&canard, &frame, 4000000);
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 
     //Send a start packet, should pass
     frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a middle packet, toggle, and use correct ID - but timestamp 0
     frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
-    err = canardHandleRxFrame(&canard, &frame, 0);
+    err = canardCANHandleRxFrame(&canard, &frame, 0);
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 
     //Send a start packet, should pass
     frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a middle packet, toggle, and use an incorrect TID
@@ -318,11 +319,11 @@ TEST_CASE("canardHandleRxFrame missed start handling, Correctness")
     frame.data[7] = 0 | 3 | (1<<5);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
-    err = canardHandleRxFrame(&canard, &frame, 0);
+    err = canardCANHandleRxFrame(&canard, &frame, 0);
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 }
 
-TEST_CASE("canardHandleRxFrame short frame handling, Correctness")
+TEST_CASE("canardCANHandleRxFrame short frame handling, Correctness")
 {
     uint8_t canard_memory_pool[1024];
     CanardInstance canard;
@@ -332,7 +333,7 @@ TEST_CASE("canardHandleRxFrame short frame handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCAN, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -340,18 +341,18 @@ TEST_CASE("canardHandleRxFrame short frame handling, Correctness")
     frame.data[1] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 2;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_SHORT_FRAME == err);
 
     //Send a start packet which is short, should fail
     frame.data[2] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 3;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_RX_SHORT_FRAME == err);
 }
 
-TEST_CASE("canardHandleRxFrame OOM handling, Correctness")
+TEST_CASE("canardCANHandleRxFrame OOM handling, Correctness")
 {
     uint8_t dummy_buf;
     CanardInstance canard;
@@ -361,7 +362,7 @@ TEST_CASE("canardHandleRxFrame OOM handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, &dummy_buf, 0,
+    canardInit(&canard, CanardTransportProtocolCAN, &dummy_buf, 0,
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -369,6 +370,6 @@ TEST_CASE("canardHandleRxFrame OOM handling, Correctness")
     frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
-    err = canardHandleRxFrame(&canard, &frame, 1);
+    err = canardCANHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == err);
 }

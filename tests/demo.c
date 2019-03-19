@@ -9,6 +9,7 @@
 #endif
 
 #include <canard.h>
+#include <canard_can.h>
 #include <socketcan.h>      // CAN backend driver for SocketCAN, distributed with Libcanard
 
 #include <stdio.h>
@@ -364,7 +365,9 @@ static void process1HzTasks(uint64_t timestamp_usec)
 static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
 {
     // Transmitting
-    for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&g_canard)) != NULL;)
+    int16_t ret;
+    CanardCANFrame* txf;
+    while ((ret = canardCANPeekTxQueue(&g_canard, &txf)) == 0 && txf != NULL)
     {
         const int16_t tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
@@ -392,7 +395,7 @@ static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
     }
     else if (rx_res > 0)        // Success - process the frame
     {
-        canardHandleRxFrame(&g_canard, &rx_frame, timestamp);
+        canardCANHandleRxFrame(&g_canard, &rx_frame, timestamp);
     }
     else
     {
@@ -428,6 +431,7 @@ int main(int argc, char** argv)
      * Initializing the Libcanard instance.
      */
     canardInit(&g_canard,
+               CanardTransportProtocolCAN,
                g_canard_memory_pool,
                sizeof(g_canard_memory_pool),
                onTransferReceived,

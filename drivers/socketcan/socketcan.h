@@ -9,6 +9,7 @@
 #define SOCKETCAN_H
 
 #include <canard.h>
+#include <canard_can.h>
 
 #ifdef __cplusplus
 extern "C"

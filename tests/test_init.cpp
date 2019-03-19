@@ -46,6 +46,7 @@ TEST_CASE("Init, UserReference")
 
     ::CanardInstance ins;
     canardInit(&ins,
+               CanardTransportProtocolCAN,
                memory_arena,
                sizeof(memory_arena),
                &onTransferReceptionMock,

@@ -112,9 +112,10 @@ TEST_CASE("ScalarDecode, MultiFrame")
     /*
      * Configuring allocator
      */
-    uint8_t buffer[2*32];
+    const uint8_t block_size = 32;
+    uint8_t buffer[2*block_size];
     CanardPoolAllocator allocator;
-    initPoolAllocator(&allocator, 32, &buffer, 2*32);
+    initPoolAllocator(&allocator, block_size, &buffer, sizeof(buffer));
 
     /*
      * Configuring the transfer object
@@ -148,6 +149,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
     transfer.payload_head   = &head[0];
     transfer.payload_middle = middle_a;
     transfer.payload_tail   = &tail[0];
+    transfer.block_size     = block_size;
 
     transfer.payload_len =
         uint16_t(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE(32) + CANARD_BUFFER_BLOCK_DATA_SIZE(32) * 2 + sizeof(tail));

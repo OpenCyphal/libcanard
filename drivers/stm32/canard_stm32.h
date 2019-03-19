@@ -10,6 +10,7 @@
 #define CANARD_STM32_H
 
 #include <canard.h>
+#include <canard_can.h>
 #include <string.h>     // NOLINT
 
 
