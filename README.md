@@ -90,14 +90,15 @@ tar czvf libcanard.tgz cov-int
 
 Then upload the resulting archive to Coverity.
 
-### Running flake8 for python code
+### Running flake8 for Python code
 
-Flake8 is a tool for checking correctness and style of python code, [Flake 8 docs](http://flake8.pycqa.org/en/latest/).
+[Flake8](http://flake8.pycqa.org/en/latest/) is a tool for checking correctness and style of Python code.
 
 The setup for Flake8 is defined in `setup.cfg`.
 
 Flake8 should be run from the top level directory, ideally code should be reviewed to make sure there are no
 flake errors before it is merged.
-```
-libcanard$ flake8
+```bash
+cd libcanard
+flake8
 ```
