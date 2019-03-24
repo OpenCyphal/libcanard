@@ -12,8 +12,8 @@
 ''''exec echo "Python not found" >&2 # '''
 
 # We can't import from __future__ here because of the wickedness above.
-import sys
-import getopt
+import sys  # noqa: E402
+import getopt  # noqa: E402
 
 try:
     import uavcan
@@ -21,34 +21,36 @@ except ImportError:
     sys.stderr.write('PyUAVCAN is not installed. Please install from PIP: sudo pip3 install uavcan\n')
     exit(1)
 
+
 def printUsage():
     print("""show_data_type_info:
     [-h, --help]: show this help
     [-c, --custom] [path/to/custom/types]: path to your custom types '00.mymsgtype.uavcan'
     """)
-    
+
+
 if __name__ == "__main__":
     # decode options given to the script
     try:
-        opts, args = getopt.getopt(sys.argv[1:],'hc:',['help','custom='])
+        opts, args = getopt.getopt(sys.argv[1:], 'hc:', ['help', 'custom='])
     except getopt.GetoptError:
         printUsage()
         sys.exit()
-    
+
     # include/execute options given to the script
     for opt, arg in opts:
-        if opt in ('-h','--help'):
+        if opt in ('-h', '--help'):
             printUsage()
             sys.exit()
-        elif opt in ('-c','--custom'):
+        elif opt in ('-c', '--custom'):
             uavcan.load_dsdl(arg)
-    
+
     longest_name = max(map(len, uavcan.TYPENAMES.keys()))
-    
+
     header = 'Full Data Type Name'.ljust(longest_name) + ' | DDTID |   Type Signature   |  Max Bit Len  '
     print(header)
     print('-' * len(header))
-    
+
     for typename, typedef in sorted(uavcan.TYPENAMES.items()):
         ddtid = typedef.default_dtid if typedef.default_dtid is not None else 'N/A'
         s = '%-*s   % 5s   0x%016x' % (longest_name, typename, ddtid, typedef.get_data_type_signature())
