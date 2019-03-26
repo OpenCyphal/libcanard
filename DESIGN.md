@@ -255,8 +255,8 @@ Note that the proposed API does not make any assumptions about the CAN driver in
 A rough draft of the API definitions is provided below:
 
 ```c
-#define CANARD_BROADCAST_NODE_ID    0
-#define CANARD_MIN_NODE_ID          1
+#define CANARD_BROADCAST_NODE_ID    255
+#define CANARD_MIN_NODE_ID          0
 #define CANARD_MAX_NODE_ID          127
 
 #define CANARD_MEM_BLOCK_SIZE       32

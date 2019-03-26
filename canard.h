@@ -87,8 +87,8 @@ extern "C" {
 #define CANARD_CAN_FRAME_MAX_DATA_LEN               8U
 
 /// Node ID values. Refer to the specification for more info.
-#define CANARD_BROADCAST_NODE_ID                    0
-#define CANARD_MIN_NODE_ID                          1
+#define CANARD_BROADCAST_NODE_ID                    255
+#define CANARD_MIN_NODE_ID                          0
 #define CANARD_MAX_NODE_ID                          127
 
 /// Refer to the type CanardRxTransfer
@@ -346,8 +346,10 @@ void* canardGetUserReference(CanardInstance* ins);
 /**
  * Assigns a new node ID value to the current node.
  * Node ID can be assigned only once.
+ *
+ * Returns CANARD_OK if success, or negative error code if node ID is outside valid range.
  */
-void canardSetLocalNodeID(CanardInstance* ins,
+int16_t canardSetLocalNodeID(CanardInstance* ins,
                           uint8_t self_node_id);
 
 /**

@@ -29,7 +29,7 @@
 #define CONSTRUCT_PRIO(prio)                    (((prio) & 0x7) << 26)
 #define CONSTRUCT_SUBJECT_ID(subject_id)        (((subject_id) & 0xFFFF) << 8)
 #define CONSTRUCT_SOURCE_ID(source_id)          (((source_id) & 0x7F) << 1)
-#define CONSTRUCT_SERVICE_ID(service_tid)      (((service_tid) & 0x1FF) << 15)
+#define CONSTRUCT_SERVICE_ID(service_id)        (((service_id) & 0x1FF) << 15)
 #define CONSTRUCT_DEST_ID(dest_id)              (((dest_id)  & 0x7F) << 8)
 #define CONSTRUCT_REQUEST(request)              (((request) & 0x1) << 24)
 
