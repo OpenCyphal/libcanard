@@ -87,11 +87,14 @@ CANARD_INTERNAL uint64_t releaseStatePayload(CanardInstance* ins,
 
 /// Returns the number of frames enqueued
 CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
+                                        CanardTransportProtocol protocol,
                                         uint32_t can_id,
                                         uint8_t* transfer_id,
                                         uint16_t crc,
                                         const uint8_t* payload,
                                         uint16_t payload_len);
+
+CANARD_INTERNAL int16_t addRequiredPadding(CanardTransportFrame* frame);
 
 CANARD_INTERNAL void copyBitArray(const uint8_t* src,
                                   uint32_t src_offset,

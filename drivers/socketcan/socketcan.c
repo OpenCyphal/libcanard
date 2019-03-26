@@ -93,8 +93,13 @@ int16_t socketcanClose(SocketCANInstance* ins)
     return (int16_t)((close_result == 0) ? 0 : getErrorCode());
 }
 
-int16_t socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int32_t timeout_msec)
+int16_t socketcanTransmit(SocketCANInstance* ins, const CanardTransportFrame* frame, int32_t timeout_msec)
 {
+    if (frame->protocol != CanardTransportProtocolCAN)
+    {
+        return -CANARD_ERROR_TRANSPORT_NOT_SUPPORTED;
+    }
+
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
     fds.fd = ins->fd;
@@ -133,7 +138,7 @@ int16_t socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, i
     return 1;
 }
 
-int16_t socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int32_t timeout_msec)
+int16_t socketcanReceive(SocketCANInstance* ins, CanardTransportFrame* out_frame, int32_t timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -172,6 +177,7 @@ int16_t socketcanReceive(SocketCANInstance* ins, CanardCANFrame* out_frame, int3
 
     out_frame->id = receive_frame.can_id;               // TODO: Map flags properly
     out_frame->data_len = receive_frame.can_dlc;
+    out_frame->protocol = CanardTransportProtocolCAN;
     memcpy(out_frame->data, &receive_frame.data, receive_frame.can_dlc);
 
     return 1;

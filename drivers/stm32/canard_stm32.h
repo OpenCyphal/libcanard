@@ -140,7 +140,7 @@ int16_t canardSTM32Init(const CanardSTM32CANTimings* const timings,
  * @retval      0               No space in the buffer
  * @retval      negative        Error
  */
-int16_t canardSTM32Transmit(const CanardCANFrame* const frame);
+int16_t canardSTM32Transmit(const CanardTransportFrame* const frame);
 
 /**
  * Reads one frame from the hardware RX FIFO, unless all FIFO are empty.
@@ -150,7 +150,7 @@ int16_t canardSTM32Transmit(const CanardCANFrame* const frame);
  * @retval      0               The buffer is empty
  * @retval      negative        Error
  */
-int16_t canardSTM32Receive(CanardCANFrame* const out_frame);
+int16_t canardSTM32Receive(CanardTransportFrame* const out_frame);
 
 /**
  * Sets up acceptance filters according to the provided list of ID and masks.

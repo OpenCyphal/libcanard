@@ -31,8 +31,13 @@ int canardNuttXClose(CanardNuttXInstance* ins)
     return close_result;
 }
 
-int canardNuttXTransmit(CanardNuttXInstance* ins, const CanardCANFrame* frame, int timeout_msec)
+int canardNuttXTransmit(CanardNuttXInstance* ins, const CanardTransportFrame* frame, int timeout_msec)
 {
+    if (frame->protocol != CanardTransportProtocolCAN)
+    {
+        return -CANARD_ERROR_TRANSPORT_NOT_SUPPORTED;
+    }
+
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
     fds.fd = ins->fd;
@@ -69,7 +74,7 @@ int canardNuttXTransmit(CanardNuttXInstance* ins, const CanardCANFrame* frame, i
     return 1;
 }
 
-int canardNuttXReceive(CanardNuttXInstance* ins, CanardCANFrame* out_frame, int timeout_msec)
+int canardNuttXReceive(CanardNuttXInstance* ins, CanardTransportFrame* out_frame, int timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));
@@ -99,6 +104,7 @@ int canardNuttXReceive(CanardNuttXInstance* ins, CanardCANFrame* out_frame, int 
 
     out_frame->id = receive_msg.cm_hdr.ch_id;
     out_frame->data_len = receive_msg.cm_hdr.ch_dlc;
+    out_frame->protocol = CanardTransportProtocolCAN;
     memcpy(out_frame->data, receive_msg.cm_data, receive_msg.cm_hdr.ch_dlc);
 
     if (receive_msg.cm_hdr.ch_extid != 0)

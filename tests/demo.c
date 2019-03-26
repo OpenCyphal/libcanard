@@ -57,7 +57,7 @@
  * In simple applications it makes sense to make it static, but it is not necessary.
  */
 static CanardInstance g_canard;                     ///< The library instance
-static uint8_t g_canard_memory_pool[1024];          ///< Arena for memory allocation, used by the library
+static uint8_t g_canard_memory_pool[4096];          ///< Arena for memory allocation, used by the library
 
 /*
  * Variables used for dynamic node ID allocation.
@@ -245,6 +245,7 @@ static void onTransferReceived(CanardInstance* ins,
          * Transmitting; in this case we don't have to release the payload because it's empty anyway.
          */
         const int16_t resp_res = canardRequestOrRespond(ins,
+                                                        CanardTransportProtocolCAN,
                                                         transfer->source_node_id,
                                                         UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE,
                                                         UAVCAN_GET_NODE_INFO_DATA_TYPE_ID,
@@ -342,6 +343,7 @@ static void process1HzTasks(uint64_t timestamp_usec)
         static uint8_t transfer_id;  // Note that the transfer ID variable MUST BE STATIC (or heap-allocated)!
 
         const int16_t bc_res = canardBroadcast(&g_canard,
+                                               CanardTransportProtocolCAN,
                                                UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE,
                                                UAVCAN_NODE_STATUS_DATA_TYPE_ID,
                                                &transfer_id,
@@ -364,7 +366,7 @@ static void process1HzTasks(uint64_t timestamp_usec)
 static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
 {
     // Transmitting
-    for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&g_canard)) != NULL;)
+    for (const CanardTransportFrame* txf = NULL; (txf = canardPeekTxQueue(&g_canard)) != NULL;)
     {
         const int16_t tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
@@ -383,7 +385,7 @@ static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
     }
 
     // Receiving
-    CanardCANFrame rx_frame;
+    CanardTransportFrame rx_frame;
     const uint64_t timestamp = getMonotonicTimestampUSec();
     const int16_t rx_res = socketcanReceive(socketcan, &rx_frame, timeout_msec);
     if (rx_res < 0)             // Failure - report
@@ -492,6 +494,7 @@ int main(int argc, char** argv)
 
         // Broadcasting the request
         const int16_t bcast_res = canardBroadcast(&g_canard,
+                                                  CanardTransportProtocolCAN,
                                                   UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
                                                   UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
                                                   &node_id_allocation_transfer_id,

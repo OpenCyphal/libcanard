@@ -62,7 +62,7 @@
 struct CanardTxQueueItem
 {
     CanardTxQueueItem* next;
-    CanardCANFrame frame;
+    CanardTransportFrame frame;
 };
 
 
@@ -132,6 +132,7 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
 }
 
 int16_t canardBroadcast(CanardInstance* ins,
+                        CanardTransportProtocol protocol,
                         uint64_t data_type_signature,
                         uint16_t data_type_id,
                         uint8_t* inout_transfer_id,
@@ -181,7 +182,7 @@ int16_t canardBroadcast(CanardInstance* ins,
         }
     }
 
-    const int16_t result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
+    const int16_t result = enqueueTxFrames(ins, protocol, can_id, inout_transfer_id, crc, payload, payload_len);
 
     incrementTransferID(inout_transfer_id);
 
@@ -189,6 +190,7 @@ int16_t canardBroadcast(CanardInstance* ins,
 }
 
 int16_t canardRequestOrRespond(CanardInstance* ins,
+                               CanardTransportProtocol protocol,
                                uint8_t destination_node_id,
                                uint64_t data_type_signature,
                                uint8_t data_type_id,
@@ -222,7 +224,7 @@ int16_t canardRequestOrRespond(CanardInstance* ins,
         crc = crcAdd(crc, payload, payload_len);
     }
 
-    const int16_t result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
+    const int16_t result = enqueueTxFrames(ins, protocol, can_id, inout_transfer_id, crc, payload, payload_len);
 
     if (kind == CanardRequest)                      // Response Transfer ID must not be altered
     {
@@ -232,7 +234,7 @@ int16_t canardRequestOrRespond(CanardInstance* ins,
     return result;
 }
 
-const CanardCANFrame* canardPeekTxQueue(const CanardInstance* ins)
+const CanardTransportFrame* canardPeekTxQueue(const CanardInstance* ins)
 {
     if (ins->tx_queue == NULL)
     {
@@ -248,7 +250,7 @@ void canardPopTxQueue(CanardInstance* ins)
     freeBlock(&ins->allocator, item);
 }
 
-int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, uint64_t timestamp_usec)
+int16_t canardHandleRxFrame(CanardInstance* ins, const CanardTransportFrame* frame, uint64_t timestamp_usec)
 {
     const CanardTransferType transfer_type = extractTransferType(frame->id);
     const uint8_t destination_node_id = (transfer_type == CanardTransferTypeBroadcast) ?
@@ -869,6 +871,7 @@ CANARD_INTERNAL void incrementTransferID(uint8_t* transfer_id)
 }
 
 CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
+                                        CanardTransportProtocol protocol,
                                         uint32_t can_id,
                                         uint8_t* transfer_id,
                                         uint16_t crc,
@@ -877,6 +880,26 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT((can_id & CANARD_CAN_EXT_ID_MASK) == can_id);            // Flags must be cleared
+
+    uint8_t frame_max_length;
+
+    switch (protocol) {
+        case CanardTransportProtocolCAN:
+        {
+            frame_max_length = CANARD_CAN_FRAME_MAX_DATA_LEN;
+            break;
+        }
+        case CanardTransportProtocolFD:
+        {
+            frame_max_length = CANARD_FD_FRAME_MAX_DATA_LEN;
+            break;
+        }
+        default:
+        {
+            return -CANARD_ERROR_INVALID_ARGUMENT;
+            break;
+        }
+    }
 
     if (transfer_id == NULL)
     {
@@ -890,7 +913,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
 
     int16_t result = 0;
 
-    if (payload_len < CANARD_CAN_FRAME_MAX_DATA_LEN)                        // Single frame transfer
+    if (payload_len < frame_max_length)                        // Single frame transfer
     {
         CanardTxQueueItem* queue_item = createTxItem(&ins->allocator);
         if (queue_item == NULL)
@@ -901,8 +924,11 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
         memcpy(queue_item->frame.data, payload, payload_len);
 
         queue_item->frame.data_len = (uint8_t)(payload_len + 1);
+        queue_item->frame.protocol = protocol;
         queue_item->frame.data[payload_len] = (uint8_t)(0xC0U | (*transfer_id & 31U));
         queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
+
+        addRequiredPadding(&queue_item->frame);
 
         pushTxQueue(ins, queue_item);
         result++;
@@ -936,7 +962,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
                 i = 0;
             }
 
-            for (; i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index < payload_len; i++, data_index++)
+            for (; i < (frame_max_length - 1) && data_index < payload_len; i++, data_index++)
             {
                 queue_item->frame.data[i] = payload[data_index];
             }
@@ -945,7 +971,9 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
 
             queue_item->frame.data[i] = (uint8_t)(sot_eot | ((uint32_t)toggle << 5U) | ((uint32_t)*transfer_id & 31U));
             queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
+            queue_item->frame.protocol = protocol;
             queue_item->frame.data_len = (uint8_t)(i + 1);
+            addRequiredPadding(&queue_item->frame);
             pushTxQueue(ins, queue_item);
 
             result++;
@@ -955,6 +983,60 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
     }
 
     return result;
+}
+
+/** 
+ * Takes an unpadded transport frame and add padding if required.
+ * If input `data_len` is longer than max, max will be returned;
+ */
+CANARD_INTERNAL int16_t addRequiredPadding(CanardTransportFrame* frame)
+{
+    uint8_t data_len = frame->data_len;
+
+    uint8_t next_available_dlc;
+
+    switch (frame->protocol)
+    {
+        case CanardTransportProtocolCAN:
+        {
+            if (data_len <= 8)
+                next_available_dlc = data_len;
+            else
+                next_available_dlc = 8;            
+            break;
+        }
+        case CanardTransportProtocolFD:
+        {
+            if (data_len <= 8)
+                next_available_dlc = data_len;
+            else if (data_len <= 12)
+                next_available_dlc = 12;
+            else if (data_len <= 16)
+                next_available_dlc = 16;
+            else if (data_len <= 20)
+                next_available_dlc = 20;
+            else if (data_len <= 24)
+                next_available_dlc = 24;
+            else if (data_len <= 32)
+                next_available_dlc = 32;
+            else if (data_len <= 48)
+                next_available_dlc = 48;
+            else
+                next_available_dlc = 64;
+            break;
+        }
+        default:
+        {
+            return -CANARD_ERROR_INVALID_ARGUMENT;
+        }
+    }
+
+    for (int i = data_len; i <= next_available_dlc; i++)
+    {
+        frame->data[i] = CANARD_PADDING_PATTERN;
+    }
+
+    return CANARD_OK;
 }
 
 /**

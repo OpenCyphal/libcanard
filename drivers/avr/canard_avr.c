@@ -92,8 +92,13 @@ int canardAVRClose(void)
     return 0;
 }
 
-int canardAVRTransmit(const CanardCANFrame* frame)
+int canardAVRTransmit(const CanardTransportFrame* frame)
 {
+    if (frame->protocol != CanardTransportProtocolCAN)
+    {
+        return -CANARD_ERROR_TRANSPORT_NOT_SUPPORTED;
+    }
+
     const int poll_result = can_check_free_buffer();
     if (poll_result <= 0)
     {
@@ -116,7 +121,7 @@ int canardAVRTransmit(const CanardCANFrame* frame)
     return 1;
 }
 
-int canardAVRReceive(CanardCANFrame* out_frame)
+int canardAVRReceive(CanardTransportFrame* out_frame)
 {
     const int poll_result = can_check_message();
     if (poll_result <= 0)
@@ -133,6 +138,7 @@ int canardAVRReceive(CanardCANFrame* out_frame)
 
     out_frame->id = receive_msg.id;
     out_frame->data_len = receive_msg.length;
+    out_frame->protocol = CanardTransportProtocolCAN;
     memcpy(out_frame->data, receive_msg.data, receive_msg.length);
 
     if (receive_msg.flags.extended != 0)

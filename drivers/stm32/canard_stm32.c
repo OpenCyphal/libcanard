@@ -278,8 +278,13 @@ int16_t canardSTM32Init(const CanardSTM32CANTimings* const timings,
 }
 
 
-int16_t canardSTM32Transmit(const CanardCANFrame* const frame)
+int16_t canardSTM32Transmit(const CanardTransportFrame* const frame)
 {
+    if (frame->protocol != CanardTransportProtocolCAN)
+    {
+        return -CANARD_ERROR_TRANSPORT_NOT_SUPPORTED;
+    }
+
     if (frame == NULL)
     {
         return -CANARD_ERROR_INVALID_ARGUMENT;
@@ -384,7 +389,7 @@ int16_t canardSTM32Transmit(const CanardCANFrame* const frame)
 }
 
 
-int16_t canardSTM32Receive(CanardCANFrame* const out_frame)
+int16_t canardSTM32Receive(CanardTransportFrame* const out_frame)
 {
     if (out_frame == NULL)
     {
@@ -419,6 +424,8 @@ int16_t canardSTM32Receive(CanardCANFrame* const out_frame)
             out_frame->id = convertFrameIDRegisterToCanard(mb->RIR);
 
             out_frame->data_len = (uint8_t)(mb->RDTR & CANARD_STM32_CAN_RDTR_DLC_MASK);
+
+            out_frame->protocol = CanardTransportProtocolCAN;
 
             // Caching to regular (non volatile) memory for faster reads
             const uint32_t rdlr = mb->RDLR;

@@ -126,7 +126,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
     {
         x = 0b10100101;
     }
-    static_assert(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE == 6, "Assumption is not met, are we on a 32-bit x86 machine?");
+    static_assert(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE == 62, "Assumption is not met, are we on a 32-bit x86 machine?");
 
     auto middle_a = createBufferBlock(&allocator);
     auto middle_b = createBufferBlock(&allocator);
