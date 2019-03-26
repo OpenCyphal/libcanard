@@ -34,6 +34,12 @@
 # CMake build directory
 build/
 cmake-build-*/
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+demo
+run_tests
 
 # IDE and tools
 .idea
@@ -49,3 +55,6 @@ dsdlc_generated/
 
 # Pycache
 __pycache__/
+
+# Ignore IDE folders
+.vscode/

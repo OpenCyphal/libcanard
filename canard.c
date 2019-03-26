@@ -37,15 +37,14 @@
 #define TRANSFER_TIMEOUT_USEC                       2000000
 
 #define TRANSFER_ID_BIT_LEN                         5U
-#define ANON_MSG_DATA_TYPE_ID_BIT_LEN               2U
 
-#define SOURCE_ID_FROM_ID(x)                        ((uint8_t) (((x) >> 0U)  & 0x7FU))
-#define SERVICE_NOT_MSG_FROM_ID(x)                  ((bool)    (((x) >> 7U)  & 0x1U))
-#define REQUEST_NOT_RESPONSE_FROM_ID(x)             ((bool)    (((x) >> 15U) & 0x1U))
+#define SOURCE_ID_FROM_ID(x)                        ((uint8_t) (((x) >> 1U)  & 0x7FU))
+#define SERVICE_NOT_MSG_FROM_ID(x)                  ((bool)    (((x) >> 25U) & 0x1U))
+#define REQUEST_NOT_RESPONSE_FROM_ID(x)             ((bool)    (((x) >> 26U) & 0x1U))
 #define DEST_ID_FROM_ID(x)                          ((uint8_t) (((x) >> 8U)  & 0x7FU))
-#define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 24U) & 0x1FU))
+#define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 26U) & 0x1FU))
 #define MSG_TYPE_FROM_ID(x)                         ((uint16_t)(((x) >> 8U)  & 0xFFFFU))
-#define SRV_TYPE_FROM_ID(x)                         ((uint8_t) (((x) >> 16U) & 0xFFU))
+#define SRV_TYPE_FROM_ID(x)                         ((uint8_t) (((x) >> 15U) & 0x1FFU))
 
 #define MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, src_node_id, dst_node_id)             \
     (((uint32_t)(data_type_id)) | (((uint32_t)(transfer_type)) << 16U) |                            \
@@ -151,6 +150,8 @@ int16_t canardBroadcast(CanardInstance* ins,
     uint32_t can_id = 0;
     uint16_t crc = 0xFFFFU;
 
+    can_id = ((uint32_t) priority << 26U) | ((uint32_t) data_type_id << 8U) | (uint32_t) canardGetLocalNodeID(ins);
+
     if (canardGetLocalNodeID(ins) == 0)
     {
         if (payload_len > 7)
@@ -158,22 +159,10 @@ int16_t canardBroadcast(CanardInstance* ins,
             return -CANARD_ERROR_NODE_ID_NOT_SET;
         }
 
-        static const uint16_t DTIDMask = (1U << ANON_MSG_DATA_TYPE_ID_BIT_LEN) - 1U;
-
-        if ((data_type_id & DTIDMask) != data_type_id)
-        {
-            return -CANARD_ERROR_INVALID_ARGUMENT;
-        }
-
-        // anonymous transfer, random discriminator
-        const uint16_t discriminator = (uint16_t)((crcAdd(0xFFFFU, payload, payload_len)) & 0x7FFEU);
-        can_id = ((uint32_t) priority << 24U) | ((uint32_t) discriminator << 9U) |
-                 ((uint32_t) (data_type_id & DTIDMask) << 8U) | (uint32_t) canardGetLocalNodeID(ins);
+        can_id |= (1U << 24U);
     }
     else
     {
-        can_id = ((uint32_t) priority << 24U) | ((uint32_t) data_type_id << 8U) | (uint32_t) canardGetLocalNodeID(ins);
-
         if (payload_len > 7)
         {
             crc = crcAddSignature(crc, data_type_signature);
@@ -211,9 +200,9 @@ int16_t canardRequestOrRespond(CanardInstance* ins,
         return -CANARD_ERROR_NODE_ID_NOT_SET;
     }
 
-    const uint32_t can_id = ((uint32_t) priority << 24U) | ((uint32_t) data_type_id << 16U) |
-                            ((uint32_t) kind << 15U) | ((uint32_t) destination_node_id << 8U) |
-                            (1U << 7U) | (uint32_t) canardGetLocalNodeID(ins);
+    const uint32_t can_id = ((uint32_t) priority << 26U) | ((uint32_t) data_type_id << 15U) |
+                            ((uint32_t) kind << 24U) | ((uint32_t) destination_node_id << 8U) |
+                            (1U << 25U) | (uint32_t) canardGetLocalNodeID(ins);
     uint16_t crc = 0xFFFFU;
 
     if (payload_len > 7)
@@ -1081,12 +1070,7 @@ CANARD_INTERNAL uint16_t extractDataType(uint32_t id)
 {
     if (extractTransferType(id) == CanardTransferTypeBroadcast)
     {
-        uint16_t dtid = MSG_TYPE_FROM_ID(id);
-        if (SOURCE_ID_FROM_ID(id) == CANARD_BROADCAST_NODE_ID)
-        {
-            dtid &= (1U << ANON_MSG_DATA_TYPE_ID_BIT_LEN) - 1U;
-        }
-        return dtid;
+        return (uint16_t) MSG_TYPE_FROM_ID(id);
     }
     else
     {
