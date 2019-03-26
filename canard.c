@@ -1021,18 +1021,18 @@ CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator)
 }
 
 /**
- * Returns true if priority of id is higher than rhs.
+ * Returns true if priority of self is higher than other.
  */
-CANARD_INTERNAL bool isPriorityHigher(uint32_t id, uint32_t rhs)
+CANARD_INTERNAL bool isPriorityHigher(uint32_t self, uint32_t other)
 {
-    const uint32_t clean_id = id & CANARD_CAN_EXT_ID_MASK;
-    const uint32_t rhs_clean_id = rhs & CANARD_CAN_EXT_ID_MASK;
+    const uint32_t clean_id = self & CANARD_CAN_EXT_ID_MASK;
+    const uint32_t rhs_clean_id = other & CANARD_CAN_EXT_ID_MASK;
 
     /*
      * STD vs EXT - if 11 most significant bits are the same, EXT loses.
      */
-    const bool ext = (id & CANARD_CAN_FRAME_EFF) != 0;
-    const bool rhs_ext = (rhs & CANARD_CAN_FRAME_EFF) != 0;
+    const bool ext = (self & CANARD_CAN_FRAME_EFF) != 0;
+    const bool rhs_ext = (other & CANARD_CAN_FRAME_EFF) != 0;
     if (ext != rhs_ext)
     {
         uint32_t arb11 = ext ? (clean_id >> 18U) : clean_id;
@@ -1050,8 +1050,8 @@ CANARD_INTERNAL bool isPriorityHigher(uint32_t id, uint32_t rhs)
     /*
      * RTR vs Data frame - if frame identifiers and frame types are the same, RTR loses.
      */
-    const bool rtr = (id & CANARD_CAN_FRAME_RTR) != 0;
-    const bool rhs_rtr = (rhs & CANARD_CAN_FRAME_RTR) != 0;
+    const bool rtr = (self & CANARD_CAN_FRAME_RTR) != 0;
+    const bool rhs_rtr = (other & CANARD_CAN_FRAME_RTR) != 0;
     if (clean_id == rhs_clean_id && rtr != rhs_rtr)
     {
         return rhs_rtr;
