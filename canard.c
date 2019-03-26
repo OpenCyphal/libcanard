@@ -1021,46 +1021,46 @@ CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator)
 }
 
 /**
- * Returns true if priority of rhs is higher than id
+ * Returns true if priority of self is higher than other.
  */
-CANARD_INTERNAL bool isPriorityHigher(uint32_t rhs, uint32_t id)
+CANARD_INTERNAL bool isPriorityHigher(uint32_t self, uint32_t other)
 {
-    const uint32_t clean_id = id & CANARD_CAN_EXT_ID_MASK;
-    const uint32_t rhs_clean_id = rhs & CANARD_CAN_EXT_ID_MASK;
+    const uint32_t self_clean_id = self & CANARD_CAN_EXT_ID_MASK;
+    const uint32_t other_clean_id = other & CANARD_CAN_EXT_ID_MASK;
 
     /*
      * STD vs EXT - if 11 most significant bits are the same, EXT loses.
      */
-    const bool ext = (id & CANARD_CAN_FRAME_EFF) != 0;
-    const bool rhs_ext = (rhs & CANARD_CAN_FRAME_EFF) != 0;
-    if (ext != rhs_ext)
+    const bool self_ext = (self & CANARD_CAN_FRAME_EFF) != 0;
+    const bool other_ext = (other & CANARD_CAN_FRAME_EFF) != 0;
+    if (self_ext != other_ext)
     {
-        uint32_t arb11 = ext ? (clean_id >> 18U) : clean_id;
-        uint32_t rhs_arb11 = rhs_ext ? (rhs_clean_id >> 18U) : rhs_clean_id;
-        if (arb11 != rhs_arb11)
+        const uint32_t self_arb11 = self_ext ? (self_clean_id >> 18U) : self_clean_id;
+        const uint32_t other_arb11 = other_ext ? (other_clean_id >> 18U) : other_clean_id;
+        if (self_arb11 != other_arb11)
         {
-            return arb11 < rhs_arb11;
+            return self_arb11 < other_arb11;
         }
         else
         {
-            return rhs_ext;
+            return other_ext;
         }
     }
 
     /*
      * RTR vs Data frame - if frame identifiers and frame types are the same, RTR loses.
      */
-    const bool rtr = (id & CANARD_CAN_FRAME_RTR) != 0;
-    const bool rhs_rtr = (rhs & CANARD_CAN_FRAME_RTR) != 0;
-    if (clean_id == rhs_clean_id && rtr != rhs_rtr)
+    const bool self_rtr = (self & CANARD_CAN_FRAME_RTR) != 0;
+    const bool other_rtr = (other & CANARD_CAN_FRAME_RTR) != 0;
+    if (self_clean_id == other_clean_id && self_rtr != other_rtr)
     {
-        return rhs_rtr;
+        return other_rtr;
     }
 
     /*
      * Plain ID arbitration - greater value loses.
      */
-    return clean_id < rhs_clean_id;
+    return self_clean_id < other_clean_id;
 }
 
 /**
