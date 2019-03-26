@@ -1021,9 +1021,9 @@ CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator)
 }
 
 /**
- * Returns true if priority of rhs is higher than id
+ * Returns true if priority of id is higher than rhs.
  */
-CANARD_INTERNAL bool isPriorityHigher(uint32_t rhs, uint32_t id)
+CANARD_INTERNAL bool isPriorityHigher(uint32_t id, uint32_t rhs)
 {
     const uint32_t clean_id = id & CANARD_CAN_EXT_ID_MASK;
     const uint32_t rhs_clean_id = rhs & CANARD_CAN_EXT_ID_MASK;
