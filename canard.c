@@ -42,11 +42,11 @@
 #define SERVICE_NOT_MSG_FROM_ID(x)                  ((bool)    (((x) >> 25U) & 0x1U))
 #define REQUEST_NOT_RESPONSE_FROM_ID(x)             ((bool)    (((x) >> 24U) & 0x1U))
 #define DEST_ID_FROM_ID(x)                          ((uint8_t) (((x) >> 8U)  & 0x7FU))
-#define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 26U) & 0x1FU))
+#define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 26U) & 0x7U))
 #define SUBJECT_TYPE_FROM_ID(x)                     ((uint16_t)(((x) >> 8U)  & 0x7FFFU))
 #define SRV_TYPE_FROM_ID(x)                         ((uint8_t) (((x) >> 15U) & 0x1FFU))
 
-#define MAKE_TRANSFER_DESCRIPTOR(port_id, transfer_type, src_node_id, dst_node_id)             \
+#define MAKE_SESSION_SPECIFIER(port_id, transfer_type, src_node_id, dst_node_id)             \
     (((uint32_t)(port_id)) | (((uint32_t)(transfer_type)) << 16U) |                            \
     (((uint32_t)(src_node_id)) << 18U) | (((uint32_t)(dst_node_id)) << 25U))
 
@@ -151,7 +151,7 @@ int16_t canardBroadcast(CanardInstance* ins,
     uint32_t can_id = 0;
     uint16_t crc = 0xFFFFU;
 
-    can_id = ((uint32_t) priority << 26U) | ((uint32_t) data_type_id << 8U) | ((uint32_t) canardGetLocalNodeID(ins) << 1U);
+    can_id = ((uint32_t) priority << 26U) | ((uint32_t) data_type_id << 8U);
 
     if (canardGetLocalNodeID(ins) == CANARD_BROADCAST_NODE_ID) // Anonymous message transfer
     {
@@ -170,6 +170,8 @@ int16_t canardBroadcast(CanardInstance* ins,
             crc = crcAddSignature(crc, data_type_signature);
             crc = crcAdd(crc, payload, payload_len);
         }
+
+        can_id |=  ((uint32_t) (canardGetLocalNodeID(ins) & 0x7FU) << 1U);
     }
 
     const int16_t result = enqueueTxFrames(ins, can_id, inout_transfer_id, crc, payload, payload_len);
@@ -267,7 +269,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
     const uint8_t source_node_id = SOURCE_ID_FROM_ID(frame->id);
     const uint16_t data_type_id = extractDataType(frame->id);
     const uint32_t transfer_descriptor =
-            MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, source_node_id, destination_node_id);
+            MAKE_SESSION_SPECIFIER(data_type_id, transfer_type, source_node_id, destination_node_id);
 
     const uint8_t tail_byte = frame->data[frame->data_len - 1];
 

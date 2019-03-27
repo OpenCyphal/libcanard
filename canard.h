@@ -347,14 +347,14 @@ void* canardGetUserReference(CanardInstance* ins);
  * Assigns a new node ID value to the current node.
  * Node ID can be assigned only once.
  *
- * Returns CANARD_OK if success, or negative error code if node ID is outside valid range.
+ * Returns CANARD_OK if success, or negative error code if node ID is outside valid range or already configured.
  */
 int16_t canardSetLocalNodeID(CanardInstance* ins,
-                          uint8_t self_node_id);
+                             uint8_t self_node_id);
 
 /**
  * Returns node ID of the local node.
- * Returns zero (broadcast) if the node ID is not set, i.e. if the local node is anonymous.
+ * Returns 255 (broadcast) if the node ID is not set, i.e. if the local node is anonymous.
  */
 uint8_t canardGetLocalNodeID(const CanardInstance* ins);
 

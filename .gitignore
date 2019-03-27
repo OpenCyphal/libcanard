@@ -34,12 +34,7 @@
 # CMake build directory
 build/
 cmake-build-*/
-CMakeFiles/
-cmake_install.cmake
-CMakeCache.txt
-Makefile
-demo
-run_tests
+build-avr/
 
 # IDE and tools
 .idea

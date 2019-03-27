@@ -142,7 +142,7 @@ Few things to note:
 Value of the field dtid_tt_snid_dnid can be computed with the following helper macro:
 
 ```c
-#define CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, \
+#define CANARD_MAKE_SESSION_SPECIFIER(data_type_id, transfer_type, \
                                         src_node_id, dst_node_id) \
     ((data_type_id) | ((transfer_type) << 16) | \
      ((src_node_id) << 18) | ((dst_node_id) << 25))
