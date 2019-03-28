@@ -58,7 +58,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
 
     %if union:
     // Union Tag ${union} bits
-    canardEncodeScalar(msg_buf, offset, ${union}, (void*)&source->union_tag); // ${union} bits
+    canardEncodePrimitive(msg_buf, offset, ${union}, (void*)&source->union_tag); // ${union} bits
     offset += ${union};
     $!setvar("union_index", "0")!$
     %endif
@@ -76,19 +76,19 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
                     %if f.bitlen < 8
     ${f.array_max_size_bit_len}
     //  - Add array length, last item, but bitlen < 8.
-    canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '.len'))});
+    canardEncodePrimitive(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '.len'))});
     offset += ${f.array_max_size_bit_len};
                     %else
     if (! root_item)
     {
         // - Add array length
-        canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '.len'))});
+        canardEncodePrimitive(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '.len'))});
         offset += ${f.array_max_size_bit_len};
     }
                     %endif
                 %else
     // - Add array length
-    canardEncodeScalar(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '.len'))});
+    canardEncodePrimitive(msg_buf, offset, ${f.array_max_size_bit_len}, (void*)&source->${'%s' % ((f.name + '.len'))});
     offset += ${f.array_max_size_bit_len};
                 %endif
 
@@ -98,7 +98,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
                 %if isinstance(f.data_type.element_type, CompoundType)
         offset += ${f.c_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
-        canardEncodeScalar(msg_buf,
+        canardEncodePrimitive(msg_buf,
                            offset,
                            ${f.bitlen},
                            (void*)(source->${'%s' % ((f.name + '.data'))} + c));// ${f.max_size}
@@ -109,7 +109,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     // Static array (${f.name})
     for (c = 0; c < ${f.array_size}; c++)
     {
-        canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)(source->${f.name} + c)); // ${f.max_size}
+        canardEncodePrimitive(msg_buf, offset, ${f.bitlen}, (void*)(source->${f.name} + c)); // ${f.max_size}
         offset += ${f.bitlen};
     }
             %endif
@@ -130,7 +130,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
 #else
     tmp_float = (CANARD_USE_FLOAT16_CAST)source->${f.name};
 #endif
-    canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)&tmp_float); // ${f.max_size}
+    canardEncodePrimitive(msg_buf, offset, ${f.bitlen}, (void*)&tmp_float); // ${f.max_size}
     offset += ${f.bitlen};
         %else
             %if f.saturate
@@ -140,7 +140,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     source->${f.name} = CANARD_INTERNAL_SATURATE_UNSIGNED(source->${f.name}, ${f.max_size})
               %endif
             %endif
-    canardEncodeScalar(msg_buf, offset, ${f.bitlen}, (void*)&source->${f.name}); // ${f.max_size}
+    canardEncodePrimitive(msg_buf, offset, ${f.bitlen}, (void*)&source->${f.name}); // ${f.max_size}
     offset += ${f.bitlen};
 
         %endif
@@ -199,7 +199,7 @@ int32_t ${type_name}_decode_internal(
 
     %if union:
     // Get Union Tag
-    ret = canardDecodeScalar(transfer, (uint32_t)offset, ${union}, false, (void*)&dest->union_tag); // ${union}
+    ret = canardDecodePrimitive(transfer, (uint32_t)offset, ${union}, false, (void*)&dest->union_tag); // ${union}
     if (ret != ${union})
     {
         goto ${type_name}_error_exit;
@@ -229,7 +229,7 @@ int32_t ${type_name}_decode_internal(
     else
     {
         // - Array length ${f.array_max_size_bit_len} bits
-        ret = canardDecodeScalar(transfer,
+        ret = canardDecodePrimitive(transfer,
                                  (uint32_t)offset,
                                  ${f.array_max_size_bit_len},
                                  false,
@@ -241,7 +241,7 @@ int32_t ${type_name}_decode_internal(
         offset += ${f.array_max_size_bit_len};
     }
                     %else
-    ret = canardDecodeScalar(transfer,
+    ret = canardDecodePrimitive(transfer,
                              (uint32_t)offset,
                              ${f.array_max_size_bit_len},
                              false,
@@ -254,7 +254,7 @@ int32_t ${type_name}_decode_internal(
                     %endif
                 %else
     //  - Array length, not last item ${f.array_max_size_bit_len} bits
-    ret = canardDecodeScalar(transfer,
+    ret = canardDecodePrimitive(transfer,
                              (uint32_t)offset,
                              ${f.array_max_size_bit_len},
                              false,
@@ -283,7 +283,7 @@ int32_t ${type_name}_decode_internal(
                     %else
         if (dyn_arr_buf)
         {
-            ret = canardDecodeScalar(transfer,
+            ret = canardDecodePrimitive(transfer,
                                      (uint32_t)offset,
                                      ${f.bitlen},
                                      ${f.signedness},
@@ -302,7 +302,7 @@ int32_t ${type_name}_decode_internal(
     // Static array (${f.name})
     for (c = 0; c < ${f.array_size}; c++)
     {
-        ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)(dest->${f.name} + c));
+        ret = canardDecodePrimitive(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)(dest->${f.name} + c));
         if (ret != ${f.bitlen})
         {
             goto ${type_name}_error_exit;
@@ -326,7 +326,7 @@ int32_t ${type_name}_decode_internal(
         %elif isinstance(f.data_type, FloatType) and f.bitlen == 16:
 
     // float16 special handling
-    ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&tmp_float);
+    ret = canardDecodePrimitive(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&tmp_float);
 
     if (ret != ${f.bitlen})
     {
@@ -340,7 +340,7 @@ int32_t ${type_name}_decode_internal(
     offset += ${f.bitlen};
         %else
 
-    ret = canardDecodeScalar(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
+    ret = canardDecodePrimitive(transfer, (uint32_t)offset, ${f.bitlen}, ${f.signedness}, (void*)&dest->${f.name});
     if (ret != ${f.bitlen})
     {
         goto ${type_name}_error_exit;

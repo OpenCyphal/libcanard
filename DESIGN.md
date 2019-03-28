@@ -142,9 +142,9 @@ Few things to note:
 Value of the field dtid_tt_snid_dnid can be computed with the following helper macro:
 
 ```c
-#define CANARD_MAKE_SESSION_SPECIFIER(data_type_id, transfer_type, \
+#define CANARD_MAKE_SESSION_SPECIFIER(port_id, transfer_type, \
                                         src_node_id, dst_node_id) \
-    ((data_type_id) | ((transfer_type) << 16) | \
+    ((port_id) | ((transfer_type) << 16) | \
      ((src_node_id) << 18) | ((dst_node_id) << 25))
 ```
 
@@ -269,9 +269,9 @@ typedef enum
 
 typedef enum
 {
-    CanardTransferTypeResponse  = 0,
-    CanardTransferTypeRequest   = 1,
-    CanardTransferTypeBroadcast = 2
+    CanardTransferTypeServiceResponse  = 0,
+    CanardTransferTypeServiceRequest   = 1,
+    CanardTransferTypeMessagePublication = 2
 } CanardTransferType;
 
 /**
@@ -301,7 +301,7 @@ typedef struct
      * of the payload of the CAN frame.
      *
      * In simple cases it should be possible to get data directly from the head and/or tail pointers.
-     * Otherwise it is advised to use canardDecodeScalar().
+     * Otherwise it is advised to use canardDecodePrimitive().
      */
     const uint8_t*           payload_head;   ///< Always valid, i.e. not NULL.
     const CanardBufferBlock* payload_middle; ///< May be NULL if the buffer was not needed. Always NULL for single-frame transfers.
@@ -311,11 +311,11 @@ typedef struct
     /**
      * These fields identify the transfer for the application logic.
      */
-    uint16_t data_type_id;                  ///< 0 to 255 for services, 0 to 65535 for messages
+    uint16_t port_id;                       ///< 0 to 511 for services, 0 to 32767 for messages
     uint8_t transfer_type;                  ///< See @ref CanardTransferType
     uint8_t transfer_id;                    ///< 0 to 31
     uint8_t priority;                       ///< 0 to 31
-    uint8_t source_node_id;                 ///< 1 to 127, or 0 if the source is anonymous
+    uint8_t source_node_id;                 ///< 1 to 127, or 255 if the source is anonymous
 } CanardRxTransfer;
 
 /**
@@ -355,9 +355,8 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins);
  * Sends a broadcast transfer.
  * If the node is in passive mode, only single-frame transfers will be allowed.
  */
-int canardBroadcast(CanardInstance* ins,
-                    uint64_t data_type_signature,
-                    uint16_t data_type_id,
+int canardPublishMessage(CanardInstance* ins,
+                    uint16_t subject_id,
                     uint8_t* inout_transfer_id,
                     uint8_t priority,
                     const void* payload,
@@ -369,8 +368,7 @@ int canardBroadcast(CanardInstance* ins,
  */
 int canardRequestOrRespond(CanardInstance* ins,
                            uint8_t destination_node_id,
-                           uint64_t data_type_signature,
-                           uint16_t data_type_id,
+                           uint16_t service_id,
                            uint8_t* inout_transfer_id,
                            uint8_t priority,
                            CanardRequestResponse kind,
@@ -396,21 +394,11 @@ void canardHandleRxFrame(CanardInstance* ins,
                          uint64_t timestamp_usec);
 
 /**
- * Traverses the list of transfers and removes those that were last updated more than
- * timeout_usec microseconds ago.
- */
-void canardCleanupStaleTransfers(CanardInstance* ins,
-                                 uint64_t timeout_usec,
-                                 uint64_t current_time_usec);
-
-/**
  * The library calls this function when it receives first frame of a transfer to determine whether
  * the transfer should be received.
- * If the application returns true, the pointer out_data_type_signature must be written with the data type signature.
  */
 typedef bool (*CanardShouldAcceptTransfer)(const CanardInstance* ins,
-                                           uint64_t* out_data_type_signature,
-                                           uint16_t data_type_id,
+                                           uint16_t port_id,
                                            CanardTransferType transfer_type,
                                            uint8_t source_node_id);
 
@@ -450,7 +438,7 @@ typedef void (*CanardOnTransferReception)(CanardInstance* ins,
  *  | [33, 64]   | false           | uint64_t                                 |
  *  | [33, 64]   | true            | int64_t, or 64-bit float                 |
  */
-int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer where the data will be copied from
+int canardDecodePrimitive(const CanardRxTransfer* transfer,    ///< The RX transfer where the data will be copied from
                        uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
                        uint8_t bit_length,                  ///< Length of the value, in bits; see the table
                        bool value_is_signed,                ///< True if the value can be negative; see the table
@@ -476,7 +464,7 @@ int canardDecodeScalar(const CanardRxTransfer* transfer,    ///< The RX transfer
  *  | [17, 32]   | uint32_t, int32_t, or 32-bit float       |
  *  | [33, 64]   | uint64_t, int64_t, or 64-bit float       |
  */
-void canardEncodeScalar(void* destination,      ///< Destination buffer where the result will be stored
+void canardEncodePrimitive(void* destination,      ///< Destination buffer where the result will be stored
                         uint32_t bit_offset,    ///< Offset, in bits, from the beginning of the destination buffer
                         uint8_t bit_length,     ///< Length of the value, in bits; see the table
                         const void* value);     ///< Pointer to the value; see the table

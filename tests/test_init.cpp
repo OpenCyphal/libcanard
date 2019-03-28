@@ -26,7 +26,6 @@
 #include "canard.h"
 
 static bool shouldAcceptTransferMock(const CanardInstance*,
-                                     uint64_t*,
                                      uint16_t,
                                      CanardTransferType,
                                      uint8_t)

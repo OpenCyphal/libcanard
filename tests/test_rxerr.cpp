@@ -78,14 +78,12 @@ static void onTransferReceived(CanardInstance* ins,
 }
 
 static bool shouldAcceptTransfer(const CanardInstance* ins,
-                                 uint64_t* out_data_type_signature,
-                                 uint16_t data_type_id,
+                                 uint16_t port_id,
                                  CanardTransferType transfer_type,
                                  uint8_t source_node_id)
 {
     (void)ins;
-    (void)out_data_type_signature;
-    (void)data_type_id;
+    (void)port_id;
     (void)transfer_type;
     (void)source_node_id;
     return g_should_accept;
