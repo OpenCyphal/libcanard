@@ -18,7 +18,8 @@ matrix:
             - gcc-7-multilib
             - linux-libc-dev:i386
       script:
-        - CC=gcc-7 && CXX=g++-7 && cd tests/ && cmake . && make
+        - rm -rf tests/build && mkdir tests/build/ && cd tests/build/
+        - CC=gcc-7 && CXX=g++-7 && cmake .. && make
         - ./run_tests --rng-seed time
 
     #
@@ -37,9 +38,9 @@ matrix:
             - linux-libc-dev:i386
             - libc6-dev-i386
       script:
+        - rm -rf tests/build && mkdir tests/build/ && cd tests/build/
         - clang++-5.0 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes
-        - cd tests/
-        - cmake -DCMAKE_C_COMPILER=clang-5.0 -DCMAKE_CXX_COMPILER=clang++-5.0 .
+        - cmake -DCMAKE_C_COMPILER=clang-5.0 -DCMAKE_CXX_COMPILER=clang++-5.0 ..
         - make
         - ./run_tests --rng-seed time
 

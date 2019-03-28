@@ -26,35 +26,34 @@
 #include <canard.h>
 
 //Independent implementation of ID layout from https://uavcan.org/Specification/4._CAN_bus_transport_layer/
-#define CONSTRUCT_PRIO(prio)        (((prio) & 0x1F) << 24)
-#define CONSTRUCT_MTID(mtid)        (((mtid) & 0xFFFF) << 8)
-#define CONSTRUCT_SID(sid)          (((sid)  & 0x7F))
-#define CONSTRUCT_DISC(disc)        (((disc) & 0x3FFF) << 10)
-#define CONSTRUCT_DISC_MTID(mtid)   (((mtid) & 0x3) << 8)
-#define CONSTRUCT_STID(stid)        (((stid) & 0xFF) << 16)
-#define CONSTRUCT_DID(did)          (((did)  & 0x7F) << 8)
-#define CONSTRUCT_REQUEST(request)  (((request) & 0x1) << 15)
+#define CONSTRUCT_PRIO(prio)                    (((prio) & 0x7) << 26)
+#define CONSTRUCT_SUBJECT_ID(subject_id)        (((subject_id) & 0xFFFF) << 8)
+#define CONSTRUCT_SOURCE_ID(source_id)          (((source_id) & 0x7F) << 1)
+#define CONSTRUCT_SERVICE_ID(service_id)        (((service_id) & 0x1FF) << 15)
+#define CONSTRUCT_DEST_ID(dest_id)              (((dest_id)  & 0x7F) << 8)
+#define CONSTRUCT_REQUEST(request)              (((request) & 0x1) << 24)
 
-#define CONSTRUCT_SNM_BIT (1 << 7)
+#define CONSTRUCT_ANON_BIT (1 << 24)
+#define CONSTRUCT_SNM_BIT (1 << 25)
+#define CONSTRUCT_PV_BIT  (1)
 
-#define CONSTRUCT_ANON_MSG_ID(prio, disc, mtid, sid)    (CONSTRUCT_PRIO(prio) | \
-                                                         CONSTRUCT_DISC_MTID(mtid) | \
-                                                         CONSTRUCT_DISC(disc) | \
-                                                         CONSTRUCT_SID(sid) \
+#define CONSTRUCT_MSG_ID(prio, subject_id, source_id)   (CONSTRUCT_PRIO(prio) | \
+                                                         CONSTRUCT_SUBJECT_ID(subject_id) | \
+                                                         CONSTRUCT_SOURCE_ID(source_id) | \
+                                                         CONSTRUCT_PV_BIT |\
                                                          CANARD_CAN_FRAME_EFF)
 
-#define CONSTRUCT_MSG_ID(prio, mtid, sid)   (CONSTRUCT_PRIO(prio) | \
-                                             CONSTRUCT_MTID(mtid) | \
-                                             CONSTRUCT_SID(sid) | \
-                                             CANARD_CAN_FRAME_EFF)
+#define CONSTRUCT_ANON_MSG_ID(prio, subject_id, source_id)  (CONSTRUCT_ANON_BIT | \
+                                                             CONSTRUCT_MSG_ID(prio, subject_id, source_id))
 
-#define CONSTRUCT_SVC_ID(prio, stid, request, did, sid) (CONSTRUCT_PRIO(prio) | \
-                                                         CONSTRUCT_STID(stid) | \
-                                                         CONSTRUCT_REQUEST(request) | \
-                                                         CONSTRUCT_DID(did) | \
-                                                         CONSTRUCT_SID(sid) | \
-                                                         CONSTRUCT_SNM_BIT | \
-                                                         CANARD_CAN_FRAME_EFF)
+#define CONSTRUCT_SVC_ID(prio, service_id, request, dest_id, source_id) (CONSTRUCT_PRIO(prio) | \
+                                                                             CONSTRUCT_SNM_BIT | \
+                                                                             CONSTRUCT_REQUEST(request) | \
+                                                                             CONSTRUCT_SERVICE_ID(service_id) | \
+                                                                             CONSTRUCT_DEST_ID(dest_id) | \
+                                                                             CONSTRUCT_SOURCE_ID(source_id) | \
+                                                                             CONSTRUCT_PV_BIT |\
+                                                                             CANARD_CAN_FRAME_EFF)
 
 #define CONSTRUCT_START(start) (((start) & 0x1) << 7)
 #define CONSTRUCT_END(end) (((end) & 0x1) << 6)

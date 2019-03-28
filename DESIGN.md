@@ -142,7 +142,7 @@ Few things to note:
 Value of the field dtid_tt_snid_dnid can be computed with the following helper macro:
 
 ```c
-#define CANARD_MAKE_TRANSFER_DESCRIPTOR(data_type_id, transfer_type, \
+#define CANARD_MAKE_SESSION_SPECIFIER(data_type_id, transfer_type, \
                                         src_node_id, dst_node_id) \
     ((data_type_id) | ((transfer_type) << 16) | \
      ((src_node_id) << 18) | ((dst_node_id) << 25))
@@ -255,8 +255,8 @@ Note that the proposed API does not make any assumptions about the CAN driver in
 A rough draft of the API definitions is provided below:
 
 ```c
-#define CANARD_BROADCAST_NODE_ID    0
-#define CANARD_MIN_NODE_ID          1
+#define CANARD_BROADCAST_NODE_ID    255
+#define CANARD_MIN_NODE_ID          0
 #define CANARD_MAX_NODE_ID          127
 
 #define CANARD_MEM_BLOCK_SIZE       32
