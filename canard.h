@@ -100,7 +100,7 @@ extern "C" {
 /// Transfer priority definitions
 #define CANARD_TRANSFER_PRIORITY_EXCEPTIONAL    0
 #define CANARD_TRANSFER_PRIORITY_IMMEDIATE      1
-#define CANARD_TRANSFER_FAST                    2
+#define CANARD_TRANSFER_PRIORITY_FAST           2
 #define CANARD_TRANSFER_PRIORITY_HIGH           3
 #define CANARD_TRANSFER_PRIORITY_NOMINAL        4
 #define CANARD_TRANSFER_PRIORITY_LOW            5
@@ -168,7 +168,7 @@ typedef struct CanardTxQueueItem CanardTxQueueItem;
 typedef bool (* CanardShouldAcceptTransfer)(const CanardInstance* ins,          ///< Library instance
                                             uint16_t port_id,                   ///< Refer to the specification
                                             CanardTransferType transfer_type,   ///< Refer to CanardTransferType
-                                            uint8_t source_node_id);            ///< Source node ID or Broadcast (0)
+                                            uint8_t source_node_id);            ///< Source node ID or Broadcast (255)
 
 /**
  * This function will be invoked by the library every time a transfer is successfully received.

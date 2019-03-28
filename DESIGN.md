@@ -315,7 +315,7 @@ typedef struct
     uint8_t transfer_type;                  ///< See @ref CanardTransferType
     uint8_t transfer_id;                    ///< 0 to 31
     uint8_t priority;                       ///< 0 to 31
-    uint8_t source_node_id;                 ///< 1 to 127, or 255 if the source is anonymous
+    uint8_t source_node_id;                 ///< 0 to 127, or 255 if the source is anonymous
 } CanardRxTransfer;
 
 /**
