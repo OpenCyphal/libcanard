@@ -132,11 +132,11 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins)
 }
 
 int16_t canardPublishMessage(CanardInstance* ins,
-                        uint16_t subject_id,
-                        uint8_t* inout_transfer_id,
-                        uint8_t priority,
-                        const void* payload,
-                        uint16_t payload_len)
+                             uint16_t subject_id,
+                             uint8_t* inout_transfer_id,
+                             uint8_t priority,
+                             const void* payload,
+                             uint16_t payload_len)
 {
     if (payload == NULL && payload_len > 0)
     {
@@ -471,10 +471,10 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
 }
 
 int16_t canardDecodePrimitive(const CanardRxTransfer* transfer,
-                           uint32_t bit_offset,
-                           uint8_t bit_length,
-                           bool value_is_signed,
-                           void* out_value)
+                              uint32_t bit_offset,
+                              uint8_t bit_length,
+                              bool value_is_signed,
+                              void* out_value)
 {
     if (transfer == NULL || out_value == NULL)
     {
@@ -632,9 +632,9 @@ int16_t canardDecodePrimitive(const CanardRxTransfer* transfer,
 }
 
 void canardEncodePrimitive(void* destination,
-                        uint32_t bit_offset,
-                        uint8_t bit_length,
-                        const void* value)
+                           uint32_t bit_offset,
+                           uint8_t bit_length,
+                           const void* value)
 {
     /*
      * This function can only fail due to invalid arguments, so it was decided to make it return void,

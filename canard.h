@@ -41,9 +41,13 @@
 extern "C" {
 #endif
 
-/// Libcanard version. API will be backwards compatible within the same major version.
-#define CANARD_VERSION_MAJOR                        1
-#define CANARD_VERSION_MINOR                        0
+/// Semantic version numbers of this library (not the UAVCAN specification).
+/// API will be backwards compatible within the same major version.
+#define UAVCAN_LIBRARY_VERSION_MAJOR        1
+#define UAVCAN_LIBRARY_VERSION_MINOR        0
+
+/// The version number of the UAVCAN specification implemented by this library.
+#define UAVCAN_SPECIFICATION_VERSION_MAJOR  1
 
 /// By default this macro resolves to the standard assert(). The user can redefine this if necessary.
 #ifndef CANARD_ASSERT
@@ -363,11 +367,11 @@ uint8_t canardGetLocalNodeID(const CanardInstance* ins);
  * Returns the number of frames enqueued, or negative error code.
  */
 int16_t canardPublishMessage(CanardInstance* ins,       ///< Library instance
-                        uint16_t subject_id,            ///< Refer to the specification
-                        uint8_t* inout_transfer_id,     ///< Pointer to a persistent variable containing the transfer ID
-                        uint8_t priority,               ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
-                        const void* payload,            ///< Transfer payload
-                        uint16_t payload_len);          ///< Length of the above, in bytes
+                             uint16_t subject_id,            ///< Refer to the specification
+                             uint8_t* inout_transfer_id,     ///< Pointer to a persistent variable containing the transfer ID
+                             uint8_t priority,               ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
+                             const void* payload,            ///< Transfer payload
+                             uint16_t payload_len);          ///< Length of the above, in bytes
 
 /**
  * Sends a request or a response transfer.
@@ -446,10 +450,10 @@ int16_t canardHandleRxFrame(CanardInstance* ins,
  *  | [33, 64]   | true            | int64_t, or 64-bit float                 |
  */
 int16_t canardDecodePrimitive(const CanardRxTransfer* transfer, ///< The RX transfer where the data will be copied from
-                           uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
-                           uint8_t bit_length,                  ///< Length of the value, in bits; see the table
-                           bool value_is_signed,                ///< True if the value can be negative; see the table
-                           void* out_value);                    ///< Pointer to the output storage; see the table
+                              uint32_t bit_offset,                 ///< Offset, in bits, from the beginning of the transfer
+                              uint8_t bit_length,                  ///< Length of the value, in bits; see the table
+                              bool value_is_signed,                ///< True if the value can be negative; see the table
+                              void* out_value);                    ///< Pointer to the output storage; see the table
 
 /**
  * This function can be used to encode values for later transmission in a UAVCAN transfer. It encodes a scalar value -
@@ -472,9 +476,9 @@ int16_t canardDecodePrimitive(const CanardRxTransfer* transfer, ///< The RX tran
  *  | [33, 64]   | uint64_t, int64_t, or 64-bit float       |
  */
 void canardEncodePrimitive(void* destination,   ///< Destination buffer where the result will be stored
-                        uint32_t bit_offset,    ///< Offset, in bits, from the beginning of the destination buffer
-                        uint8_t bit_length,     ///< Length of the value, in bits; see the table
-                        const void* value);     ///< Pointer to the value; see the table
+                           uint32_t bit_offset,    ///< Offset, in bits, from the beginning of the destination buffer
+                           uint8_t bit_length,     ///< Length of the value, in bits; see the table
+                           const void* value);     ///< Pointer to the value; see the table
 
 /**
  * This function can be invoked by the application to release pool blocks that are used
