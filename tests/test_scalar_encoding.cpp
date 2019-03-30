@@ -43,7 +43,7 @@ static inline T read(CanardRxTransfer* transfer, uint32_t bit_offset, uint8_t bi
 {
     auto value = T();
 
-    const int res = canardDecodeScalar(transfer, uint16_t(bit_offset), bit_length, std::is_signed<T>::value, &value);
+    const int res = canardDecodePrimitive(transfer, uint16_t(bit_offset), bit_length, std::is_signed<T>::value, &value);
     if (res != bit_length)
     {
         throw std::runtime_error("Unexpected return value; expected " +
@@ -194,24 +194,24 @@ TEST_CASE("ScalarEncode, Basic")
     std::fill_n(std::begin(buffer), sizeof(buffer), 0);
 
     uint8_t u8 = 123;
-    canardEncodeScalar(buffer, 0, 8, &u8);
+    canardEncodePrimitive(buffer, 0, 8, &u8);
     REQUIRE(123 == buffer[0]);
     REQUIRE(0 == buffer[1]);
 
     u8 = 0b1111;
-    canardEncodeScalar(buffer, 5, 4, &u8);
+    canardEncodePrimitive(buffer, 5, 4, &u8);
     REQUIRE((123U | 0b111U) == buffer[0]);
     REQUIRE(0b10000000 == buffer[1]);
 
     int16_t s16 = -1;
-    canardEncodeScalar(buffer, 9, 15, &s16);
+    canardEncodePrimitive(buffer, 9, 15, &s16);
     REQUIRE((123U | 0b111U) == buffer[0]);
     REQUIRE(0b11111111 == buffer[1]);
     REQUIRE(0b11111111 == buffer[2]);
     REQUIRE(0b00000000 == buffer[3]);
 
     auto s64 = int64_t(0b0000000100100011101111000110011110001001101010111100110111101111L);
-    canardEncodeScalar(buffer, 16, 60, &s64);
+    canardEncodePrimitive(buffer, 16, 60, &s64);
     REQUIRE((123U | 0b111U) == buffer[0]);  // 0
     REQUIRE(0b11111111 == buffer[1]);    // 8
     REQUIRE(0b11101111 == buffer[2]);    // 16

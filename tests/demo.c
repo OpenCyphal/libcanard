@@ -27,16 +27,13 @@
 
 /*
  * Some useful constants defined by the UAVCAN specification.
- * Data type signature values can be easily obtained with the script show_data_type_info.py
  */
-#define UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID                      1
-#define UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE               0x0b2a812620a11d40
+#define UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID                  1
 #define UAVCAN_NODE_ID_ALLOCATION_RANDOM_TIMEOUT_RANGE_USEC         400000UL
 #define UAVCAN_NODE_ID_ALLOCATION_REQUEST_DELAY_OFFSET_USEC         600000UL
 
 #define UAVCAN_NODE_STATUS_MESSAGE_SIZE                             7
-#define UAVCAN_NODE_STATUS_DATA_TYPE_ID                             341
-#define UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE                      0x0f0868d0c1a7c6f1
+#define UAVCAN_NODE_STATUS_FIXED_SUBJECT_ID                         341
 
 #define UAVCAN_NODE_HEALTH_OK                                       0
 #define UAVCAN_NODE_HEALTH_WARNING                                  1
@@ -47,8 +44,7 @@
 #define UAVCAN_NODE_MODE_INITIALIZATION                             1
 
 #define UAVCAN_GET_NODE_INFO_RESPONSE_MAX_SIZE                      ((3015 + 7) / 8)
-#define UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE                    0xee468a8121c46a9e
-#define UAVCAN_GET_NODE_INFO_DATA_TYPE_ID                           1
+#define UAVCAN_GET_NODE_INFO_FIXED_SERVICE_ID                       1
 
 #define UNIQUE_ID_LENGTH_BYTES                                      16
 
@@ -129,9 +125,9 @@ static void makeNodeStatusMessage(uint8_t buffer[UAVCAN_NODE_STATUS_MESSAGE_SIZE
      * Here we're using the helper for demonstrational purposes; in this simple case it could be preferred to
      * encode the values manually.
      */
-    canardEncodeScalar(buffer,  0, 32, &uptime_sec);
-    canardEncodeScalar(buffer, 32,  2, &g_node_health);
-    canardEncodeScalar(buffer, 34,  3, &g_node_mode);
+    canardEncodePrimitive(buffer,  0, 32, &uptime_sec);
+    canardEncodePrimitive(buffer, 32,  2, &g_node_health);
+    canardEncodePrimitive(buffer, 34,  3, &g_node_mode);
 }
 
 
@@ -146,8 +142,8 @@ static void onTransferReceived(CanardInstance* ins,
      * Taking this branch only if we don't have a node ID, ignoring otherwise.
      */
     if ((canardGetLocalNodeID(ins) == CANARD_BROADCAST_NODE_ID) &&
-        (transfer->transfer_type == CanardTransferTypeBroadcast) &&
-        (transfer->data_type_id == UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID))
+        (transfer->transfer_type == CanardTransferTypeMessagePublication) &&
+        (transfer->port_id == UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID))
     {
         // Rule C - updating the randomized time interval
         g_send_next_node_id_allocation_request_at =
@@ -169,7 +165,7 @@ static void onTransferReceived(CanardInstance* ins,
         {
             assert(received_unique_id_len < UNIQUE_ID_LENGTH_BYTES);
             const uint8_t bit_offset = (uint8_t)(UniqueIDBitOffset + received_unique_id_len * 8U);
-            (void) canardDecodeScalar(transfer, bit_offset, 8, false, &received_unique_id[received_unique_id_len]);
+            (void) canardDecodePrimitive(transfer, bit_offset, 8, false, &received_unique_id[received_unique_id_len]);
         }
 
         // Obtaining the local unique ID
@@ -202,7 +198,7 @@ static void onTransferReceived(CanardInstance* ins,
         {
             // Allocation complete - copying the allocated node ID from the message
             uint8_t allocated_node_id = 0;
-            (void) canardDecodeScalar(transfer, 0, 7, false, &allocated_node_id);
+            (void) canardDecodePrimitive(transfer, 0, 7, false, &allocated_node_id);
             assert(allocated_node_id <= 127);
 
             canardSetLocalNodeID(ins, allocated_node_id);
@@ -210,8 +206,8 @@ static void onTransferReceived(CanardInstance* ins,
         }
     }
 
-    if ((transfer->transfer_type == CanardTransferTypeRequest) &&
-        (transfer->data_type_id == UAVCAN_GET_NODE_INFO_DATA_TYPE_ID))
+    if ((transfer->transfer_type == CanardTransferTypeServiceRequest) &&
+        (transfer->port_id == UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID))
     {
         printf("GetNodeInfo request from %d\n", transfer->source_node_id);
 
@@ -226,7 +222,7 @@ static void onTransferReceived(CanardInstance* ins,
         buffer[8] = APP_VERSION_MINOR;
         buffer[9] = 1;                          // Optional field flags, VCS commit is set
         uint32_t u32 = GIT_HASH;
-        canardEncodeScalar(buffer, 80, 32, &u32);
+        canardEncodePrimitive(buffer, 80, 32, &u32);
         // Image CRC skipped
 
         // HardwareVersion
@@ -246,8 +242,7 @@ static void onTransferReceived(CanardInstance* ins,
          */
         const int16_t resp_res = canardRequestOrRespond(ins,
                                                         transfer->source_node_id,
-                                                        UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE,
-                                                        UAVCAN_GET_NODE_INFO_DATA_TYPE_ID,
+                                                        UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID,
                                                         &transfer->transfer_id,
                                                         transfer->priority,
                                                         CanardResponse,
@@ -269,8 +264,7 @@ static void onTransferReceived(CanardInstance* ins,
  * All transfers that are addressed to other nodes are always ignored.
  */
 static bool shouldAcceptTransfer(const CanardInstance* ins,
-                                 uint64_t* out_data_type_signature,
-                                 uint16_t data_type_id,
+                                 uint16_t port_id,
                                  CanardTransferType transfer_type,
                                  uint8_t source_node_id)
 {
@@ -281,19 +275,17 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
         /*
          * If we're in the process of allocation of dynamic node ID, accept only relevant transfers.
          */
-        if ((transfer_type == CanardTransferTypeBroadcast) &&
-            (data_type_id == UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID))
+        if ((transfer_type == CanardTransferTypeMessagePublication) &&
+            (port_id == UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID))
         {
-            *out_data_type_signature = UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE;
             return true;
         }
     }
     else
     {
-        if ((transfer_type == CanardTransferTypeRequest) &&
-            (data_type_id == UAVCAN_GET_NODE_INFO_DATA_TYPE_ID))
+        if ((transfer_type == CanardTransferTypeServiceRequest) &&
+            (port_id == UAVCAN_GET_NODE_INFO_FIXED_SERVICE_ID))
         {
-            *out_data_type_signature = UAVCAN_GET_NODE_INFO_DATA_TYPE_SIGNATURE;
             return true;
         }
     }
@@ -305,13 +297,8 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
 /**
  * This function is called at 1 Hz rate from the main loop.
  */
-static void process1HzTasks(uint64_t timestamp_usec)
+static void process1HzTasks()
 {
-    /*
-     * Purging transfers that are no longer transmitted. This will occasionally free up some memory.
-     */
-    canardCleanupStaleTransfers(&g_canard, timestamp_usec);
-
     /*
      * Printing the memory usage statistics.
      */
@@ -341,9 +328,8 @@ static void process1HzTasks(uint64_t timestamp_usec)
 
         static uint8_t transfer_id;  // Note that the transfer ID variable MUST BE STATIC (or heap-allocated)!
 
-        const int16_t bc_res = canardBroadcast(&g_canard,
-                                               UAVCAN_NODE_STATUS_DATA_TYPE_SIGNATURE,
-                                               UAVCAN_NODE_STATUS_DATA_TYPE_ID,
+        const int16_t bc_res = canardPublishMessage(&g_canard,
+                                               UAVCAN_NODE_STATUS_FIXED_SUBJECT_ID,
                                                &transfer_id,
                                                CANARD_TRANSFER_PRIORITY_LOW,
                                                buffer,
@@ -491,9 +477,8 @@ int main(int argc, char** argv)
         memmove(&allocation_request[1], &my_unique_id[g_node_id_allocation_unique_id_offset], uid_size);
 
         // Broadcasting the request
-        const int16_t bcast_res = canardBroadcast(&g_canard,
-                                                  UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_SIGNATURE,
-                                                  UAVCAN_NODE_ID_ALLOCATION_DATA_TYPE_ID,
+        const int16_t bcast_res = canardPublishMessage(&g_canard,
+                                                  UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID,
                                                   &node_id_allocation_transfer_id,
                                                   CANARD_TRANSFER_PRIORITY_LOW,
                                                   &allocation_request[0],
@@ -523,7 +508,7 @@ int main(int argc, char** argv)
         if (ts >= next_1hz_service_at)
         {
             next_1hz_service_at += 1000000;
-            process1HzTasks(ts);
+            process1HzTasks();
         }
     }
 

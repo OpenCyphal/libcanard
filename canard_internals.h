@@ -118,9 +118,6 @@ CANARD_INTERNAL void swapByteOrder(void* data, unsigned size);
 CANARD_INTERNAL uint16_t crcAddByte(uint16_t crc_val,
                                     uint8_t byte);
 
-CANARD_INTERNAL uint16_t crcAddSignature(uint16_t crc_val,
-                                         uint64_t data_type_signature);
-
 CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
                                 const uint8_t* bytes,
                                 size_t len);

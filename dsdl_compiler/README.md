@@ -70,7 +70,7 @@ msg.vendor_specific_status_code = vendor_status_code;
 /* Encode the filled struct into packed_uavcan_msg_buf, ready to be sent */
 const uint32_t len_of_packed_msg = uavcan_protocol_NodeStatus_encode(&msg, packed_uavcan_msg_buf);
 
-(void) canardBroadcast(&g_canard,
+(void) canardPublishMessage(&g_canard,
                        UAVCAN_PROTOCOL_NODESTATUS_SIGNATURE,
                        UAVCAN_PROTOCOL_NODESTATUS_ID,
                        &g_bc_node_status_transfer_id,
