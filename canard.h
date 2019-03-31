@@ -389,7 +389,7 @@ int16_t canardPublishMessage(CanardInstance* ins,       ///< Library instance
  */
 int16_t canardRequestOrRespond(CanardInstance* ins,             ///< Library instance
                                uint8_t destination_node_id,     ///< Node ID of the server/client
-                               uint8_t service_id,              ///< Refer to the specification
+                               uint16_t service_id,             ///< Refer to the specification
                                uint8_t* inout_transfer_id,      ///< Pointer to a persistent variable with transfer ID
                                uint8_t priority,                ///< Refer to definitions CANARD_TRANSFER_PRIORITY_*
                                CanardRequestResponse kind,      ///< Refer to CanardRequestResponse
