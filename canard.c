@@ -44,7 +44,7 @@
 #define DEST_ID_FROM_ID(x)                          ((uint8_t) (((x) >> 8U)  & 0x7FU))
 #define PRIORITY_FROM_ID(x)                         ((uint8_t) (((x) >> 26U) & 0x7U))
 #define SUBJECT_TYPE_FROM_ID(x)                     ((uint16_t)(((x) >> 8U)  & 0x7FFFU))
-#define SRV_TYPE_FROM_ID(x)                         ((uint8_t) (((x) >> 15U) & 0x1FFU))
+#define SRV_TYPE_FROM_ID(x)                         ((uint16_t) (((x) >> 15U) & 0x1FFU))
 
 #define MAKE_SESSION_SPECIFIER(port_id, transfer_type, src_node_id, dst_node_id)             \
     (((uint32_t)(port_id)) | (((uint32_t)(transfer_type)) << 16U) |                            \
@@ -181,7 +181,7 @@ int16_t canardPublishMessage(CanardInstance* ins,
 
 int16_t canardRequestOrRespond(CanardInstance* ins,
                                uint8_t destination_node_id,
-                               uint8_t service_id,
+                               uint16_t service_id,
                                uint8_t* inout_transfer_id,
                                uint8_t priority,
                                CanardRequestResponse kind,
