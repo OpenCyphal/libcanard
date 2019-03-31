@@ -315,7 +315,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
     if (need_restart)
     {
         rx_state->transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte);
-        rx_state->next_toggle = 0;
+        rx_state->next_toggle = 1;
         releaseStatePayload(ins, rx_state);
         if (!IS_START_OF_TRANSFER(tail_byte))
         {
@@ -856,7 +856,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
         memcpy(queue_item->frame.data, payload, payload_len);
 
         queue_item->frame.data_len = (uint8_t)(payload_len + 1);
-        queue_item->frame.data[payload_len] = (uint8_t)(0xC0U | (*transfer_id & 31U));
+        queue_item->frame.data[payload_len] = (uint8_t)(0xE0U | (*transfer_id & 0x1FU));
         queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
 
         pushTxQueue(ins, queue_item);
@@ -865,7 +865,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
     else                                                                    // Multi frame transfer
     {
         uint16_t data_index = 0;
-        uint8_t toggle = 0;
+        uint8_t toggle = 1;
         uint8_t sot_eot = 0x80;
 
         CanardTxQueueItem* queue_item = NULL;
@@ -898,7 +898,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
             // tail byte
             sot_eot = (data_index == payload_len) ? (uint8_t)0x40 : sot_eot;
 
-            queue_item->frame.data[i] = (uint8_t)(sot_eot | ((uint32_t)toggle << 5U) | ((uint32_t)*transfer_id & 31U));
+            queue_item->frame.data[i] = (uint8_t)(sot_eot | ((uint32_t)toggle << 5U) | ((uint32_t)*transfer_id & 0x1FU));
             queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
             queue_item->frame.data_len = (uint8_t)(i + 1);
             pushTxQueue(ins, queue_item);
@@ -1026,7 +1026,7 @@ CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state)
     CANARD_ASSERT(state->buffer_blocks == NULL);
     state->transfer_id++;
     state->payload_len = 0;
-    state->next_toggle = 0;
+    state->next_toggle = 1;
 }
 
 /**
