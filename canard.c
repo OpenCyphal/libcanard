@@ -150,7 +150,7 @@ int16_t canardPublishMessage(CanardInstance* ins,
     uint32_t can_id = 0;
     uint16_t crc = 0xFFFFU;
 
-    can_id = ((uint32_t) priority << 26U) | ((uint32_t) subject_id << 8U);
+    can_id = ((uint32_t) priority << 26U) | ((uint32_t) subject_id << 8U) | 1U;
 
     if (canardGetLocalNodeID(ins) == CANARD_BROADCAST_NODE_ID) // Anonymous message transfer
     {
@@ -204,7 +204,7 @@ int16_t canardRequestOrRespond(CanardInstance* ins,
 
     const uint32_t can_id = ((uint32_t) priority << 26U) | ((uint32_t) service_id << 15U) |
                             ((uint32_t) kind << 24U) | ((uint32_t) destination_node_id << 8U) |
-                            (1U << 25U) | ((uint32_t) canardGetLocalNodeID(ins) << 1U);
+                            (1U << 25U) | ((uint32_t) canardGetLocalNodeID(ins) << 1U) | 1U;
     uint16_t crc = 0xFFFFU;
 
     if (payload_len > 7)
