@@ -51,12 +51,14 @@ ${line}
 
 #define ${'%-50s' % (t.macro_name + service + '_MAX_SIZE')} ((${'%d' % max_bitlen} + 7)/8)
 
- %if max_bitlen
-
+ %if len(constants) > 0:
 // Constants
     % for a in constants:
 #define ${'%-60s %10s' % (t.macro_name + service + '_' + a.name, a.initialization_expression, )} // ${a.initialization_expression}
     % endfor
+ %endif
+
+ %if max_bitlen
 
     % for a in fields:
         %if isinstance(a.data_type, DynamicArrayType)
