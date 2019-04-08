@@ -121,7 +121,11 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
         %elif f.type_category == t.CATEGORY_COMPOUND:
 
     // Compound
+          %if f.last_item
+    offset = ${f.cpp_type}_encode_internal(&source->${f.name}, msg_buf, offset, root_item);
+          %else
     offset = ${f.cpp_type}_encode_internal(&source->${f.name}, msg_buf, offset, 0);
+          %endif
         %elif f.type_category == t.CATEGORY_PRIMITIVE and f.cpp_type == "float" and f.bitlen == 16:
 
     // float16 special handling
