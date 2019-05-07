@@ -279,7 +279,7 @@ int32_t ${type_name}_decode_internal(
     for (c = 0; c < dest->${'%s' % ((f.name + '.len'))}; c++)
     {
                     %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}_decode_internal(transfer,
+        offset = ${f.cpp_type}_decode_internal(transfer,
                                                 0,
                                                 (void*)&dest->${'%s' % ((f.name + '.data'))}[c],
                                                 dyn_arr_buf,
