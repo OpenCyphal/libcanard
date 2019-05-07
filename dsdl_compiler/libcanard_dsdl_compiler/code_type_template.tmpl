@@ -180,7 +180,7 @@ uint32_t ${type_name}_encode(${type_name}* source, void* msg_buf)
   *                     ${type_name} dyn memory will point to dyn_arr_buf memory.
   *                     NULL will ignore dynamic arrays decoding.
   * @param offset: Call with 0, bit offset to msg storage
-  * @retval offset or ERROR value if < 0
+  * @retval new offset or ERROR value if < 0
   */
 int32_t ${type_name}_decode_internal(
   const CanardRxTransfer* transfer,
