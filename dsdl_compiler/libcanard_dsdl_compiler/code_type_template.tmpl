@@ -34,7 +34,7 @@
   * @param msg_buf: pointer to msg storage
   * @param offset: bit offset to msg storage
   * @param root_item: for detecting if TAO should be used
-  * @retval returns offset
+  * @retval returns new offset
   */
 uint32_t ${type_name}_encode_internal(${type_name}* source,
   void* msg_buf,
@@ -96,7 +96,7 @@ uint32_t ${type_name}_encode_internal(${type_name}* source,
     for (c = 0; c < source->${'%s' % ((f.name + '.len'))}; c++)
     {
                 %if f.cpp_type_category == t.CATEGORY_COMPOUND:
-        offset += ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
+        offset = ${f.cpp_type}_encode_internal((void*)&source->${'%s' % ((f.name + '.data'))}[c], msg_buf, offset, 0);
                 %else
         canardEncodeScalar(msg_buf,
                            offset,
