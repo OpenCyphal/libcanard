@@ -18,11 +18,11 @@ It is based on the DSDL parsing package from pyuavcan.
 import sys, os, logging, errno, re
 from .pyratemp import Template
 
-from pydsdl import parse_namespace
-from pydsdl.parse_error import ParseError
-from pydsdl.data_type import StructureType, ServiceType, CompoundType, PrimitiveType,  \
+from pydsdl import read_namespace
+from pydsdl import FrontendError
+from pydsdl import StructureType, ServiceType, CompositeType, PrimitiveType,  \
             FloatType, UnsignedIntegerType, SignedIntegerType, BooleanType, ArrayType, \
-            DynamicArrayType, StaticArrayType, VoidType, UnionType
+            VariableLengthArrayType, FixedLengthArrayType, VoidType, UnionType
 
 
 OUTPUT_HEADER_FILE_EXTENSION = 'h'
@@ -90,7 +90,7 @@ def get_name_space_prefix(t):
 
 
 def type_output_filename(t, extension = OUTPUT_HEADER_FILE_EXTENSION):
-    assert isinstance(t, CompoundType)
+    assert isinstance(t, CompositeType)
     name_list = t.full_name.split('.')
     if extension == OUTPUT_CODE_FILE_EXTENSION:
         if len(name_list[-2]):
@@ -120,9 +120,9 @@ def die(text):
 
 def run_parser(source_dirs, search_dirs, allow_unregulated_fixed_port_id):
     try:
-        types = parse_namespace(source_dirs, search_dirs, allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
-    except ParseError as ex:
-        logger.info('Parser failure', exc_info=True)
+        types = read_namespace(source_dirs, search_dirs, allow_unregulated_fixed_port_id=allow_unregulated_fixed_port_id)
+    except FrontendError as ex:
+        logger.info('Frontend failure', exc_info=True)
         die(ex)
     return types
 
@@ -244,17 +244,14 @@ def type_to_c_type(t):
                     'saturate':saturate}
 
     elif isinstance(t, ArrayType):
-        assert isinstance(t, (DynamicArrayType, StaticArrayType))
+        assert isinstance(t, (VariableLengthArrayType, FixedLengthArrayType))
         values = type_to_c_type(t.element_type)
         mode = {
-            StaticArrayType: 'Static Array',
-            DynamicArrayType: 'Dynamic Array',
+            FixedLengthArrayType: 'Fixed Length Array',
+            VariableLengthArrayType: 'Variable Length Array',
         }[type(t)]
 
-        if isinstance(t, DynamicArrayType):
-            max_size = t.max_size
-        else:
-            max_size = t.size 
+        max_size = t.capacity
         
         return {'c_type':'%s' % (values['c_type'], ),
             'c_type_category': type(t),
@@ -265,15 +262,15 @@ def type_to_c_type(t):
             'max_size':values['max_size'],
             'signedness':values['signedness'],
             'saturate':values['saturate'],
-            'dynamic_array': isinstance(t, DynamicArrayType),
+            'dynamic_array': isinstance(t, VariableLengthArrayType),
             'max_array_elements': max_size,
             }
-    elif isinstance(t, CompoundType):
+    elif isinstance(t, CompositeType):
         return {
             'c_type':(t.full_name + '_' + get_version_string(t)).replace('.','_'),
             'post_c_type':'',
             'c_type_comment':'',
-            'bitlen':t.bit_length_range.max,
+            'bitlen':max(t.bit_length_set),
             'max_size':0,
             'signedness':'false',
             'saturate':False}
@@ -300,7 +297,7 @@ def generate_one_type(template_expander, t):
     # Dependencies (no duplicates)
     def fields_includes(fields):
         def detect_include(t):
-            if isinstance(t, CompoundType):
+            if isinstance(t, CompositeType):
                 return type_output_filename(t)
             if isinstance(t, ArrayType):
                 return detect_include(t.element_type)
@@ -374,15 +371,15 @@ def eval_allowed_locals():
     safe_pydsdl = {
         "StructureType":        StructureType, 
         "ServiceType":          ServiceType, 
-        "CompoundType":         CompoundType, 
+        "CompositeType":        CompositeType, 
         "PrimitiveType":        PrimitiveType,
         "FloatType":            FloatType, 
         "UnsignedIntegerType":  UnsignedIntegerType, 
         "SignedIntegerType":    SignedIntegerType, 
         "BooleanType":          BooleanType, 
         "ArrayType":            ArrayType,
-        "DynamicArrayType":     DynamicArrayType, 
-        "StaticArrayType":      StaticArrayType, 
+        "VariableLengthArrayType":     VariableLengthArrayType, 
+        "FixedLengthArrayType":      FixedLengthArrayType, 
         "VoidType":             VoidType, 
         "UnionType":            UnionType
     }

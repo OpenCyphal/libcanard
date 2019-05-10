@@ -54,16 +54,16 @@ ${line}
  %if len(constants) > 0:
 // Constants
     % for a in constants:
-#define ${'%-60s %10s' % (t.macro_name + service + '_' + a.name, a.initialization_expression, )} // ${a.initialization_expression}
+#define ${'%-60s %10s' % (t.macro_name + service + '_' + a.name, a.value, )} // ${a.value}
     % endfor
  %endif
 
  %if max_bitlen
 
     % for a in fields:
-        %if isinstance(a.data_type, DynamicArrayType)
+        %if isinstance(a.data_type, VariableLengthArrayType)
 #define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_MAX_LENGTH')} ${a.max_array_elements}
-        %elif isinstance(a.data_type, StaticArrayType)
+        %elif isinstance(a.data_type, FixedLengthArrayType)
 #define ${'%-80s' % (t.macro_name + service + '_' + a.name.upper() + '_LENGTH')} ${a.max_array_elements}  
         %endif
     % endfor
@@ -89,13 +89,13 @@ typedef struct
     // ${group_name}
     % for a in attrs:
         %if isinstance(a.data_type, ArrayType)
-            %if isinstance(a.data_type, DynamicArrayType)
+            %if isinstance(a.data_type, VariableLengthArrayType)
     struct
     {
                 %if a.max_array_elements > 255
-        ${'uint16_t    %-26s // %s' % (('len;'), 'Dynamic array length')}
+        ${'uint16_t    %-26s // %s' % (('len;'), 'Variable array length')}
                 %else
-        ${'uint8_t    %-26s // %s' % (('len;'), 'Dynamic array length')}
+        ${'uint8_t    %-26s // %s' % (('len;'), 'Variable array length')}
                 %endif
         ${'%-10s %-26s // %s' % ((a.c_type + '*'), ('data;'), a.c_type_comment, )}
     } ${a.name};
@@ -137,17 +137,17 @@ typedef struct
 
 /********************************* Request ***********************************/
 
-${generate_primary_body(type_name=t.name_space_type_name+'Request' + '_' + t.version_name.replace('.', '_'), service='_REQUEST', max_bitlen=t.request_type.bit_length_range.max, \
+${generate_primary_body(type_name=t.name_space_type_name+'Request' + '_' + t.version_name.replace('.', '_'), service='_REQUEST', max_bitlen=max(t.request_type.bit_length_set), \
                                fields=t.request_type.fields, constants=t.request_type.constants, \
                                union=t.request_union, has_array=t.request_has_array)}
 
 /********************************* Response **********************************/
 
-${generate_primary_body(type_name=t.name_space_type_name+'Response' + '_' + t.version_name.replace('.', '_'), service='_RESPONSE', max_bitlen=t.response_type.bit_length_range.max, \
+${generate_primary_body(type_name=t.name_space_type_name+'Response' + '_' + t.version_name.replace('.', '_'), service='_RESPONSE', max_bitlen=max(t.response_type.bit_length_set), \
                                fields=t.response_type.fields, constants=t.response_type.constants, \
                                union=t.response_union, has_array=t.response_has_array)}
 % else:
-${generate_primary_body(type_name=t.name_space_type_name, service='', max_bitlen=t.bit_length_range.max, \
+${generate_primary_body(type_name=t.name_space_type_name, service='', max_bitlen=max(t.bit_length_set), \
                         fields=t.fields, constants=t.constants, union=t.union, has_array=t.has_array)}
 % endif
 %if not t.header_only
