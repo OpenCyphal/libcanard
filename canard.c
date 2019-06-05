@@ -462,7 +462,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
         }
         else
         {
-            return CANARD_ERROR_RX_BAD_CRC;
+            return -CANARD_ERROR_RX_BAD_CRC;
         }
     }
 
@@ -1138,7 +1138,8 @@ CANARD_INTERNAL CanardRxState* createRxState(CanardPoolAllocator* allocator, uin
     CanardRxState init = {
         .next = NULL,
         .buffer_blocks = NULL,
-        .dtid_tt_snid_dnid = transfer_descriptor
+        .dtid_tt_snid_dnid = transfer_descriptor,
+        .calculated_crc = 0xFFFF
     };
 
     CanardRxState* state = (CanardRxState*) allocateBlock(allocator);
