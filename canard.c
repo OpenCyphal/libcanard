@@ -372,7 +372,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
             return CANARD_ERROR_OUT_OF_MEMORY;
         }
         rx_state->payload_crc = (uint16_t)(((uint16_t) frame->data[0]) | (uint16_t)((uint16_t) frame->data[1] << 8U));
-        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
+        rx_state->calculated_crc = crcAdd(0xFFFFU,
                                           frame->data + 2, (uint8_t)(frame->data_len - 3));
     }
     else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))    // Middle of a multi-frame transfer
@@ -1138,8 +1138,7 @@ CANARD_INTERNAL CanardRxState* createRxState(CanardPoolAllocator* allocator, uin
     CanardRxState init = {
         .next = NULL,
         .buffer_blocks = NULL,
-        .dtid_tt_snid_dnid = transfer_descriptor,
-        .calculated_crc = 0xFFFF
+        .dtid_tt_snid_dnid = transfer_descriptor
     };
 
     CanardRxState* state = (CanardRxState*) allocateBlock(allocator);
