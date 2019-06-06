@@ -369,10 +369,10 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
         {
             releaseStatePayload(ins, rx_state);
             prepareForNextTransfer(rx_state);
-            return CANARD_ERROR_OUT_OF_MEMORY;
+            return -CANARD_ERROR_OUT_OF_MEMORY;
         }
         rx_state->payload_crc = (uint16_t)(((uint16_t) frame->data[0]) | (uint16_t)((uint16_t) frame->data[1] << 8U));
-        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
+        rx_state->calculated_crc = crcAdd(0xFFFFU,
                                           frame->data + 2, (uint8_t)(frame->data_len - 3));
     }
     else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))    // Middle of a multi-frame transfer
@@ -383,7 +383,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
         {
             releaseStatePayload(ins, rx_state);
             prepareForNextTransfer(rx_state);
-            return CANARD_ERROR_OUT_OF_MEMORY;
+            return -CANARD_ERROR_OUT_OF_MEMORY;
         }
         rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
                                           frame->data, (uint8_t)(frame->data_len - 1));
@@ -462,7 +462,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
         }
         else
         {
-            return CANARD_ERROR_RX_BAD_CRC;
+            return -CANARD_ERROR_RX_BAD_CRC;
         }
     }
 
