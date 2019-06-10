@@ -870,7 +870,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
 
         CanardTxQueueItem* queue_item = NULL;
 
-        while (payload_len - data_index != 0)
+        while (data_index < payload_len + CANARD_CAN_MULTI_FRAME_CRC_LENGTH)
         {
             queue_item = createTxItem(&ins->allocator);
             if (queue_item == NULL)
@@ -879,24 +879,32 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
             }
 
             uint8_t i = 0;
-            if (data_index == 0)
-            {
-                // add crc
-                queue_item->frame.data[0] = (uint8_t) (crc);
-                queue_item->frame.data[1] = (uint8_t) (crc >> 8U);
-                i = 2;
-            }
-            else
-            {
-                i = 0;
-            }
 
-            for (; i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index < payload_len; i++, data_index++)
+            while (i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index < payload_len)
             {
                 queue_item->frame.data[i] = payload[data_index];
+                i++; 
+                data_index++;
             }
+
+            if (i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index == payload_len)
+            {
+                // add crc byte 1
+                queue_item->frame.data[i] = (uint8_t) (crc);
+                i++;
+                data_index++;
+            }
+
+            if (i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index == payload_len + 1)
+            {
+                // add crc byte 2
+                queue_item->frame.data[i] = (uint8_t) (crc >> 8U);
+                i++;
+                data_index++;
+            }
+
             // tail byte
-            sot_eot = (data_index == payload_len) ? (uint8_t)0x40 : sot_eot;
+            sot_eot = (data_index == payload_len + CANARD_CAN_MULTI_FRAME_CRC_LENGTH) ? (uint8_t)0x40 : sot_eot;
 
             queue_item->frame.data[i] = (uint8_t)(sot_eot | ((uint32_t)toggle << 5U) | ((uint32_t)*transfer_id & 0x1FU));
             queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;

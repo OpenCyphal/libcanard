@@ -149,3 +149,87 @@ TEST_CASE("Deframing, SingleFrameBasicCan2")
 
 }
 
+TEST_CASE("Framing, MultiFrameBasicCan2")
+{
+    uint8_t node_id = 22;
+    uint8_t toggle_bit = 5;
+    uint8_t eof_bit = 6;
+    uint8_t sof_bit = 7;
+
+    std::uint8_t memory_arena[4096];
+    ::CanardInstance ins;
+
+    uint16_t subject_id = 12;
+    uint8_t transfer_id = 2;
+    uint8_t transfer_priority = CANARD_TRANSFER_PRIORITY_NOMINAL;
+    uint8_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
+    
+    canardInit(&ins,
+               memory_arena,
+               sizeof(memory_arena),
+               onTransferReceptionMock,
+               acceptAllTransfers,
+               reinterpret_cast<void*>(12345));
+    canardSetLocalNodeID(&ins, node_id);
+
+    auto res = canardPublishMessage(&ins,
+                         subject_id,
+                         &transfer_id,
+                         transfer_priority,
+                         data,
+                         sizeof(data));
+    REQUIRE(res >= 0);
+
+    // compenaste for internally incrementing transfer_id in canardPublishMessage
+    transfer_id--;
+
+
+    // First frame (1)
+    auto transfer_frame = canardPeekTxQueue(&ins);
+    REQUIRE(transfer_frame != nullptr);
+    canardPopTxQueue(&ins);
+
+    REQUIRE(transfer_frame->data_len == 8);
+    REQUIRE(transfer_frame->data[0] == 1);
+    REQUIRE(transfer_frame->data[1] == 2);
+    REQUIRE(transfer_frame->data[2] == 3);                 
+    REQUIRE(transfer_frame->data[3] == 4);                 
+    REQUIRE(transfer_frame->data[4] == 5);                 
+    REQUIRE(transfer_frame->data[5] == 6);                 
+    REQUIRE(transfer_frame->data[6] == 7);                 
+    REQUIRE(transfer_frame->data[7] == ((1 << sof_bit) | (0 << eof_bit) | (1 << toggle_bit) | transfer_id));
+
+
+    // Second frame (2)
+    transfer_frame = canardPeekTxQueue(&ins);
+    REQUIRE(transfer_frame != nullptr);
+    canardPopTxQueue(&ins);
+
+    REQUIRE(transfer_frame->data_len == 8);
+    REQUIRE(transfer_frame->data[0] == 8);
+    REQUIRE(transfer_frame->data[1] == 9);
+    REQUIRE(transfer_frame->data[2] == 10);                 
+    REQUIRE(transfer_frame->data[3] == 11);                 
+    REQUIRE(transfer_frame->data[4] == 12);                 
+    REQUIRE(transfer_frame->data[5] == 13);                 
+    REQUIRE(transfer_frame->data[6] == 14);                 
+    REQUIRE(transfer_frame->data[7] == ((0 << sof_bit) | (0 << eof_bit) | (0 << toggle_bit) | transfer_id));
+
+
+    // Third and last frame (3)
+    transfer_frame = canardPeekTxQueue(&ins);
+    REQUIRE(transfer_frame != nullptr);
+    canardPopTxQueue(&ins);
+
+    REQUIRE(transfer_frame->data_len == 6);
+    REQUIRE(transfer_frame->data[0] == 15);
+    REQUIRE(transfer_frame->data[1] == 16);
+    REQUIRE(transfer_frame->data[2] == 17);                                 
+    // CRC correctness is to be checked in unrelated test                               
+    REQUIRE(transfer_frame->data[5] == ((0 << sof_bit) | (1 << eof_bit) | (1 << toggle_bit) | transfer_id));
+
+
+    // Make sure there are no frames after the last frame
+    REQUIRE(canardPeekTxQueue(&ins) == nullptr);               
+}
+
