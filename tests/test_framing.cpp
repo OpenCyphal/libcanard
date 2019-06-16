@@ -403,6 +403,107 @@ TEST_CASE("Framing, MultiFrameSeperateCRCCan2")
     REQUIRE(canardPeekTxQueue(&ins) == nullptr);               
 }
 
+/* This test is created to see that sending the CRC in a sepereate frame works fine.
+ * When all the data is sent with no free byte for CRC in the last frame, 
+ * the CRC bytes must be sent in a seperate frame.
+ */
+TEST_CASE("Deframing, MultiFrameSeperateCRCCan2")
+{
+    uint8_t node_id = 22;
+
+    uint8_t toggle_bit = 5;
+    uint8_t eof_bit = 6;
+    uint8_t sof_bit = 7;
+
+    uint8_t transfer_priority_bit = 24;
+    uint8_t subject_id_bit = 8;
+    uint8_t node_id_bit = 1;
+
+
+    std::uint8_t memory_arena[4096];
+    ::CanardInstance ins;
+
+    uint16_t subject_id = 12;
+    uint8_t transfer_id = 2;
+    uint8_t transfer_priority = CANARD_TRANSFER_PRIORITY_NOMINAL;
+
+    static uint8_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+    uint16_t crc = crcAdd(0xFFFFU, data, sizeof(data));
+
+
+    auto onTransferReception = [](CanardInstance*, CanardRxTransfer* transfer)
+    {
+        // Only check (de)framing in this test
+        REQUIRE(transfer->payload_len == sizeof(data));
+
+        uint8_t out_value = 0;
+
+        for (uint8_t i = 0; i < sizeof(data); i++)
+        {
+            canardDecodePrimitive(transfer, i*8U, 8, false, &out_value);
+            REQUIRE(out_value == data[i]);
+        }
+
+    };
+
+    canardInit(&ins,
+               memory_arena,
+               sizeof(memory_arena),
+               onTransferReception,
+               acceptAllTransfers,
+               reinterpret_cast<void*>(12345));
+
+    CanardCANFrame frame1 = {
+        .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
+            | static_cast<uint32_t>(transfer_priority << transfer_priority_bit) 
+            | static_cast<uint32_t>(subject_id << subject_id_bit) 
+            | static_cast<uint32_t>(node_id << node_id_bit)
+        ),
+        .data = {1, 2, 3, 4, 5, 6, 7, static_cast<uint8_t>((1 << sof_bit) | (0 << eof_bit) | (1 << toggle_bit) | transfer_id)},
+        .data_len = 8,
+    };
+
+    auto res = canardHandleRxFrame(&ins,
+                                   &frame1,
+                                   1);
+    REQUIRE(res >= 0);
+
+
+    CanardCANFrame frame2 = {
+        .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
+            | static_cast<uint32_t>(transfer_priority << transfer_priority_bit) 
+            | static_cast<uint32_t>(subject_id << subject_id_bit) 
+            | static_cast<uint32_t>(node_id << node_id_bit)
+        ),
+        .data = {8, 9, 10, 11, 12, 13, 14, static_cast<uint8_t>((0 << sof_bit) | (0 << eof_bit) | (0 << toggle_bit) | transfer_id)},
+        .data_len = 8,
+    };
+
+    res = canardHandleRxFrame(&ins,
+                              &frame2,
+                              2);
+    REQUIRE(res >= 0);
+
+
+    CanardCANFrame frame3 = {
+        .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
+            | static_cast<uint32_t>(transfer_priority << transfer_priority_bit) 
+            | static_cast<uint32_t>(subject_id << subject_id_bit) 
+            | static_cast<uint32_t>(node_id << node_id_bit)
+        ),
+        .data = {static_cast<uint8_t>(crc >> 8), static_cast<uint8_t>(crc), static_cast<uint8_t>((0 << sof_bit) | (1 << eof_bit) | (1 << toggle_bit) | transfer_id)},
+        .data_len = 3,
+    };
+
+    res = canardHandleRxFrame(&ins,
+                              &frame3,
+                              3);
+    REQUIRE(res >= 0);
+
+}
+
+
+
 /* This test is created to see that split CRC between frames works fine.
  * When all the data is sent with only one free byte for CRC, 
  * the last CRC byte must be sent in a seperate frame.
@@ -473,5 +574,104 @@ TEST_CASE("Framing, MultiFrameSplitCRCCan2")
 
     // Make sure there are no frames after the last frame
     REQUIRE(canardPeekTxQueue(&ins) == nullptr);               
+}
+
+/* This test is created to see that split CRC between frames works fine.
+ * When all the data is sent with only one free byte for CRC, 
+ * the last CRC byte must be sent in a seperate frame.
+ */
+TEST_CASE("Deframing, MultiFrameSplitCRCCan2")
+{
+    uint8_t node_id = 22;
+
+    uint8_t toggle_bit = 5;
+    uint8_t eof_bit = 6;
+    uint8_t sof_bit = 7;
+
+    uint8_t transfer_priority_bit = 24;
+    uint8_t subject_id_bit = 8;
+    uint8_t node_id_bit = 1;
+
+
+    std::uint8_t memory_arena[4096];
+    ::CanardInstance ins;
+
+    uint16_t subject_id = 12;
+    uint8_t transfer_id = 2;
+    uint8_t transfer_priority = CANARD_TRANSFER_PRIORITY_NOMINAL;
+
+    static uint8_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
+    uint16_t crc = crcAdd(0xFFFFU, data, sizeof(data));
+
+
+    auto onTransferReception = [](CanardInstance*, CanardRxTransfer* transfer)
+    {
+        // Only check (de)framing in this test
+        REQUIRE(transfer->payload_len == sizeof(data));
+
+        uint8_t out_value = 0;
+
+        for (uint8_t i = 0; i < sizeof(data); i++)
+        {
+            canardDecodePrimitive(transfer, i*8U, 8, false, &out_value);
+            REQUIRE(out_value == data[i]);
+        }
+
+    };
+
+    canardInit(&ins,
+               memory_arena,
+               sizeof(memory_arena),
+               onTransferReception,
+               acceptAllTransfers,
+               reinterpret_cast<void*>(12345));
+
+    CanardCANFrame frame1 = {
+        .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
+            | static_cast<uint32_t>(transfer_priority << transfer_priority_bit) 
+            | static_cast<uint32_t>(subject_id << subject_id_bit) 
+            | static_cast<uint32_t>(node_id << node_id_bit)
+        ),
+        .data = {1, 2, 3, 4, 5, 6, 7, static_cast<uint8_t>((1 << sof_bit) | (0 << eof_bit) | (1 << toggle_bit) | transfer_id)},
+        .data_len = 8,
+    };
+
+    auto res = canardHandleRxFrame(&ins,
+                                   &frame1,
+                                   1);
+    REQUIRE(res >= 0);
+
+
+    CanardCANFrame frame2 = {
+        .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
+            | static_cast<uint32_t>(transfer_priority << transfer_priority_bit) 
+            | static_cast<uint32_t>(subject_id << subject_id_bit) 
+            | static_cast<uint32_t>(node_id << node_id_bit)
+        ),
+        .data = {8, 9, 10, 11, 12, 13, static_cast<uint8_t>(crc >> 8), static_cast<uint8_t>((0 << sof_bit) | (0 << eof_bit) | (0 << toggle_bit) | transfer_id)},
+        .data_len = 8,
+    };
+
+    res = canardHandleRxFrame(&ins,
+                              &frame2,
+                              2);
+    REQUIRE(res >= 0);
+
+
+    CanardCANFrame frame3 = {
+        .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
+            | static_cast<uint32_t>(transfer_priority << transfer_priority_bit) 
+            | static_cast<uint32_t>(subject_id << subject_id_bit) 
+            | static_cast<uint32_t>(node_id << node_id_bit)
+        ),
+        .data = {static_cast<uint8_t>(crc), static_cast<uint8_t>((0 << sof_bit) | (1 << eof_bit) | (1 << toggle_bit) | transfer_id)},
+        .data_len = 2,
+    };
+
+    res = canardHandleRxFrame(&ins,
+                              &frame3,
+                              3);
+    REQUIRE(res >= 0);
+
 }
 
