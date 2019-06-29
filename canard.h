@@ -90,6 +90,8 @@ extern "C" {
 /// This will be changed when the support for CAN FD is added
 #define CANARD_CAN_FRAME_MAX_DATA_LEN               8U
 
+#define CANARD_CAN_MULTI_FRAME_CRC_LENGTH           2U
+
 /// Node ID values. Refer to the specification for more info.
 #define CANARD_BROADCAST_NODE_ID                    255
 #define CANARD_MIN_NODE_ID                          0

@@ -282,6 +282,12 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
             {
                 return -CANARD_ERROR_OUT_OF_MEMORY;
             }
+
+            rx_state->calculated_crc = 0xFFFFU;
+            rx_state->timestamp_usec = timestamp_usec;
+            rx_state->next_toggle = 1;
+            rx_state->transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte);
+            rx_state->payload_len = 0;
         }
         else
         {
@@ -326,7 +332,6 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
 
     if (IS_START_OF_TRANSFER(tail_byte) && IS_END_OF_TRANSFER(tail_byte)) // single frame transfer
     {
-        rx_state->timestamp_usec = timestamp_usec;
         CanardRxTransfer rx_transfer = {
             .timestamp_usec = timestamp_usec,
             .payload_head = frame->data,
@@ -341,132 +346,115 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
         ins->on_reception(ins, &rx_transfer);
 
         prepareForNextTransfer(rx_state);
-        return CANARD_OK;
-    }
-
-    if (TOGGLE_BIT(tail_byte) != rx_state->next_toggle)
+    } 
+    else                                           // multi frame transfer
     {
-        return -CANARD_ERROR_RX_WRONG_TOGGLE;
-    }
-
-    if (TRANSFER_ID_FROM_TAIL_BYTE(tail_byte) != rx_state->transfer_id)
-    {
-        return -CANARD_ERROR_RX_UNEXPECTED_TID;
-    }
-
-    if (IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))      // Beginning of multi frame transfer
-    {
-        if (frame->data_len <= 3)
+        if (IS_START_OF_TRANSFER(tail_byte) && frame->data_len <= 3)
         {
             return -CANARD_ERROR_RX_SHORT_FRAME;
         }
 
-        // take off the crc and store the payload
-        rx_state->timestamp_usec = timestamp_usec;
-        const int16_t ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data + 2,
-                                                 (uint8_t) (frame->data_len - 3));
-        if (ret < 0)
+        if (TOGGLE_BIT(tail_byte) != rx_state->next_toggle)
         {
-            releaseStatePayload(ins, rx_state);
-            prepareForNextTransfer(rx_state);
-            return -CANARD_ERROR_OUT_OF_MEMORY;
+            return -CANARD_ERROR_RX_WRONG_TOGGLE;
         }
-        rx_state->payload_crc = (uint16_t)(((uint16_t) frame->data[0]) | (uint16_t)((uint16_t) frame->data[1] << 8U));
-        rx_state->calculated_crc = crcAdd(0xFFFFU,
-                                          frame->data + 2, (uint8_t)(frame->data_len - 3));
-    }
-    else if (!IS_START_OF_TRANSFER(tail_byte) && !IS_END_OF_TRANSFER(tail_byte))    // Middle of a multi-frame transfer
-    {
-        const int16_t ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data,
-                                                 (uint8_t) (frame->data_len - 1));
-        if (ret < 0)
+
+        if (TRANSFER_ID_FROM_TAIL_BYTE(tail_byte) != rx_state->transfer_id)
         {
-            releaseStatePayload(ins, rx_state);
-            prepareForNextTransfer(rx_state);
-            return -CANARD_ERROR_OUT_OF_MEMORY;
+            return -CANARD_ERROR_RX_UNEXPECTED_TID;
         }
-        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
-                                          frame->data, (uint8_t)(frame->data_len - 1));
-    }
-    else                                                                            // End of a multi-frame transfer
-    {
-        const uint8_t frame_payload_size = (uint8_t)(frame->data_len - 1);
 
-        uint8_t tail_offset = 0;
-
-        if (rx_state->payload_len < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE)
+        if (!IS_END_OF_TRANSFER(tail_byte)) // Any multi frame that do not complete the transfer
         {
-            // Copy the beginning of the frame into the head, point the tail pointer to the remainder
-            for (size_t i = rx_state->payload_len;
-                 (i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) && (tail_offset < frame_payload_size);
-                 i++, tail_offset++)
+            const int16_t ret = bufferBlockPushBytes(&ins->allocator, rx_state, frame->data,
+                                                        (uint8_t) (frame->data_len - 1));
+            if (ret < 0)
             {
-                rx_state->buffer_head[i] = frame->data[tail_offset];
+                releaseStatePayload(ins, rx_state);
+                prepareForNextTransfer(rx_state);
+                return -CANARD_ERROR_OUT_OF_MEMORY;
             }
+            rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc,
+                                            frame->data, (uint8_t)(frame->data_len - 1));
+
         }
-        else
+        else              // End of a multi-frame transfer
         {
-            // Like above, except that the beginning goes into the last block of the storage
-            CanardBufferBlock* block = rx_state->buffer_blocks;
-            if (block != NULL)          // If there's no middle, that's fine, we'll use only head and tail
+            const uint8_t frame_payload_size = (uint8_t)(frame->data_len - 1);
+
+            uint8_t tail_offset = 0;
+
+            if (rx_state->payload_len < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE)
             {
-                size_t offset = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE;    // Payload offset of the first block
-                while (block->next != NULL)
+                // Copy the beginning of the frame into the head, point the tail pointer to the remainder
+                for (size_t i = rx_state->payload_len;
+                    (i < CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) && (tail_offset < frame_payload_size);
+                    i++, tail_offset++)
                 {
-                    block = block->next;
-                    offset += CANARD_BUFFER_BLOCK_DATA_SIZE;
-                }
-                CANARD_ASSERT(block != NULL);
-
-                const size_t offset_within_block = rx_state->payload_len - offset;
-                CANARD_ASSERT(offset_within_block < CANARD_BUFFER_BLOCK_DATA_SIZE);
-
-                for (size_t i = offset_within_block;
-                     (i < CANARD_BUFFER_BLOCK_DATA_SIZE) && (tail_offset < frame_payload_size);
-                     i++, tail_offset++)
-                {
-                    block->data[i] = frame->data[tail_offset];
+                    rx_state->buffer_head[i] = frame->data[tail_offset];
                 }
             }
+            else
+            {
+                // Like above, except that the beginning goes into the last block of the storage
+                CanardBufferBlock* block = rx_state->buffer_blocks;
+                if (block != NULL)          // If there's no middle, that's fine, we'll use only head and tail
+                {
+                    size_t offset = CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE;    // Payload offset of the first block
+                    while (block->next != NULL)
+                    {
+                        block = block->next;
+                        offset += CANARD_BUFFER_BLOCK_DATA_SIZE;
+                    }
+                    CANARD_ASSERT(block != NULL);
+
+                    const size_t offset_within_block = rx_state->payload_len - offset;
+                    CANARD_ASSERT(offset_within_block < CANARD_BUFFER_BLOCK_DATA_SIZE);
+
+                    for (size_t i = offset_within_block;
+                        (i < CANARD_BUFFER_BLOCK_DATA_SIZE) && (tail_offset < frame_payload_size);
+                        i++, tail_offset++)
+                    {
+                        block->data[i] = frame->data[tail_offset];
+                    }
+                }
+            }
+
+            CanardRxTransfer rx_transfer = {
+                .timestamp_usec = timestamp_usec,
+                .payload_head = rx_state->buffer_head,
+                .payload_middle = rx_state->buffer_blocks,
+                .payload_tail = (tail_offset >= frame_payload_size) ? NULL : (&frame->data[tail_offset]),
+                .payload_len = (uint16_t)(rx_state->payload_len + frame_payload_size - (uint16_t)CANARD_CAN_MULTI_FRAME_CRC_LENGTH),
+                .port_id = port_id,
+                .transfer_type = (uint8_t)transfer_type,
+                .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),
+                .priority = priority,
+                .source_node_id = source_node_id
+            };
+
+            rx_state->buffer_blocks = NULL;     // Block list ownership has been transferred to rx_transfer!
+
+            // CRC validation
+            rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc, frame->data, frame->data_len - 1U);
+            if (rx_state->calculated_crc == 0)
+            {
+                ins->on_reception(ins, &rx_transfer);
+            }
+
+            // Making sure the payload is released even if the application didn't bother with it
+            canardReleaseRxTransferPayload(ins, &rx_transfer);
+            prepareForNextTransfer(rx_state);
+
+            if (rx_state->calculated_crc != 0)
+            {
+                return -CANARD_ERROR_RX_BAD_CRC;
+            }
         }
 
-        CanardRxTransfer rx_transfer = {
-            .timestamp_usec = timestamp_usec,
-            .payload_head = rx_state->buffer_head,
-            .payload_middle = rx_state->buffer_blocks,
-            .payload_tail = (tail_offset >= frame_payload_size) ? NULL : (&frame->data[tail_offset]),
-            .payload_len = (uint16_t)(rx_state->payload_len + frame_payload_size),
-            .port_id = port_id,
-            .transfer_type = (uint8_t)transfer_type,
-            .transfer_id = TRANSFER_ID_FROM_TAIL_BYTE(tail_byte),
-            .priority = priority,
-            .source_node_id = source_node_id
-        };
-
-        rx_state->buffer_blocks = NULL;     // Block list ownership has been transferred to rx_transfer!
-
-        // CRC validation
-        rx_state->calculated_crc = crcAdd((uint16_t)rx_state->calculated_crc, frame->data, frame->data_len - 1U);
-        if (rx_state->calculated_crc == rx_state->payload_crc)
-        {
-            ins->on_reception(ins, &rx_transfer);
-        }
-
-        // Making sure the payload is released even if the application didn't bother with it
-        canardReleaseRxTransferPayload(ins, &rx_transfer);
-        prepareForNextTransfer(rx_state);
-
-        if (rx_state->calculated_crc == rx_state->payload_crc)
-        {
-            return CANARD_OK;
-        }
-        else
-        {
-            return -CANARD_ERROR_RX_BAD_CRC;
-        }
+        rx_state->next_toggle = rx_state->next_toggle ? 0 : 1;
     }
 
-    rx_state->next_toggle = rx_state->next_toggle ? 0 : 1;
     return CANARD_OK;
 }
 
@@ -870,7 +858,7 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
 
         CanardTxQueueItem* queue_item = NULL;
 
-        while (payload_len - data_index != 0)
+        while (data_index < payload_len + CANARD_CAN_MULTI_FRAME_CRC_LENGTH)
         {
             queue_item = createTxItem(&ins->allocator);
             if (queue_item == NULL)
@@ -879,24 +867,32 @@ CANARD_INTERNAL int16_t enqueueTxFrames(CanardInstance* ins,
             }
 
             uint8_t i = 0;
-            if (data_index == 0)
-            {
-                // add crc
-                queue_item->frame.data[0] = (uint8_t) (crc);
-                queue_item->frame.data[1] = (uint8_t) (crc >> 8U);
-                i = 2;
-            }
-            else
-            {
-                i = 0;
-            }
 
-            for (; i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index < payload_len; i++, data_index++)
+            while (i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index < payload_len)
             {
                 queue_item->frame.data[i] = payload[data_index];
+                i++; 
+                data_index++;
             }
+
+            if (i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index == payload_len)
+            {
+                // add crc byte 1
+                queue_item->frame.data[i] = (uint8_t) (crc);
+                i++;
+                data_index++;
+            }
+
+            if (i < (CANARD_CAN_FRAME_MAX_DATA_LEN - 1) && data_index == payload_len + 1)
+            {
+                // add crc byte 2
+                queue_item->frame.data[i] = (uint8_t) (crc >> 8U);
+                i++;
+                data_index++;
+            }
+
             // tail byte
-            sot_eot = (data_index == payload_len) ? (uint8_t)0x40 : sot_eot;
+            sot_eot = (data_index == payload_len + CANARD_CAN_MULTI_FRAME_CRC_LENGTH) ? (uint8_t)0x40 : sot_eot;
 
             queue_item->frame.data[i] = (uint8_t)(sot_eot | ((uint32_t)toggle << 5U) | ((uint32_t)*transfer_id & 0x1FU));
             queue_item->frame.id = can_id | CANARD_CAN_FRAME_EFF;
