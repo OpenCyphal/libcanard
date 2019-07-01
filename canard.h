@@ -79,6 +79,7 @@ extern "C" {
 #define CANARD_ERROR_RX_UNEXPECTED_TID                 15
 #define CANARD_ERROR_RX_SHORT_FRAME                    16
 #define CANARD_ERROR_RX_BAD_CRC                        17
+#define CANARD_ERROR_RX_DUPLICATE_TID                  18
 
 /// The size of a memory block in bytes.
 #define CANARD_MEM_BLOCK_SIZE                       32U

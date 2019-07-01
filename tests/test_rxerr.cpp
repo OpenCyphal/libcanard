@@ -67,7 +67,7 @@
                                                          CONSTRUCT_TID(tid))
 
 static bool g_should_accept = true;
-
+static int g_accepted_messages = 0;
 /**
  * This callback is invoked by the library when a new message or request or response is received.
  */
@@ -76,6 +76,7 @@ static void onTransferReceived(CanardInstance* ins,
 {
     (void)ins;
     (void)transfer;
+    g_accepted_messages++;
 }
 
 static bool shouldAcceptTransfer(const CanardInstance* ins,
@@ -293,28 +294,28 @@ TEST_CASE("canardHandleRxFrame missed start handling, Correctness")
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 
     //Send a start packet, should pass
-    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 2);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
     err = canardHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a middle packet, toggle, and use correct ID - but timestamp 0
-    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 2);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
     err = canardHandleRxFrame(&canard, &frame, 0);
     REQUIRE(-CANARD_ERROR_RX_MISSED_START == err);
 
     //Send a start packet, should pass
-    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 4);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;                             //Data length MUST be full packet
     err = canardHandleRxFrame(&canard, &frame, 1);
     REQUIRE(CANARD_OK == err);
 
     //Send a middle packet, toggle, and use an incorrect TID
-    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 3);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 5);
     frame.data[7] = 0 | 3 | (1<<5);
     frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
     frame.data_len = 8;
@@ -371,4 +372,161 @@ TEST_CASE("canardHandleRxFrame OOM handling, Correctness")
     frame.data_len = 8;                             //Data length MUST be full packet
     err = canardHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == err);
+}
+
+TEST_CASE("canardHandleRxFrame TID handling, Correctness")
+{
+    uint8_t canard_memory_pool[1024];
+    uint8_t dummy_buf;
+    CanardInstance canard;
+    CanardCANFrame frame;
+    int16_t err;
+
+    g_should_accept = true;
+    g_accepted_messages = 0;
+
+    //Open canard to accept all transfers with a node ID of 20
+    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+               onTransferReceived, shouldAcceptTransfer, &canard);
+    canardSetLocalNodeID(&canard, 20);
+
+    frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 1);
+    frame.id = 0 | CANARD_CAN_FRAME_EFF;            //Set EFF
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 1;
+    err = canardHandleRxFrame(&canard, &frame, 1);
+    REQUIRE(err == CANARD_OK);
+
+    //More messages with same TID fail
+    err = canardHandleRxFrame(&canard, &frame, 2);
+    REQUIRE(err == -CANARD_ERROR_RX_DUPLICATE_TID);
+    err = canardHandleRxFrame(&canard, &frame, 3);
+    REQUIRE(err == -CANARD_ERROR_RX_DUPLICATE_TID);
+    REQUIRE(g_accepted_messages == 1);
+
+    //Next TID is accepted
+    frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 2);
+    err = canardHandleRxFrame(&canard, &frame, 4);
+    REQUIRE(err == CANARD_OK);
+    REQUIRE(g_accepted_messages == 2);
+}
+
+TEST_CASE("canardHandleRxFrame TID handling, Timeout")
+{
+    uint8_t canard_memory_pool[1024];
+    uint8_t dummy_buf;
+    CanardInstance canard;
+    CanardCANFrame frame;
+    int16_t err;
+
+    g_should_accept = true;
+    g_accepted_messages = 0;
+    //Open canard to accept all transfers with a node ID of 20
+    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+               onTransferReceived, shouldAcceptTransfer, &canard);
+    canardSetLocalNodeID(&canard, 20);
+
+    frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 1);
+    frame.id = 0 | CANARD_CAN_FRAME_EFF;            //Set EFF
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 1;
+    err = canardHandleRxFrame(&canard, &frame, 1);
+    REQUIRE(err == CANARD_OK);
+    err = canardHandleRxFrame(&canard, &frame, 4000000);
+    REQUIRE(err == CANARD_OK);
+    err = canardHandleRxFrame(&canard, &frame, 8000000);
+    REQUIRE(err == CANARD_OK);
+    REQUIRE(g_accepted_messages == 3);
+}
+
+TEST_CASE("canardHandleRxFrame Timed out transfer handling")
+{
+    uint8_t canard_memory_pool[1024];
+    CanardInstance canard;
+    CanardCANFrame frame;
+    int16_t err;
+    uint64_t current_time;
+
+    g_should_accept = true;
+    g_accepted_messages = 0;
+    //Open canard to accept all transfers with a node ID of 20
+    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+               onTransferReceived, shouldAcceptTransfer, &canard);
+    canardSetLocalNodeID(&canard, 20);
+
+    // Send a start of transfer frame
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
+    frame.id = 0 | CANARD_CAN_FRAME_EFF;            //Set EFF
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 8;
+    current_time = 1;
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == CANARD_OK);
+
+    //Advance time and cleanup (this shouldn't time out our transfer!)
+    current_time += 500 * 1000; //Advance time 500ms
+    canardCleanupStaleTransfers(&canard, current_time);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == CANARD_OK);
+
+    //Advance time and cleanup (Advance to the last instant before timeout)
+    current_time += 1500 * 1000; //Advance time 1500ms
+    canardCleanupStaleTransfers(&canard, current_time);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 0, 1);
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == CANARD_OK);
+
+    //Advance time and cleanup
+    current_time++; //Push time one instant past timeout
+    canardCleanupStaleTransfers(&canard, current_time);
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == -CANARD_ERROR_RX_MISSED_START);
+
+    // Resend same start, should be accepted because timeout overrides TID
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
+    frame.id = 0 | CANARD_CAN_FRAME_EFF;            //Set EFF
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 8;
+    current_time = 1;
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == CANARD_OK);
+}
+
+TEST_CASE("canardHandleRxFrame Timed out transfer handling2")
+{
+    uint8_t canard_memory_pool[1024];
+    CanardInstance canard;
+    CanardCANFrame frame;
+    int16_t err;
+    uint64_t current_time;
+
+    g_should_accept = true;
+    g_accepted_messages = 0;
+    //Open canard to accept all transfers with a node ID of 20
+    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+               onTransferReceived, shouldAcceptTransfer, &canard);
+    canardSetLocalNodeID(&canard, 20);
+
+    // Send a start of transfer frame
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
+    frame.id = 0 | CANARD_CAN_FRAME_EFF;            //Set EFF
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 8;
+    current_time = 1;
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == CANARD_OK);
+
+    //Advance time and cleanup (this shouldn't time out our transfer!)
+    current_time += 2000 * 1000;
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == CANARD_OK);
+
+    //Have timed out transfer which isn't cleaned up
+    current_time++;
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 0, 1);
+    err = canardHandleRxFrame(&canard, &frame, current_time);
+    REQUIRE(err == -CANARD_ERROR_RX_MISSED_START);
 }

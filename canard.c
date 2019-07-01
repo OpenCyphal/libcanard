@@ -318,8 +318,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
     const bool tid_timed_out = (timestamp_usec - rx_state->timestamp_usec) > TRANSFER_TIMEOUT_USEC;
     const bool first_frame = IS_START_OF_TRANSFER(tail_byte);
     const bool not_previous_tid =
-        computeTransferIDForwardDistance((uint8_t) rx_state->transfer_id, TRANSFER_ID_FROM_TAIL_BYTE(tail_byte)) > 1;
-
+        computeTransferIDForwardDistance((uint8_t) rx_state->transfer_id, TRANSFER_ID_FROM_TAIL_BYTE(tail_byte)) >= 1;
     const bool need_restart =
             (not_initialized) ||
             (tid_timed_out) ||
@@ -332,9 +331,14 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
         releaseStatePayload(ins, rx_state);
         if (!IS_START_OF_TRANSFER(tail_byte))
         {
-            rx_state->transfer_id++;
             return -CANARD_ERROR_RX_MISSED_START;
         }
+    }
+    else if (first_frame && !not_previous_tid)
+    {
+        //This message has already been processed and hasn't timed out
+        //potential dup on bus
+        return -CANARD_ERROR_RX_DUPLICATE_TID;
     }
 
     if (IS_START_OF_TRANSFER(tail_byte) && IS_END_OF_TRANSFER(tail_byte)) // single frame transfer
@@ -1069,7 +1073,6 @@ CANARD_INTERNAL bool isPriorityHigher(uint32_t rhs, uint32_t id)
 CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state)
 {
     CANARD_ASSERT(state->buffer_blocks == NULL);
-    state->transfer_id++;
     state->payload_len = 0;
     state->next_toggle = 0;
 }
