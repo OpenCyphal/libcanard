@@ -1,5 +1,9 @@
 # DSDL compiler for libcanard
 
+**WARNING: this code generation tool is not production-ready;
+do not use it unless you are feeling adventurous and willing to contribute.**
+In a production setting consider writing the serialization code manually instead.
+
 ## Overview
 
 Libcanard_dsdlc is a tool for converting UAVCAN DSDL definitions into libcanard-compatible C source files or headers.
