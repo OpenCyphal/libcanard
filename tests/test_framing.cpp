@@ -62,6 +62,7 @@ TEST_CASE("Framing, SingleFrameBasicCan2")
     uint8_t data[] = {1, 2, 3};
     
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReceptionMock,
@@ -107,30 +108,31 @@ TEST_CASE("Deframing, SingleFrameBasicCan2")
     uint8_t data[] = {1, 2, 3};
     
 
-    auto onTransferReception = [](CanardInstance*, CanardRxTransfer* transfer)
+    auto onTransferReception = [](CanardInstance* ins, CanardRxTransfer* transfer)
     {
         // Only check (de)framing in this test
         REQUIRE(transfer->payload_len == 3);
 
         uint8_t out_value = 0;
-        canardDecodePrimitive(transfer, 0, 8, false, &out_value);
+        canardDecodePrimitive(ins, transfer, 0, 8, false, &out_value);
         REQUIRE(out_value == 1);
 
-        canardDecodePrimitive(transfer, 8, 16, false, &out_value);
+        canardDecodePrimitive(ins, transfer, 8, 16, false, &out_value);
         REQUIRE(out_value == 2);
 
-        canardDecodePrimitive(transfer, 16, 24, false, &out_value);
+        canardDecodePrimitive(ins, transfer, 16, 24, false, &out_value);
         REQUIRE(out_value == 3);
     };
 
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReception,
                acceptAllTransfers,
                reinterpret_cast<void*>(12345));
 
-    CanardCANFrame frame = {
+    CanardCANFrame2B frame = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -141,7 +143,7 @@ TEST_CASE("Deframing, SingleFrameBasicCan2")
     };
 
     auto res = canardHandleRxFrame(&ins,
-                                   &frame,
+                                   reinterpret_cast<CanardCANFrame*>(&frame),
                                    0);
     REQUIRE(res >= 0);
 
@@ -160,6 +162,7 @@ TEST_CASE("Framing, MultiFrameBasicCan2")
     uint8_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
     
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReceptionMock,
@@ -243,7 +246,7 @@ TEST_CASE("Deframing, MultiFrameBasicCan2")
     uint16_t crc = crcAdd(0xFFFFU, data, sizeof(data));
 
 
-    auto onTransferReception = [](CanardInstance*, CanardRxTransfer* transfer)
+    auto onTransferReception = [](CanardInstance* ins, CanardRxTransfer* transfer)
     {
         // Only check (de)framing in this test
         REQUIRE(transfer->payload_len == sizeof(data));
@@ -252,20 +255,21 @@ TEST_CASE("Deframing, MultiFrameBasicCan2")
 
         for (uint8_t i = 0; i < sizeof(data); i++)
         {
-            canardDecodePrimitive(transfer, i*8U, 8, false, &out_value);
+            canardDecodePrimitive(ins, transfer, i*8U, 8, false, &out_value);
             REQUIRE(out_value == data[i]);
         }
 
     };
 
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReception,
                acceptAllTransfers,
                reinterpret_cast<void*>(12345));
 
-    CanardCANFrame frame1 = {
+    CanardCANFrame2B frame1 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -276,12 +280,12 @@ TEST_CASE("Deframing, MultiFrameBasicCan2")
     };
 
     auto res = canardHandleRxFrame(&ins,
-                                   &frame1,
+                                   reinterpret_cast<CanardCANFrame*>(&frame1),
                                    1);
     REQUIRE(res >= 0);
 
 
-    CanardCANFrame frame2 = {
+    CanardCANFrame2B frame2 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -292,12 +296,12 @@ TEST_CASE("Deframing, MultiFrameBasicCan2")
     };
 
     res = canardHandleRxFrame(&ins,
-                              &frame2,
+                              reinterpret_cast<CanardCANFrame*>(&frame2),
                               2);
     REQUIRE(res >= 0);
 
 
-    CanardCANFrame frame3 = {
+    CanardCANFrame2B frame3 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -308,7 +312,7 @@ TEST_CASE("Deframing, MultiFrameBasicCan2")
     };
 
     res = canardHandleRxFrame(&ins,
-                              &frame3,
+                              reinterpret_cast<CanardCANFrame*>(&frame3),
                               3);
     REQUIRE(res >= 0);
 
@@ -333,6 +337,7 @@ TEST_CASE("Framing, MultiFrameSeperateCRCCan2")
     uint8_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
     
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReceptionMock,
@@ -404,7 +409,7 @@ TEST_CASE("Deframing, MultiFrameSeperateCRCCan2")
     uint16_t crc = crcAdd(0xFFFFU, data, sizeof(data));
 
 
-    auto onTransferReception = [](CanardInstance*, CanardRxTransfer* transfer)
+    auto onTransferReception = [](CanardInstance* ins, CanardRxTransfer* transfer)
     {
         // Only check (de)framing in this test
         REQUIRE(transfer->payload_len == sizeof(data));
@@ -413,20 +418,21 @@ TEST_CASE("Deframing, MultiFrameSeperateCRCCan2")
 
         for (uint8_t i = 0; i < sizeof(data); i++)
         {
-            canardDecodePrimitive(transfer, i*8U, 8, false, &out_value);
+            canardDecodePrimitive(ins, transfer, i*8U, 8, false, &out_value);
             REQUIRE(out_value == data[i]);
         }
 
     };
 
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReception,
                acceptAllTransfers,
                reinterpret_cast<void*>(12345));
 
-    CanardCANFrame frame1 = {
+    CanardCANFrame2B frame1 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -437,12 +443,12 @@ TEST_CASE("Deframing, MultiFrameSeperateCRCCan2")
     };
 
     auto res = canardHandleRxFrame(&ins,
-                                   &frame1,
+                                   reinterpret_cast<CanardCANFrame*>(&frame1),
                                    1);
     REQUIRE(res >= 0);
 
 
-    CanardCANFrame frame2 = {
+    CanardCANFrame2B frame2 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -453,12 +459,12 @@ TEST_CASE("Deframing, MultiFrameSeperateCRCCan2")
     };
 
     res = canardHandleRxFrame(&ins,
-                              &frame2,
+                              reinterpret_cast<CanardCANFrame*>(&frame2),
                               2);
     REQUIRE(res >= 0);
 
 
-    CanardCANFrame frame3 = {
+    CanardCANFrame2B frame3 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -469,7 +475,7 @@ TEST_CASE("Deframing, MultiFrameSeperateCRCCan2")
     };
 
     res = canardHandleRxFrame(&ins,
-                              &frame3,
+                              reinterpret_cast<CanardCANFrame*>(&frame3),
                               3);
     REQUIRE(res >= 0);
 
@@ -494,6 +500,7 @@ TEST_CASE("Framing, MultiFrameSplitCRCCan2")
     uint8_t data[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
     
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReceptionMock,
@@ -565,7 +572,7 @@ TEST_CASE("Deframing, MultiFrameSplitCRCCan2")
     uint16_t crc = crcAdd(0xFFFFU, data, sizeof(data));
 
 
-    auto onTransferReception = [](CanardInstance*, CanardRxTransfer* transfer)
+    auto onTransferReception = [](CanardInstance* ins, CanardRxTransfer* transfer)
     {
         // Only check (de)framing in this test
         REQUIRE(transfer->payload_len == sizeof(data));
@@ -574,20 +581,21 @@ TEST_CASE("Deframing, MultiFrameSplitCRCCan2")
 
         for (uint8_t i = 0; i < sizeof(data); i++)
         {
-            canardDecodePrimitive(transfer, i*8U, 8, false, &out_value);
+            canardDecodePrimitive(ins, transfer, i*8U, 8, false, &out_value);
             REQUIRE(out_value == data[i]);
         }
 
     };
 
     canardInit(&ins,
+               CanardTransportProtocolCan2B,
                memory_arena,
                sizeof(memory_arena),
                onTransferReception,
                acceptAllTransfers,
                reinterpret_cast<void*>(12345));
 
-    CanardCANFrame frame1 = {
+    CanardCANFrame2B frame1 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -598,12 +606,12 @@ TEST_CASE("Deframing, MultiFrameSplitCRCCan2")
     };
 
     auto res = canardHandleRxFrame(&ins,
-                                   &frame1,
+                                   reinterpret_cast<CanardCANFrame*>(&frame1),
                                    1);
     REQUIRE(res >= 0);
 
 
-    CanardCANFrame frame2 = {
+    CanardCANFrame2B frame2 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -614,12 +622,12 @@ TEST_CASE("Deframing, MultiFrameSplitCRCCan2")
     };
 
     res = canardHandleRxFrame(&ins,
-                              &frame2,
+                              reinterpret_cast<CanardCANFrame*>(&frame2),
                               2);
     REQUIRE(res >= 0);
 
 
-    CanardCANFrame frame3 = {
+    CanardCANFrame2B frame3 = {
         .id = (static_cast<uint32_t>(CANARD_CAN_FRAME_EFF) 
             | static_cast<uint32_t>(transfer_priority << TEST_FRAMING_TRANSFER_PRIORITY_BIT) 
             | static_cast<uint32_t>(subject_id << TEST_FRAMING_SUBJECT_ID_BIT) 
@@ -630,7 +638,7 @@ TEST_CASE("Deframing, MultiFrameSplitCRCCan2")
     };
 
     res = canardHandleRxFrame(&ins,
-                              &frame3,
+                              reinterpret_cast<CanardCANFrame*>(&frame3),
                               3);
     REQUIRE(res >= 0);
 

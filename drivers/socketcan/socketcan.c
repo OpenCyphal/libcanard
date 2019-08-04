@@ -93,7 +93,7 @@ int16_t socketcanClose(SocketCANInstance* ins)
     return (int16_t)((close_result == 0) ? 0 : getErrorCode());
 }
 
-int16_t socketcanTransmit(SocketCANInstance* ins, const CanardCANFrame* frame, int32_t timeout_msec)
+int16_t socketcanTransmit(SocketCANInstance* ins, const CanardTxItem* frame, int32_t timeout_msec)
 {
     struct pollfd fds;
     memset(&fds, 0, sizeof(fds));

@@ -165,7 +165,7 @@ static void onTransferReceived(CanardInstance* ins,
         {
             assert(received_unique_id_len < UNIQUE_ID_LENGTH_BYTES);
             const uint8_t bit_offset = (uint8_t)(UniqueIDBitOffset + received_unique_id_len * 8U);
-            (void) canardDecodePrimitive(transfer, bit_offset, 8, false, &received_unique_id[received_unique_id_len]);
+            (void) canardDecodePrimitive(ins, transfer, bit_offset, 8, false, &received_unique_id[received_unique_id_len]);
         }
 
         // Obtaining the local unique ID
@@ -198,7 +198,7 @@ static void onTransferReceived(CanardInstance* ins,
         {
             // Allocation complete - copying the allocated node ID from the message
             uint8_t allocated_node_id = 0;
-            (void) canardDecodePrimitive(transfer, 0, 7, false, &allocated_node_id);
+            (void) canardDecodePrimitive(ins, transfer, 0, 7, false, &allocated_node_id);
             assert(allocated_node_id <= 127);
 
             canardSetLocalNodeID(ins, allocated_node_id);
@@ -350,7 +350,7 @@ static void process1HzTasks()
 static void processTxRxOnce(SocketCANInstance* socketcan, int32_t timeout_msec)
 {
     // Transmitting
-    for (const CanardCANFrame* txf = NULL; (txf = canardPeekTxQueue(&g_canard)) != NULL;)
+    for (const CanardTxItem* txf = NULL; (txf = canardPeekTxQueue(&g_canard)) != NULL;)
     {
         const int16_t tx_res = socketcanTransmit(socketcan, txf, 0);
         if (tx_res < 0)         // Failure - drop the frame and report
@@ -414,6 +414,7 @@ int main(int argc, char** argv)
      * Initializing the Libcanard instance.
      */
     canardInit(&g_canard,
+               CanardTransportProtocolCan2B,
                g_canard_memory_pool,
                sizeof(g_canard_memory_pool),
                onTransferReceived,
@@ -450,7 +451,7 @@ int main(int argc, char** argv)
 
         // Structure of the request is documented in the DSDL definition
         // See http://uavcan.org/Specification/6._Application_level_functions/#dynamic-node-id-allocation
-        uint8_t allocation_request[CANARD_CAN_FRAME_MAX_DATA_LEN - 1];
+        uint8_t allocation_request[CANARD_CAN_FRAME_2B_MAX_DATA_LEN - 1];
         allocation_request[0] = (uint8_t)(PreferredNodeID << 1U);
 
         if (g_node_id_allocation_unique_id_offset == 0)

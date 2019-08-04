@@ -43,7 +43,6 @@ extern "C" {
 # define CANARD_INTERNAL static
 #endif
 
-
 CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins,
                                                 uint32_t transfer_descriptor);
 
@@ -68,12 +67,12 @@ CANARD_INTERNAL CanardTransferType extractTransferType(uint32_t id);
 CANARD_INTERNAL uint16_t extractDataType(uint32_t id);
 
 CANARD_INTERNAL void pushTxQueue(CanardInstance* ins,
-                                 CanardTxQueueItem* item);
+                                 CanardTxItem* item);
 
 CANARD_INTERNAL bool isPriorityHigher(uint32_t id,
                                       uint32_t rhs);
 
-CANARD_INTERNAL CanardTxQueueItem* createTxItem(CanardPoolAllocator* allocator);
+CANARD_INTERNAL CanardTxItem* createTxItem(CanardPoolAllocator* allocator);
 
 CANARD_INTERNAL void prepareForNextTransfer(CanardRxState* state);
 
@@ -103,7 +102,8 @@ CANARD_INTERNAL void copyBitArray(const uint8_t* src,
  * Moves specified bits from the scattered transfer storage to a specified contiguous buffer.
  * Returns the number of bits copied, or negated error code.
  */
-CANARD_INTERNAL int16_t descatterTransferPayload(const CanardRxTransfer* transfer,
+CANARD_INTERNAL int16_t descatterTransferPayload(const CanardInstance* ins,
+                                                 const CanardRxTransfer* transfer,
                                                  uint32_t bit_offset,
                                                  uint8_t bit_length,
                                                  void* output);
@@ -130,8 +130,9 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val,
  * @param [in] buf_len The number of blocks in buf.
  */
 CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator,
-                                       CanardPoolAllocatorBlock* buf,
-                                       uint16_t buf_len);
+                                       void* buf,
+                                       size_t buf_len,
+                                       size_t block_size);
 
 /**
  * Allocates a block from the given pool allocator.

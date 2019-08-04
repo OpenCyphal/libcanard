@@ -99,7 +99,7 @@ TEST_CASE("canardHandleRxFrame incompatible packet handling, Correctness")
     //Setup frame data to be single frame transfer
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 0);
 
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCan2B, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     g_should_accept = true;
 
@@ -145,7 +145,7 @@ TEST_CASE("canardHandleRxFrame wrong address handling, Correctness")
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 0);
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCan2B, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
     g_should_accept = true;
@@ -175,7 +175,7 @@ TEST_CASE("canardHandleRxFrame shouldAccept handling, Correctness")
     frame.data[0] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 0);
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCan2B, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -204,7 +204,7 @@ TEST_CASE("canardHandleRxFrame no state handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCan2B, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -270,7 +270,7 @@ TEST_CASE("canardHandleRxFrame missed start handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCan2B, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -329,7 +329,7 @@ TEST_CASE("canardHandleRxFrame short frame handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+    canardInit(&canard, CanardTransportProtocolCan2B, canard_memory_pool, sizeof(canard_memory_pool),
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 
@@ -358,7 +358,7 @@ TEST_CASE("canardHandleRxFrame OOM handling, Correctness")
     g_should_accept = true;
 
     //Open canard to accept all transfers with a node ID of 20
-    canardInit(&canard, &dummy_buf, 0,
+    canardInit(&canard, CanardTransportProtocolCan2B, &dummy_buf, 0,
                onTransferReceived, shouldAcceptTransfer, &canard);
     canardSetLocalNodeID(&canard, 20);
 

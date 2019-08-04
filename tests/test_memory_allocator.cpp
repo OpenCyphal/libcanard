@@ -26,19 +26,24 @@
 #include "canard_internals.h"
 
 
+#define BLOCK_SIZE 32
 #define AVAILABLE_BLOCKS 3
+#define BUFFER_SIZE (BLOCK_SIZE*AVAILABLE_BLOCKS)
 
+struct MockBlock {
+    uint8_t data[BLOCK_SIZE];
+};
 
 TEST_CASE("MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly")
 {
     CanardPoolAllocator allocator;
-    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
-    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+    struct MockBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, sizeof(buffer), BLOCK_SIZE);
 
     // Check that the memory list is constructed correctly.
-    REQUIRE(&buffer[0] == allocator.free_list);
-    REQUIRE(&buffer[1] == allocator.free_list->next);
-    REQUIRE(&buffer[2] == allocator.free_list->next->next);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[0]) == allocator.free_list);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[1]) == allocator.free_list->next);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[2]) == allocator.free_list->next->next);
     REQUIRE(NULL == allocator.free_list->next->next->next);
 
     // Check statistics
@@ -50,14 +55,14 @@ TEST_CASE("MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly")
 TEST_CASE("MemoryAllocatorTestGroup, CanAllocateBlock")
 {
     CanardPoolAllocator allocator;
-    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
-    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+    struct MockBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, sizeof(buffer), BLOCK_SIZE);
 
     void* block = allocateBlock(&allocator);
 
     // Check that the first free memory block was used and that the next block is ready.
-    REQUIRE(&buffer[0] == block);
-    REQUIRE(&buffer[1] == allocator.free_list);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[0]) == block);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[1]) == allocator.free_list);
 
     // Check statistics
     REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
@@ -68,8 +73,8 @@ TEST_CASE("MemoryAllocatorTestGroup, CanAllocateBlock")
 TEST_CASE("MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft")
 {
     CanardPoolAllocator allocator;
-    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
-    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+    struct MockBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, sizeof(buffer), BLOCK_SIZE);
 
     // First exhaust all availables block
     for (int i = 0; i < AVAILABLE_BLOCKS; ++i)
@@ -90,16 +95,16 @@ TEST_CASE("MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft")
 TEST_CASE("MemoryAllocatorTestGroup, CanFreeBlock")
 {
     CanardPoolAllocator allocator;
-    CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
-    initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
+    struct MockBlock buffer[AVAILABLE_BLOCKS];
+    initPoolAllocator(&allocator, buffer, sizeof(buffer), BLOCK_SIZE);
 
     void* block = allocateBlock(&allocator);
 
     freeBlock(&allocator, block);
 
     // Check that the block was added back to the beginning
-    REQUIRE(&buffer[0] == allocator.free_list);
-    REQUIRE(&buffer[1] == allocator.free_list->next);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[0]) == allocator.free_list);
+    REQUIRE(reinterpret_cast<CanardPoolAllocatorFreeBlock*>(&buffer[1]) == allocator.free_list->next);
 
     // Check statistics
     REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
