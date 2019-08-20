@@ -318,7 +318,7 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
     const bool tid_timed_out = (timestamp_usec - rx_state->timestamp_usec) > TRANSFER_TIMEOUT_USEC;
     const bool first_frame = IS_START_OF_TRANSFER(tail_byte);
     const bool not_previous_tid =
-        computeTransferIDForwardDistance((uint8_t) rx_state->transfer_id, TRANSFER_ID_FROM_TAIL_BYTE(tail_byte)) >= 1;
+        computeTransferIDForwardDistance(TRANSFER_ID_FROM_TAIL_BYTE(tail_byte), (uint8_t) rx_state->transfer_id) > 1;
     const bool need_restart =
             (not_initialized) ||
             (tid_timed_out) ||
