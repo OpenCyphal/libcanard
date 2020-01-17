@@ -70,14 +70,6 @@ void canardInit(CanardInstance*            out_ins,
 {
     CANARD_ASSERT(out_ins != NULL);
 
-    /*
-     * Checking memory layout.
-     * This condition is supposed to be true for all 32-bit and smaller platforms.
-     * If your application fails here, make sure it's not built in 64-bit mode.
-     * Refer to the design documentation for more info.
-     */
-    CANARD_ASSERT(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE >= 6);
-
     memset(out_ins, 0, sizeof(*out_ins));
 
     out_ins->node_id        = CANARD_BROADCAST_NODE_ID;
@@ -704,8 +696,6 @@ CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* i
 
 uint16_t canardConvertNativeFloatToFloat16(float value)
 {
-    CANARD_ASSERT(sizeof(float) == 4);
-
     union FP32
     {
         uint32_t u;
@@ -748,8 +738,6 @@ uint16_t canardConvertNativeFloatToFloat16(float value)
 
 float canardConvertFloat16ToNativeFloat(uint16_t value)
 {
-    CANARD_ASSERT(sizeof(float) == 4);
-
     union FP32
     {
         uint32_t u;
@@ -917,21 +905,15 @@ CANARD_INTERNAL void pushTxQueue(CanardInstance* ins, CanardTxQueueItem* item)
                 previous->next = item;
                 item->next     = queue;
             }
-            return;
+            break;
         }
-        else
+        if (queue->next == NULL)
         {
-            if (queue->next == NULL)
-            {
-                queue->next = item;
-                return;
-            }
-            else
-            {
-                previous = queue;
-                queue    = queue->next;
-            }
+            queue->next = item;
+            break;
         }
+        previous = queue;
+        queue    = queue->next;
     }
 }
 
@@ -958,16 +940,9 @@ CANARD_INTERNAL bool isPriorityHigher(uint32_t rhs, uint32_t id)
     const bool rhs_ext = (rhs & CANARD_CAN_FRAME_EFF) != 0;
     if (ext != rhs_ext)
     {
-        uint32_t arb11     = ext ? (clean_id >> 18U) : clean_id;
-        uint32_t rhs_arb11 = rhs_ext ? (rhs_clean_id >> 18U) : rhs_clean_id;
-        if (arb11 != rhs_arb11)
-        {
-            return arb11 < rhs_arb11;
-        }
-        else
-        {
-            return rhs_ext;
-        }
+        const uint32_t arb11     = ext ? (clean_id >> 18U) : clean_id;
+        const uint32_t rhs_arb11 = rhs_ext ? (rhs_clean_id >> 18U) : rhs_clean_id;
+        return (arb11 != rhs_arb11) ? (arb11 < rhs_arb11) : rhs_ext;
     }
 
     /*
@@ -998,12 +973,9 @@ CANARD_INTERNAL uint16_t extractDataType(uint32_t id)
 {
     if (extractTransferKind(id) == CanardTransferKindMessagePublication)
     {
-        return (uint16_t) SUBJECT_TYPE_FROM_ID(id);
+        return SUBJECT_TYPE_FROM_ID(id);
     }
-    else
-    {
-        return (uint16_t) SRV_TYPE_FROM_ID(id);
-    }
+    return SRV_TYPE_FROM_ID(id);
 }
 
 CANARD_INTERNAL CanardTransferKind extractTransferKind(uint32_t id)
@@ -1013,14 +985,11 @@ CANARD_INTERNAL CanardTransferKind extractTransferKind(uint32_t id)
     {
         return CanardTransferKindMessagePublication;
     }
-    else if (REQUEST_NOT_RESPONSE_FROM_ID(id) == 1)
+    if (REQUEST_NOT_RESPONSE_FROM_ID(id) == 1)
     {
         return CanardTransferKindServiceRequest;
     }
-    else
-    {
-        return CanardTransferKindServiceResponse;
-    }
+    return CanardTransferKindServiceResponse;
 }
 
 CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins, uint32_t session_specifier)
@@ -1030,12 +999,10 @@ CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins, uint32_t se
     if (states == NULL)  // initialize CanardRxStates
     {
         states = createRxState(&ins->allocator, session_specifier);
-
         if (states == NULL)
         {
             return NULL;
         }
-
         ins->rx_states = states;
         return states;
     }
@@ -1045,10 +1012,7 @@ CANARD_INTERNAL CanardRxState* traverseRxStates(CanardInstance* ins, uint32_t se
     {
         return states;
     }
-    else
-    {
-        return prependRxState(ins, session_specifier);
-    }
+    return prependRxState(ins, session_specifier);
 }
 
 CANARD_INTERNAL CanardRxState* findRxState(CanardRxState* state, uint32_t session_specifier)

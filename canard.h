@@ -517,9 +517,12 @@ CanardPoolAllocatorStatistics canardGetPoolAllocatorStatistics(CanardInstance* i
 uint16_t canardConvertNativeFloatToFloat16(float value);
 float    canardConvertFloat16ToNativeFloat(uint16_t value);
 
-CANARD_STATIC_ASSERT(((uint32_t) CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) < 32,
+// Static checks.
+CANARD_STATIC_ASSERT((((uint32_t) CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) < 32) &&
+                         (((uint32_t) CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE) >= 6),
                      "Platforms where sizeof(void*) > 4 are not supported. "
                      "On AMD64 use 32-bit mode (e.g. GCC flag -m32).");
+CANARD_STATIC_ASSERT(sizeof(float) == 4, "Native float format shall match IEEE 754 binary32");
 
 #ifdef __cplusplus
 }
