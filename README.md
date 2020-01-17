@@ -66,7 +66,20 @@ Therefore, there is no need for a dedicated porting guide.
 This is unlike Libuavcan, which is more complex and does have a well-defined interface between
 the library and the platform.
 
-![libuavcan vs libcanard arch](libuavcan_vs_libcanard_arch.png)
+    +---------------+                               +---------------------------------------------+
+    |  Application  |                               |                  Application                |
+    +-------+-------+                               +-------+---------------------------------+---+
+            |                                               | Libcanard does NOT interact     |
+    +-------+-------+                                       | with the platform drivers       |
+    |   Libuavcan   |                                       | directly. This interface is     |
+    +-------+-------+                                       | application-/driver-specific.   |
+            | The interface between the             +-------+-------+                 +-------+-------+
+            | library and the platform              |    Platform   |                 |   Libcanard   |
+            | is defined by the library.            |    drivers    |                 +---------------+
+    +-------+-------+                               +---------------+
+    |    Platform   |
+    |    drivers    |
+    +---------------+
 
 ## Library development
 
