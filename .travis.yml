@@ -58,3 +58,9 @@ matrix:
         - cd build-avr
         - cmake ../drivers/avr
         - make
+
+script:
+  # Code style enforcement.
+  - ./format.sh
+  - modified="$(git status --porcelain --untracked-files=no)"
+  - if [ -n "$modified" ]; then echo "Run format.sh to reformat the code."; exit 1; fi
