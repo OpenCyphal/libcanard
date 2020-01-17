@@ -59,7 +59,7 @@ matrix:
         - cmake ../drivers/avr
         - make
 
-script:
+after_script:
   # Code style enforcement.
   - ./format.sh
   - modified="$(git status --porcelain --untracked-files=no)"
