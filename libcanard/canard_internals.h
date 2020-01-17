@@ -116,7 +116,7 @@ CANARD_INTERNAL uint16_t crcAdd(uint16_t crc_val, const uint8_t* bytes, size_t l
 CANARD_INTERNAL void initPoolAllocator(CanardPoolAllocator* allocator, CanardPoolAllocatorBlock* buf, uint16_t buf_len);
 
 CANARD_INTERNAL void* allocateBlock(CanardPoolAllocator* allocator);
-CANARD_INTERNAL void freeBlock(CanardPoolAllocator* allocator, void* p);
+CANARD_INTERNAL void  freeBlock(CanardPoolAllocator* allocator, void* p);
 
 #ifdef __cplusplus
 }
