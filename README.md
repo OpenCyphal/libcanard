@@ -58,7 +58,17 @@ like other implementations (e.g. libuavcan for C++ or pyuavcan for Python) do.
 Therefore, data structures need to be parsed and assembled manually.
 The necessary examples are provided in the demo application.
 
-## Library Development
+### Platform drivers
+
+The existing platform drivers should be used as a reference for implementation of one's own custom drivers.
+Libcanard does not interact with the underlying platform drivers directly; it does so via the application.
+Therefore, there is no need for a dedicated porting guide.
+This is unlike Libuavcan, which is more complex and does have a well-defined interface between
+the library and the platform.
+
+![libuavcan vs libcanard arch](libuavcan_vs_libcanard_arch.png)
+
+## Library development
 
 This section is intended only for library developers and contributors.
 
@@ -66,7 +76,7 @@ The library design document can be found in [DESIGN.md](DESIGN.md)
 
 Contributors, please follow the [Zubax C++ Coding Conventions](https://kb.zubax.com/x/84Ah).
 
-### Building and Running Tests
+### Testing
 
 ```bash
 mkdir build && cd build
@@ -75,7 +85,7 @@ make
 ./run_tests
 ```
 
-### Submitting a Coverity Scan Build
+### Coverity Scan
 
 First, [get the Coverity build tool](https://scan.coverity.com/download?tab=cxx).
 Then build the tests with it:

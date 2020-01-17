@@ -1,6 +1,0 @@
-[submodule "drivers/avr/avr-can-lib"]
-	path = drivers/avr/avr-can-lib
-	url = https://github.com/rennerm/avr-can-lib
-[submodule "dsdl_compiler/pydsdl"]
-	path = dsdl_compiler/pydsdl
-	url = https://github.com/UAVCAN/pydsdl.git
