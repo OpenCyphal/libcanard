@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 UAVCAN Team
+ * Copyright (c) 2016-2020 UAVCAN Development Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -18,20 +18,16 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
 #include <catch.hpp>
 #include "canard_internals.h"
 
-
 #define AVAILABLE_BLOCKS 3
-
 
 TEST_CASE("MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly")
 {
-    CanardPoolAllocator allocator;
+    CanardPoolAllocator      allocator;
     CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
     initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
 
@@ -43,13 +39,13 @@ TEST_CASE("MemoryAllocatorTestGroup, FreeListIsConstructedCorrectly")
 
     // Check statistics
     REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
-    REQUIRE(0 ==                allocator.statistics.current_usage_blocks);
-    REQUIRE(0 ==                allocator.statistics.peak_usage_blocks);
+    REQUIRE(0 == allocator.statistics.current_usage_blocks);
+    REQUIRE(0 == allocator.statistics.peak_usage_blocks);
 }
 
 TEST_CASE("MemoryAllocatorTestGroup, CanAllocateBlock")
 {
-    CanardPoolAllocator allocator;
+    CanardPoolAllocator      allocator;
     CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
     initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
 
@@ -61,13 +57,13 @@ TEST_CASE("MemoryAllocatorTestGroup, CanAllocateBlock")
 
     // Check statistics
     REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
-    REQUIRE(1 ==                allocator.statistics.current_usage_blocks);
-    REQUIRE(1 ==                allocator.statistics.peak_usage_blocks);
+    REQUIRE(1 == allocator.statistics.current_usage_blocks);
+    REQUIRE(1 == allocator.statistics.peak_usage_blocks);
 }
 
 TEST_CASE("MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft")
 {
-    CanardPoolAllocator allocator;
+    CanardPoolAllocator      allocator;
     CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
     initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
 
@@ -89,7 +85,7 @@ TEST_CASE("MemoryAllocatorTestGroup, ReturnsNullIfThereIsNoBlockLeft")
 
 TEST_CASE("MemoryAllocatorTestGroup, CanFreeBlock")
 {
-    CanardPoolAllocator allocator;
+    CanardPoolAllocator      allocator;
     CanardPoolAllocatorBlock buffer[AVAILABLE_BLOCKS];
     initPoolAllocator(&allocator, buffer, AVAILABLE_BLOCKS);
 
@@ -103,6 +99,6 @@ TEST_CASE("MemoryAllocatorTestGroup, CanFreeBlock")
 
     // Check statistics
     REQUIRE(AVAILABLE_BLOCKS == allocator.statistics.capacity_blocks);
-    REQUIRE(0 ==                allocator.statistics.current_usage_blocks);
-    REQUIRE(1 ==                allocator.statistics.peak_usage_blocks);
+    REQUIRE(0 == allocator.statistics.current_usage_blocks);
+    REQUIRE(1 == allocator.statistics.peak_usage_blocks);
 }

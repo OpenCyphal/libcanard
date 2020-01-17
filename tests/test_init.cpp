@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 UAVCAN Team
+ * Copyright (c) 2016-2020 UAVCAN Development Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -18,26 +18,17 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
 #include <catch.hpp>
 #include "canard.h"
 
-static bool shouldAcceptTransferMock(const CanardInstance*,
-                                     uint16_t,
-                                     CanardTransferKind,
-                                     uint8_t)
+static bool shouldAcceptTransferMock(const CanardInstance*, uint16_t, CanardTransferKind, uint8_t)
 {
     return false;
 }
 
-static void onTransferReceptionMock(CanardInstance*,
-                                    CanardRxTransfer*)
-{
-}
-
+static void onTransferReceptionMock(CanardInstance*, CanardRxTransfer*) {}
 
 TEST_CASE("Init, UserReference")
 {

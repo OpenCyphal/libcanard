@@ -28,9 +28,7 @@
 #include <string>
 #include <stdexcept>
 
-
-static std::uint32_t computeBDTR(const std::uint32_t pclk1,
-                                 const std::uint32_t target_bitrate)
+static std::uint32_t computeBDTR(const std::uint32_t pclk1, const std::uint32_t target_bitrate)
 {
     CanardSTM32CANTimings timings = CanardSTM32CANTimings();
 
@@ -39,10 +37,10 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
     const auto sample_point_permill =
         std::uint16_t((1000 * (1 + timings.bit_segment_1) / (1 + timings.bit_segment_1 + timings.bit_segment_2)));
 
-    const std::uint32_t bdtr = (((timings.max_resynchronization_jump_width - 1U) &    3U) << 24U) |
-                               (((timings.bit_segment_1 - 1U)                    &   15U) << 16U) |
-                               (((timings.bit_segment_2 - 1U)                    &    7U) << 20U) |
-                               (((timings.bit_rate_prescaler - 1U)               & 1023U) << 0U);
+    const std::uint32_t bdtr = (((timings.max_resynchronization_jump_width - 1U) & 3U) << 24U) |
+                               (((timings.bit_segment_1 - 1U) & 15U) << 16U) |
+                               (((timings.bit_segment_2 - 1U) & 7U) << 20U) |
+                               (((timings.bit_rate_prescaler - 1U) & 1023U) << 0U);
 
     std::printf("PCLK %9u    Target %9u    %s (%d)    Presc %4u    BS %2u/%u %.1f%%    BDTR 0x%08x\n",
                 unsigned(pclk1),
@@ -68,16 +66,16 @@ static std::uint32_t computeBDTR(const std::uint32_t pclk1,
 TEST_CASE("STM32, CANTimings")
 {
     CHECK(0x00060003 == computeBDTR(36000000, 1000000));
-    CHECK(0x00180005 == computeBDTR(36000000,  500000));
-    CHECK(0x001c0008 == computeBDTR(36000000,  250000));
-    CHECK(0x001c0011 == computeBDTR(36000000,  125000));
-    CHECK(0x001b0017 == computeBDTR(36000000,  100000));
-    CHECK(0x001c00e0 == computeBDTR(36000000,   10000));
+    CHECK(0x00180005 == computeBDTR(36000000, 500000));
+    CHECK(0x001c0008 == computeBDTR(36000000, 250000));
+    CHECK(0x001c0011 == computeBDTR(36000000, 125000));
+    CHECK(0x001b0017 == computeBDTR(36000000, 100000));
+    CHECK(0x001c00e0 == computeBDTR(36000000, 10000));
 
     CHECK(0x00070008 == computeBDTR(90000000, 1000000));
-    CHECK(0x001b000b == computeBDTR(90000000,  500000));
-    CHECK(0x001b0017 == computeBDTR(90000000,  250000));
-    CHECK(0x001c002c == computeBDTR(90000000,  125000));
-    CHECK(0x001b003b == computeBDTR(90000000,  100000));
-    CHECK(0x001b0257 == computeBDTR(90000000,   10000));
+    CHECK(0x001b000b == computeBDTR(90000000, 500000));
+    CHECK(0x001b0017 == computeBDTR(90000000, 250000));
+    CHECK(0x001c002c == computeBDTR(90000000, 125000));
+    CHECK(0x001b003b == computeBDTR(90000000, 100000));
+    CHECK(0x001b0257 == computeBDTR(90000000, 10000));
 }

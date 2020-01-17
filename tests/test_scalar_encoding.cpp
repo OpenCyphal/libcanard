@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 UAVCAN Team
+ * Copyright (c) 2016-2020 UAVCAN Development Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -18,25 +18,20 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
 #include <type_traits>
 #include <algorithm>
 #include <stdexcept>
-#include <memory>
 #include <catch.hpp>
 #include <iostream>
 #include "canard_internals.h"
-
 
 TEST_CASE("BigEndian, Check")
 {
     // Assuming that unit tests can only be run on little-endian platforms!
     REQUIRE_FALSE(isBigEndian());
 }
-
 
 template <typename T>
 static inline T read(CanardRxTransfer* transfer, uint32_t bit_offset, uint8_t bit_length)
@@ -46,31 +41,27 @@ static inline T read(CanardRxTransfer* transfer, uint32_t bit_offset, uint8_t bi
     const int res = canardDecodePrimitive(transfer, uint16_t(bit_offset), bit_length, std::is_signed<T>::value, &value);
     if (res != bit_length)
     {
-        throw std::runtime_error("Unexpected return value; expected " +
-                                 std::to_string(unsigned(bit_length)) + ", got " + std::to_string(res));
+        throw std::runtime_error("Unexpected return value; expected " + std::to_string(unsigned(bit_length)) +
+                                 ", got " + std::to_string(res));
     }
 
     return value;
 }
 
-
 TEST_CASE("ScalarDecode, SingleFrame")
 {
     auto transfer = CanardRxTransfer();
 
-    static const uint8_t buf[7] =
-    {
-        0b10100101, // 0
-        0b11000011, // 8
-        0b11100111, // 16
-        0b01111110, // 24
-        0b01010101,
-        0b10101010,
-        0b11101000
-    };
+    static const uint8_t buf[7] = {0b10100101,  // 0
+                                   0b11000011,  // 8
+                                   0b11100111,  // 16
+                                   0b01111110,  // 24
+                                   0b01010101,
+                                   0b10101010,
+                                   0b11101000};
 
     transfer.payload_head = &buf[0];
-    transfer.payload_len = sizeof(buf);
+    transfer.payload_len  = sizeof(buf);
 
     REQUIRE(0b10100101 == read<uint8_t>(&transfer, 0, 8));
     REQUIRE(0b01011100 == read<uint8_t>(&transfer, 4, 8));
@@ -101,11 +92,10 @@ TEST_CASE("ScalarDecode, SingleFrame")
     REQUIRE(-1 == read<int8_t>(&transfer, 16, 3));  // 0b111
     REQUIRE(-4 == read<int8_t>(&transfer, 2, 3));   // 0b100
 
-    REQUIRE(-91    == read<int8_t>(&transfer, 0, 8));       //         0b10100101
-    REQUIRE(-15451 == read<int16_t>(&transfer, 0, 16));     // 0b1100001110100101
-    REQUIRE(-7771  == read<int16_t>(&transfer, 0, 15));     //  0b100001110100101
+    REQUIRE(-91 == read<int8_t>(&transfer, 0, 8));       //         0b10100101
+    REQUIRE(-15451 == read<int16_t>(&transfer, 0, 16));  // 0b1100001110100101
+    REQUIRE(-7771 == read<int16_t>(&transfer, 0, 15));   //  0b100001110100101
 }
-
 
 TEST_CASE("ScalarDecode, MultiFrame")
 {
@@ -113,7 +103,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
      * Configuring allocator
      */
     CanardPoolAllocatorBlock allocator_blocks[2];
-    CanardPoolAllocator allocator;
+    CanardPoolAllocator      allocator;
     initPoolAllocator(&allocator, &allocator_blocks[0], 2);
 
     /*
@@ -126,7 +116,8 @@ TEST_CASE("ScalarDecode, MultiFrame")
     {
         x = 0b10100101;
     }
-    static_assert(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE == 6, "Assumption is not met, are we on a 32-bit x86 machine?");
+    static_assert(CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE == 6,
+                  "Assumption is not met, are we on a 32-bit x86 machine?");
 
     auto middle_a = createBufferBlock(&allocator);
     auto middle_b = createBufferBlock(&allocator);
@@ -137,13 +128,7 @@ TEST_CASE("ScalarDecode, MultiFrame")
     middle_a->next = middle_b;
     middle_b->next = nullptr;
 
-    const uint8_t tail[4] =
-    {
-        0b00010001,
-        0b00100010,
-        0b00110011,
-        0b01000100
-    };
+    const uint8_t tail[4] = {0b00010001, 0b00100010, 0b00110011, 0b01000100};
 
     transfer.payload_head   = &head[0];
     transfer.payload_middle = middle_a;
@@ -170,7 +155,8 @@ TEST_CASE("ScalarDecode, MultiFrame")
     // 64 from two middle blocks, 32 from the first, 32 from the second
     REQUIRE(0b1100110011001100110011001100110001011010010110100101101001011010ULL ==
             read<uint64_t>(&transfer,
-                           CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32, 64));
+                           CANARD_MULTIFRAME_RX_PAYLOAD_HEAD_SIZE * 8 + CANARD_BUFFER_BLOCK_DATA_SIZE * 8 - 32,
+                           64));
 
     // Last 64
     REQUIRE(0b0100010000110011001000100001000111001100110011001100110011001100ULL ==
@@ -180,13 +166,12 @@ TEST_CASE("ScalarDecode, MultiFrame")
      * Testing without the middle
      */
     transfer.payload_middle = nullptr;
-    transfer.payload_len = uint16_t(transfer.payload_len - CANARD_BUFFER_BLOCK_DATA_SIZE * 2U);
+    transfer.payload_len    = uint16_t(transfer.payload_len - CANARD_BUFFER_BLOCK_DATA_SIZE * 2U);
 
     // Last 64
     REQUIRE(0b0100010000110011001000100001000110100101101001011010010110100101ULL ==
             read<uint64_t>(&transfer, transfer.payload_len * 8U - 64U, 64));
 }
-
 
 TEST_CASE("ScalarEncode, Basic")
 {
@@ -213,8 +198,8 @@ TEST_CASE("ScalarEncode, Basic")
     auto s64 = int64_t(0b0000000100100011101111000110011110001001101010111100110111101111L);
     canardEncodePrimitive(buffer, 16, 60, &s64);
     REQUIRE((123U | 0b111U) == buffer[0]);  // 0
-    REQUIRE(0b11111111 == buffer[1]);    // 8
-    REQUIRE(0b11101111 == buffer[2]);    // 16
+    REQUIRE(0b11111111 == buffer[1]);       // 8
+    REQUIRE(0b11101111 == buffer[2]);       // 16
     REQUIRE(0b11001101 == buffer[3]);
     REQUIRE(0b10101011 == buffer[4]);
     REQUIRE(0b10001001 == buffer[5]);
