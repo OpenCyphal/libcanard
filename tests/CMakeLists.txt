@@ -9,8 +9,8 @@ project(libcanard)
 include_directories(catch)
 
 # Libcanard
-include_directories(..)
-include_directories(../drivers/socketcan)
+set(LIBCANARD_DIR "${CMAKE_SOURCE_DIR}/../libcanard/")
+include_directories(${LIBCANARD_DIR})
 
 # Compiler configuration - supporting only Clang and GCC
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Werror -m32")
@@ -42,6 +42,6 @@ file(GLOB tests_src
 message(STATUS "Unit test source files: ${tests_src}")
 add_executable(run_tests
                ${tests_src}
-               ../canard.c)
+               ${LIBCANARD_DIR}/canard.c)
 target_link_libraries(run_tests
                       pthread)

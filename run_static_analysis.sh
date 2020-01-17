@@ -14,4 +14,4 @@ clang_tidy_version=$(clang-tidy --version | sed -ne 's/[^0-9]*\([0-9]*\)\..*/\1/
     die "clang-tidy v$MIN_CLANG_TIDY_VERSION+ required; found v$clang_tidy_version"
 
 set -e
-clang-tidy canard.c
+clang-tidy libcanard/canard.c

@@ -10,14 +10,10 @@ Get help on the **[UAVCAN Forum](https://forum.uavcan.org)**.
 ## Usage
 
 If you're not using Git, you can just copy the entire library into your project tree.
-If you're using Git, it is recommended to add Libcanard to your project as a Git submodule,
-like this:
+If you're using Git, it is recommended to add Libcanard to your project using submoduling, subtreeing, vendoring,
+or whatever alternative suits your workflow best.
 
-```bash
-git submodule add https://github.com/UAVCAN/libcanard
-```
-
-The entire library is contained in three files:
+The entire library is contained in three files under `libcanard/`:
 
 - `canard.c` - the only translation unit; add it to your build or compile it into a separate static library;
 - `canard.h` - the API header; include it in your application;
@@ -39,13 +35,13 @@ Example for Make:
 
 ```make
 # Adding the library.
-INCLUDE += libcanard
-CSRC += libcanard/canard.c
+INCLUDE += libcanard/libcanard/
+CSRC += libcanard/libcanard/canard.c
 
 # Adding drivers, unless you want to use your own.
 # In this example we're using Linux SocketCAN drivers.
-INCLUDE += libcanard/drivers/socketcan
-CSRC += libcanard/drivers/socketcan/socketcan.c
+INCLUDE += libcanard_socketcan/
+CSRC += libcanard_socketcan/socketcan.c
 ```
 
 There is no dedicated documentation for the library API, because it is simple enough to be self-documenting.
