@@ -27,7 +27,7 @@
 
 static bool shouldAcceptTransferMock(const CanardInstance*,
                                      uint16_t,
-                                     CanardTransferType,
+                                     CanardTransferKind,
                                      uint8_t)
 {
     return false;

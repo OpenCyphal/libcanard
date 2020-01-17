@@ -142,7 +142,7 @@ static void onTransferReceived(CanardInstance* ins,
      * Taking this branch only if we don't have a node ID, ignoring otherwise.
      */
     if ((canardGetLocalNodeID(ins) == CANARD_BROADCAST_NODE_ID) &&
-        (transfer->transfer_type == CanardTransferTypeMessagePublication) &&
+        (transfer->transfer_kind == CanardTransferKindMessagePublication) &&
         (transfer->port_id == UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID))
     {
         // Rule C - updating the randomized time interval
@@ -206,7 +206,7 @@ static void onTransferReceived(CanardInstance* ins,
         }
     }
 
-    if ((transfer->transfer_type == CanardTransferTypeServiceRequest) &&
+    if ((transfer->transfer_kind == CanardTransferKindServiceRequest) &&
         (transfer->port_id == UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID))
     {
         printf("GetNodeInfo request from %d\n", transfer->source_node_id);
@@ -265,7 +265,7 @@ static void onTransferReceived(CanardInstance* ins,
  */
 static bool shouldAcceptTransfer(const CanardInstance* ins,
                                  uint16_t port_id,
-                                 CanardTransferType transfer_type,
+                                 CanardTransferKind transfer_kind,
                                  uint8_t source_node_id)
 {
     (void)source_node_id;
@@ -275,7 +275,7 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
         /*
          * If we're in the process of allocation of dynamic node ID, accept only relevant transfers.
          */
-        if ((transfer_type == CanardTransferTypeMessagePublication) &&
+        if ((transfer_kind == CanardTransferKindMessagePublication) &&
             (port_id == UAVCAN_NODE_ID_ALLOCATION_FIXED_SUBJECT_ID))
         {
             return true;
@@ -283,7 +283,7 @@ static bool shouldAcceptTransfer(const CanardInstance* ins,
     }
     else
     {
-        if ((transfer_type == CanardTransferTypeServiceRequest) &&
+        if ((transfer_kind == CanardTransferKindServiceRequest) &&
             (port_id == UAVCAN_GET_NODE_INFO_FIXED_SERVICE_ID))
         {
             return true;
