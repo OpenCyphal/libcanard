@@ -44,17 +44,8 @@ matrix:
         - make
         - ./run_tests --rng-seed time
 
-    #
-    # AVR driver test
-    #
-    - language: cpp
-      addons:
-        apt:
-          packages:
-            - gcc-avr
-            - avr-libc
-      script:
-        - mkdir build-avr
-        - cd build-avr
-        - cmake ../drivers/avr
-        - make
+after_script:
+  # Code style enforcement.
+  - ./format.sh
+  - modified="$(git status --porcelain --untracked-files=no)"
+  - if [ -n "$modified" ]; then echo "Run format.sh to reformat the code."; exit 1; fi

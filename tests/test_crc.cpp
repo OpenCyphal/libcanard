@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 UAVCAN Team
+ * Copyright (c) 2016-2020 UAVCAN Development Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -18,26 +18,10 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
- * Contributors: https://github.com/UAVCAN/libcanard/contributors
  */
 
 #include <catch.hpp>
 #include "canard_internals.h"
-
-/*
- * CRC-16-CCITT
- * Initial value: 0xFFFF
- * Poly: 0x1021
- * Reverse: no
- * Output xor: 0
- *
- * import crcmod
- * crc = crcmod.predefined.Crc('crc-ccitt-false')
- * crc.update('123456789')
- * crc.hexdigest()
- * '29B1'
- */
 
 TEST_CASE("CRC, Correctness")
 {
@@ -47,7 +31,7 @@ TEST_CASE("CRC, Correctness")
     crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("2"), 1);
     crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("3"), 1);
 
-    REQUIRE(0x5BCE == crc);                                     // Using Libuavcan as reference
+    REQUIRE(0x5BCE == crc);  // Using Libuavcan as reference
 
     crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("456789"), 6);
 

@@ -117,7 +117,7 @@ typedef struct CanardRxState
 
     uint64_t timestamp_usec;
 
-    const uint32_t dtid_tt_snid_dnid;
+    const uint32_t session_specifier;
 
     uint16_t payload_crc;
     uint16_t payload_len : 10;
@@ -139,13 +139,11 @@ Few things to note:
 * The last field of the structure is buffer_head, size of which is 32 - sizeof(CanardRxState).
     It is intended for keeping first few bytes of incoming transfers.
 
-Value of the field dtid_tt_snid_dnid can be computed with the following helper macro:
+Value of the field `session_specifier` can be computed with the following helper macro:
 
 ```c
-#define CANARD_MAKE_SESSION_SPECIFIER(port_id, transfer_type, \
-                                        src_node_id, dst_node_id) \
-    ((port_id) | ((transfer_type) << 16) | \
-     ((src_node_id) << 18) | ((dst_node_id) << 25))
+#define CANARD_MAKE_SESSION_SPECIFIER(port_id, transfer_type, src_node_id, dst_node_id) \
+    ((port_id) | ((transfer_type) << 16) | ((src_node_id) << 18) | ((dst_node_id) << 25))
 ```
 
 Keeping the transfer ID in a single scalar rather than in separate fields should be beneficial in terms of ROM footprint and linked list search speed.
@@ -269,10 +267,10 @@ typedef enum
 
 typedef enum
 {
-    CanardTransferTypeServiceResponse  = 0,
-    CanardTransferTypeServiceRequest   = 1,
-    CanardTransferTypeMessagePublication = 2
-} CanardTransferType;
+    CanardTransferKindServiceResponse    = 0,
+    CanardTransferKindServiceRequest     = 1,
+    CanardTransferKindMessagePublication = 2
+} CanardTransferKind;
 
 /**
  * This structure represents a received transfer for the application.
@@ -312,7 +310,7 @@ typedef struct
      * These fields identify the transfer for the application logic.
      */
     uint16_t port_id;                       ///< 0 to 511 for services, 0 to 32767 for messages
-    uint8_t transfer_type;                  ///< See @ref CanardTransferType
+    uint8_t transfer_type;                  ///< See @ref CanardTransferKind
     uint8_t transfer_id;                    ///< 0 to 31
     uint8_t priority;                       ///< 0 to 31
     uint8_t source_node_id;                 ///< 0 to 127, or 255 if the source is anonymous
@@ -399,7 +397,7 @@ void canardHandleRxFrame(CanardInstance* ins,
  */
 typedef bool (*CanardShouldAcceptTransfer)(const CanardInstance* ins,
                                            uint16_t port_id,
-                                           CanardTransferType transfer_type,
+                                           CanardTransferKind transfer_type,
                                            uint8_t source_node_id);
 
 /**
