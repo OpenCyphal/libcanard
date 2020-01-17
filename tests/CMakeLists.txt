@@ -38,8 +38,7 @@ set(CMAKE_C_FLAGS   "${CMAKE_C_FLAGS}   -DCANARD_INTERNAL=''")
 file(GLOB tests_src
      RELATIVE "${CMAKE_SOURCE_DIR}"
      "*.cpp"
-     "catch/*.cpp"
-     "stm32/*.cpp")
+     "catch/*.cpp")
 message(STATUS "Unit test source files: ${tests_src}")
 add_executable(run_tests
                ${tests_src}
