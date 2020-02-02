@@ -26,6 +26,13 @@
 #include <string.h>
 #include <assert.h>
 
+// ---------------------------------------- BUILD CONFIGURATION ----------------------------------------
+
+/// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
+#ifndef CANARD_ASSERT
+#    define CANARD_ASSERT(x) assert(x)
+#endif
+
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
 #ifndef CANARD_INTERNAL
 #    define CANARD_INTERNAL static
@@ -39,23 +46,39 @@
 
 #define CAN_EXT_ID_MASK ((1UL << 29U) - 1U)
 
-// ---------------------------------------- INTERNAL TYPES ----------------------------------------
+// ---------------------------------------- INTERNAL DEFINITIONS ----------------------------------------
 
-struct CanardInternalTxQueueItem
-{
-    CanardInternalTxQueueItem* next;
-    uint64_t                   deadline_usec;
-    CanardCANFrame             frame;
-};
+#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
+#    error "Unsupported language: ISO C99 or a newer version is required."
+#endif
+
+#if __STDC_VERSION__ < 201112L
+// Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
+#    define static_assert(x, ...) typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
+#    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                              // NOSONAR
+// Intentional violation of MISRA: the paste operator ## cannot be avoided in this context.
+#    define _static_assert_gl_impl(a, b) a##b  // NOSONAR
+#endif
 
 /// The fields are ordered to minimize padding on all platforms.
-struct CanardInternalInputSession
+typedef struct CanardInternalTxQueueItem
+{
+    struct CanardInternalTxQueueItem* next;
+
+    uint32_t id;
+    uint64_t deadline_usec;
+    uint8_t  data_length;
+    uint8_t  data[];
+} CanardInternalTxQueueItem;
+
+/// The fields are ordered to minimize padding on all platforms.
+typedef struct CanardInternalInputSession
 {
     struct CanardInternalInputSession* next;
 
-    uint8_t* payload;
-    size_t   payload_length;    ///< How many bytes received so far.
     size_t   payload_capacity;  ///< Payload past this limit may be discarded by the library.
+    size_t   payload_length;    ///< How many bytes received so far.
+    uint8_t* payload;
 
     uint64_t timestamp_usec;            ///< Time of last update of this session. Used for removal on timeout.
     uint32_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
@@ -64,7 +87,7 @@ struct CanardInternalInputSession
     uint16_t       calculated_crc;     ///< Updated with the received payload in real time.
     uint8_t        transfer_id;
     bool           next_toggle;
-};
+} CanardInternalInputSession;
 
 // ---------------------------------------- PRIVATE FUNCTIONS ----------------------------------------
 
@@ -87,4 +110,4 @@ CANARD_INTERNAL inline uint32_t makeServiceSessionSpecifier(const uint16_t servi
            (request_not_response ? (1U << 24U) : 0U);
 }
 
-CANARD_STATIC_ASSERT(sizeof(float) == 4, "Native float format shall match IEEE 754 binary32");
+static_assert(sizeof(float) == 4, "Native float format shall match IEEE 754 binary32");
