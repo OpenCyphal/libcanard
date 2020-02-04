@@ -84,6 +84,7 @@ const uint8_t CanardCANLengthToDLC[65] = {
     64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,  // 49
 };
 
+CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte);
 CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte)
 {
     uint16_t out = crc ^ (uint16_t)((uint16_t)(byte) << BITS_PER_BYTE);
@@ -95,6 +96,7 @@ CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte)
     return crc;
 }
 
+CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const uint8_t* const bytes, const size_t size);
 CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const uint8_t* const bytes, const size_t size)
 {
     uint16_t       out = crc;
@@ -106,6 +108,7 @@ CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const uint8_t* const bytes, 
     return out;
 }
 
+CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id);
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id)
 {
     // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
@@ -114,6 +117,10 @@ CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, 
     return ((uint32_t) src_node_id) | ((uint32_t) subject_id << 8U);  // NOLINT
 }
 
+CANARD_INTERNAL uint32_t makeServiceSessionSpecifier(const uint16_t service_id,
+                                                     const bool     request_not_response,
+                                                     const uint8_t  src_node_id,
+                                                     const uint8_t  dst_node_id);
 CANARD_INTERNAL uint32_t makeServiceSessionSpecifier(const uint16_t service_id,
                                                      const bool     request_not_response,
                                                      const uint8_t  src_node_id,
