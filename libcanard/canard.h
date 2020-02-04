@@ -31,22 +31,12 @@
 extern "C" {
 #endif
 
-// ---------------------------------------- CONSTANT DEFINITIONS ----------------------------------------
-
 /// Semantic version numbers of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 1
-#define CANARD_VERSION_MINOR 0
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
-
-/// Error code definitions; inverse of these values may be returned from API calls.
-#define CANARD_OK 0
-// Value 1 is omitted intentionally since -1 is often used in 3rd party code
-#define CANARD_ERROR_INVALID_ARGUMENT 2
-#define CANARD_ERROR_OUT_OF_MEMORY 3
-#define CANARD_ERROR_NODE_ID_NOT_SET 4
 
 /// MTU values for supported protocols.
 /// Per the recommendations given in the UAVCAN specification, other MTU values should not be used.
@@ -67,11 +57,8 @@ extern "C" {
 /// If not specified, the transfer-ID timeout will take this value for all new input sessions.
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
 
-// ---------------------------------------- TYPE DEFINITIONS ----------------------------------------
-
 // Forward declarations.
-typedef struct CanardInstance         CanardInstance;
-typedef struct CanardReceivedTransfer CanardReceivedTransfer;
+typedef struct CanardInstance CanardInstance;
 
 /// Transfer priority level mnemonics per the recommendations given in the UAVCAN specification.
 typedef enum
@@ -80,19 +67,28 @@ typedef enum
     CanardPriorityImmediate   = 1,
     CanardPriorityFast        = 2,
     CanardPriorityHigh        = 3,
-    CanardPriorityNominal     = 4,
+    CanardPriorityNominal     = 4,  ///< This should be the default.
     CanardPriorityLow         = 5,
     CanardPrioritySlow        = 6,
     CanardPriorityOptional    = 7,
 } CanardPriority;
+
+/// Transfer kinds are defined by the UAVCAN specification.
+typedef enum
+{
+    CanardTransferKindMessagePublication = 0,  ///< Multicast, from publisher to all subscribers.
+    CanardTransferKindServiceResponse    = 1,  ///< Point-to-point, from server to client.
+    CanardTransferKindServiceRequest     = 2,  ///< Point-to-point, from client to server.
+} CanardTransferKind;
 
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
 typedef struct
 {
     /// For RX frames: reception timestamp.
     /// For TX frames: transmission deadline.
-    /// The time system may be arbitrary as long as the clock is monotonic (steady).
-    uint64_t time_usec;
+    /// The time system may be arbitrary as long as the clock is monotonic (steady) and 0 is not a valid timestamp.
+    /// Zero timestamp indicates that the instance is invalid (empty).
+    uint64_t timestamp_usec;
 
     /// 29-bit extended ID. The bits above 29-th are ignored.
     uint32_t id;
@@ -100,142 +96,119 @@ typedef struct
     /// The useful data in the frame. The length value is not to be confused with DLC!
     uint8_t  data_length;
     uint8_t* data;
-} CanardCANFrame;
+} CanardFrame;
 
-/// Transfer kinds are defined by the UAVCAN specification.
-typedef enum
+typedef struct
 {
-    CanardTransferKindMessagePublication = 0,  ///< Broadcast, from publisher to all subscribers.
-    CanardTransferKindServiceResponse    = 1,  ///< Point-to-point, from server to client.
-    CanardTransferKindServiceRequest     = 2   ///< Point-to-point, from client to server.
-} CanardTransferKind;
+    /// For RX transfers: reception timestamp.
+    /// For TX transfers: transmission deadline.
+    /// The time system may be arbitrary as long as the clock is monotonic (steady) and 0 is not a valid timestamp.
+    /// Zero timestamp indicates that the instance is invalid (empty).
+    uint64_t timestamp_usec;
+
+    CanardPriority priority;
+
+    CanardTransferKind transfer_kind;
+
+    /// Subject-ID for message publications; service-ID for service requests/responses.
+    uint16_t port_id;
+
+    uint8_t remote_node_id;
+
+    uint8_t transfer_id;
+
+    size_t   payload_length;
+    uint8_t* payload;
+} CanardTransfer;
 
 /// The application supplies the library with this information when a new transfer should be received.
 typedef struct
 {
-    bool     should_accept;
-    uint32_t transfer_id_timeout_usec;
-    size_t   payload_capacity;
-} CanardTransferReceptionParameters;
+    /// The transfer-ID timeout for this session. If no specific requirements are defined, the default value
+    /// @ref CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC should be used.
+    /// Zero timeout indicates that this transfer should not be received (all its frames will be silently dropped).
+    uint64_t transfer_id_timeout_usec;
+
+    /// The maximum payload size of the transfer (i.e., the maximum size of the serialized DSDL object).
+    /// Payloads larger than this will be silently truncated per the Implicit Truncation Rule defined in Specification.
+    /// Per Specification, the transfer CRC of multi-frame transfers is always validated regardless of the
+    /// implicit truncation rule.
+    /// Zero is also a valid value indicating that the transfer shall be accepted but the payload need not be stored.
+    size_t payload_length_max;
+} CanardRxMetadata;
 
 /// The application shall implement this function and supply a pointer to it to the library during initialization.
 /// The library calls this function to determine whether a transfer should be received.
 /// @param ins            Library instance.
 /// @param port_id        Subject-ID or service-ID of the transfer.
 /// @param transfer_kind  Message or service transfer.
-/// @param source_node_id Node-ID of the origin; broadcast if anonymous.
+/// @param source_node_id Node-ID of the origin; @ref CANARD_NODE_ID_UNSET if anonymous.
 /// @returns @ref CanardTransferReceptionParameters.
-typedef CanardTransferReceptionParameters (*CanardShouldAcceptTransfer)(const CanardInstance* ins,
-                                                                        uint16_t              port_id,
-                                                                        CanardTransferKind    transfer_kind,
-                                                                        uint8_t               source_node_id);
+typedef CanardRxMetadata (*CanardRxFilter)(const CanardInstance* ins,
+                                           uint16_t              port_id,
+                                           CanardTransferKind    transfer_kind,
+                                           uint8_t               source_node_id);
+
+typedef void* (*CanardHeapAllocate)(CanardInstance* ins, size_t amount);
+
+/// Free as in freedom.
+typedef void (*CanardHeapFree)(CanardInstance* ins, void* pointer);
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
-/// The application should never access any of the fields directly! Instead, the API functions should be used.
+/// Fields whose names begin with an underscore SHALL NOT be accessed by the application,
+/// they are for internal use only.
 struct CanardInstance
 {
-    CanardShouldAcceptTransfer should_accept_transfer;
+    /// User pointer that can link this instance with other objects.
+    /// This field can be changed arbitrarily, the library does not access it after initialization.
+    /// The default value is NULL.
+    void* user_reference;
 
-    struct CanardInternalInputSession* input_sessions;
-    struct CanardInternalTxQueueItem*  tx_queue;
+    /// The node-ID of the local node. The default value is @ref CANARD_NODE_ID_UNSET.
+    /// Per the UAVCAN Specification, the node-ID should not be assigned more than once.
+    /// Invalid values are treated as @ref CANARD_NODE_ID_UNSET.
+    uint8_t node_id;
 
-    void* user_reference;  ///< User pointer that can link this instance with other objects
+    /// The maximum transmission unit. The value can be changed arbitrarily at any time.
+    /// This setting defines the maximum number of bytes per CAN data frame in all outgoing transfers.
+    /// Regardless of this setting, CAN frames with any MTU can always be accepted.
+    ///
+    /// Only the standard values should be used as recommended by the specification; otherwise,
+    /// networking interoperability issues may arise. See "CANARD_MTU_*".
+    /// Valid values are any valid CAN frame data length. The default is the maximum valid value.
+    /// Invalid values are treated as the nearest valid value.
+    uint8_t mtu_bytes;
 
-    uint8_t node_id;     ///< Local node-ID or @ref CANARD_NODE_ID_UNSET.
-    uint8_t mtu_bytes;  ///< Maximum number of data bytes per CAN frame. Range: [8, 64].
+    /// Callbacks invoked by the library. See their type documentation for details.
+    /// They SHALL be valid function pointers at all times.
+    CanardHeapAllocate heap_allocate;
+    CanardHeapFree     heap_free;
+    CanardRxFilter     rx_filter;
+
+    /// These fields are for internal use only. Do not access from the application.
+    struct CanardInternalRxSession*   _rx_sessions;
+    struct CanardInternalTxQueueItem* _tx_queue;
 };
 
-/// This structure represents a received transfer for the application.
-/// An instance of it is passed to the application via the callback when a new transfer is received.
-/// Pointers to the structure and all its fields are invalidated after the callback returns.
-struct CanardReceivedTransfer
-{
-    /// Timestamp of the first frame of this transfer.
-    uint64_t timestamp_usec;
+/// Initialize a new library instance.
+/// The default values will be assigned as specified in the structure field documentation.
+CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
+                          const CanardHeapFree     heap_free,
+                          const CanardRxFilter     rx_filter);
 
-    size_t   payload_length;
-    uint8_t* payload;
+// ---------------------------------------- OUTGOING TRANSFERS ----------------------------------------
 
-    CanardPriority     priority;
-    CanardTransferKind transfer_kind;
-    uint16_t           port_id;         ///< Subject-ID or service-ID.
-    uint8_t            source_node_id;  ///< For anonymous transfers it's @ref CANARD_NODE_ID_UNSET.
-    uint8_t            transfer_id;     ///< Bits above @ref CANARD_TRANSFER_ID_BIT_LENGTH are always zero.
-};
+void canardTxPush(CanardInstance* const ins, const CanardTransfer* transfer);
 
-// ---------------------------------------- CONFIGURATION FUNCTIONS ----------------------------------------
+CanardFrame canardTxPeek(const CanardInstance* const ins);
 
-/// Initialize a library instance.
-/// The local node-ID will be initialized as @ref CANARD_NODE_ID_UNSET, i.e. anonymous by default.
-///
-/// @param should_accept_transfer    Callback, see @ref CanardShouldAcceptTransfer.
-/// @param user_reference            Optional application-defined pointer; NULL if not needed.
-CanardInstance canardInit(const CanardShouldAcceptTransfer should_accept_transfer,
-                          void* const                      user_reference);
+void canardTxPop(CanardInstance* const ins);
 
-/// Assign a new node-ID value to the current node. Node-ID can be assigned only once.
-/// If the supplied value is invalid or the node-ID is already configured, nothing will be done.
-void canardSetLocalNodeID(CanardInstance* const ins, const uint8_t self_node_id);
+// ---------------------------------------- INCOMING TRANSFERS ----------------------------------------
 
-/// @returns Node-ID of the local node; 255 (broadcast) if the node-ID is not set, i.e. if the local node is anonymous.
-uint8_t canardGetLocalNodeID(const CanardInstance* const ins);
+CanardTransfer canardRxAcceptFrame(CanardInstance* const ins, const CanardFrame* frame);
 
-/// Configure the maximum transmission unit. This can be done as many times as needed.
-/// This setting defines the maximum number of bytes per CAN data frame in all outgoing transfers.
-/// Regardless of this setting, CAN frames with any MTU up to CANARD_CONFIG_MTU_MAX bytes can always be accepted.
-///
-/// Only the standard values should be used as recommended by the specification (8, 64 bytes);
-/// otherwise, interoperability issues may arise. See "CANARD_MTU_*".
-///
-/// Range: [8, 64]. The default is the maximum.
-/// Invalid values are rounded to the nearest valid value.
-void canardSetMTU(const CanardInstance* const ins, const uint8_t mtu_bytes);
-
-/// Read the value of the user pointer.
-/// The user pointer is configured once during initialization.
-/// It can be used to store references to any user-specific data, or to link the instance object with C++ objects.
-/// @returns The application-defined pointer.
-void* canardGetUserReference(const CanardInstance* const ins);
-
-// ---------------------------------------- OUTGOING TRANSFER FUNCTIONS ----------------------------------------
-
-int32_t canardPublish(CanardInstance* const ins,
-                      const uint16_t        subject_id,
-                      uint8_t* const        inout_transfer_id,
-                      const uint8_t         priority,
-                      const size_t          payload_length,
-                      const void* const     payload,
-                      const uint64_t        deadline_usec);
-
-int32_t canardRequest(CanardInstance* const ins,
-                      const uint8_t         server_node_id,
-                      const uint16_t        service_id,
-                      uint8_t* const        inout_transfer_id,
-                      const CanardPriority  priority,
-                      const size_t          payload_length,
-                      const void* const     payload,
-                      const uint64_t        deadline_usec);
-
-int32_t canardRespond(CanardInstance* const ins,
-                      const uint8_t         client_node_id,
-                      const uint16_t        service_id,
-                      const uint8_t         transfer_id,
-                      const CanardPriority  priority,
-                      const size_t          payload_length,
-                      const void* const     payload,
-                      const uint64_t        deadline_usec);
-
-/// TODO: REVIEW NEEDED
-CanardCANFrame canardPeekTxQueue(const CanardInstance* const ins);
-void canardPopTxQueue(const CanardInstance* const ins);
-
-// ---------------------------------------- INCOMING TRANSFER FUNCTIONS ----------------------------------------
-
-CanardReceivedTransfer canardReceive(CanardInstance* const ins, const CanardCANFrame frame);
-
-void canardDestroyTransfer(CanardInstance* const ins, CanardReceivedTransfer* const transfer);
-
-// ---------------------------------------- DATA SERIALIZATION FUNCTIONS ----------------------------------------
+// ---------------------------------------- DATA SERIALIZATION ----------------------------------------
 
 /// This function may be used to encode values for later transmission in a UAVCAN transfer. It encodes a scalar value
 /// -- boolean, integer, character, or floating point -- and puts it at the specified bit offset in the specified
@@ -256,13 +229,13 @@ void canardDestroyTransfer(CanardInstance* const ins, CanardReceivedTransfer* co
 ///  | [33, 64]   | uint64_t, int64_t, or 64-bit float       |
 ///
 /// @param destination   Destination buffer where the result will be stored.
-/// @param bit_offset    Offset, in bits, from the beginning of the destination buffer.
-/// @param bit_length    Length of the value, in bits; see the table.
+/// @param offset_bit    Offset, in bits, from the beginning of the destination buffer.
+/// @param length_bit    Length of the value, in bits; see the table.
 /// @param value         Pointer to the value; see the table.
-void canardSerializePrimitive(void* const       destination,
-                              const size_t      bit_offset,
-                              const uint8_t     bit_length,
-                              const void* const value);
+void canardDSDLPrimitiveSerialize(void* const       destination,
+                                  const size_t      offset_bit,
+                                  const uint8_t     length_bit,
+                                  const void* const value);
 
 /// This function may be used to extract values from received UAVCAN transfers. It decodes a scalar value --
 /// boolean, integer, character, or floating point -- from the specified bit position in the source buffer.
@@ -273,36 +246,36 @@ void canardSerializePrimitive(void* const       destination,
 ///
 /// The type of the value pointed to by 'out_value' is defined as follows:
 ///
-///  | bit_length | value_is_signed | out_value points to                      |
-///  |------------|-----------------|------------------------------------------|
-///  | 1          | false           | bool (may be incompatible with uint8_t!) |
-///  | 1          | true            | N/A                                      |
-///  | [2, 8]     | false           | uint8_t, or char                         |
-///  | [2, 8]     | true            | int8_t, or char                          |
-///  | [9, 16]    | false           | uint16_t                                 |
-///  | [9, 16]    | true            | int16_t                                  |
-///  | [17, 32]   | false           | uint32_t                                 |
-///  | [17, 32]   | true            | int32_t, or 32-bit float IEEE 754        |
-///  | [33, 64]   | false           | uint64_t                                 |
-///  | [33, 64]   | true            | int64_t, or 64-bit float IEEE 754        |
+///  | bit_length | is_signed   | out_value points to                      |
+///  |------------|-------------|------------------------------------------|
+///  | 1          | false       | bool (may be incompatible with uint8_t!) |
+///  | 1          | true        | N/A                                      |
+///  | [2, 8]     | false       | uint8_t, or char                         |
+///  | [2, 8]     | true        | int8_t, or char                          |
+///  | [9, 16]    | false       | uint16_t                                 |
+///  | [9, 16]    | true        | int16_t                                  |
+///  | [17, 32]   | false       | uint32_t                                 |
+///  | [17, 32]   | true        | int32_t, or 32-bit float IEEE 754        |
+///  | [33, 64]   | false       | uint64_t                                 |
+///  | [33, 64]   | true        | int64_t, or 64-bit float IEEE 754        |
 ///
-/// @param source            The source buffer where the data will be read from.
-/// @param bit_offset        Offset, in bits, from the beginning of the source buffer.
-/// @param bit_length        Length of the value, in bits; see the table.
-/// @param value_is_signed   True if the value can be negative (i.e., sign bit extension is needed); see the table.
-/// @param out_value         Pointer to the output storage; see the table.
-void canardDeserializePrimitive(const void* const source,
-                                const size_t      bit_offset,
-                                const uint8_t     bit_length,
-                                const bool        value_is_signed,
-                                void* const       out_value);
+/// @param source       The source buffer where the data will be read from.
+/// @param offset_bit   Offset, in bits, from the beginning of the source buffer.
+/// @param length_bit   Length of the value, in bits; see the table.
+/// @param is_signed    True if the value can be negative (i.e., sign bit extension is needed); see the table.
+/// @param out_value    Pointer to the output storage; see the table.
+void canardDSDLPrimitiveDeserialize(const void* const source,
+                                    const size_t      offset_bit,
+                                    const uint8_t     length_bit,
+                                    const bool        is_signed,
+                                    void* const       out_value);
 
 /// IEEE 754 binary16 marshaling helpers.
 /// These functions convert between the native float and the standard IEEE 754 binary16 float (a.k.a. half precision).
 /// It is assumed that the native float is IEEE 754 binary32, otherwise, the results may be unpredictable.
 /// Majority of modern computers and microcontrollers use IEEE 754, so this limitation should not limit the portability.
-uint16_t canardComposeFloat16(float value);
-float    canardParseFloat16(uint16_t value);
+uint16_t canardDSDLFloat16Serialize(float value);
+float    canardDSDLFloat16Deserialize(uint16_t value);
 
 #ifdef __cplusplus
 }

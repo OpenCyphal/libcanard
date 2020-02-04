@@ -72,9 +72,9 @@ typedef struct CanardInternalTxQueueItem
 } CanardInternalTxQueueItem;
 
 /// The fields are ordered to minimize padding on all platforms.
-typedef struct CanardInternalInputSession
+typedef struct CanardInternalRxSession
 {
-    struct CanardInternalInputSession* next;
+    struct CanardInternalRxSession* next;
 
     size_t   payload_capacity;  ///< Payload past this limit may be discarded by the library.
     size_t   payload_length;    ///< How many bytes received so far.
@@ -87,7 +87,7 @@ typedef struct CanardInternalInputSession
     uint16_t       calculated_crc;     ///< Updated with the received payload in real time.
     uint8_t        transfer_id;
     bool           next_toggle;
-} CanardInternalInputSession;
+} CanardInternalRxSession;
 
 // ---------------------------------------- PRIVATE FUNCTIONS ----------------------------------------
 
