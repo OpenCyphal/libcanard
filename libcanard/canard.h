@@ -40,6 +40,9 @@ extern "C" {
 /// If not specified, the transfer-ID timeout will take this value for all new input sessions.
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
 
+/// It is assumed that the native float type follows the IEEE 754 binary32 representation.
+typedef float CanardIEEE754Binary32;
+
 // Forward declarations.
 typedef struct CanardInstance CanardInstance;
 
@@ -257,8 +260,8 @@ void canardDSDLPrimitiveDeserialize(const void* const source,
 /// These functions convert between the native float and the standard IEEE 754 binary16 float (a.k.a. half precision).
 /// It is assumed that the native float is IEEE 754 binary32, otherwise, the results may be unpredictable.
 /// Majority of modern computers and microcontrollers use IEEE 754, so this limitation should not limit the portability.
-uint16_t canardDSDLFloat16Serialize(const float value);
-float    canardDSDLFloat16Deserialize(const uint16_t value);
+uint16_t              canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value);
+CanardIEEE754Binary32 canardDSDLFloat16Deserialize(const uint16_t value);
 
 #ifdef __cplusplus
 }

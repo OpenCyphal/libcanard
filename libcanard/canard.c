@@ -10,7 +10,8 @@
 /// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
 /// To disable assertion checks completely, make it expand into `(void)(0)`.
 #ifndef CANARD_ASSERT
-#    define CANARD_ASSERT(x) assert(x)
+// Intentional violation of MISRA: assertion macro cannot be replaced with a function definition.
+#    define CANARD_ASSERT(x) assert(x)  // NOSONAR
 #endif
 
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
@@ -50,7 +51,12 @@ typedef struct CanardInternalTxQueueItem
     uint32_t id;
     uint64_t deadline_usec;
     uint8_t  data_length;
-    uint8_t  data[];
+
+    // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
+    //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
+    //    The pointer is bad because it requires us to use pointer arithmetics and adds sizeof(void*) of waste per item.
+    //  - Use a separate memory allocation for data. This is terribly wasteful.
+    uint8_t data[];  // NOSONAR
 } CanardInternalTxQueueItem;
 
 /// The fields are ordered to minimize padding on all platforms.
@@ -103,7 +109,8 @@ CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const uint8_t* const bytes, 
     const uint8_t* p   = bytes;
     for (size_t i = 0; i < size; i++)
     {
-        out = crcAddByte(out, *p++);
+        out = crcAddByte(out, *p);
+        ++p;
     }
     return out;
 }
@@ -167,15 +174,17 @@ void canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfe
 
 // ---------------------------------------- FLOAT16 SERIALIZATION ----------------------------------------
 
-typedef union
+// Intentional violation of MISRA: we need this union because the alternative is far more error prone.
+// We have to rely on low-level data representation details to do the conversion; unions are helpful.
+typedef union  // NOSONAR
 {
-    uint32_t bits;
-    float    real;
+    uint32_t              bits;
+    CanardIEEE754Binary32 real;
 } Float32Bits;
-static_assert(sizeof(float) == 4, "Native float format shall match IEEE 754 binary32");
-static_assert(sizeof(Float32Bits) == 4, "Native float format shall match IEEE 754 binary32");
+static_assert(4 == sizeof(CanardIEEE754Binary32), "Native float format shall match IEEE 754 binary32");
+static_assert(4 == sizeof(Float32Bits), "Native float format shall match IEEE 754 binary32");
 
-uint16_t canardDSDLFloat16Serialize(const float value)
+uint16_t canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value)
 {
     // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
     const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT
@@ -205,7 +214,7 @@ uint16_t canardDSDLFloat16Serialize(const float value)
     return out;
 }
 
-float canardDSDLFloat16Deserialize(const uint16_t value)
+CanardIEEE754Binary32 canardDSDLFloat16Deserialize(const uint16_t value)
 {
     // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
     const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT
