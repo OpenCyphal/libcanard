@@ -33,9 +33,7 @@
 #    define _static_assert_gl_impl(a, b) a##b  // NOSONAR
 #endif
 
-// ---------------------------------------- TRANSPORT ----------------------------------------
-
-#define TRANSFER_CRC_INITIAL 0xFFFFU
+// ---------------------------------------- COMMON CONSTANTS ----------------------------------------
 
 #define TRANSFER_ID_BIT_LEN 5U
 
@@ -43,52 +41,9 @@
 
 #define BITS_PER_BYTE 8U
 
-/// The fields are ordered to minimize padding on all platforms.
-typedef struct CanardInternalTxQueueItem
-{
-    struct CanardInternalTxQueueItem* next;
+// ---------------------------------------- TRANSFER CRC ----------------------------------------
 
-    uint32_t id;
-    uint64_t deadline_usec;
-    uint8_t  data_length;
-
-    // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
-    //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
-    //    The pointer is bad because it requires us to use pointer arithmetics and adds sizeof(void*) of waste per item.
-    //  - Use a separate memory allocation for data. This is terribly wasteful.
-    uint8_t data[];  // NOSONAR
-} CanardInternalTxQueueItem;
-
-/// The fields are ordered to minimize padding on all platforms.
-typedef struct CanardInternalRxSession
-{
-    struct CanardInternalRxSession* next;
-
-    size_t   payload_capacity;  ///< Payload past this limit may be discarded by the library.
-    size_t   payload_size;      ///< How many bytes received so far.
-    uint8_t* payload;
-
-    uint64_t timestamp_usec;            ///< Time of last update of this session. Used for removal on timeout.
-    uint32_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
-
-    const uint32_t session_specifier;  ///< Differentiates this session from other sessions.
-
-    uint16_t calculated_crc;  ///< Updated with the received payload in real time.
-    uint8_t  transfer_id;
-    bool     next_toggle;
-} CanardInternalRxSession;
-
-const uint8_t CanardCANDLCToLength[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
-const uint8_t CanardCANLengthToDLC[65] = {
-    0,  1,  2,  3,  4,  5,  6,  7,  8,                               // 0
-    12, 12, 12, 12,                                                  // 9
-    16, 16, 16, 16,                                                  // 13
-    20, 20, 20, 20,                                                  // 17
-    24, 24, 24, 24,                                                  // 21
-    32, 32, 32, 32, 32, 32, 32, 32,                                  // 25
-    48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48,  // 33
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,  // 49
-};
+#define TRANSFER_CRC_INITIAL 0xFFFFU
 
 CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte);
 CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte)
@@ -99,7 +54,7 @@ CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte)
         // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
         out = ((out & 0x8000U) != 0U) ? ((uint16_t)(out << 1U) ^ 0x1021U) : (uint16_t)(out << 1U);  // NOLINT
     }
-    return crc;
+    return out;
 }
 
 CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const uint8_t* const bytes, const size_t size);
@@ -114,6 +69,12 @@ CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const uint8_t* const bytes, 
     }
     return out;
 }
+
+// ---------------------------------------- SESSION SPECIFIER ----------------------------------------
+
+#define SERVICE_NOT_MESSAGE (((uint32_t) 1U) << 25U)
+#define ANONYMOUS_MESSAGE (((uint32_t) 1U) << 24U)
+#define REQUEST_NOT_RESPONSE (((uint32_t) 1U) << 24U)
 
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id);
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id)
@@ -138,8 +99,61 @@ CANARD_INTERNAL uint32_t makeServiceSessionSpecifier(const uint16_t service_id,
     CANARD_ASSERT(dst_node_id <= CANARD_NODE_ID_MAX);
     // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
     return ((uint32_t) src_node_id) | ((uint32_t) dst_node_id << 7U) | ((uint32_t) service_id << 14U) |  // NOLINT
-           (request_not_response ? (1U << 24U) : 0U);                                                    // NOLINT
+           (request_not_response ? REQUEST_NOT_RESPONSE : 0U) | SERVICE_NOT_MESSAGE;
 }
+
+// ---------------------------------------- TRANSMISSION ----------------------------------------
+
+/// The fields are ordered to minimize padding on all platforms.
+typedef struct CanardInternalTxQueueItem
+{
+    struct CanardInternalTxQueueItem* next;
+
+    uint32_t id;
+    uint64_t deadline_usec;
+    uint8_t  data_length;
+
+    // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
+    //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
+    //    The pointer is bad because it requires us to use pointer arithmetics and adds sizeof(void*) of waste per item.
+    //  - Use a separate memory allocation for data. This is terribly wasteful.
+    uint8_t data[];  // NOSONAR
+} CanardInternalTxQueueItem;
+
+// ---------------------------------------- RECEPTION ----------------------------------------
+
+/// The fields are ordered to minimize padding on all platforms.
+typedef struct CanardInternalRxSession
+{
+    struct CanardInternalRxSession* next;
+
+    size_t   payload_capacity;  ///< Payload past this limit may be discarded by the library.
+    size_t   payload_size;      ///< How many bytes received so far.
+    uint8_t* payload;
+
+    uint64_t timestamp_usec;            ///< Time of last update of this session. Used for removal on timeout.
+    uint32_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
+
+    const uint32_t session_specifier;  ///< Differentiates this session from other sessions.
+
+    uint16_t calculated_crc;  ///< Updated with the received payload in real time.
+    uint8_t  transfer_id;
+    bool     next_toggle;
+} CanardInternalRxSession;
+
+// ---------------------------------------- PUBLIC API ----------------------------------------
+
+const uint8_t CanardCANDLCToLength[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+const uint8_t CanardCANLengthToDLC[65] = {
+    0,  1,  2,  3,  4,  5,  6,  7,  8,                               // 0
+    12, 12, 12, 12,                                                  // 9
+    16, 16, 16, 16,                                                  // 13
+    20, 20, 20, 20,                                                  // 17
+    24, 24, 24, 24,                                                  // 21
+    32, 32, 32, 32, 32, 32, 32, 32,                                  // 25
+    48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48,  // 33
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,  // 49
+};
 
 CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
