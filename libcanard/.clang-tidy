@@ -13,10 +13,11 @@ Checks: >-
   performance-*,
   portability-*,
   readability-*,
-  -*-magic-numbers,
   -google-readability-todo,
-WarningsAsErrors: true
-HeaderFilterRegex: ''
+  -readability-avoid-const-params-in-decls,
+  -llvm-header-guard,
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
 FormatStyle: file
 ...

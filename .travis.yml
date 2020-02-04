@@ -1,60 +1,79 @@
 dist: xenial
+env:
+  - CTEST_OUTPUT_ON_FAILURE=1
 
 matrix:
   include:
     # -------------------- GCC + SonarCloud --------------------
-#    - language: cpp
-#      addons:
-#        sonarcloud:
-#          organization: uavcan
-#          token:
-#            secure: "LbaAOcguJspiraxAb9RNkwtGvWDh1aMTEPdz2MCbeICxIIiJ6LRoabD58rLvPsrNSWsR3AAep9Q551dDzT8c04UX+C67N3CZ/oof4DwBT+XQCSfB8FMj2QpbglJqwFPclYUorROjH31VwGcgIq3kfQq3Cw8G+nsL8vRaaJXsJb/KPp6MU698NGzHJIgRyn29VW76dW0NSxOv4ub3e6aKOnwfI+h1Ctx4p3hCdzd402PaZspv1VgEmirf5sVUJvE67PVIzlwov+CF+2PlrIpGUWI98Gl6HqYHv3hkvSP+4iLvCMD99Zmee4yLnCFY3xcJuZ8zKCRBBoquuUxdzK0f/4l9TZXePDXDMhaj3cXLlaAPWDw+emqTcm+hzP1mt/DaIqopAf54bQojVWELbL6QcjBNkphSvWBeIoyKWuUWU2LWJcJNPXFNUug//D99uXNurkzAIWR+lcsx6zO+cr4EN00N92W6hPt7mhKCF0prs7SvMleEi9mAbxvd4lOHFT56RvcB5ny6IapX9/q1+xm5iSoAzLhbvU1aUCnX74S/yFFejvClxxhW+P0bXYNtZ9RRfl8BdSgENTgA9RSnqdtIJGA4cU3OxIHDyJIC2cgmsE38u7QaMO49r1liJFH+xmDPa6bkGGHiPoHaPu9+g+wYFttK9FNt5ozyHY+VpjwTrY4="
-#        apt:
-#          sources:
-#            - ubuntu-toolchain-r-test
-#          packages:
-#            - g++-9
-#            - g++-9-multilib
-#            - gcc-9-multilib
-#            - linux-libc-dev:i386
-#      script:
-#        - CC=gcc-9 && CXX=g++-9 && cmake tests
-#        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all  # The build wrapper comes from Sonar Cloud.
-#        - ./run_tests --rng-seed time
-#        - sonar-scanner
+    - language: cpp
+      addons:
+        sonarcloud:
+          organization: uavcan
+          token:
+            secure: "LbaAOcguJspiraxAb9RNkwtGvWDh1aMTEPdz2MCbeICxIIiJ6LRoabD58rLvPsrNSWsR3AAep9Q551dDzT8c04UX+C67N3CZ/oof4DwBT+XQCSfB8FMj2QpbglJqwFPclYUorROjH31VwGcgIq3kfQq3Cw8G+nsL8vRaaJXsJb/KPp6MU698NGzHJIgRyn29VW76dW0NSxOv4ub3e6aKOnwfI+h1Ctx4p3hCdzd402PaZspv1VgEmirf5sVUJvE67PVIzlwov+CF+2PlrIpGUWI98Gl6HqYHv3hkvSP+4iLvCMD99Zmee4yLnCFY3xcJuZ8zKCRBBoquuUxdzK0f/4l9TZXePDXDMhaj3cXLlaAPWDw+emqTcm+hzP1mt/DaIqopAf54bQojVWELbL6QcjBNkphSvWBeIoyKWuUWU2LWJcJNPXFNUug//D99uXNurkzAIWR+lcsx6zO+cr4EN00N92W6hPt7mhKCF0prs7SvMleEi9mAbxvd4lOHFT56RvcB5ny6IapX9/q1+xm5iSoAzLhbvU1aUCnX74S/yFFejvClxxhW+P0bXYNtZ9RRfl8BdSgENTgA9RSnqdtIJGA4cU3OxIHDyJIC2cgmsE38u7QaMO49r1liJFH+xmDPa6bkGGHiPoHaPu9+g+wYFttK9FNt5ozyHY+VpjwTrY4="
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-9
+            - g++-9-multilib
+            - gcc-9-multilib
+            - linux-libc-dev:i386
+      script:
+        # DEBUG
+        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
+        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all  # The build wrapper comes from Sonar Cloud.
+        - make test
+        # TODO: COMBINE COVERAGE FROM ALL EXECUTABLES!
+        - find CMakeFiles/test_general_cov.dir/ -name 'canard.c.*' -type f -print -exec mv -f {} . \;
+        - gcov-9 libcanard/canard.c --object-file canard*gcda --object-file canard*gcno
+
+        # RELEASE
+        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - make all VERBOSE=1 && make test
+
+        # ANALYSIS
+        - sonar-scanner
 
     # -------------------- Clang 9 --------------------
-#    - language: cpp
-#      addons:
-#        apt:
-#          sources:
-#            - ubuntu-toolchain-r-test
-#          packages:
-#            - libstdc++-7-dev:i386
-#            - linux-libc-dev:i386
-#            - libc6-dev-i386
-#      script:
-#        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-#        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes
-#        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests
-#        - make
-#        - ./run_tests --rng-seed time
-
-    # -------------------- Static analysis --------------------
     - language: cpp
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
+            - g++-9
+            - g++-9-multilib
+            - gcc-9-multilib
+            - linux-libc-dev:i386
+            - libc6-dev-i386
+            - libstdc++-7-dev:i386
       script:
-        - sudo rm -rf /usr/local/clang*
+        # Set up the toolchain.
         - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-        - sudo apt install clang-format-9 clang-tidy-9
-        - sudo ln -sf $(which clang-format-9) /usr/bin/clang-format
-        - sudo ln -sf $(which clang-tidy-9) /usr/bin/clang-tidy
+        - sudo apt install clang-tidy-9 clang-format-9
+        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
-        # TODO: invoke clang-tidy.
+        # DEBUG
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Debug
+        - make VERBOSE=1 && make test
 
-        # Code style enforcement.
-        - ./format.sh
+        # RELEASE
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Release
+        - make VERBOSE=1 && make test
+
+        # RELWITHDEBINFO
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        - make VERBOSE=1 && make test
+
+        # MINSIZEREL
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=MinSizeRel
+        - make VERBOSE=1 && make test
+
+        # Format check
+        - make format VERBOSE=1
         - 'modified="$(git status --porcelain --untracked-files=no)"'
-        - 'if [ -n "$modified" ]; then echo "Run format.sh to reformat the code."; exit 1; fi'
+        - 'if [ -n "$modified" ]; then echo "Run scripts/format.sh to reformat the code."; exit 1; fi'
 
 git:
   depth: false  # Disable shallow clone because it is incompatible with SonarCloud

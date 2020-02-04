@@ -1,37 +1,20 @@
-// Copyright (c) 2016-2020 UAVCAN Development Team
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-//
-// Contributors: https://github.com/UAVCAN/libcanard/contributors
+// This software is distributed under the terms of the MIT License.
+// Copyright (c) 2016-2020 UAVCAN Development Team.
+// Contributors: https://github.com/UAVCAN/libcanard/contributors.
+// READ THE DOCUMENTATION IN README.md.
 
 #ifndef CANARD_H_INCLUDED
 #define CANARD_H_INCLUDED
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/// Semantic version numbers of this library (not the UAVCAN specification).
+/// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 1
 
@@ -67,7 +50,7 @@ typedef enum
     CanardPriorityImmediate   = 1,
     CanardPriorityFast        = 2,
     CanardPriorityHigh        = 3,
-    CanardPriorityNominal     = 4,  ///< This should be the default.
+    CanardPriorityNominal     = 4,  ///< Nominal priority level should be the default.
     CanardPriorityLow         = 5,
     CanardPrioritySlow        = 6,
     CanardPriorityOptional    = 7,
@@ -90,13 +73,17 @@ typedef struct
     /// Zero timestamp indicates that the instance is invalid (empty).
     uint64_t timestamp_usec;
 
-    /// 29-bit extended ID. The bits above 29-th are ignored.
-    uint32_t id;
+    /// 29-bit extended ID. The bits above 29-th are zero/ignored.
+    uint32_t extended_can_id;
 
     /// The useful data in the frame. The length value is not to be confused with DLC!
-    uint8_t  data_length;
-    uint8_t* data;
-} CanardFrame;
+    uint8_t payload_size;
+    void*   payload;
+} CanardCANFrame;
+
+/// Conversion look-up tables between CAN DLC and data length.
+extern const uint8_t CanardCANDLCToLength[16];
+extern const uint8_t CanardCANLengthToDLC[65];
 
 typedef struct
 {
@@ -117,8 +104,8 @@ typedef struct
 
     uint8_t transfer_id;
 
-    size_t   payload_length;
-    uint8_t* payload;
+    size_t payload_size;
+    void*  payload;
 } CanardTransfer;
 
 /// The application supplies the library with this information when a new transfer should be received.
@@ -129,12 +116,12 @@ typedef struct
     /// Zero timeout indicates that this transfer should not be received (all its frames will be silently dropped).
     uint64_t transfer_id_timeout_usec;
 
-    /// The maximum payload size of the transfer (i.e., the maximum size of the serialized DSDL object).
+    /// The maximum payload size of the transfer (i.e., the maximum size of the serialized DSDL object), in bytes.
     /// Payloads larger than this will be silently truncated per the Implicit Truncation Rule defined in Specification.
     /// Per Specification, the transfer CRC of multi-frame transfers is always validated regardless of the
     /// implicit truncation rule.
     /// Zero is also a valid value indicating that the transfer shall be accepted but the payload need not be stored.
-    size_t payload_length_max;
+    size_t payload_size_max;
 } CanardRxMetadata;
 
 /// The application shall implement this function and supply a pointer to it to the library during initialization.
@@ -192,27 +179,23 @@ struct CanardInstance
 
 /// Initialize a new library instance.
 /// The default values will be assigned as specified in the structure field documentation.
+/// If any of the pointers are NULL, the behavior is undefined.
 CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
                           const CanardRxFilter     rx_filter);
 
-// ---------------------------------------- OUTGOING TRANSFERS ----------------------------------------
+void canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
-void canardTxPush(CanardInstance* const ins, const CanardTransfer* transfer);
-
-CanardFrame canardTxPeek(const CanardInstance* const ins);
+CanardCANFrame canardTxPeek(const CanardInstance* const ins);
 
 void canardTxPop(CanardInstance* const ins);
 
-// ---------------------------------------- INCOMING TRANSFERS ----------------------------------------
+CanardTransfer canardRxPush(CanardInstance* const ins, const CanardCANFrame* const frame);
 
-CanardTransfer canardRxAcceptFrame(CanardInstance* const ins, const CanardFrame* frame);
-
-// ---------------------------------------- DATA SERIALIZATION ----------------------------------------
-
-/// This function may be used to encode values for later transmission in a UAVCAN transfer. It encodes a scalar value
-/// -- boolean, integer, character, or floating point -- and puts it at the specified bit offset in the specified
-/// contiguous buffer. Simple payloads can also be encoded manually instead of using this function.
+/// This function may be used to encode values for later transmission in a UAVCAN transfer.
+/// It serializes a primitive value -- boolean, integer, character, or floating point -- and puts it at the
+/// specified bit offset in the specified contiguous buffer.
+/// Simple objects can also be serialized manually instead of using this function.
 ///
 /// Caveat: This function works correctly only on platforms that use two's complement signed integer representation.
 /// I am not aware of any modern microarchitecture that uses anything else than two's complement, so it should not
@@ -274,8 +257,8 @@ void canardDSDLPrimitiveDeserialize(const void* const source,
 /// These functions convert between the native float and the standard IEEE 754 binary16 float (a.k.a. half precision).
 /// It is assumed that the native float is IEEE 754 binary32, otherwise, the results may be unpredictable.
 /// Majority of modern computers and microcontrollers use IEEE 754, so this limitation should not limit the portability.
-uint16_t canardDSDLFloat16Serialize(float value);
-float    canardDSDLFloat16Deserialize(uint16_t value);
+uint16_t canardDSDLFloat16Serialize(const float value);
+float    canardDSDLFloat16Deserialize(const uint16_t value);
 
 #ifdef __cplusplus
 }
