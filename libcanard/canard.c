@@ -145,14 +145,14 @@ typedef struct CanardInternalRxSession
 
 const uint8_t CanardCANDLCToLength[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 const uint8_t CanardCANLengthToDLC[65] = {
-    0,  1,  2,  3,  4,  5,  6,  7,  8,                               // 0
-    12, 12, 12, 12,                                                  // 9
-    16, 16, 16, 16,                                                  // 13
-    20, 20, 20, 20,                                                  // 17
-    24, 24, 24, 24,                                                  // 21
-    32, 32, 32, 32, 32, 32, 32, 32,                                  // 25
-    48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48,  // 33
-    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,  // 49
+    0,  1,  2,  3,  4,  5,  6,  7,  8,                               // 0-8
+    9,  9,  9,  9,                                                   // 9-12
+    10, 10, 10, 10,                                                  // 13-16
+    11, 11, 11, 11,                                                  // 17-20
+    12, 12, 12, 12,                                                  // 21-24
+    13, 13, 13, 13, 13, 13, 13, 13,                                  // 25-32
+    14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14,  // 33-48
+    15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,  // 49-64
 };
 
 CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
@@ -187,6 +187,8 @@ void canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfe
 }
 
 // ---------------------------------------- FLOAT16 SERIALIZATION ----------------------------------------
+
+#if CANARD_PLATFORM_IEEE754
 
 // Intentional violation of MISRA: we need this union because the alternative is far more error prone.
 // We have to rely on low-level data representation details to do the conversion; unions are helpful.
@@ -242,3 +244,5 @@ CanardIEEE754Binary32 canardDSDLFloat16Deserialize(const uint16_t value)
     out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT
     return out.real;
 }
+
+#endif  // CANARD_PLATFORM_IEEE754

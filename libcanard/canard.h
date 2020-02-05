@@ -6,6 +6,7 @@
 #ifndef CANARD_H_INCLUDED
 #define CANARD_H_INCLUDED
 
+#include <float.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -39,6 +40,14 @@ extern "C" {
 
 /// If not specified, the transfer-ID timeout will take this value for all new input sessions.
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
+
+/// Auto-detected properties of the target platform.
+#define CANARD_PLATFORM_TWOS_COMPLEMENT                                                          \
+    ((INT8_MIN == -128) && (INT8_MAX == 127) && (INT16_MIN == -32768) && (INT16_MAX == 32767) && \
+     (INT32_MIN == -0x80000000LL) && (INT32_MAX == 0x7FFFFFFFLL) && (INT64_MAX == 0x7FFFFFFFFFFFFFFFLL))
+#define CANARD_PLATFORM_IEEE754                                                                     \
+    ((FLT_RADIX == 2) && (FLT_MANT_DIG == 24) && (FLT_HAS_SUBNORM == 1) && (FLT_MIN_EXP == -125) && \
+     (FLT_MAX_EXP == 128))
 
 // Forward declarations.
 typedef struct CanardInstance CanardInstance;
@@ -192,6 +201,8 @@ void canardTxPop(CanardInstance* const ins);
 
 CanardTransfer canardRxPush(CanardInstance* const ins, const CanardCANFrame* const frame);
 
+#if CANARD_PLATFORM_TWOS_COMPLEMENT
+
 /// This function may be used to encode values for later transmission in a UAVCAN transfer.
 /// It serializes a primitive value -- boolean, integer, character, or floating point -- and puts it at the
 /// specified bit offset in the specified contiguous buffer.
@@ -253,6 +264,10 @@ void canardDSDLPrimitiveDeserialize(const void* const source,
                                     const bool        is_signed,
                                     void* const       out_value);
 
+#endif  // CANARD_PLATFORM_TWOS_COMPLEMENT
+
+#if CANARD_PLATFORM_IEEE754
+
 /// IEEE 754 binary16 marshaling helpers.
 /// These functions convert between the native float and the standard IEEE 754 binary16 float (a.k.a. half precision).
 /// It is assumed that the native float is IEEE 754 binary32, otherwise, the results may be unpredictable.
@@ -260,6 +275,8 @@ void canardDSDLPrimitiveDeserialize(const void* const source,
 typedef float         CanardIEEE754Binary32;
 uint16_t              canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value);
 CanardIEEE754Binary32 canardDSDLFloat16Deserialize(const uint16_t value);
+
+#endif  // CANARD_PLATFORM_IEEE754
 
 #ifdef __cplusplus
 }
