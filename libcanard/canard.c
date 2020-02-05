@@ -127,26 +127,27 @@ typedef struct CanardInternalTxQueueItem
     uint8_t payload[];  // NOSONAR
 } CanardInternalTxQueueItem;
 
+/// This is the transport MTU minus the tail byte.
 CANARD_INTERNAL uint8_t getPresentationLayerMTU(const CanardInstance* const ins);
 CANARD_INTERNAL uint8_t getPresentationLayerMTU(const CanardInstance* const ins)
 {
     uint8_t out = 0U;
     if (ins->mtu_bytes < CANARD_MTU_MIN)
     {
-        out = CANARD_MTU_MIN - 1U;
+        out = (uint8_t)(CANARD_MTU_MIN - 1U);
     }
     else if (ins->mtu_bytes > CANARD_MTU_MAX)
     {
-        out = CANARD_MTU_MAX - 1U;
+        out = (uint8_t)(CANARD_MTU_MAX - 1U);
     }
     else
     {
-        out = ins->mtu_bytes - 1U;
+        out = (uint8_t)(ins->mtu_bytes - 1U);
     }
     return out;
 }
 
-/// Returns a value above CAN_EXT_ID_MASK to indicate failure.
+/// Returns an invalid value above CAN_EXT_ID_MASK to indicate failure.
 CANARD_INTERNAL uint32_t makeCANID(const CanardTransfer* const transfer,
                                    const uint8_t               local_node_id,
                                    const uint8_t               presentation_layer_mtu);
@@ -243,10 +244,14 @@ CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(CanardInstance* c
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
-    CanardInternalTxQueueItem* out = ins->_tx_queue;  // The linear search should be replaced with O(log n) at least.
-    // TODO: INCOMPLETE.
-    if ((out != NULL) && (out->id <= can_id))
+    CanardInternalTxQueueItem* out = ins->_tx_queue;
+    if ((out == NULL) || (out->id > can_id))
     {
+        out = NULL;
+    }
+    else
+    {
+        // The linear search should be replaced with O(log n) at least. Please help us here.
         while ((out != NULL) && (out->next != NULL) && (out->next->id <= can_id))
         {
             out = out->next;
@@ -276,9 +281,11 @@ CANARD_INTERNAL void pushSingleFrameTransfer(CanardInstance* const ins,
         allocateTxQueueItem(ins, can_id, deadline_usec, (uint8_t)(payload_size + 1U));
     if (tqi != NULL)
     {
-        (void) memmove(&tqi->payload[0], payload, payload_size);
-        tqi->payload[payload_size]     = makeTailByte(true, true, true, transfer_id);
-        CanardInternalTxQueueItem* sup = findTxQueueSupremum(ins, can_id);
+        // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+        // We ignore this recommendation because it is not available in C99.
+        (void) memcpy(&tqi->payload[0], payload, payload_size);  // NOLINT
+        tqi->payload[payload_size]           = makeTailByte(true, true, true, transfer_id);
+        CanardInternalTxQueueItem* const sup = findTxQueueSupremum(ins, can_id);
         if (sup != NULL)
         {
             tqi->next = sup->next;
@@ -313,7 +320,8 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
     CANARD_ASSERT(payload_size > presentation_layer_mtu);
     CANARD_ASSERT(payload != NULL);
 
-    // TODO: QUEUE PRE-ALLOCATION.
+    CanardInternalTxQueueItem* head = NULL;  // Head and tail of the linked list of frames of this transfer.
+    CanardInternalTxQueueItem* tail = NULL;
 
     const size_t   payload_size_with_crc = payload_size + CRC_SIZE_BYTES;
     size_t         offset                = 0U;
@@ -337,10 +345,21 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
             }
         }
 
-        // Allocate the storage using the above computed size.
-        CanardInternalTxQueueItem* const tqi =
-            allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);
-        if (tqi == NULL)
+        // Allocate the storage using the above computed size. Link all frames into a list.
+        {
+            CanardInternalTxQueueItem* const tqi =
+                allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);
+            if (head == NULL)
+            {
+                head = tqi;
+            }
+            else
+            {
+                tail->next = tqi;
+            }
+            tail = tqi;
+        }
+        if (tail == NULL)
         {
             break;
         }
@@ -348,12 +367,19 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
         // Copy the payload into the frame.
         const uint8_t frame_payload_size = (uint8_t)(frame_payload_size_with_tail - 1U);
         uint8_t       frame_offset       = 0U;
-        while ((offset < payload_size) && (frame_offset < frame_payload_size))
+        if (offset < payload_size)
         {
-            tqi->payload[frame_offset] = *payload_ptr;
-            ++frame_offset;
-            ++offset;
-            ++payload_ptr;
+            size_t move_size = payload_size - offset;
+            if (move_size > frame_payload_size)
+            {
+                move_size = frame_payload_size;
+            }
+            // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+            // We ignore this recommendation because it is not available in C99.
+            (void) memcpy(&tail->payload[0], payload_ptr, move_size);  // NOLINT
+            frame_offset = (uint8_t)(frame_offset + move_size);
+            offset += move_size;
+            payload_ptr += move_size;
         }
 
         // Handle the last frame of the transfer: it is special because it also contains padding and CRC.
@@ -363,7 +389,7 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
             // Insert padding -- only in the last frame. Don't forget to include padding into the CRC.
             while ((frame_offset + CRC_SIZE_BYTES) < frame_payload_size)
             {
-                tqi->payload[frame_offset] = PADDING_BYTE;
+                tail->payload[frame_offset] = PADDING_BYTE;
                 ++frame_offset;
                 crc = crcAddByte(crc, PADDING_BYTE);
             }
@@ -371,23 +397,48 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
             // Insert the CRC.
             if ((frame_offset < frame_payload_size) && (offset == payload_size))
             {
-                tqi->payload[frame_offset] = (uint8_t)(crc & BYTE_MAX);
+                tail->payload[frame_offset] = (uint8_t)(crc & BYTE_MAX);
                 ++frame_offset;
             }
             if ((frame_offset < frame_payload_size) && (offset > payload_size))
             {
-                tqi->payload[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
+                tail->payload[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
                 ++frame_offset;
             }
         }
 
         // Finalize the frame.
-        tqi->payload[frame_offset] = makeTailByte(start_of_transfer, end_of_transfer, toggle, transfer_id);
-        start_of_transfer          = false;
-        toggle                     = !toggle;
+        CANARD_ASSERT((frame_offset + 1U) == tail->payload_size);
+        tail->payload[frame_offset] = makeTailByte(start_of_transfer, end_of_transfer, toggle, transfer_id);
+        start_of_transfer           = false;
+        toggle                      = !toggle;
     }
 
-    // TODO: INSERTION.
+    if (tail != NULL)
+    {
+        CANARD_ASSERT(head->next != NULL);  // This is not a single-frame transfer so at least two frames shall exist.
+        CANARD_ASSERT(tail->next == NULL);  // The list shall be properly terminated.
+        CanardInternalTxQueueItem* const sup = findTxQueueSupremum(ins, can_id);
+        if (sup == NULL)  // Once the insertion point is located, we insert the entire frame sequence in constant time.
+        {
+            tail->next     = ins->_tx_queue;
+            ins->_tx_queue = head;
+        }
+        else
+        {
+            tail->next = sup->next;
+            sup->next  = head;
+        }
+    }
+    else  // Failed to allocate at least one frame in the queue! Remove all frames and abort.
+    {
+        while (head != NULL)
+        {
+            CanardInternalTxQueueItem* const next = head->next;
+            ins->heap_free(ins, head);
+            head = next;
+        }
+    }
 }
 
 // ---------------------------------------- RECEPTION ----------------------------------------

@@ -196,6 +196,15 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
                           const CanardRxFilter     rx_filter);
 
+/// Values of remote node-ID above @ref CANARD_NODE_ID_MAX are treated as @ref CANARD_NODE_ID_UNSET.
+/// In message transfers, the remote node-ID is ignored.
+/// Excessive bits in priority, subject-ID, service-ID, and transfer-ID are silently masked away.
+///
+/// Either all frames of the transfer are enqueued successfully, or none are.
+/// Partial enqueueing is guaranteed to never happen.
+///
+/// The time complexity is O(s+t), where s is the amount of payload in the transfer, and t is the number of
+/// frames already enqueued in the transmission queue.
 void canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
 CanardCANFrame canardTxPeek(const CanardInstance* const ins);
@@ -206,7 +215,7 @@ CanardTransfer canardRxPush(CanardInstance* const ins, const CanardCANFrame* con
 
 #if CANARD_PLATFORM_TWOS_COMPLEMENT
 
-/// This function may be used to encode values for later transmission in a UAVCAN transfer.
+/// This function may be used to serialize values for later transmission in a UAVCAN transfer.
 /// It serializes a primitive value -- boolean, integer, character, or floating point -- and puts it at the
 /// specified bit offset in the specified contiguous buffer.
 /// Simple objects can also be serialized manually instead of using this function.
@@ -234,7 +243,7 @@ void canardDSDLPrimitiveSerialize(void* const       destination,
                                   const uint8_t     length_bit,
                                   const void* const value);
 
-/// This function may be used to extract values from received UAVCAN transfers. It decodes a scalar value --
+/// This function may be used to extract values from received UAVCAN transfers. It deserializes a scalar value --
 /// boolean, integer, character, or floating point -- from the specified bit position in the source buffer.
 ///
 /// Caveat: This function works correctly only on platforms that use two's complement signed integer representation.
