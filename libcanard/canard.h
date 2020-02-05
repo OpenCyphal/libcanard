@@ -48,9 +48,8 @@ extern "C" {
 #define CANARD_PLATFORM_TWOS_COMPLEMENT                                                          \
     ((INT8_MIN == -128) && (INT8_MAX == 127) && (INT16_MIN == -32768) && (INT16_MAX == 32767) && \
      (INT32_MIN == -0x80000000LL) && (INT32_MAX == 0x7FFFFFFFLL) && (INT64_MAX == 0x7FFFFFFFFFFFFFFFLL))
-#define CANARD_PLATFORM_IEEE754                                                                     \
-    ((FLT_RADIX == 2) && (FLT_MANT_DIG == 24) && (FLT_HAS_SUBNORM == 1) && (FLT_MIN_EXP == -125) && \
-     (FLT_MAX_EXP == 128))
+#define CANARD_PLATFORM_IEEE754 \
+    ((FLT_RADIX == 2) && (FLT_MANT_DIG == 24) && (FLT_MIN_EXP == -125) && (FLT_MAX_EXP == 128))
 
 // Forward declarations.
 typedef struct CanardInstance CanardInstance;
