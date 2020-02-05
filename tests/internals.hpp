@@ -14,13 +14,46 @@ namespace internals
 {
 // Extern C effectively discards the outer namespaces.
 extern "C" {
-std::uint32_t makeMessageSessionSpecifier(const std::uint16_t subject_id, const std::uint8_t src_node_id);
-std::uint32_t makeServiceSessionSpecifier(const std::uint16_t service_id,
-                                          const bool          request_not_response,
-                                          const std::uint8_t  src_node_id,
-                                          const std::uint8_t  dst_node_id);
 
-std::uint16_t crcAdd(const std::uint16_t crc, const std::size_t size, const void* const bytes);
+auto crcAdd(const std::uint16_t crc, const std::size_t size, const void* const bytes) -> std::uint16_t;
+
+auto makeMessageSessionSpecifier(const std::uint16_t subject_id, const std::uint8_t src_node_id) -> std::uint32_t;
+auto makeServiceSessionSpecifier(const std::uint16_t service_id,
+                                 const bool          request_not_response,
+                                 const std::uint8_t  src_node_id,
+                                 const std::uint8_t  dst_node_id) -> std::uint32_t;
+
+auto getPresentationLayerMTU(const CanardInstance* const ins) -> std::uint8_t;
+
+auto makeCANID(const CanardTransfer* const transfer,
+               const std::uint8_t          local_node_id,
+               const std::uint8_t          presentation_layer_mtu) -> std::uint32_t;
+
+auto makeTailByte(const bool         start_of_transfer,
+                  const bool         end_of_transfer,
+                  const bool         toggle,
+                  const std::uint8_t transfer_id) -> std::uint8_t;
+
+auto allocateTxQueueItem(CanardInstance* const ins,
+                         const std::uint32_t   id,
+                         const std::uint64_t   deadline_usec,
+                         const std::uint8_t    payload_size) -> CanardInternalTxQueueItem*;
+
+auto findTxQueueSupremum(CanardInstance* const ins, const std::uint32_t can_id) -> CanardInternalTxQueueItem*;
+
+void pushSingleFrameTransfer(CanardInstance* const ins,
+                             const std::uint64_t   deadline_usec,
+                             const std::uint32_t   can_id,
+                             const std::uint8_t    transfer_id,
+                             const std::size_t     payload_size,
+                             const void* const     payload);
+
+void pushMultiFrameTransfer(CanardInstance* const ins,
+                            const std::uint8_t    presentation_layer_mtu,
+                            const std::uint64_t   deadline_usec,
+                            const std::uint32_t   can_id,
+                            const std::uint8_t    transfer_id,
+                            const std::size_t     payload_size,
+                            const void* const     payload);
 }
-
 }  // namespace internals

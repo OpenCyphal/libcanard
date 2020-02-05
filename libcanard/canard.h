@@ -115,8 +115,8 @@ typedef struct
 
     uint8_t transfer_id;
 
-    size_t payload_size;
-    void*  payload;
+    size_t      payload_size;
+    const void* payload; // TODO incompatible with free().
 } CanardTransfer;
 
 /// The application supplies the library with this information when a new transfer should be received.

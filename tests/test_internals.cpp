@@ -2,6 +2,7 @@
 // Copyright (c) 2016-2020 UAVCAN Development Team.
 
 #include "internals.hpp"
+#include "helpers.hpp"
 
 TEST_CASE("SessionSpecifier")
 {
@@ -24,4 +25,17 @@ TEST_CASE("TransferCRC")
     REQUIRE(0x5BCEU == crc);  // Using Libuavcan as reference
     crc = crcAdd(crc, 6, "456789");
     REQUIRE(0x29B1U == crc);
+}
+
+TEST_CASE("getPresentationLayerMTU")
+{
+    auto ins =
+        canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free, &helpers::rejectAllRxFilter);
+    REQUIRE(63 == internals::getPresentationLayerMTU(&ins));  // This is the default.
+    ins.mtu_bytes = 0;
+    REQUIRE(7 == internals::getPresentationLayerMTU(&ins));
+    ins.mtu_bytes = 255;
+    REQUIRE(63 == internals::getPresentationLayerMTU(&ins));
+    ins.mtu_bytes = 32;
+    REQUIRE(31 == internals::getPresentationLayerMTU(&ins));
 }
