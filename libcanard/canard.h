@@ -26,11 +26,14 @@ extern "C" {
 /// Per the recommendations given in the UAVCAN specification, other MTU values should not be used.
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD 64U
+#define CANARD_MTU_MIN 8U
+#define CANARD_MTU_MAX 64U
 
 /// Parameter ranges are inclusive; the lower bound is zero for all. Refer to the specification for more info.
 #define CANARD_SUBJECT_ID_MAX 32767U
 #define CANARD_SERVICE_ID_MAX 511U
 #define CANARD_NODE_ID_MAX 127U
+#define CANARD_PRIORITY_MAX 7U
 #define CANARD_TRANSFER_ID_BIT_LENGTH 5U
 #define CANARD_TRANSFER_ID_MAX ((1U << CANARD_TRANSFER_ID_BIT_LENGTH) - 1U)
 

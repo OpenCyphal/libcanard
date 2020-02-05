@@ -17,10 +17,11 @@ TEST_CASE("TransferCRC")
 {
     using internals::crcAdd;
     std::uint16_t crc = 0xFFFFU;
-    crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("1"), 1);
-    crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("2"), 1);
-    crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("3"), 1);
-    REQUIRE(0x5BCEU == crc);                                     // Using Libuavcan as reference
-    crc = crcAdd(crc, reinterpret_cast<const uint8_t*>("456789"), 6);
+
+    crc = crcAdd(crc, 1, "1");
+    crc = crcAdd(crc, 1, "2");
+    crc = crcAdd(crc, 1, "3");
+    REQUIRE(0x5BCEU == crc);  // Using Libuavcan as reference
+    crc = crcAdd(crc, 6, "456789");
     REQUIRE(0x29B1U == crc);
 }

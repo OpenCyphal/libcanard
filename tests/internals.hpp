@@ -20,7 +20,7 @@ std::uint32_t makeServiceSessionSpecifier(const std::uint16_t service_id,
                                           const std::uint8_t  src_node_id,
                                           const std::uint8_t  dst_node_id);
 
-std::uint16_t crcAdd(const std::uint16_t crc, const std::uint8_t* const bytes, const std::size_t size);
+std::uint16_t crcAdd(const std::uint16_t crc, const std::size_t size, const void* const bytes);
 }
 
 }  // namespace internals
