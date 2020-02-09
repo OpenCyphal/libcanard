@@ -83,15 +83,16 @@ CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const size_t size, const voi
 #define OFFSET_SERVICE_ID 14U
 #define OFFSET_DST_NODE_ID 7U
 
-#define SERVICE_NOT_MESSAGE (UINT32_C(1) << 25U)
-#define ANONYMOUS_MESSAGE (UINT32_C(1) << 24U)
-#define REQUEST_NOT_RESPONSE (UINT32_C(1) << 24U)
+#define FLAG_SERVICE_NOT_MESSAGE (UINT32_C(1) << 25U)
+#define FLAG_ANONYMOUS_MESSAGE (UINT32_C(1) << 24U)
+#define FLAG_REQUEST_NOT_RESPONSE (UINT32_C(1) << 24U)
 
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id);
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id)
 {
-    return ((uint32_t)(src_node_id & CANARD_NODE_ID_MAX)) |
-           ((uint32_t)(subject_id & CANARD_SUBJECT_ID_MAX) << OFFSET_SUBJECT_ID);
+    CANARD_ASSERT(src_node_id <= CANARD_NODE_ID_MAX);
+    CANARD_ASSERT(subject_id <= CANARD_SUBJECT_ID_MAX);
+    return src_node_id | ((uint32_t) subject_id << OFFSET_SUBJECT_ID);
 }
 
 CANARD_INTERNAL uint32_t makeServiceSessionSpecifier(const uint16_t service_id,
@@ -103,10 +104,12 @@ CANARD_INTERNAL uint32_t makeServiceSessionSpecifier(const uint16_t service_id,
                                                      const uint8_t  src_node_id,
                                                      const uint8_t  dst_node_id)
 {
-    return ((uint32_t)(src_node_id & CANARD_NODE_ID_MAX)) |
-           ((uint32_t)(dst_node_id & CANARD_NODE_ID_MAX) << OFFSET_DST_NODE_ID) |
-           ((uint32_t)(service_id & CANARD_SERVICE_ID_MAX) << OFFSET_SERVICE_ID) |
-           (request_not_response ? REQUEST_NOT_RESPONSE : 0U) | SERVICE_NOT_MESSAGE;
+    CANARD_ASSERT(src_node_id <= CANARD_NODE_ID_MAX);
+    CANARD_ASSERT(dst_node_id <= CANARD_NODE_ID_MAX);
+    CANARD_ASSERT(service_id <= CANARD_SERVICE_ID_MAX);
+    return src_node_id | (((uint32_t) dst_node_id) << OFFSET_DST_NODE_ID) |  //
+           (((uint32_t) service_id) << OFFSET_SERVICE_ID) |                  //
+           (request_not_response ? FLAG_REQUEST_NOT_RESPONSE : 0U) | FLAG_SERVICE_NOT_MESSAGE;
 }
 
 // ---------------------------------------- TRANSMISSION ----------------------------------------
@@ -118,7 +121,7 @@ typedef struct CanardInternalTxQueueItem
 
     uint32_t id;
     uint64_t deadline_usec;
-    uint8_t  payload_size;
+    size_t   payload_size;
 
     // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
     //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
@@ -127,75 +130,88 @@ typedef struct CanardInternalTxQueueItem
     uint8_t payload[];  // NOSONAR
 } CanardInternalTxQueueItem;
 
-/// This is the transport MTU minus the tail byte.
-CANARD_INTERNAL uint8_t getPresentationLayerMTU(const CanardInstance* const ins);
-CANARD_INTERNAL uint8_t getPresentationLayerMTU(const CanardInstance* const ins)
+/// This is the transport MTU rounded up to next full DLC minus the tail byte.
+CANARD_INTERNAL size_t getPresentationLayerMTU(const CanardInstance* const ins);
+CANARD_INTERNAL size_t getPresentationLayerMTU(const CanardInstance* const ins)
 {
-    uint8_t out = 0U;
-    if (ins->mtu_bytes < CANARD_MTU_MIN)
+    const size_t max_index = (sizeof(CanardCANLengthToDLC) / sizeof(CanardCANLengthToDLC[0])) - 1U;
+    size_t       mtu       = 0U;
+    if (ins->mtu_bytes < CANARD_MTU_CAN_CLASSIC)
     {
-        out = (uint8_t)(CANARD_MTU_MIN - 1U);
+        mtu = CANARD_MTU_CAN_CLASSIC;
     }
-    else if (ins->mtu_bytes > CANARD_MTU_MAX)
+    else if (ins->mtu_bytes <= max_index)
     {
-        out = (uint8_t)(CANARD_MTU_MAX - 1U);
+        mtu = CanardCANDLCToLength[CanardCANLengthToDLC[ins->mtu_bytes]];  // Round up to nearest valid length.
     }
     else
     {
-        out = (uint8_t)(ins->mtu_bytes - 1U);
+        mtu = CanardCANDLCToLength[CanardCANLengthToDLC[max_index]];
     }
-    return out;
+    return mtu - 1U;
 }
 
-/// Returns an invalid value above CAN_EXT_ID_MASK to indicate failure.
-CANARD_INTERNAL uint32_t makeCANID(const CanardTransfer* const transfer,
-                                   const uint8_t               local_node_id,
-                                   const uint8_t               presentation_layer_mtu);
-CANARD_INTERNAL uint32_t makeCANID(const CanardTransfer* const transfer,
-                                   const uint8_t               local_node_id,
-                                   const uint8_t               presentation_layer_mtu)
+CANARD_INTERNAL int32_t makeCANID(const CanardTransfer* const tr,
+                                  const uint8_t               local_node_id,
+                                  const size_t                presentation_layer_mtu);
+CANARD_INTERNAL int32_t makeCANID(const CanardTransfer* const tr,
+                                  const uint8_t               local_node_id,
+                                  const size_t                presentation_layer_mtu)
 {
-    uint32_t out = UINT32_MAX;
-    if (transfer->transfer_kind == CanardTransferKindMessage)
+    CANARD_ASSERT(tr != NULL);
+    CANARD_ASSERT(presentation_layer_mtu > 0);
+    int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
+    if ((tr->transfer_kind == CanardTransferKindMessage) && (tr->remote_node_id == CANARD_NODE_ID_UNSET) &&
+        (tr->port_id <= CANARD_SUBJECT_ID_MAX))
     {
         if (local_node_id <= CANARD_NODE_ID_MAX)
         {
-            out = makeMessageSessionSpecifier(transfer->port_id, local_node_id);
+            out = (int32_t) makeMessageSessionSpecifier(tr->port_id, local_node_id);
+            CANARD_ASSERT(out >= 0);
         }
-        else if (transfer->payload_size <= presentation_layer_mtu)
+        else if (tr->payload_size <= presentation_layer_mtu)
         {
-            const uint8_t c = (uint8_t) crcAdd(CRC_INITIAL, transfer->payload_size, transfer->payload);
-            out             = makeMessageSessionSpecifier(transfer->port_id, c) | ANONYMOUS_MESSAGE;
+            const uint8_t c = (uint8_t)(crcAdd(CRC_INITIAL, tr->payload_size, tr->payload) & CANARD_NODE_ID_MAX);
+            out             = (int32_t)(makeMessageSessionSpecifier(tr->port_id, c) | FLAG_ANONYMOUS_MESSAGE);
+            CANARD_ASSERT(out >= 0);
         }
         else
         {
-            CANARD_ASSERT(false);  // Anonymous multi-frame message transfers are not allowed.
+            out = -CANARD_ERROR_INVALID_ARGUMENT;  // Anonymous multi-frame message trs are not allowed.
         }
     }
-    else if ((transfer->transfer_kind == CanardTransferKindRequest) ||
-             (transfer->transfer_kind == CanardTransferKindResponse))
+    else if (((tr->transfer_kind == CanardTransferKindRequest) || (tr->transfer_kind == CanardTransferKindResponse)) &&
+             (tr->remote_node_id <= CANARD_NODE_ID_MAX) && (tr->port_id <= CANARD_SERVICE_ID_MAX))
     {
         if (local_node_id <= CANARD_NODE_ID_MAX)
         {
-            out = makeServiceSessionSpecifier(transfer->port_id,
-                                              transfer->transfer_kind == CanardTransferKindRequest,
-                                              local_node_id,
-                                              transfer->remote_node_id);
+            out = (int32_t) makeServiceSessionSpecifier(tr->port_id,
+                                                        tr->transfer_kind == CanardTransferKindRequest,
+                                                        local_node_id,
+                                                        tr->remote_node_id);
+            CANARD_ASSERT(out >= 0);
         }
         else
         {
-            CANARD_ASSERT(false);  // Anonymous service transfers are not allowed.
+            out = -CANARD_ERROR_INVALID_ARGUMENT;  // Anonymous service transfers are not allowed.
         }
     }
     else
     {
-        CANARD_ASSERT(false);  // Invalid transfer kind.
+        out = -CANARD_ERROR_INVALID_ARGUMENT;
     }
 
-    if (out < UINT32_MAX)
+    if (out >= 0)
     {
-        out |= ((uint32_t) transfer->priority & CANARD_PRIORITY_MAX) << OFFSET_PRIORITY;
-        CANARD_ASSERT(out <= CAN_EXT_ID_MASK);
+        const uint32_t prio = (uint32_t) tr->priority;
+        if (prio <= CANARD_PRIORITY_MAX)
+        {
+            out = (int32_t)(((uint32_t) out) | (prio << OFFSET_PRIORITY));
+        }
+        else
+        {
+            out = -CANARD_ERROR_INVALID_ARGUMENT;
+        }
     }
     return out;
 }
@@ -216,14 +232,13 @@ CANARD_INTERNAL uint8_t makeTailByte(const bool    start_of_transfer,
 CANARD_INTERNAL CanardInternalTxQueueItem* allocateTxQueueItem(CanardInstance* const ins,
                                                                const uint32_t        id,
                                                                const uint64_t        deadline_usec,
-                                                               const uint8_t         payload_size);
+                                                               const size_t          payload_size);
 CANARD_INTERNAL CanardInternalTxQueueItem* allocateTxQueueItem(CanardInstance* const ins,
                                                                const uint32_t        id,
                                                                const uint64_t        deadline_usec,
-                                                               const uint8_t         payload_size)
+                                                               const size_t          payload_size)
 {
     CANARD_ASSERT(ins != NULL);
-    CANARD_ASSERT(id <= CAN_EXT_ID_MASK);
     CANARD_ASSERT(payload_size > 0U);  // UAVCAN/CAN doesn't allow zero-payload frames.
     CanardInternalTxQueueItem* const out =
         (CanardInternalTxQueueItem*) ins->heap_allocate(ins, sizeof(CanardInternalTxQueueItem) + payload_size);
@@ -261,24 +276,24 @@ CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(CanardInstance* c
     return out;
 }
 
-CANARD_INTERNAL void pushSingleFrameTransfer(CanardInstance* const ins,
-                                             const uint64_t        deadline_usec,
-                                             const uint32_t        can_id,
-                                             const uint8_t         transfer_id,
-                                             const size_t          payload_size,
-                                             const void* const     payload);
-CANARD_INTERNAL void pushSingleFrameTransfer(CanardInstance* const ins,
-                                             const uint64_t        deadline_usec,
-                                             const uint32_t        can_id,
-                                             const uint8_t         transfer_id,
-                                             const size_t          payload_size,
-                                             const void* const     payload)
+/// Returns the number of frames enqueued or error (i.e., =1 or <0).
+CANARD_INTERNAL int32_t pushSingleFrameTransfer(CanardInstance* const ins,
+                                                const uint64_t        deadline_usec,
+                                                const uint32_t        can_id,
+                                                const uint8_t         transfer_id,
+                                                const size_t          payload_size,
+                                                const void* const     payload);
+CANARD_INTERNAL int32_t pushSingleFrameTransfer(CanardInstance* const ins,
+                                                const uint64_t        deadline_usec,
+                                                const uint32_t        can_id,
+                                                const uint8_t         transfer_id,
+                                                const size_t          payload_size,
+                                                const void* const     payload)
 {
     CANARD_ASSERT(ins != NULL);
-    CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
-    CANARD_ASSERT((payload_size == 0U) || (payload != NULL));
-    CanardInternalTxQueueItem* const tqi =
-        allocateTxQueueItem(ins, can_id, deadline_usec, (uint8_t)(payload_size + 1U));
+    CANARD_ASSERT((payload != NULL) || (payload_size == 0));
+    int32_t                          out = 0;
+    CanardInternalTxQueueItem* const tqi = allocateTxQueueItem(ins, can_id, deadline_usec, payload_size + 1U);
     if (tqi != NULL)
     {
         // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
@@ -296,29 +311,38 @@ CANARD_INTERNAL void pushSingleFrameTransfer(CanardInstance* const ins,
             tqi->next      = ins->_tx_queue;
             ins->_tx_queue = tqi;
         }
+        out = 1;  // One frame enqueued.
     }
+    else
+    {
+        out = -CANARD_ERROR_OUT_OF_MEMORY;
+    }
+    CANARD_ASSERT((out < 0) || (out == 1));
+    return out;
 }
 
-CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
-                                            const uint8_t         presentation_layer_mtu,
-                                            const uint64_t        deadline_usec,
-                                            const uint32_t        can_id,
-                                            const uint8_t         transfer_id,
-                                            const size_t          payload_size,
-                                            const void* const     payload);
-CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
-                                            const uint8_t         presentation_layer_mtu,
-                                            const uint64_t        deadline_usec,
-                                            const uint32_t        can_id,
-                                            const uint8_t         transfer_id,
-                                            const size_t          payload_size,
-                                            const void* const     payload)
+/// Returns the number of frames enqueued or error.
+CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
+                                               const size_t          presentation_layer_mtu,
+                                               const uint64_t        deadline_usec,
+                                               const uint32_t        can_id,
+                                               const uint8_t         transfer_id,
+                                               const size_t          payload_size,
+                                               const void* const     payload);
+CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
+                                               const size_t          presentation_layer_mtu,
+                                               const uint64_t        deadline_usec,
+                                               const uint32_t        can_id,
+                                               const uint8_t         transfer_id,
+                                               const size_t          payload_size,
+                                               const void* const     payload)
 {
     CANARD_ASSERT(ins != NULL);
-    CANARD_ASSERT(presentation_layer_mtu > 1U);
-    CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
-    CANARD_ASSERT(payload_size > presentation_layer_mtu);
+    CANARD_ASSERT(presentation_layer_mtu > 0U);
+    CANARD_ASSERT(payload_size > presentation_layer_mtu);  // Otherwise, a single-frame transfer should be used.
     CANARD_ASSERT(payload != NULL);
+
+    int32_t out = 0;  // The number of frames enqueued or negated error.
 
     CanardInternalTxQueueItem* head = NULL;  // Head and tail of the linked list of frames of this transfer.
     CanardInternalTxQueueItem* tail = NULL;
@@ -332,8 +356,10 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
 
     while (offset < payload_size_with_crc)
     {
+        ++out;  // Count the number of generated frames.
+
         // Compute the required size of the frame payload for this frame, including CRC and padding.
-        uint8_t frame_payload_size_with_tail = (uint8_t)(presentation_layer_mtu + 1U);
+        size_t frame_payload_size_with_tail = presentation_layer_mtu + 1U;
         {
             const size_t remaining_payload_with_crc = payload_size_with_crc - offset;
             if (remaining_payload_with_crc < presentation_layer_mtu)
@@ -365,8 +391,8 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
         }
 
         // Copy the payload into the frame.
-        const uint8_t frame_payload_size = (uint8_t)(frame_payload_size_with_tail - 1U);
-        uint8_t       frame_offset       = 0U;
+        const size_t frame_payload_size = frame_payload_size_with_tail - 1U;
+        size_t       frame_offset       = 0U;
         if (offset < payload_size)
         {
             size_t move_size = payload_size - offset;
@@ -377,7 +403,7 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
             // We ignore this recommendation because it is not available in C99.
             (void) memcpy(&tail->payload[0], payload_ptr, move_size);  // NOLINT
-            frame_offset = (uint8_t)(frame_offset + move_size);
+            frame_offset = frame_offset + move_size;
             offset += move_size;
             payload_ptr += move_size;
         }
@@ -432,6 +458,7 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
     }
     else  // Failed to allocate at least one frame in the queue! Remove all frames and abort.
     {
+        out = -CANARD_ERROR_OUT_OF_MEMORY;
         while (head != NULL)
         {
             CanardInternalTxQueueItem* const next = head->next;
@@ -439,6 +466,9 @@ CANARD_INTERNAL void pushMultiFrameTransfer(CanardInstance* const ins,
             head = next;
         }
     }
+
+    CANARD_ASSERT((out < 0) || (out >= 2));
+    return out;
 }
 
 // ---------------------------------------- RECEPTION ----------------------------------------
@@ -496,39 +526,41 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
     return out;
 }
 
-void canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer)
+int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer)
 {
-    if ((ins != NULL) && (transfer != NULL))
+    int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
+    if ((ins != NULL) && (transfer != NULL) && ((transfer->payload != NULL) || (transfer->payload_size == 0U)))
     {
-        const uint8_t  pl_mtu = getPresentationLayerMTU(ins);
-        const uint32_t can_id = makeCANID(transfer, ins->node_id, pl_mtu);
-        if (can_id <= CAN_EXT_ID_MASK)
+        const size_t  pl_mtu       = getPresentationLayerMTU(ins);
+        const int32_t maybe_can_id = makeCANID(transfer, ins->node_id, pl_mtu);
+        if (maybe_can_id >= 0)
         {
             if (transfer->payload_size <= pl_mtu)
             {
-                pushSingleFrameTransfer(ins,
-                                        transfer->timestamp_usec,
-                                        can_id,
-                                        transfer->transfer_id,
-                                        transfer->payload_size,
-                                        transfer->payload);
+                out = pushSingleFrameTransfer(ins,
+                                              transfer->timestamp_usec,
+                                              (uint32_t) maybe_can_id,
+                                              transfer->transfer_id,
+                                              transfer->payload_size,
+                                              transfer->payload);
             }
             else
             {
-                pushMultiFrameTransfer(ins,
-                                       pl_mtu,
-                                       transfer->timestamp_usec,
-                                       can_id,
-                                       transfer->transfer_id,
-                                       transfer->payload_size,
-                                       transfer->payload);
+                out = pushMultiFrameTransfer(ins,
+                                             pl_mtu,
+                                             transfer->timestamp_usec,
+                                             (uint32_t) maybe_can_id,
+                                             transfer->transfer_id,
+                                             transfer->payload_size,
+                                             transfer->payload);
             }
         }
+        else
+        {
+            out = maybe_can_id;
+        }
     }
-    else
-    {
-        CANARD_ASSERT(false);
-    }
+    return out;
 }
 
 // ---------------------------------------- FLOAT16 SERIALIZATION ----------------------------------------

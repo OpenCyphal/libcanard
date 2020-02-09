@@ -22,12 +22,19 @@ extern "C" {
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
 
+/// These error codes may be returned from the library API calls whose return type is a signed integer
+/// in the negated form (i.e., code 2 returned as -2).
+/// API calls whose return type is not a signer integer cannot fail by contract.
+/// No other error states may occur in the library.
+/// By contract, a deterministic application with a properly sized heap will never encounter any of the listed errors.
+/// The error code 1 is not used because -1 is often used as a generic error code in 3rd-party code.
+#define CANARD_ERROR_INVALID_ARGUMENT 2
+#define CANARD_ERROR_OUT_OF_MEMORY 3
+
 /// MTU values for supported protocols.
 /// Per the recommendations given in the UAVCAN specification, other MTU values should not be used.
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD 64U
-#define CANARD_MTU_MIN 8U
-#define CANARD_MTU_MAX 64U
 
 /// Parameter ranges are inclusive; the lower bound is zero for all. Refer to the specification for more info.
 #define CANARD_SUBJECT_ID_MAX 32767U
@@ -171,9 +178,9 @@ struct CanardInstance
     /// This setting defines the maximum number of bytes per CAN data frame in all outgoing transfers.
     /// Regardless of this setting, CAN frames with any MTU can always be accepted.
     ///
-    /// Only the standard values should be used as recommended by the specification; otherwise,
-    /// networking interoperability issues may arise. See "CANARD_MTU_*".
-    /// Valid values are any valid CAN frame data length. The default is the maximum valid value.
+    /// Only the standard values should be used as recommended by the specification;
+    /// otherwise, networking interoperability issues may arise. See "CANARD_MTU_*".
+    /// Valid values are any valid CAN frame data length not smaller than 8. The default is the maximum valid value.
     /// Invalid values are treated as the nearest valid value.
     uint8_t mtu_bytes;
 
@@ -195,22 +202,37 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
                           const CanardRxFilter     rx_filter);
 
-/// Values of remote node-ID above @ref CANARD_NODE_ID_MAX are treated as @ref CANARD_NODE_ID_UNSET.
-/// In message transfers, the remote node-ID is ignored.
-/// Excessive bits in priority, subject-ID, service-ID, and transfer-ID are silently masked away.
+/// Takes a transfer, serializes it into a sequence of CAN frames which are injected into the prioritized TX queue
+/// at the appropriate position.
+/// Returns the number of frames enqueued (which is always a positive number) in case of success.
+/// Returns a negated error code in case of failure.
 ///
-/// Either all frames of the transfer are enqueued successfully, or none are.
-/// Partial enqueueing is guaranteed to never happen.
+/// An invalid argument error may be returned in the following cases:
+///     - Any of the input arguments are NULL.
+///     - The remote node-ID is not @ref CANARD_NODE_ID_UNSET and the transfer is a message transfer.
+///     - The remote node-ID is above @ref CANARD_NODE_ID_MAX and the transfer is a service transfer.
+///     - The priority, subject-ID, or service-ID exceed their respective maximums.
+///     - The transfer kind is invalid.
+///     - The payload pointer is NULL while the payload size is nonzero.
+///     - The local node is anonymous and a message transfer is requested that requires a multi-frame transfer.
+///     - The local node is anonymous and a service transfer is requested.
+/// The following cases are handled without raising an invalid argument error:
+///     - If the transfer-ID is above the maximum, the excessive bits are silently masked away
+///       (i.e., the modulo is computed automatically, so the caller doesn't have to bother).
+///
+/// An out-of-memory error is returned if a TX frame could not be allocated due to the heap being exhausted.
+/// In that case, all previously allocated frames will be purged automatically.
+/// In other words, either all frames of the transfer are enqueued successfully, or none are.
 ///
 /// The time complexity is O(s+t), where s is the amount of payload in the transfer, and t is the number of
 /// frames already enqueued in the transmission queue.
-void canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
+int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
-CanardCANFrame canardTxPeek(const CanardInstance* const ins);
+int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_frame);
 
 void canardTxPop(CanardInstance* const ins);
 
-CanardTransfer canardRxPush(CanardInstance* const ins, const CanardCANFrame* const frame);
+int32_t canardRxPush(CanardInstance* const ins, const CanardCANFrame* const frame, CanardTransfer* const out_transfer);
 
 #if CANARD_PLATFORM_TWOS_COMPLEMENT
 

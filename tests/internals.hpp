@@ -23,11 +23,11 @@ auto makeServiceSessionSpecifier(const std::uint16_t service_id,
                                  const std::uint8_t  src_node_id,
                                  const std::uint8_t  dst_node_id) -> std::uint32_t;
 
-auto getPresentationLayerMTU(const CanardInstance* const ins) -> std::uint8_t;
+auto getPresentationLayerMTU(const CanardInstance* const ins) -> std::size_t;
 
 auto makeCANID(const CanardTransfer* const transfer,
                const std::uint8_t          local_node_id,
-               const std::uint8_t          presentation_layer_mtu) -> std::uint32_t;
+               const std::size_t           presentation_layer_mtu) -> std::int32_t;
 
 auto makeTailByte(const bool         start_of_transfer,
                   const bool         end_of_transfer,
@@ -37,23 +37,23 @@ auto makeTailByte(const bool         start_of_transfer,
 auto allocateTxQueueItem(CanardInstance* const ins,
                          const std::uint32_t   id,
                          const std::uint64_t   deadline_usec,
-                         const std::uint8_t    payload_size) -> CanardInternalTxQueueItem*;
+                         const std::size_t     payload_size) -> CanardInternalTxQueueItem*;
 
 auto findTxQueueSupremum(CanardInstance* const ins, const std::uint32_t can_id) -> CanardInternalTxQueueItem*;
 
-void pushSingleFrameTransfer(CanardInstance* const ins,
+auto pushSingleFrameTransfer(CanardInstance* const ins,
                              const std::uint64_t   deadline_usec,
                              const std::uint32_t   can_id,
                              const std::uint8_t    transfer_id,
                              const std::size_t     payload_size,
-                             const void* const     payload);
+                             const void* const     payload) -> std::int32_t;
 
-void pushMultiFrameTransfer(CanardInstance* const ins,
-                            const std::uint8_t    presentation_layer_mtu,
+auto pushMultiFrameTransfer(CanardInstance* const ins,
+                            const std::size_t     presentation_layer_mtu,
                             const std::uint64_t   deadline_usec,
                             const std::uint32_t   can_id,
                             const std::uint8_t    transfer_id,
                             const std::size_t     payload_size,
-                            const void* const     payload);
+                            const void* const     payload) -> std::int32_t;
 }
 }  // namespace internals
