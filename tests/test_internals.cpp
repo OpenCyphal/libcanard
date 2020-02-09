@@ -68,7 +68,7 @@ TEST_CASE("makeCANID")
 
     union PriorityAlias
     {
-        std::uint8_t bits;
+        std::uint8_t   bits;
         CanardPriority prio;
     };
 
@@ -129,19 +129,17 @@ TEST_CASE("makeCANID")
             makeCANID(mk_transfer(CanardPriorityExceptional, CanardTransferKindRequest, 0b0100110011, 0b0101010),
                       CANARD_NODE_ID_UNSET,
                       7U));
-    REQUIRE(
-        -CANARD_ERROR_INVALID_ARGUMENT ==  // Broadcast service transfers not permitted.
-        makeCANID(mk_transfer(CanardPrioritySlow, CanardTransferKindResponse, 0b0100110011, CANARD_NODE_ID_UNSET),
-                  0b1010101,
-                  7U));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Broadcast service transfers not permitted.
+            makeCANID(mk_transfer(CanardPrioritySlow, CanardTransferKindResponse, 0b0100110011, CANARD_NODE_ID_UNSET),
+                      0b1010101,
+                      7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad service-ID.
         makeCANID(mk_transfer(CanardPriorityNominal, CanardTransferKindResponse, 0xFFFFU, 0b0101010), 0b1010101, 7U));
-    REQUIRE(
-        -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
-        makeCANID(mk_transfer(PriorityAlias{123}.prio, CanardTransferKindResponse, 0b0100110011, 0b0101010),
-                  0b1010101,
-                  7U));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
+            makeCANID(mk_transfer(PriorityAlias{123}.prio, CanardTransferKindResponse, 0b0100110011, 0b0101010),
+                      0b1010101,
+                      7U));
 }
 
 TEST_CASE("makeTailByte")
