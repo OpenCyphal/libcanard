@@ -66,6 +66,12 @@ TEST_CASE("makeCANID")
 
     const auto crc123 = internals::crcAdd(0xFFFFU, 3, "\x01\x02\x03");
 
+    union PriorityAlias
+    {
+        std::uint8_t bits;
+        CanardPriority prio;
+    };
+
     // MESSAGE TRANSFERS
     REQUIRE(0b000'00'0011001100110011'0'1010101 ==  // Regular message.
             makeCANID(mk_transfer(CanardPriorityExceptional,
@@ -133,7 +139,7 @@ TEST_CASE("makeCANID")
         makeCANID(mk_transfer(CanardPriorityNominal, CanardTransferKindResponse, 0xFFFFU, 0b0101010), 0b1010101, 7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
-        makeCANID(mk_transfer(static_cast<CanardPriority>(123), CanardTransferKindResponse, 0b0100110011, 0b0101010),
+        makeCANID(mk_transfer(PriorityAlias{123}.prio, CanardTransferKindResponse, 0b0100110011, 0b0101010),
                   0b1010101,
                   7U));
 }
