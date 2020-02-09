@@ -90,7 +90,7 @@ TEST_CASE("makeCANID")
                       128U,  // Invalid local node-ID.
                       7U));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Multi-frame anonymous messages are not allowed.
-            makeCANID(mk_transfer(CanardPriorityFast,
+            makeCANID(mk_transfer(CanardPriorityImmediate,
                                   CanardTransferKindMessage,
                                   0b0011001100110011,
                                   CANARD_NODE_ID_UNSET,
@@ -98,10 +98,10 @@ TEST_CASE("makeCANID")
                       128U,  // Invalid local node-ID is treated as anonymous/unset.
                       7U));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad remote node-ID -- unicast messages not supported.
-            makeCANID(mk_transfer(CanardPriorityFast, CanardTransferKindMessage, 0b0011001100110011, 123U), 0U, 7U));
+            makeCANID(mk_transfer(CanardPriorityHigh, CanardTransferKindMessage, 0b0011001100110011, 123U), 0U, 7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad subject-ID.
-        makeCANID(mk_transfer(CanardPriorityFast, CanardTransferKindMessage, 0xFFFFU, CANARD_NODE_ID_UNSET), 0U, 7U));
+        makeCANID(mk_transfer(CanardPriorityLow, CanardTransferKindMessage, 0xFFFFU, CANARD_NODE_ID_UNSET), 0U, 7U));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
             makeCANID(mk_transfer(static_cast<CanardPriority>(123),
                                   CanardTransferKindMessage,
@@ -125,12 +125,12 @@ TEST_CASE("makeCANID")
                       7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Broadcast service transfers not permitted.
-        makeCANID(mk_transfer(CanardPriorityOptional, CanardTransferKindResponse, 0b0100110011, CANARD_NODE_ID_UNSET),
+        makeCANID(mk_transfer(CanardPrioritySlow, CanardTransferKindResponse, 0b0100110011, CANARD_NODE_ID_UNSET),
                   0b1010101,
                   7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad service-ID.
-        makeCANID(mk_transfer(CanardPriorityOptional, CanardTransferKindResponse, 0xFFFFU, 0b0101010), 0b1010101, 7U));
+        makeCANID(mk_transfer(CanardPriorityNominal, CanardTransferKindResponse, 0xFFFFU, 0b0101010), 0b1010101, 7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
         makeCANID(mk_transfer(static_cast<CanardPriority>(123), CanardTransferKindResponse, 0b0100110011, 0b0101010),

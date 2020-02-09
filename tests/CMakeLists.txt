@@ -76,4 +76,4 @@ endfunction()
 
 gen_test_matrix(test_internals test_internals.cpp CANARD_EXPOSE_INTERNALS=1)
 
-gen_test_matrix(test_general test_float16.cpp "")
+gen_test_matrix(test_general "test_float16.cpp;test_tx.cpp" "")

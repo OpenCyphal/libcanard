@@ -53,19 +53,5 @@ auto allocateTxQueueItem(CanardInstance* const ins,
 
 auto findTxQueueSupremum(CanardInstance* const ins, const std::uint32_t can_id) -> CanardInternalTxQueueItem*;
 
-auto pushSingleFrameTransfer(CanardInstance* const ins,
-                             const std::uint64_t   deadline_usec,
-                             const std::uint32_t   can_id,
-                             const std::uint8_t    transfer_id,
-                             const std::size_t     payload_size,
-                             const void* const     payload) -> std::int32_t;
-
-auto pushMultiFrameTransfer(CanardInstance* const ins,
-                            const std::size_t     presentation_layer_mtu,
-                            const std::uint64_t   deadline_usec,
-                            const std::uint32_t   can_id,
-                            const std::uint8_t    transfer_id,
-                            const std::size_t     payload_size,
-                            const void* const     payload) -> std::int32_t;
 }
 }  // namespace internals
