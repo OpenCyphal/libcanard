@@ -150,4 +150,53 @@ TEST_CASE("makeTailByte")
     REQUIRE(0b010'00001 == makeTailByte(false, true, false, 1U));
 }
 
-TEST_CASE("findTxQueueSupremum") {}
+TEST_CASE("findTxQueueSupremum")
+{
+    using internals::findTxQueueSupremum;
+    using TxQueueItem = internals::CanardInternalTxQueueItem;
+
+    auto ins =
+        canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free, &helpers::rejectAllRxFilter);
+
+    const auto find = [&](std::uint32_t x) -> TxQueueItem* { return findTxQueueSupremum(&ins, x); };
+
+    REQUIRE(nullptr == find(0));
+    REQUIRE(nullptr == find((1UL << 29U) - 1U));
+
+    TxQueueItem a{};
+    a.id          = 1000;
+    ins._tx_queue = reinterpret_cast<CanardInternalTxQueueItem*>(&a);
+
+    REQUIRE(nullptr == find(999));
+    REQUIRE(&a == find(1000));
+    REQUIRE(&a == find(1001));
+
+    TxQueueItem b{};
+    b.id   = 1010;
+    a.next = &b;
+
+    REQUIRE(nullptr == find(999));
+    REQUIRE(&a == find(1000));
+    REQUIRE(&a == find(1001));
+    REQUIRE(&a == find(1009));
+    REQUIRE(&b == find(1010));
+    REQUIRE(&b == find(1011));
+
+    TxQueueItem c{};
+    c.id          = 990;
+    c.next        = &a;
+    ins._tx_queue = reinterpret_cast<CanardInternalTxQueueItem*>(&c);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->id == 990);  // Make sure the list is assembled correctly.
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->id == 1000);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->id == 1010);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->next == nullptr);
+
+    REQUIRE(nullptr == find(989));
+    REQUIRE(&c == find(990));
+    REQUIRE(&c == find(999));
+    REQUIRE(&a == find(1000));
+    REQUIRE(&a == find(1001));
+    REQUIRE(&a == find(1009));
+    REQUIRE(&b == find(1010));
+    REQUIRE(&b == find(1011));
+}

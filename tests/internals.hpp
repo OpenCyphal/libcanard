@@ -12,6 +12,18 @@
 /// Please keep them in sync with the library by manually updating as necessary.
 namespace internals
 {
+
+struct CanardInternalTxQueueItem
+{
+    CanardInternalTxQueueItem* next = nullptr;
+
+    std::uint32_t id            = 0;
+    std::uint64_t deadline_usec = 0;
+    std::size_t   payload_size  = 0;
+
+    std::array<std::uint8_t, 1> payload{};  // The real definition has a flex array here.
+};
+
 // Extern C effectively discards the outer namespaces.
 extern "C" {
 
