@@ -95,8 +95,8 @@ typedef struct
     uint32_t extended_can_id;
 
     /// The useful data in the frame. The length value is not to be confused with DLC!
-    uint8_t payload_size;
-    void*   payload;
+    size_t      payload_size;
+    const void* payload;
 } CanardCANFrame;
 
 /// Conversion look-up tables between CAN DLC and data length.
@@ -122,8 +122,9 @@ typedef struct
 
     uint8_t transfer_id;
 
+    /// The const pointer makes it incompatible with free(), but we have to tolerate that due to the limitations of C.
     size_t      payload_size;
-    const void* payload; // TODO incompatible with free().
+    const void* payload;
 } CanardTransfer;
 
 /// The application supplies the library with this information when a new transfer should be received.
@@ -202,8 +203,10 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
                           const CanardRxFilter     rx_filter);
 
-/// Takes a transfer, serializes it into a sequence of CAN frames which are injected into the prioritized TX queue
-/// at the appropriate position.
+/// Takes a transfer, serializes it into a sequence of CAN frames, and inserts them into the prioritized TX queue
+/// at the appropriate position. The application is supposed to take the enqueued frames from the TX buffer and
+/// transmit them afterwards.
+///
 /// Returns the number of frames enqueued (which is always a positive number) in case of success.
 /// Returns a negated error code in case of failure.
 ///

@@ -73,7 +73,7 @@ matrix:
         # Format check
         - make format VERBOSE=1
         - 'modified="$(git status --porcelain --untracked-files=no)"'
-        - 'if [ -n "$modified" ]; then echo "Run scripts/format.sh to reformat the code."; exit 1; fi'
+        - 'if [ -n "$modified" ]; then echo "Run make format to reformat the code properly."; exit 1; fi'
 
 git:
   depth: false  # Disable shallow clone because it is incompatible with SonarCloud

@@ -4,16 +4,6 @@
 #include "internals.hpp"
 #include "helpers.hpp"
 
-TEST_CASE("SessionSpecifier")
-{
-    REQUIRE(0b000'00'0011001100110011'0'1010101 ==
-            internals::makeMessageSessionSpecifier(0b0011001100110011, 0b1010101));
-    REQUIRE(0b000'11'0100110011'0101010'1010101 ==
-            internals::makeServiceSessionSpecifier(0b0100110011, true, 0b1010101, 0b0101010));
-    REQUIRE(0b000'10'0100110011'1010101'0101010 ==
-            internals::makeServiceSessionSpecifier(0b0100110011, false, 0b0101010, 0b1010101));
-}
-
 TEST_CASE("TransferCRC")
 {
     using internals::crcAdd;
@@ -27,6 +17,16 @@ TEST_CASE("TransferCRC")
     REQUIRE(0x29B1U == crc);
 }
 
+TEST_CASE("SessionSpecifier")
+{
+    REQUIRE(0b000'00'0011001100110011'0'1010101 ==
+            internals::makeMessageSessionSpecifier(0b0011001100110011, 0b1010101));
+    REQUIRE(0b000'11'0100110011'0101010'1010101 ==
+            internals::makeServiceSessionSpecifier(0b0100110011, true, 0b1010101, 0b0101010));
+    REQUIRE(0b000'10'0100110011'1010101'0101010 ==
+            internals::makeServiceSessionSpecifier(0b0100110011, false, 0b0101010, 0b1010101));
+}
+
 TEST_CASE("getPresentationLayerMTU")
 {
     auto ins =
@@ -38,4 +38,12 @@ TEST_CASE("getPresentationLayerMTU")
     REQUIRE(63 == internals::getPresentationLayerMTU(&ins));
     ins.mtu_bytes = 32;
     REQUIRE(31 == internals::getPresentationLayerMTU(&ins));
+    ins.mtu_bytes = 30;  // Round up.
+    REQUIRE(31 == internals::getPresentationLayerMTU(&ins));
 }
+
+TEST_CASE("makeCANID") {}
+
+TEST_CASE("makeTailByte") {}
+
+TEST_CASE("findTxQueueSupremum") {}
