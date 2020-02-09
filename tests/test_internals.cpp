@@ -42,8 +42,112 @@ TEST_CASE("getPresentationLayerMTU")
     REQUIRE(31 == internals::getPresentationLayerMTU(&ins));
 }
 
-TEST_CASE("makeCANID") {}
+TEST_CASE("makeCANID")
+{
+    using internals::makeCANID;
 
-TEST_CASE("makeTailByte") {}
+    CanardTransfer            transfer{};
+    std::vector<std::uint8_t> transfer_payload;
+
+    const auto mk_transfer = [&](const CanardPriority             priority,
+                                 const CanardTransferKind         kind,
+                                 const std::uint16_t              port_id,
+                                 const std::uint8_t               remote_node_id,
+                                 const std::vector<std::uint8_t>& payload = {}) {
+        transfer_payload        = payload;
+        transfer.priority       = priority;
+        transfer.transfer_kind  = kind;
+        transfer.port_id        = port_id;
+        transfer.remote_node_id = remote_node_id;
+        transfer.payload        = transfer_payload.data();
+        transfer.payload_size   = transfer_payload.size();
+        return &transfer;
+    };
+
+    const auto crc123 = internals::crcAdd(0xFFFFU, 3, "\x01\x02\x03");
+
+    // MESSAGE TRANSFERS
+    REQUIRE(0b000'00'0011001100110011'0'1010101 ==  // Regular message.
+            makeCANID(mk_transfer(CanardPriorityExceptional,
+                                  CanardTransferKindMessage,
+                                  0b0011001100110011,
+                                  CANARD_NODE_ID_UNSET),
+                      0b1010101,
+                      7U));
+    REQUIRE(0b111'00'0011001100110011'0'1010101 ==  // Regular message.
+            makeCANID(mk_transfer(CanardPriorityOptional,
+                                  CanardTransferKindMessage,
+                                  0b0011001100110011,
+                                  CANARD_NODE_ID_UNSET),
+                      0b1010101,
+                      7U));
+    REQUIRE((0b010'01'0011001100110011'0'0000000U | (crc123 & CANARD_NODE_ID_MAX)) ==  // Anonymous message.
+            makeCANID(mk_transfer(CanardPriorityFast,
+                                  CanardTransferKindMessage,
+                                  0b0011001100110011,
+                                  CANARD_NODE_ID_UNSET,
+                                  {1, 2, 3}),
+                      128U,  // Invalid local node-ID.
+                      7U));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Multi-frame anonymous messages are not allowed.
+            makeCANID(mk_transfer(CanardPriorityFast,
+                                  CanardTransferKindMessage,
+                                  0b0011001100110011,
+                                  CANARD_NODE_ID_UNSET,
+                                  {1, 2, 3, 4, 5, 6, 7, 8}),
+                      128U,  // Invalid local node-ID is treated as anonymous/unset.
+                      7U));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad remote node-ID -- unicast messages not supported.
+            makeCANID(mk_transfer(CanardPriorityFast, CanardTransferKindMessage, 0b0011001100110011, 123U), 0U, 7U));
+    REQUIRE(
+        -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad subject-ID.
+        makeCANID(mk_transfer(CanardPriorityFast, CanardTransferKindMessage, 0xFFFFU, CANARD_NODE_ID_UNSET), 0U, 7U));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
+            makeCANID(mk_transfer(static_cast<CanardPriority>(123),
+                                  CanardTransferKindMessage,
+                                  0b0011001100110011,
+                                  CANARD_NODE_ID_UNSET),
+                      0b1010101,
+                      7U));
+
+    // SERVICE TRANSFERS
+    REQUIRE(0b000'11'0100110011'0101010'1010101 ==  // Request.
+            makeCANID(mk_transfer(CanardPriorityExceptional, CanardTransferKindRequest, 0b0100110011, 0b0101010),
+                      0b1010101,
+                      7U));
+    REQUIRE(0b111'10'0100110011'0101010'1010101 ==  // Response.
+            makeCANID(mk_transfer(CanardPriorityOptional, CanardTransferKindResponse, 0b0100110011, 0b0101010),
+                      0b1010101,
+                      7U));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Anonymous service transfers not permitted.
+            makeCANID(mk_transfer(CanardPriorityExceptional, CanardTransferKindRequest, 0b0100110011, 0b0101010),
+                      CANARD_NODE_ID_UNSET,
+                      7U));
+    REQUIRE(
+        -CANARD_ERROR_INVALID_ARGUMENT ==  // Broadcast service transfers not permitted.
+        makeCANID(mk_transfer(CanardPriorityOptional, CanardTransferKindResponse, 0b0100110011, CANARD_NODE_ID_UNSET),
+                  0b1010101,
+                  7U));
+    REQUIRE(
+        -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad service-ID.
+        makeCANID(mk_transfer(CanardPriorityOptional, CanardTransferKindResponse, 0xFFFFU, 0b0101010), 0b1010101, 7U));
+    REQUIRE(
+        -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
+        makeCANID(mk_transfer(static_cast<CanardPriority>(123), CanardTransferKindResponse, 0b0100110011, 0b0101010),
+                  0b1010101,
+                  7U));
+}
+
+TEST_CASE("makeTailByte")
+{
+    using internals::makeTailByte;
+    REQUIRE(0b111'00000 == makeTailByte(true, true, true, 0U));
+    REQUIRE(0b111'00000 == makeTailByte(true, true, true, 32U));
+    REQUIRE(0b111'11111 == makeTailByte(true, true, true, 31U));
+    REQUIRE(0b011'11111 == makeTailByte(false, true, true, 31U));
+    REQUIRE(0b101'11110 == makeTailByte(true, false, true, 30U));
+    REQUIRE(0b001'11101 == makeTailByte(false, false, true, 29U));
+    REQUIRE(0b010'00001 == makeTailByte(false, true, false, 1U));
+}
 
 TEST_CASE("findTxQueueSupremum") {}

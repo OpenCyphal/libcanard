@@ -235,7 +235,10 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_f
 
 void canardTxPop(CanardInstance* const ins);
 
-int32_t canardRxPush(CanardInstance* const ins, const CanardCANFrame* const frame, CanardTransfer* const out_transfer);
+int32_t canardRxPush(CanardInstance* const       ins,
+                     const CanardCANFrame* const frame,
+                     const uint8_t               iface_index,
+                     CanardTransfer* const       out_transfer);
 
 #if CANARD_PLATFORM_TWOS_COMPLEMENT
 

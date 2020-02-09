@@ -66,6 +66,7 @@ CANARD_INTERNAL uint16_t crcAddByte(const uint16_t crc, const uint8_t byte)
 CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const size_t size, const void* const data);
 CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const size_t size, const void* const data)
 {
+    CANARD_ASSERT((data != NULL) || (size == 0U));
     uint16_t       out = crc;
     const uint8_t* p   = (const uint8_t*) data;
     for (size_t i = 0; i < size; i++)
@@ -171,6 +172,7 @@ CANARD_INTERNAL int32_t makeCANID(const CanardTransfer* const tr,
         }
         else if (tr->payload_size <= presentation_layer_mtu)
         {
+            CANARD_ASSERT((tr->payload != NULL) || (tr->payload_size == 0U));
             const uint8_t c = (uint8_t)(crcAdd(CRC_INITIAL, tr->payload_size, tr->payload) & CANARD_NODE_ID_MAX);
             out             = (int32_t)(makeMessageSessionSpecifier(tr->port_id, c) | FLAG_ANONYMOUS_MESSAGE);
             CANARD_ASSERT(out >= 0);
@@ -225,6 +227,7 @@ CANARD_INTERNAL uint8_t makeTailByte(const bool    start_of_transfer,
                                      const bool    toggle,
                                      const uint8_t transfer_id)
 {
+    CANARD_ASSERT(start_of_transfer ? toggle : true);
     return (uint8_t)((start_of_transfer ? TAIL_START_OF_TRANSFER : 0U) | (end_of_transfer ? TAIL_END_OF_TRANSFER : 0U) |
                      (toggle ? TAIL_TOGGLE : 0U) | (transfer_id & CANARD_TRANSFER_ID_MAX));
 }
@@ -488,6 +491,7 @@ typedef struct CanardInternalRxSession
     const uint32_t session_specifier;  ///< Differentiates this session from other sessions.
 
     uint16_t calculated_crc;  ///< Updated with the received payload in real time.
+    uint8_t  iface_index;
     uint8_t  transfer_id;
     bool     next_toggle;
 } CanardInternalRxSession;
