@@ -205,8 +205,8 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
 /// at the appropriate position. The application is supposed to take the enqueued frames from the TX buffer and
 /// transmit them afterwards.
 ///
-/// Returns the number of frames enqueued (which is always a positive number) in case of success.
-/// Returns a negated error code in case of failure.
+/// Returns the number of frames enqueued into the prioritized TX queue (which is always a positive number)
+/// in case of success. Returns a negated error code in case of failure.
 ///
 /// An invalid argument error may be returned in the following cases:
 ///     - Any of the input arguments are NULL.
@@ -233,10 +233,10 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_f
 
 void canardTxPop(CanardInstance* const ins);
 
-int32_t canardRxPush(CanardInstance* const       ins,
-                     const CanardCANFrame* const frame,
-                     const uint8_t               iface_index,
-                     CanardTransfer* const       out_transfer);
+int8_t canardRxPush(CanardInstance* const       ins,
+                    const CanardCANFrame* const frame,
+                    const uint8_t               iface_index,
+                    CanardTransfer* const       out_transfer);
 
 #if CANARD_PLATFORM_TWOS_COMPLEMENT
 

@@ -109,7 +109,7 @@ TEST_CASE("makeCANID")
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad subject-ID.
         makeCANID(mk_transfer(CanardPriorityLow, CanardTransferKindMessage, 0xFFFFU, CANARD_NODE_ID_UNSET), 0U, 7U));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
-            makeCANID(mk_transfer(static_cast<CanardPriority>(123),
+            makeCANID(mk_transfer(PriorityAlias{123}.prio,
                                   CanardTransferKindMessage,
                                   0b0011001100110011,
                                   CANARD_NODE_ID_UNSET),
