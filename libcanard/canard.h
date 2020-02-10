@@ -168,11 +168,6 @@ struct CanardInstance
     /// The default value is NULL.
     void* user_reference;
 
-    /// The node-ID of the local node. The default value is @ref CANARD_NODE_ID_UNSET.
-    /// Per the UAVCAN Specification, the node-ID should not be assigned more than once.
-    /// Invalid values are treated as @ref CANARD_NODE_ID_UNSET.
-    uint8_t node_id;
-
     /// The maximum transmission unit. The value can be changed arbitrarily at any time.
     /// This setting defines the maximum number of bytes per CAN data frame in all outgoing transfers.
     /// Regardless of this setting, CAN frames with any MTU can always be accepted.
@@ -181,7 +176,12 @@ struct CanardInstance
     /// otherwise, networking interoperability issues may arise. See "CANARD_MTU_*".
     /// Valid values are any valid CAN frame data length not smaller than 8. The default is the maximum valid value.
     /// Invalid values are treated as the nearest valid value.
-    uint8_t mtu_bytes;
+    size_t mtu_bytes;
+
+    /// The node-ID of the local node. The default value is @ref CANARD_NODE_ID_UNSET.
+    /// Per the UAVCAN Specification, the node-ID should not be assigned more than once.
+    /// Invalid values are treated as @ref CANARD_NODE_ID_UNSET.
+    uint8_t node_id;
 
     /// Callbacks invoked by the library. See their type documentation for details.
     /// They SHALL be valid function pointers at all times.
@@ -233,10 +233,10 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_f
 
 void canardTxPop(CanardInstance* const ins);
 
-int8_t canardRxPush(CanardInstance* const       ins,
-                    const CanardCANFrame* const frame,
-                    const uint8_t               iface_index,
-                    CanardTransfer* const       out_transfer);
+int8_t canardRxAccept(CanardInstance* const       ins,
+                      const CanardCANFrame* const frame,
+                      const uint8_t               iface_index,
+                      CanardTransfer* const       out_transfer);
 
 #if CANARD_PLATFORM_TWOS_COMPLEMENT
 

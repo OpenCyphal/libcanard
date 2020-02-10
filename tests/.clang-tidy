@@ -23,6 +23,7 @@ Checks: >-
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-avoid-magic-numbers,
   -readability-magic-numbers,
+  -google-runtime-references,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 AnalyzeTemporaryDtors: false

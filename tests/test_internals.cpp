@@ -157,7 +157,7 @@ TEST_CASE("makeTailByte")
 TEST_CASE("findTxQueueSupremum")
 {
     using internals::findTxQueueSupremum;
-    using TxQueueItem = internals::CanardInternalTxQueueItem;
+    using TxQueueItem = internals::TxQueueItem;
 
     auto ins =
         canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free, &helpers::rejectAllRxFilter);

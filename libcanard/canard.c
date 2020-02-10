@@ -519,8 +519,8 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
     CANARD_ASSERT(rx_filter != NULL);
     const CanardInstance out = {
         .user_reference = NULL,
-        .node_id        = CANARD_NODE_ID_UNSET,
         .mtu_bytes      = CANARD_MTU_CAN_FD,
+        .node_id        = CANARD_NODE_ID_UNSET,
         .heap_allocate  = heap_allocate,
         .heap_free      = heap_free,
         .rx_filter      = rx_filter,
