@@ -154,6 +154,36 @@ TEST_CASE("makeTailByte")
     REQUIRE(0b010'00001 == makeTailByte(false, true, false, 1U));
 }
 
+TEST_CASE("roundFramePayloadSizeUp")
+{
+    using internals::roundFramePayloadSizeUp;
+    REQUIRE(0 == roundFramePayloadSizeUp(0));
+    REQUIRE(1 == roundFramePayloadSizeUp(1));
+    REQUIRE(2 == roundFramePayloadSizeUp(2));
+    REQUIRE(3 == roundFramePayloadSizeUp(3));
+    REQUIRE(4 == roundFramePayloadSizeUp(4));
+    REQUIRE(5 == roundFramePayloadSizeUp(5));
+    REQUIRE(6 == roundFramePayloadSizeUp(6));
+    REQUIRE(7 == roundFramePayloadSizeUp(7));
+    REQUIRE(8 == roundFramePayloadSizeUp(8));
+    REQUIRE(12 == roundFramePayloadSizeUp(9));
+    REQUIRE(12 == roundFramePayloadSizeUp(10));
+    REQUIRE(12 == roundFramePayloadSizeUp(11));
+    REQUIRE(12 == roundFramePayloadSizeUp(12));
+    REQUIRE(16 == roundFramePayloadSizeUp(13));
+    REQUIRE(16 == roundFramePayloadSizeUp(14));
+    REQUIRE(16 == roundFramePayloadSizeUp(15));
+    REQUIRE(16 == roundFramePayloadSizeUp(16));
+    REQUIRE(20 == roundFramePayloadSizeUp(17));
+    REQUIRE(20 == roundFramePayloadSizeUp(20));
+    REQUIRE(32 == roundFramePayloadSizeUp(30));
+    REQUIRE(32 == roundFramePayloadSizeUp(32));
+    REQUIRE(48 == roundFramePayloadSizeUp(40));
+    REQUIRE(48 == roundFramePayloadSizeUp(48));
+    REQUIRE(64 == roundFramePayloadSizeUp(50));
+    REQUIRE(64 == roundFramePayloadSizeUp(64));
+}
+
 TEST_CASE("findTxQueueSupremum")
 {
     using internals::findTxQueueSupremum;

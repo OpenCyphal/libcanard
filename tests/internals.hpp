@@ -66,6 +66,8 @@ auto makeTailByte(const bool         start_of_transfer,
                   const bool         toggle,
                   const std::uint8_t transfer_id) -> std::uint8_t;
 
+auto roundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
+
 auto findTxQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
 }
 }  // namespace internals

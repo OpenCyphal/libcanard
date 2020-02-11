@@ -234,6 +234,16 @@ CANARD_INTERNAL uint8_t makeTailByte(const bool    start_of_transfer,
                      (toggle ? TAIL_TOGGLE : 0U) | (transfer_id & CANARD_TRANSFER_ID_MAX));
 }
 
+/// Takes a frame payload size, returns a new size that is >=x and is rounded up to the nearest valid DLC.
+CANARD_INTERNAL size_t roundFramePayloadSizeUp(const size_t x);
+CANARD_INTERNAL size_t roundFramePayloadSizeUp(const size_t x)
+{
+    CANARD_ASSERT(x < (sizeof(CanardCANLengthToDLC) / sizeof(CanardCANLengthToDLC[0])));
+    const size_t y = CanardCANLengthToDLC[x];
+    CANARD_ASSERT(y < (sizeof(CanardCANDLCToLength) / sizeof(CanardCANDLCToLength[0])));
+    return CanardCANDLCToLength[y];
+}
+
 CANARD_INTERNAL CanardInternalTxQueueItem* allocateTxQueueItem(CanardInstance* const ins,
                                                                const uint32_t        id,
                                                                const uint64_t        deadline_usec,
@@ -297,8 +307,14 @@ CANARD_INTERNAL int32_t pushSingleFrameTransfer(CanardInstance* const ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT((payload != NULL) || (payload_size == 0));
-    int32_t                          out = 0;
-    CanardInternalTxQueueItem* const tqi = allocateTxQueueItem(ins, can_id, deadline_usec, payload_size + 1U);
+
+    const size_t frame_payload_size = roundFramePayloadSizeUp(payload_size + 1U);
+    CANARD_ASSERT(frame_payload_size > payload_size);
+    const size_t padding_size = frame_payload_size - payload_size - 1U;
+    CANARD_ASSERT((padding_size + payload_size + 1U) == frame_payload_size);
+    int32_t out = 0;
+
+    CanardInternalTxQueueItem* const tqi = allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size);
     if (tqi != NULL)
     {
         if (payload_size > 0U)  // The check is needed to avoid calling memcpy() with a NULL pointer, it's an UB.
@@ -308,8 +324,13 @@ CANARD_INTERNAL int32_t pushSingleFrameTransfer(CanardInstance* const ins,
             // We ignore this recommendation because it is not available in C99.
             (void) memcpy(&tqi->payload[0], payload, payload_size);  // NOLINT
         }
-        tqi->payload[payload_size]           = makeTailByte(true, true, true, transfer_id);
-        CanardInternalTxQueueItem* const sup = findTxQueueSupremum(ins, can_id);
+
+        // Clang-Tidy raises an error recommending the use of memset_s() instead.
+        // We ignore this recommendation because it is not available in C99.
+        (void) memset(&tqi->payload[payload_size], PADDING_BYTE, padding_size);  // NOLINT
+
+        tqi->payload[frame_payload_size - 1U] = makeTailByte(true, true, true, transfer_id);
+        CanardInternalTxQueueItem* const sup  = findTxQueueSupremum(ins, can_id);
         if (sup != NULL)
         {
             tqi->next = sup->next;
@@ -365,21 +386,11 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
 
     while (offset < payload_size_with_crc)
     {
-        ++out;  // Count the number of generated frames.
-
-        // Compute the required size of the frame payload for this frame, including CRC and padding.
-        size_t frame_payload_size_with_tail = presentation_layer_mtu + 1U;
-        if ((payload_size_with_crc - offset) < presentation_layer_mtu)
-        {
-            size_t index = payload_size_with_crc - offset + 1U;
-            CANARD_ASSERT(index < (sizeof(CanardCANLengthToDLC) / sizeof(CanardCANLengthToDLC[0])));
-            index = CanardCANLengthToDLC[index];
-            CANARD_ASSERT(index < (sizeof(CanardCANDLCToLength) / sizeof(CanardCANDLCToLength[0])));
-            frame_payload_size_with_tail = CanardCANDLCToLength[index];  // Round up to accommodate padding.
-        }
-
-        // Allocate the storage using the above computed size. Link all frames into a list.
-
+        ++out;
+        const size_t frame_payload_size_with_tail =
+            ((payload_size_with_crc - offset) < presentation_layer_mtu)
+                ? roundFramePayloadSizeUp(payload_size_with_crc - offset + 1U)  // Add padding only in the last frame.
+                : (presentation_layer_mtu + 1U);
         CanardInternalTxQueueItem* const tqi =
             allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);
         if (NULL == head)
