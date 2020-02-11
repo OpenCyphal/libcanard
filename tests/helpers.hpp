@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdarg>
 #include <numeric>
+#include <random>
 #include <unordered_map>
 
 namespace helpers
@@ -46,6 +47,14 @@ class TestAllocator
 {
     std::unordered_map<void*, std::size_t> allocated_;
     std::size_t                            ceiling_ = std::numeric_limits<std::size_t>::max();
+
+    static auto getRandomByte()
+    {
+        static std::random_device                           rd;
+        static std::mt19937                                 gen(rd());
+        static std::uniform_int_distribution<std::uint16_t> dis(0, 255U);
+        return static_cast<std::byte>(dis(gen));
+    }
 
 public:
     TestAllocator()                      = default;
@@ -86,6 +95,8 @@ public:
         {
             throw std::logic_error("Heap corruption: an attempt to deallocate memory that is not allocated");
         }
+        // Damage the memory to make sure it's not used after deallocation.
+        std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, &TestAllocator::getRandomByte);
         // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
         std::free(it->first);  // NOLINT
         allocated_.erase(it);

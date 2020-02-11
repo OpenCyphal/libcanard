@@ -372,9 +372,9 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
         if ((payload_size_with_crc - offset) < presentation_layer_mtu)
         {
             size_t index = payload_size_with_crc - offset + 1U;
-            CANARD_ASSERT(index < sizeof(CanardCANLengthToDLC));
+            CANARD_ASSERT(index < (sizeof(CanardCANLengthToDLC) / sizeof(CanardCANLengthToDLC[0])));
             index = CanardCANLengthToDLC[index];
-            CANARD_ASSERT(index < sizeof(CanardCANDLCToLength));
+            CANARD_ASSERT(index < (sizeof(CanardCANDLCToLength) / sizeof(CanardCANDLCToLength[0])));
             frame_payload_size_with_tail = CanardCANDLCToLength[index];  // Round up to accommodate padding.
         }
 
@@ -415,8 +415,7 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
         }
 
         // Handle the last frame of the transfer: it is special because it also contains padding and CRC.
-        const bool end_of_transfer = offset >= payload_size;
-        if (end_of_transfer)
+        if (offset >= payload_size)
         {
             // Insert padding -- only in the last frame. Don't forget to include padding into the CRC.
             while ((frame_offset + CRC_SIZE_BYTES) < frame_payload_size)
@@ -429,13 +428,13 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
             // Insert the CRC.
             if ((frame_offset < frame_payload_size) && (offset == payload_size))
             {
-                tail->payload[frame_offset] = (uint8_t)(crc & BYTE_MAX);
+                tail->payload[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
                 ++frame_offset;
                 ++offset;
             }
             if ((frame_offset < frame_payload_size) && (offset > payload_size))
             {
-                tail->payload[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
+                tail->payload[frame_offset] = (uint8_t)(crc & BYTE_MAX);
                 ++frame_offset;
                 ++offset;
             }
@@ -443,7 +442,10 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
 
         // Finalize the frame.
         CANARD_ASSERT((frame_offset + 1U) == tail->payload_size);
-        tail->payload[frame_offset] = makeTailByte(start_of_transfer, end_of_transfer, toggle, transfer_id);
+        tail->payload[frame_offset] = makeTailByte(start_of_transfer,  //
+                                                   offset >= payload_size_with_crc,
+                                                   toggle,
+                                                   transfer_id);
         start_of_transfer           = false;
         toggle                      = !toggle;
     }
@@ -598,8 +600,9 @@ void canardTxPop(CanardInstance* const ins)
 {
     if ((ins != NULL) && (ins->_tx_queue != NULL))
     {
+        CanardInternalTxQueueItem* const next = ins->_tx_queue->next;
         ins->heap_free(ins, ins->_tx_queue);
-        ins->_tx_queue = ins->_tx_queue->next;
+        ins->_tx_queue = next;
     }
 }
 

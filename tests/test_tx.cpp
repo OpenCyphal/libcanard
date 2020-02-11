@@ -3,6 +3,7 @@
 
 #include "internals.hpp"
 #include "helpers.hpp"
+#include <cstring>
 
 TEST_CASE("TxBasic")
 {
@@ -111,5 +112,128 @@ TEST_CASE("TxBasic")
     REQUIRE(200 > alloc.getTotalAllocatedAmount());
 
     // Pop the queue.
-    // TODO
+    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
+    constexpr std::uint16_t CRC8 = 0x178DU;
+    CanardCANFrame frame{};
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 9);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 8));
+    REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[8]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'000'000ULL);
+    frame = {};
+    REQUIRE(1 == ins.txPeek(frame));  // Make sure we get the same frame again.
+    REQUIRE(frame.payload_size == 9);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 8));
+    REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[8]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'000'000ULL);
+    ins.txPop();
+    REQUIRE(2 == ins.getTxQueueLength());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 8);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 7));
+    REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[7]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'000'100ULL);
+    ins.txPop();
+    REQUIRE(1 == ins.getTxQueueLength());
+    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 4);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 7U, 1));
+    REQUIRE((CRC8 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[1]);
+    REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[2]);
+    REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[3]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'000'100ULL);
+    ins.txPop();
+    REQUIRE(0 == ins.getTxQueueLength());
+    REQUIRE(nullptr == ins.getTxQueueRoot());
+    REQUIRE(0 == alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins.txPeek(frame));
+    ins.txPop();  // Invocation when empty has no effect.
+    ins.txPop();
+    REQUIRE(0 == ins.getTxQueueLength());
+    REQUIRE(nullptr == ins.getTxQueueRoot());
+    REQUIRE(0 == alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins.txPeek(frame));
+
+    alloc.setAllocationCeiling(1000);
+    ins.setMTU(32);
+
+    // Multi-frame, success. CRC split over the frame boundary.
+    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
+    constexpr std::uint16_t CRC61 = 0x554EU;
+    transfer.timestamp_usec       = 1'000'000'001'000ULL;
+    transfer.priority             = CanardPriorityFast;
+    transfer.transfer_id          = 25;
+    transfer.payload_size         = 31 + 30;  // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
+    REQUIRE(3 == ins.txPush(transfer));
+    REQUIRE(3 == ins.getTxQueueLength());
+    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(40 < alloc.getTotalAllocatedAmount());
+    REQUIRE(200 > alloc.getTotalAllocatedAmount());
+    // Read the generated frames.
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 31));
+    REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'001'000ULL);
+    ins.txPop();
+    REQUIRE(2 == ins.getTxQueueLength());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 31U, 30));
+    REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[30]);
+    REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'001'000ULL);
+    ins.txPop();
+    REQUIRE(1 == ins.getTxQueueLength());
+    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 2);  // The last byte of CRC plus the tail byte.
+    REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[0]);
+    REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[1]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'001'000ULL);
+    ins.txPop();
+    REQUIRE(0 == ins.getTxQueueLength());
+    REQUIRE(0 == alloc.getNumAllocatedFragments());
+
+    // Multi-frame, success. CRC is in the last frame.
+    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
+    constexpr std::uint16_t CRC62 = 0xA3AEU;
+    transfer.timestamp_usec       = 1'000'000'002'000ULL;
+    transfer.priority             = CanardPrioritySlow;
+    transfer.transfer_id          = 26;
+    transfer.payload_size         = 31 + 31;  // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
+    REQUIRE(3 == ins.txPush(transfer));
+    REQUIRE(3 == ins.getTxQueueLength());
+    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(40 < alloc.getTotalAllocatedAmount());
+    REQUIRE(200 > alloc.getTotalAllocatedAmount());
+    // Read the generated frames.
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 31));
+    REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'002'000ULL);
+    ins.txPop();
+    REQUIRE(2 == ins.getTxQueueLength());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 31U, 31));
+    REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'002'000ULL);
+    ins.txPop();
+    REQUIRE(1 == ins.getTxQueueLength());
+    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(1 == ins.txPeek(frame));
+    REQUIRE(frame.payload_size == 3);  // The CRC plus the tail byte.
+    REQUIRE((CRC62 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[0]);
+    REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[1]);
+    REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[2]);
+    REQUIRE(frame.timestamp_usec == 1'000'000'002'000ULL);
+    ins.txPop();
+    REQUIRE(0 == ins.getTxQueueLength());
+    REQUIRE(0 == alloc.getNumAllocatedFragments());
 }
