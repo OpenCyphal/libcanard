@@ -40,6 +40,8 @@ inline auto rejectAllRxFilter(const CanardInstance* const ins,
     return CanardRxMetadata{};
 }
 
+/// An allocator that sits on top of the standard malloc() providing additional testing capabilities.
+/// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
 class TestAllocator
 {
     std::unordered_map<void*, std::size_t> allocated_;

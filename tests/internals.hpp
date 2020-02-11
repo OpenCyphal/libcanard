@@ -12,7 +12,7 @@
 /// Please keep them in sync with the library by manually updating as necessary.
 namespace internals
 {
-struct TxQueueItem
+struct TxQueueItem final
 {
     TxQueueItem* next = nullptr;
 
@@ -21,6 +21,29 @@ struct TxQueueItem
     std::size_t   payload_size  = 0;
 
     std::array<std::uint8_t, 1> payload{};  // The real definition has a flex array here.
+
+    [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
+    {
+        return *(payload.data() + offset);
+    }
+
+    [[nodiscard]] auto getTailByte() const
+    {
+        REQUIRE(payload_size >= 1U);
+        return getPayloadByte(payload_size - 1U);
+    }
+
+    [[nodiscard]] auto isStartOfTransfer() const { return (getTailByte() & 128U) != 0; }
+    [[nodiscard]] auto isEndOfTransfer() const { return (getTailByte() & 64U) != 0; }
+    [[nodiscard]] auto isToggleBitSet() const { return (getTailByte() & 32U) != 0; }
+
+    // Instances of this type cannot be constructed by the test suite. It is designed for aliasing only.
+    TxQueueItem()                    = delete;
+    ~TxQueueItem()                   = delete;
+    TxQueueItem(const TxQueueItem&)  = delete;
+    TxQueueItem(const TxQueueItem&&) = delete;
+    auto operator=(const TxQueueItem&) -> TxQueueItem& = delete;
+    auto operator=(const TxQueueItem &&) -> TxQueueItem& = delete;
 };
 
 // Extern C effectively discards the outer namespaces.

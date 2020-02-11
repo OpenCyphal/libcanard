@@ -206,7 +206,7 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
 /// transmit them afterwards.
 ///
 /// Returns the number of frames enqueued into the prioritized TX queue (which is always a positive number)
-/// in case of success. Returns a negated error code in case of failure.
+/// in case of success. Returns a negated error code in case of failure. Zero cannot be returned.
 ///
 /// An invalid argument error may be returned in the following cases:
 ///     - Any of the input arguments are NULL.

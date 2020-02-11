@@ -37,6 +37,8 @@ TEST_CASE("TestAllocator")
     REQUIRE(3 == al.getNumAllocatedFragments());
     REQUIRE(577 == al.getTotalAllocatedAmount());
 
+    REQUIRE_THROWS_AS(al.deallocate(a), std::logic_error);
+
     al.deallocate(c);
     REQUIRE(2 == al.getNumAllocatedFragments());
     REQUIRE(556 == al.getTotalAllocatedAmount());
@@ -48,4 +50,9 @@ TEST_CASE("TestAllocator")
     al.deallocate(b);
     REQUIRE(0 == al.getNumAllocatedFragments());
     REQUIRE(0 == al.getTotalAllocatedAmount());
+
+    REQUIRE_THROWS_AS(al.deallocate(a), std::logic_error);
+    REQUIRE_THROWS_AS(al.deallocate(b), std::logic_error);
+    REQUIRE_THROWS_AS(al.deallocate(c), std::logic_error);
+    REQUIRE_THROWS_AS(al.deallocate(d), std::logic_error);
 }

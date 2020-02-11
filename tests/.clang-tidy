@@ -16,14 +16,15 @@ Checks: >-
   portability-*,
   readability-*,
   -google-readability-todo,
+  -google-runtime-references,
   -readability-avoid-const-params-in-decls,
+  -readability-magic-numbers,
   -llvm-header-guard,
-  -cppcoreguidelines-pro-type-reinterpret-cast,
   -misc-non-private-member-variables-in-classes,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-avoid-magic-numbers,
-  -readability-magic-numbers,
-  -google-runtime-references,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 AnalyzeTemporaryDtors: false

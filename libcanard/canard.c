@@ -428,11 +428,13 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
             {
                 tail->payload[frame_offset] = (uint8_t)(crc & BYTE_MAX);
                 ++frame_offset;
+                ++offset;
             }
             if ((frame_offset < frame_payload_size) && (offset > payload_size))
             {
                 tail->payload[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
                 ++frame_offset;
+                ++offset;
             }
         }
 
