@@ -45,7 +45,7 @@ extern "C" {
 #define CANARD_TRANSFER_ID_MAX ((1U << CANARD_TRANSFER_ID_BIT_LENGTH) - 1U)
 
 /// This value represents an undefined node-ID: broadcast destination or anonymous source.
-/// Library functions treat all values above @ref CANARD_NODE_ID_MAX as anonymous.
+/// Library functions treat all values above CANARD_NODE_ID_MAX as anonymous.
 #define CANARD_NODE_ID_UNSET 255U
 
 /// If not specified, the transfer-ID timeout will take this value for all new input sessions.
@@ -116,6 +116,7 @@ typedef struct
     /// Subject-ID for message publications; service-ID for service requests/responses.
     uint16_t port_id;
 
+    /// For outgoing message transfers or for incoming anonymous transfers, the value is CANARD_NODE_ID_UNSET.
     uint8_t remote_node_id;
 
     uint8_t transfer_id;
@@ -128,8 +129,8 @@ typedef struct
 /// The application supplies the library with this information when a new transfer should be received.
 typedef struct
 {
-    /// The transfer-ID timeout for this session. If no specific requirements are defined, the default value
-    /// @ref CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC should be used.
+    /// The transfer-ID timeout for this session.
+    /// If no specific requirements are defined, the default CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC should be used.
     /// Zero timeout indicates that this transfer should not be received (all its frames will be silently dropped).
     uint64_t transfer_id_timeout_usec;
 
@@ -146,8 +147,8 @@ typedef struct
 /// @param ins            Library instance.
 /// @param port_id        Subject-ID or service-ID of the transfer.
 /// @param transfer_kind  Message or service transfer.
-/// @param source_node_id Node-ID of the origin; @ref CANARD_NODE_ID_UNSET if anonymous.
-/// @returns @ref CanardTransferReceptionParameters.
+/// @param source_node_id Node-ID of the origin; CANARD_NODE_ID_UNSET if anonymous.
+/// @returns CanardTransferReceptionParameters.
 typedef CanardRxMetadata (*CanardRxFilter)(const CanardInstance* ins,
                                            uint16_t              port_id,
                                            CanardTransferKind    transfer_kind,
@@ -178,9 +179,9 @@ struct CanardInstance
     /// Invalid values are treated as the nearest valid value.
     size_t mtu_bytes;
 
-    /// The node-ID of the local node. The default value is @ref CANARD_NODE_ID_UNSET.
+    /// The node-ID of the local node. The default value is CANARD_NODE_ID_UNSET.
     /// Per the UAVCAN Specification, the node-ID should not be assigned more than once.
-    /// Invalid values are treated as @ref CANARD_NODE_ID_UNSET.
+    /// Invalid values are treated as CANARD_NODE_ID_UNSET.
     uint8_t node_id;
 
     /// Callbacks invoked by the library. See their type documentation for details.
@@ -190,8 +191,8 @@ struct CanardInstance
     /// the heap management functions (allocate and free) have constant complexity.
     ///
     /// There are only two API functions that may lead to allocation of heap memory:
-    ///     - @ref canardTxPush()
-    ///     - @ref canardRxAccept()
+    ///     - canardTxPush()
+    ///     - canardRxAccept()
     /// Their exact memory requirement model is specified in their documentation.
     CanardHeapAllocate heap_allocate;
     CanardHeapFree     heap_free;
@@ -211,21 +212,42 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
                           const CanardRxFilter     rx_filter);
 
-/// Takes a transfer, serializes it into a sequence of transport frames, and inserts them into the prioritized
-/// transmission queue at the appropriate position. Afterwards, the application is supposed to take the enqueued
-/// frames from the transmission queue using the function @ref canardTxPeek() and transmit them. Each transmitted
-/// (or otherwise discarded, e.g., due to timeout) frame should be removed from the queue using @ref canardTxPop().
+/// Serializes a transfer into a sequence of transport frames, and inserts them into the prioritized transmission
+/// queue at the appropriate position. Afterwards, the application is supposed to take the enqueued frames from
+/// the transmission queue using the function canardTxPeek() and transmit them. Each transmitted (or otherwise
+/// discarded, e.g., due to timeout) frame should be removed from the queue using canardTxPop().
 ///
 /// The MTU of the generated frames is dependent on the value of the MTU setting at the time when this function
-/// is invoked.
+/// is invoked. The MTU setting can be changed arbitrarily between invocations. No other functions rely on that
+/// parameter.
+///
+/// The timestamp value of the transfer will be used to populate the timestamp values of the resulting transport
+/// frames (so all frames will have the same timestamp value). This feature is intended to facilitate transmission
+/// deadline tracking, i.e., aborting frames that could not be transmitted before the specified deadline.
+/// Therefore, normally, the timestamp value should be in the future.
+/// The library itself, however, does not use or check this value itself, so it can be zero if not needed.
+///
+/// It is the responsibility of the application to ensure that the transfer parameters are managed correctly.
+/// In particular, the application shall ensure that the transfer-ID computation rules, as defined in the
+/// UAVCAN Specification, are being followed; here is a relevant excerpt:
+///     - For service response transfers the transfer-ID value shall be directly copied from the corresponding
+///       service request transfer.
+///     - A node that is interested in emitting message transfers or service request transfers under a particular
+///       session specifier, whether periodically or on an ad-hoc basis, shall allocate a transfer-ID counter state
+///       associated with said session specifier exclusively. The transfer-ID value of every emitted transfer is
+///       determined by sampling the corresponding counter keyed by the session specifier of the transfer; afterwards,
+///       the counter is incremented by one.
+/// The recommended approach to storing the transfer-ID counters is to use static or member variables.
+/// Sophisticated applications may find this approach unsuitable, in which case O(1) static look-up tables
+/// or heap-allocated data structures should be considered.
 ///
 /// Returns the number of frames enqueued into the prioritized TX queue (which is always a positive number)
 /// in case of success. Returns a negated error code in case of failure. Zero cannot be returned.
 ///
 /// An invalid argument error may be returned in the following cases:
 ///     - Any of the input arguments are NULL.
-///     - The remote node-ID is not @ref CANARD_NODE_ID_UNSET and the transfer is a message transfer.
-///     - The remote node-ID is above @ref CANARD_NODE_ID_MAX and the transfer is a service transfer.
+///     - The remote node-ID is not CANARD_NODE_ID_UNSET and the transfer is a message transfer.
+///     - The remote node-ID is above CANARD_NODE_ID_MAX and the transfer is a service transfer.
 ///     - The priority, subject-ID, or service-ID exceed their respective maximums.
 ///     - The transfer kind is invalid.
 ///     - The payload pointer is NULL while the payload size is nonzero.
@@ -249,14 +271,22 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 
 /// Access the top element of the prioritized transmission queue. The queue itself is not modified (i.e., the
 /// accessed element is not removed). The application should invoke this function to collect the transport frames
-/// of serialized transfers stored into the prioritized transmission queue by @ref canardTxPush().
+/// of serialized transfers stored into the prioritized transmission queue by canardTxPush().
+///
+/// Nodes with redundant transports should replicate every frame into each of the transport interfaces.
+/// Such replication may require additional buffering in the driver layer, depending on the implementation.
+///
+/// The timestamp values of returned frames are initialized with the timestamp value of the transfer instance they
+/// originate from. Timestamps are used to specify the transmission deadline. It is up to the application and/or
+/// the driver layer to implement the discardment of timed-out transport frames. The library does not check it,
+/// so a frame that is already timed out may be returned here.
 ///
 /// If the queue is empty, the return value is zero and the out_frame is not modified.
 ///
 /// If the queue is non-empty, the return value is 1 (one) and the out_frame is populated with the data from
 /// the top element (i.e., the next frame awaiting transmission).
 /// The payload pointer of the out_frame will point to the data buffer of the accessed frame;
-/// the pointer retains validity until the element is removed from the queue by calling @ref canardTxPop().
+/// the pointer retains validity until the element is removed from the queue by calling canardTxPop().
 /// The payload pointer retains validity even if more frames are added to the transmission queue.
 /// If the returned frame instance is not needed, it can be dropped -- no deinitialization procedures are needed
 /// since it does not own any memory itself.
@@ -268,13 +298,13 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_frame);
 
 /// Remove and free the top element from the prioritized transmission queue.
-/// The application should invoke this function after the top frame obtained through @ref canardTxPeek() has been
+/// The application should invoke this function after the top frame obtained through canardTxPeek() has been
 /// processed and need not be kept anymore (e.g., transmitted successfully, timed out, errored, etc.).
 ///
 /// WARNING:
-///     Invocation of @ref canardTxPush() may add new elements at the top of the prioritized transmission queue.
+///     Invocation of canardTxPush() may add new elements at the top of the prioritized transmission queue.
 ///     The calling code shall take that into account to eliminate the possibility of data loss due to the frame
-///     at the top of the queue being unexpectedly replaced between calls of @ref canardTxPeek() and this function.
+///     at the top of the queue being unexpectedly replaced between calls of canardTxPeek() and this function.
 ///
 /// Invocation of this function invalidates the payload pointer of the top frame because the underlying buffer is freed.
 ///

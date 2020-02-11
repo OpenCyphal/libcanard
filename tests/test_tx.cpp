@@ -5,7 +5,7 @@
 #include "helpers.hpp"
 #include <cstring>
 
-TEST_CASE("TxBasic")
+TEST_CASE("TxBasic0")
 {
     using internals::TxQueueItem;
 
@@ -290,6 +290,7 @@ TEST_CASE("TxBasic")
     transfer.timestamp_usec = 1'000'000'004'000ULL;
     transfer.transfer_id    = 28;
     transfer.payload_size   = 0;
+    transfer.payload        = nullptr;  // Null is OK if size is 0.
     REQUIRE(1 == ins.txPush(transfer));
     REQUIRE(1 == ins.getTxQueueLength());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
@@ -306,6 +307,21 @@ TEST_CASE("TxBasic")
     ins.txPop();
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
-}
 
-TEST_CASE("TxPrioritization") {}
+    // Nothing left to peek at.
+    REQUIRE(0 == ins.txPeek(frame));
+
+    // Error handling.
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &transfer));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(&ins.getInstance(), nullptr));
+    transfer.payload_size = 1;
+    transfer.payload      = nullptr;
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == ins.txPush(transfer));
+
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPeek(nullptr, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPeek(nullptr, &frame));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPeek(&ins.getInstance(), nullptr));
+
+    canardTxPop(&ins.getInstance());  // No effect.
+}

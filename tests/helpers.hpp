@@ -206,6 +206,9 @@ public:
     }
 
     [[nodiscard]] auto getAllocator() -> TestAllocator& { return allocator_; }
+
+    [[nodiscard]] auto getInstance() -> CanardInstance& { return canard_; }
+    [[nodiscard]] auto getInstance() const -> const CanardInstance& { return canard_; }
 };
 
 }  // namespace helpers

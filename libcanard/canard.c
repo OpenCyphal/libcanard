@@ -239,7 +239,8 @@ CANARD_INTERNAL size_t roundFramePayloadSizeUp(const size_t x);
 CANARD_INTERNAL size_t roundFramePayloadSizeUp(const size_t x)
 {
     CANARD_ASSERT(x < (sizeof(CanardCANLengthToDLC) / sizeof(CanardCANLengthToDLC[0])));
-    const size_t y = CanardCANLengthToDLC[x];
+    // Suppressing a false-positive out-of-bounds access error from Sonar. Its control flow analyser is misbehaving.
+    const size_t y = CanardCANLengthToDLC[x];  // NOSONAR
     CANARD_ASSERT(y < (sizeof(CanardCANDLCToLength) / sizeof(CanardCANDLCToLength[0])));
     return CanardCANDLCToLength[y];
 }
@@ -453,12 +454,10 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
 
         // Finalize the frame.
         CANARD_ASSERT((frame_offset + 1U) == tail->payload_size);
-        tail->payload[frame_offset] = makeTailByte(start_of_transfer,  //
-                                                   offset >= payload_size_with_crc,
-                                                   toggle,
-                                                   transfer_id);
-        start_of_transfer           = false;
-        toggle                      = !toggle;
+        tail->payload[frame_offset] =
+            makeTailByte(start_of_transfer, offset >= payload_size_with_crc, toggle, transfer_id);
+        start_of_transfer = false;
+        toggle            = !toggle;
     }
 
     if (tail != NULL)
