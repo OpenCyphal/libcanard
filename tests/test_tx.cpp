@@ -109,4 +109,7 @@ TEST_CASE("TxBasic")
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
     REQUIRE(200 > alloc.getTotalAllocatedAmount());
+
+    // Pop the queue.
+    // TODO
 }

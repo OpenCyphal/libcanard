@@ -569,6 +569,37 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
     return out;
 }
 
+int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_frame)
+{
+    int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
+    if ((ins != NULL) && (out_frame != NULL))
+    {
+        CanardInternalTxQueueItem* const tqi = ins->_tx_queue;
+        if (tqi != NULL)
+        {
+            out_frame->timestamp_usec  = tqi->deadline_usec;
+            out_frame->extended_can_id = tqi->id;
+            out_frame->payload_size    = tqi->payload_size;
+            out_frame->payload         = &tqi->payload[0];
+            out                        = 1;
+        }
+        else
+        {
+            out = 0;
+        }
+    }
+    return out;
+}
+
+void canardTxPop(CanardInstance* const ins)
+{
+    if ((ins != NULL) && (ins->_tx_queue != NULL))
+    {
+        ins->heap_free(ins, ins->_tx_queue);
+        ins->_tx_queue = ins->_tx_queue->next;
+    }
+}
+
 // ---------------------------------------- FLOAT16 SERIALIZATION ----------------------------------------
 
 #if CANARD_PLATFORM_IEEE754

@@ -185,6 +185,14 @@ struct CanardInstance
 
     /// Callbacks invoked by the library. See their type documentation for details.
     /// They SHALL be valid function pointers at all times.
+    ///
+    /// The time complexity parameters given in the API documentation are made on the assumption that
+    /// the heap management functions (allocate and free) have constant complexity.
+    ///
+    /// There are only two API functions that may lead to allocation of heap memory:
+    ///     - @ref canardTxPush()
+    ///     - @ref canardRxAccept()
+    /// Their exact memory requirement model is specified in their documentation.
     CanardHeapAllocate heap_allocate;
     CanardHeapFree     heap_free;
     CanardRxFilter     rx_filter;
@@ -196,14 +204,20 @@ struct CanardInstance
 
 /// Initialize a new library instance.
 /// The default values will be assigned as specified in the structure field documentation.
+/// The time complexity parameters given in the API documentation are made on the assumption that the heap management
+/// functions (allocate and free) have constant complexity.
 /// If any of the pointers are NULL, the behavior is undefined.
 CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
                           const CanardHeapFree     heap_free,
                           const CanardRxFilter     rx_filter);
 
-/// Takes a transfer, serializes it into a sequence of CAN frames, and inserts them into the prioritized TX queue
-/// at the appropriate position. The application is supposed to take the enqueued frames from the TX buffer and
-/// transmit them afterwards.
+/// Takes a transfer, serializes it into a sequence of transport frames, and inserts them into the prioritized
+/// transmission queue at the appropriate position. Afterwards, the application is supposed to take the enqueued
+/// frames from the transmission queue using the function @ref canardTxPeek() and transmit them. Each transmitted
+/// (or otherwise discarded, e.g., due to timeout) frame should be removed from the queue using @ref canardTxPop().
+///
+/// The MTU of the generated frames is dependent on the value of the MTU setting at the time when this function
+/// is invoked.
 ///
 /// Returns the number of frames enqueued into the prioritized TX queue (which is always a positive number)
 /// in case of success. Returns a negated error code in case of failure. Zero cannot be returned.
@@ -227,10 +241,46 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
 ///
 /// The time complexity is O(s+t), where s is the amount of payload in the transfer, and t is the number of
 /// frames already enqueued in the transmission queue.
+///
+/// The heap memory requirement is one allocation per transport frame. In other words, a single-frame transfer takes
+/// one allocation; a multi-frame transfer of N frames takes N allocations. The maximum size of each allocation is
+/// sizeof(CanardInternalTxQueueItem) plus MTU.
 int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
+/// Access the top element of the prioritized transmission queue. The queue itself is not modified (i.e., the
+/// accessed element is not removed). The application should invoke this function to collect the transport frames
+/// of serialized transfers stored into the prioritized transmission queue by @ref canardTxPush().
+///
+/// If the queue is empty, the return value is zero and the out_frame is not modified.
+///
+/// If the queue is non-empty, the return value is 1 (one) and the out_frame is populated with the data from
+/// the top element (i.e., the next frame awaiting transmission).
+/// The payload pointer of the out_frame will point to the data buffer of the accessed frame;
+/// the pointer retains validity until the element is removed from the queue by calling @ref canardTxPop().
+/// The payload pointer retains validity even if more frames are added to the transmission queue.
+/// If the returned frame instance is not needed, it can be dropped -- no deinitialization procedures are needed
+/// since it does not own any memory itself.
+///
+/// If either of the arguments are NULL, the negated invalid argument error code is returned and no other
+/// actions are performed.
+///
+/// The time complexity is constant.
 int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_frame);
 
+/// Remove and free the top element from the prioritized transmission queue.
+/// The application should invoke this function after the top frame obtained through @ref canardTxPeek() has been
+/// processed and need not be kept anymore (e.g., transmitted successfully, timed out, errored, etc.).
+///
+/// WARNING:
+///     Invocation of @ref canardTxPush() may add new elements at the top of the prioritized transmission queue.
+///     The calling code shall take that into account to eliminate the possibility of data loss due to the frame
+///     at the top of the queue being unexpectedly replaced between calls of @ref canardTxPeek() and this function.
+///
+/// Invocation of this function invalidates the payload pointer of the top frame because the underlying buffer is freed.
+///
+/// If the input argument is NULL or if the transmission queue is empty, the function has no effect.
+///
+/// The time complexity is constant.
 void canardTxPop(CanardInstance* const ins);
 
 int8_t canardRxAccept(CanardInstance* const       ins,

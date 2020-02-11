@@ -37,9 +37,7 @@ struct TxQueueItem final
     [[nodiscard]] auto isEndOfTransfer() const { return (getTailByte() & 64U) != 0; }
     [[nodiscard]] auto isToggleBitSet() const { return (getTailByte() & 32U) != 0; }
 
-    // Instances of this type cannot be constructed by the test suite. It is designed for aliasing only.
-    TxQueueItem()                    = delete;
-    ~TxQueueItem()                   = delete;
+    ~TxQueueItem()                   = default;
     TxQueueItem(const TxQueueItem&)  = delete;
     TxQueueItem(const TxQueueItem&&) = delete;
     auto operator=(const TxQueueItem&) -> TxQueueItem& = delete;
