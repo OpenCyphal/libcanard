@@ -299,9 +299,13 @@ CANARD_INTERNAL int32_t pushSingleFrameTransfer(CanardInstance* const ins,
     CanardInternalTxQueueItem* const tqi = allocateTxQueueItem(ins, can_id, deadline_usec, payload_size + 1U);
     if (tqi != NULL)
     {
-        // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-        // We ignore this recommendation because it is not available in C99.
-        (void) memcpy(&tqi->payload[0], payload, payload_size);  // NOLINT
+        if (payload_size > 0U)  // The check is needed to avoid calling memcpy() with a NULL pointer, it's an UB.
+        {
+            CANARD_ASSERT(payload != NULL);
+            // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+            // We ignore this recommendation because it is not available in C99.
+            (void) memcpy(&tqi->payload[0], payload, payload_size);  // NOLINT
+        }
         tqi->payload[payload_size]           = makeTailByte(true, true, true, transfer_id);
         CanardInternalTxQueueItem* const sup = findTxQueueSupremum(ins, can_id);
         if (sup != NULL)
@@ -367,10 +371,11 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
             const size_t remaining_payload_with_crc = payload_size_with_crc - offset;
             if (remaining_payload_with_crc < presentation_layer_mtu)
             {
-                const size_t index = remaining_payload_with_crc + 1U;
+                size_t index = remaining_payload_with_crc + 1U;  // Round up to accommodate padding.
                 CANARD_ASSERT(index < sizeof(CanardCANLengthToDLC));
-                // Round up to accommodate padding.
-                frame_payload_size_with_tail = CanardCANDLCToLength[CanardCANLengthToDLC[index]];
+                index = CanardCANLengthToDLC[index];
+                CANARD_ASSERT(index < sizeof(CanardCANDLCToLength));
+                frame_payload_size_with_tail = CanardCANDLCToLength[index];
             }
         }
 
