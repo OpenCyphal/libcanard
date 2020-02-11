@@ -83,6 +83,8 @@ public:
             {
                 throw std::bad_alloc();  // This is a test suite failure, not a failed test. Mind the difference.
             }
+            // Random-fill the memory to make sure no assumptions are made about its contents.
+            std::generate_n(reinterpret_cast<std::byte*>(p), amount, &TestAllocator::getRandomByte);
             allocated_.emplace(p, amount);
         }
         return p;
@@ -107,7 +109,7 @@ public:
     [[nodiscard]] auto getTotalAllocatedAmount() const -> std::size_t
     {
         std::size_t out = 0U;
-        for (auto [ptr, size] : allocated_)
+        for (auto [_, size] : allocated_)
         {
             out += size;
         }
