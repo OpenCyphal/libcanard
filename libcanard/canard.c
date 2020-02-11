@@ -162,7 +162,7 @@ CANARD_INTERNAL int32_t makeCANID(const CanardTransfer* const tr,
     CANARD_ASSERT(tr != NULL);
     CANARD_ASSERT(presentation_layer_mtu > 0);
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
-    if ((tr->transfer_kind == CanardTransferKindMessage) && (tr->remote_node_id == CANARD_NODE_ID_UNSET) &&
+    if ((tr->transfer_kind == CanardTransferKindMessage) && (CANARD_NODE_ID_UNSET == tr->remote_node_id) &&
         (tr->port_id <= CANARD_SUBJECT_ID_MAX))
     {
         if (local_node_id <= CANARD_NODE_ID_MAX)
@@ -173,9 +173,10 @@ CANARD_INTERNAL int32_t makeCANID(const CanardTransfer* const tr,
         else if (tr->payload_size <= presentation_layer_mtu)
         {
             CANARD_ASSERT((tr->payload != NULL) || (tr->payload_size == 0U));
-            const uint8_t c = (uint8_t)(crcAdd(CRC_INITIAL, tr->payload_size, tr->payload) & CANARD_NODE_ID_MAX);
-            out             = (int32_t)(makeMessageSessionSpecifier(tr->port_id, c) | FLAG_ANONYMOUS_MESSAGE);
-            CANARD_ASSERT(out >= 0);
+            const uint8_t  c    = (uint8_t)(crcAdd(CRC_INITIAL, tr->payload_size, tr->payload) & CANARD_NODE_ID_MAX);
+            const uint32_t spec = makeMessageSessionSpecifier(tr->port_id, c) | FLAG_ANONYMOUS_MESSAGE;
+            CANARD_ASSERT(spec <= CAN_EXT_ID_MASK);
+            out = (int32_t) spec;
         }
         else
         {
@@ -208,7 +209,8 @@ CANARD_INTERNAL int32_t makeCANID(const CanardTransfer* const tr,
         const uint32_t prio = (uint32_t) tr->priority;
         if (prio <= CANARD_PRIORITY_MAX)
         {
-            out = (int32_t)(((uint32_t) out) | (prio << OFFSET_PRIORITY));
+            const uint32_t id = ((uint32_t) out) | (prio << OFFSET_PRIORITY);
+            out               = (int32_t) id;
         }
         else
         {
@@ -257,13 +259,13 @@ CANARD_INTERNAL CanardInternalTxQueueItem* allocateTxQueueItem(CanardInstance* c
 
 /// Returns the element after which new elements with the specified CAN ID should be inserted.
 /// Returns NULL if the element shall be inserted in the beginning of the list (i.e., no prior elements).
-CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(CanardInstance* const ins, const uint32_t can_id);
-CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(CanardInstance* const ins, const uint32_t can_id)
+CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(const CanardInstance* const ins, const uint32_t can_id);
+CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(const CanardInstance* const ins, const uint32_t can_id)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
     CanardInternalTxQueueItem* out = ins->_tx_queue;
-    if ((out == NULL) || (out->id > can_id))
+    if ((NULL == out) || (out->id > can_id))
     {
         out = NULL;
     }
@@ -367,33 +369,29 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
 
         // Compute the required size of the frame payload for this frame, including CRC and padding.
         size_t frame_payload_size_with_tail = presentation_layer_mtu + 1U;
+        if ((payload_size_with_crc - offset) < presentation_layer_mtu)
         {
-            const size_t remaining_payload_with_crc = payload_size_with_crc - offset;
-            if (remaining_payload_with_crc < presentation_layer_mtu)
-            {
-                size_t index = remaining_payload_with_crc + 1U;  // Round up to accommodate padding.
-                CANARD_ASSERT(index < sizeof(CanardCANLengthToDLC));
-                index = CanardCANLengthToDLC[index];
-                CANARD_ASSERT(index < sizeof(CanardCANDLCToLength));
-                frame_payload_size_with_tail = CanardCANDLCToLength[index];
-            }
+            size_t index = payload_size_with_crc - offset + 1U;
+            CANARD_ASSERT(index < sizeof(CanardCANLengthToDLC));
+            index = CanardCANLengthToDLC[index];
+            CANARD_ASSERT(index < sizeof(CanardCANDLCToLength));
+            frame_payload_size_with_tail = CanardCANDLCToLength[index];  // Round up to accommodate padding.
         }
 
         // Allocate the storage using the above computed size. Link all frames into a list.
+
+        CanardInternalTxQueueItem* const tqi =
+            allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);
+        if (NULL == head)
         {
-            CanardInternalTxQueueItem* const tqi =
-                allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);
-            if (head == NULL)
-            {
-                head = tqi;
-            }
-            else
-            {
-                tail->next = tqi;
-            }
-            tail = tqi;
+            head = tqi;
         }
-        if (tail == NULL)
+        else
+        {
+            tail->next = tqi;
+        }
+        tail = tqi;
+        if (NULL == tail)
         {
             break;
         }
@@ -455,7 +453,7 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
         CANARD_ASSERT(head->next != NULL);  // This is not a single-frame transfer so at least two frames shall exist.
         CANARD_ASSERT(tail->next == NULL);  // The list shall be properly terminated.
         CanardInternalTxQueueItem* const sup = findTxQueueSupremum(ins, can_id);
-        if (sup == NULL)  // Once the insertion point is located, we insert the entire frame sequence in constant time.
+        if (NULL == sup)  // Once the insertion point is located, we insert the entire frame sequence in constant time.
         {
             tail->next     = ins->_tx_queue;
             ins->_tx_queue = head;
@@ -622,10 +620,11 @@ static_assert(4 == sizeof(Float32Bits), "Native float format shall match IEEE 75
 uint16_t canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value)
 {
     // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
+    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
     const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT
-    const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT
-    const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT
-    const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT
+    const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT NOSONAR
+    const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT NOSONAR
+    const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT NOSONAR
     Float32Bits       in         = {.real = value};
     const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT
     in.bits ^= sign;
@@ -652,9 +651,10 @@ uint16_t canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value)
 CanardIEEE754Binary32 canardDSDLFloat16Deserialize(const uint16_t value)
 {
     // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
-    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT
-    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};             // NOLINT
-    Float32Bits       out     = {.bits = ((uint32_t)(value & 0x7FFFU)) << 13U};  // NOLINT
+    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
+    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT NOSONAR
+    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};             // NOLINT NOSONAR
+    Float32Bits       out     = {.bits = ((uint32_t)(value & 0x7FFFU)) << 13U};  // NOLINT NOSONAR
     out.real *= magic.real;
     if (out.real >= inf_nan.real)
     {
