@@ -10,8 +10,7 @@
 /// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
 /// To disable assertion checks completely, make it expand into `(void)(0)`.
 #ifndef CANARD_ASSERT
-// Intentional violation of MISRA: assertion macro cannot be replaced with a function definition.
-#    define CANARD_ASSERT(x) assert(x)  // NOSONAR
+#    define CANARD_ASSERT assert
 #endif
 
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
@@ -25,7 +24,7 @@
 #    error "Unsupported language: ISO C99 or a newer version is required."
 #endif
 
-#if __STDC_VERSION__ < 201112L
+#ifndef static_assert
 // Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
 #    define static_assert(x, ...) typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
 #    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                              // NOSONAR
@@ -615,66 +614,3 @@ void canardTxPop(CanardInstance* const ins)
         ins->_tx_queue = next;
     }
 }
-
-// ---------------------------------------- FLOAT16 SERIALIZATION ----------------------------------------
-
-#if CANARD_PLATFORM_IEEE754
-
-// Intentional violation of MISRA: we need this union because the alternative is far more error prone.
-// We have to rely on low-level data representation details to do the conversion; unions are helpful.
-typedef union  // NOSONAR
-{
-    uint32_t              bits;
-    CanardIEEE754Binary32 real;
-} Float32Bits;
-static_assert(4 == sizeof(CanardIEEE754Binary32), "Native float format shall match IEEE 754 binary32");
-static_assert(4 == sizeof(Float32Bits), "Native float format shall match IEEE 754 binary32");
-
-uint16_t canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value)
-{
-    // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
-    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
-    const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT
-    const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT NOSONAR
-    const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT NOSONAR
-    const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT NOSONAR
-    Float32Bits       in         = {.real = value};                     // NOSONAR
-    const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT
-    in.bits ^= sign;
-    uint16_t out = 0;
-    if (in.bits >= f32inf.bits)
-    {
-        out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT
-    }
-    else
-    {
-        in.bits &= round_mask;
-        in.real *= magic.real;
-        in.bits -= round_mask;
-        if (in.bits > f16inf.bits)
-        {
-            in.bits = f16inf.bits;
-        }
-        out = (uint16_t)(in.bits >> 13U);  // NOLINT
-    }
-    out |= (uint16_t)(sign >> 16U);  // NOLINT
-    return out;
-}
-
-CanardIEEE754Binary32 canardDSDLFloat16Deserialize(const uint16_t value)
-{
-    // The no-lint statements suppress the warnings about magic numbers. These numbers are not magic.
-    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
-    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT NOSONAR
-    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};             // NOLINT NOSONAR
-    Float32Bits       out     = {.bits = ((uint32_t)(value & 0x7FFFU)) << 13U};  // NOLINT NOSONAR
-    out.real *= magic.real;
-    if (out.real >= inf_nan.real)
-    {
-        out.bits |= ((uint32_t) 0xFFU) << 23U;  // NOLINT
-    }
-    out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT
-    return out.real;
-}
-
-#endif  // CANARD_PLATFORM_IEEE754

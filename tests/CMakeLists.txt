@@ -53,7 +53,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wsign-promo -Wold-
 
 include_directories(catch ${library_dir})
 
-set(common_sources catch/main.cpp ${library_dir}/canard.c)
+set(common_sources catch/main.cpp ${library_dir}/canard.c ${library_dir}/canard_dsdl.c)
 
 function(gen_test name files compile_definitions compile_features compile_flags link_flags)
     add_executable(${name} ${common_sources} ${files})
