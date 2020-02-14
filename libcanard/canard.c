@@ -390,7 +390,7 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
         ++out;
         const size_t frame_payload_size_with_tail =
             ((payload_size_with_crc - offset) < presentation_layer_mtu)
-                ? roundFramePayloadSizeUp(payload_size_with_crc - offset + 1U)  // Add padding only in the last frame.
+                ? roundFramePayloadSizeUp((payload_size_with_crc - offset) + 1U)  // Add padding only in the last frame.
                 : (presentation_layer_mtu + 1U);
         CanardInternalTxQueueItem* const tqi =
             allocateTxQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);
@@ -550,7 +550,7 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
 int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer)
 {
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
-    if ((ins != NULL) && (transfer != NULL) && ((transfer->payload != NULL) || (transfer->payload_size == 0U)))
+    if ((ins != NULL) && (transfer != NULL) && ((transfer->payload != NULL) || (0U == transfer->payload_size)))
     {
         const size_t  pl_mtu       = getPresentationLayerMTU(ins);
         const int32_t maybe_can_id = makeCANID(transfer, ins->node_id, pl_mtu);
@@ -589,7 +589,7 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_f
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (out_frame != NULL))
     {
-        CanardInternalTxQueueItem* const tqi = ins->_tx_queue;
+        const CanardInternalTxQueueItem* const tqi = ins->_tx_queue;
         if (tqi != NULL)
         {
             out_frame->timestamp_usec  = tqi->deadline_usec;
@@ -638,7 +638,7 @@ uint16_t canardDSDLFloat16Serialize(const CanardIEEE754Binary32 value)
     const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT NOSONAR
     const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT NOSONAR
     const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT NOSONAR
-    Float32Bits       in         = {.real = value};
+    Float32Bits       in         = {.real = value};                     // NOSONAR
     const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT
     in.bits ^= sign;
     uint16_t out = 0;
