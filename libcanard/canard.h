@@ -256,9 +256,11 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate,
 /// The time complexity is O(s+t), where s is the amount of payload in the transfer, and t is the number of
 /// frames already enqueued in the transmission queue.
 ///
-/// The heap memory requirement is one allocation per transport frame. In other words, a single-frame transfer takes
-/// one allocation; a multi-frame transfer of N frames takes N allocations. The maximum size of each allocation is
-/// sizeof(CanardInternalTxQueueItem) plus MTU.
+/// The heap memory requirement is one allocation per transport frame.
+/// A single-frame transfer takes one allocation; a multi-frame transfer of N frames takes N allocations.
+/// The maximum size of each allocation is sizeof(CanardInternalTxQueueItem) plus MTU,
+/// where sizeof(CanardInternalTxQueueItem) is at most 32 bytes on any conventional platform (typically smaller).
+/// For example, if the MTU is 64 bytes, the allocation size will never exceed 96 bytes on any conventional platform.
 int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
 /// Access the top element of the prioritized transmission queue. The queue itself is not modified (i.e., the
@@ -305,6 +307,14 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_f
 /// The time complexity is constant.
 void canardTxPop(CanardInstance* const ins);
 
+/// If any of the input pointers are NULL, does nothing and returns a negated invalid argument error immediately.
+/// Any value of iface_index is accepted; that is, up to 256 redundant transports are supported.
+/// The interface from which the transfer is accepted is always the same as iface_index.
+/// A frame that initiates a new transfer may require up to two heap allocations: one of size
+/// sizeof(CanardInternalRxSession) (which never exceeds 64 bytes on any conventional platform),
+/// and the other of size CanardRxMetadata.payload_size_max, as returned by the application.
+/// The first allocation will not take place if a transfer under this session was seen earlier (i.e., the state
+/// already exists).
 int8_t canardRxAccept(CanardInstance* const       ins,
                       const CanardCANFrame* const frame,
                       const uint8_t               iface_index,

@@ -114,7 +114,11 @@ CANARD_INTERNAL uint32_t makeServiceSessionSpecifier(const uint16_t service_id,
 
 // ---------------------------------------- TRANSMISSION ----------------------------------------
 
-/// The fields are ordered to minimize padding on all platforms.
+/// The memory requirement model provided in the documentation assumes that the maximum size of this structure never
+/// exceeds 32 bytes on any conventional platform. The sizeof() of this structure, per the C standard, assumes that
+/// the length of the flex array member is zero.
+/// A user that needs a detailed analysis of the worst-case memory consumption may compute the size of this structure
+/// for the particular platform at hand manually or by evaluating its sizeof().
 typedef struct CanardInternalTxQueueItem
 {
     struct CanardInternalTxQueueItem* next;
@@ -492,22 +496,22 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const ins,
 
 // ---------------------------------------- RECEPTION ----------------------------------------
 
-/// The fields are ordered to minimize padding on all platforms.
+/// The memory requirement model provided in the documentation assumes that the maximum size of this structure never
+/// exceeds 64 bytes on any conventional platform.
+/// A user that needs a detailed analysis of the worst-case memory consumption may compute the size of this structure
+/// for the particular platform at hand manually or by evaluating its sizeof().
 typedef struct CanardInternalRxSession
 {
     struct CanardInternalRxSession* next;
 
-    size_t   payload_capacity;  ///< Payload past this limit may be discarded by the library.
-    size_t   payload_size;      ///< How many bytes received so far.
-    uint8_t* payload;
-
+    size_t   payload_capacity;          ///< Payload past this limit may be discarded by the library.
+    size_t   payload_size;              ///< How many bytes received so far.
+    uint8_t* payload;                   ///< Allocated once when the first frame of the transfer is recevied.
     uint64_t timestamp_usec;            ///< Time of last update of this session. Used for removal on timeout.
     uint32_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
-
-    const uint32_t session_specifier;  ///< Differentiates this session from other sessions.
-
-    uint16_t calculated_crc;  ///< Updated with the received payload in real time.
-    uint8_t  iface_index;
+    uint32_t session_specifier;         ///< Differentiates this session from other sessions.
+    uint16_t calculated_crc;            ///< Updated with the received payload in real time.
+    uint8_t  iface_index;               ///< Arbitrary value in [0, 255].
     uint8_t  transfer_id;
     bool     next_toggle;
 } CanardInternalRxSession;
@@ -613,4 +617,17 @@ void canardTxPop(CanardInstance* const ins)
         ins->heap_free(ins, ins->_tx_queue);
         ins->_tx_queue = next;
     }
+}
+
+int8_t canardRxAccept(CanardInstance* const       ins,
+                      const CanardCANFrame* const frame,
+                      const uint8_t               iface_index,
+                      CanardTransfer* const       out_transfer)
+{
+    int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
+    if ((ins != NULL) && (frame != NULL) && (out_transfer != NULL))
+    {
+        (void) iface_index;
+    }
+    return out;
 }
