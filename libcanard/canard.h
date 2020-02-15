@@ -312,10 +312,25 @@ void canardTxPop(CanardInstance* const ins);
 ///     - The payload pointer of the input frame is NULL while its size is non-zero.
 ///     - The CAN ID of the input frame is not less than 2**29=0x20000000.
 ///
+/// RX filter callback behavior?
+///
+/// The function returns zero if any of the following conditions are true; the general policy is that protocol errors
+/// are not escalated because they do not construe a node-local error:
+///     - The received frame is not a valid UAVCAN/CAN transport frame; in this case the frame is silently ignored.
+///     - The received frame is a valid UAVCAN/CAN transport frame, but it belongs to a session that is not
+///       relevant to the application (i.e., the application reported via the RX filter callback that the library
+///       need not receive transfers from this session).
+///     - The received frame is a valid UAVCAN/CAN transport frame, but it did not complete a transfer, or it belongs
+///       to an invalid frame sequence.
+///
 /// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
 /// that is, any MTU is accepted.
+///
 /// Any value of iface_index is accepted; that is, up to 256 redundant transports are supported.
 /// The interface from which the transfer is accepted is always the same as iface_index.
+///
+///
+///
 /// A frame that initiates a new transfer may require up to two heap allocations: one of size
 /// sizeof(CanardInternalRxSession) (which never exceeds 64 bytes on any conventional platform),
 /// and the other of size CanardRxMetadata.payload_size_max, as returned by the application.

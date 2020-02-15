@@ -506,14 +506,13 @@ typedef struct CanardInternalRxSession
 {
     struct CanardInternalRxSession* next;
 
-    size_t   payload_capacity;          ///< Payload past this limit may be discarded by the library.
-    size_t   payload_size;              ///< How many bytes received so far.
-    uint8_t* payload;                   ///< Allocated once when the first frame of the transfer is recevied.
-    uint64_t timestamp_usec;            ///< Time of last update of this session. Used for removal on timeout.
-    uint64_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
-    uint32_t session_specifier;         ///< Differentiates this session from other sessions.
-    uint16_t calculated_crc;            ///< Updated with the received payload in real time.
-    uint8_t  iface_index;               ///< Arbitrary value in [0, 255].
+    size_t   payload_capacity;   ///< Payload past this limit may be discarded by the library.
+    size_t   payload_size;       ///< How many bytes received so far.
+    uint8_t* payload;            ///< Allocated once when the first frame of the transfer is received.
+    uint64_t timestamp_usec;     ///< Time of last update of this session. Used for removal on timeout.
+    uint32_t session_specifier;  ///< Differentiates this session from other sessions.
+    uint16_t calculated_crc;     ///< Updated with the received payload in real time.
+    uint8_t  iface_index;        ///< Arbitrary value in [0, 255].
     uint8_t  transfer_id;
     bool     next_toggle;
 } CanardInternalRxSession;
@@ -521,6 +520,8 @@ typedef struct CanardInternalRxSession
 /// High-level transport frame model.
 typedef struct
 {
+    uint64_t timestamp_usec;
+
     CanardPriority priority;
 
     CanardTransferKind transfer_kind;
@@ -548,6 +549,7 @@ CANARD_INTERNAL bool tryParseFrame(const CanardFrame* const frame, FrameModel* c
     if (frame->payload_size > 0)
     {
         CANARD_ASSERT(frame->payload != NULL);
+        out_result->timestamp_usec = frame->timestamp_usec;
 
         // CAN ID parsing.
         const uint32_t can_id      = frame->extended_can_id;
@@ -584,20 +586,95 @@ CANARD_INTERNAL bool tryParseFrame(const CanardFrame* const frame, FrameModel* c
         out_result->start_of_transfer = ((tail & TAIL_START_OF_TRANSFER) != 0);
         out_result->end_of_transfer   = ((tail & TAIL_END_OF_TRANSFER) != 0);
         out_result->toggle            = ((tail & TAIL_TOGGLE) != 0);
-        valid                         = valid && (out_result->start_of_transfer ? out_result->toggle : true);
+
+        // Final validation.
+        valid = valid && (out_result->start_of_transfer ? out_result->toggle : true);  // Protocol version check.
+        valid = valid && ((out_result->source_node_id == CANARD_NODE_ID_UNSET)
+                              ? (out_result->start_of_transfer && out_result->end_of_transfer)  // Single-frame.
+                              : true);
     }
     return valid;
 }
 
-CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const   ins,
-                                   const FrameModel* const model,
-                                   const uint8_t           iface_index,
-                                   CanardTransfer* const   out_transfer)
+CANARD_INTERNAL CanardRxMetadata callRxFilter(const CanardInstance* const ins, const FrameModel* const model);
+CANARD_INTERNAL CanardRxMetadata callRxFilter(const CanardInstance* const ins, const FrameModel* const model)
+{
+    CANARD_ASSERT(ins->rx_filter != NULL);
+    return ins->rx_filter(ins, model->port_id, model->transfer_kind, model->source_node_id);
+}
+
+CANARD_INTERNAL void initRxTransferFromFrame(const FrameModel* const model, CanardTransfer* const out_transfer);
+CANARD_INTERNAL void initRxTransferFromFrame(const FrameModel* const model, CanardTransfer* const out_transfer)
+{
+    CANARD_ASSERT(model != NULL);
+    CANARD_ASSERT(model->payload != NULL);
+    CANARD_ASSERT(out_transfer != NULL);
+    out_transfer->timestamp_usec = model->timestamp_usec;
+    out_transfer->priority       = model->priority;
+    out_transfer->transfer_kind  = model->transfer_kind;
+    out_transfer->port_id        = model->port_id;
+    out_transfer->remote_node_id = model->source_node_id;
+    out_transfer->transfer_id    = model->transfer_id;
+    out_transfer->payload_size   = model->payload_size;
+    out_transfer->payload        = model->payload;
+}
+
+CANARD_INTERNAL CanardInternalRxSession* findRxSession(CanardInstance* const ins, const uint32_t session_specifier);
+CANARD_INTERNAL CanardInternalRxSession* findRxSession(CanardInstance* const ins, const uint32_t session_specifier)
+{
+    CANARD_ASSERT(ins != NULL);
+    // The linear search should be replaced with O(log n) at least, O(1) is preferred. Please help us here.
+    CanardInternalRxSession* p = ins->_rx_sessions;
+    while (p != NULL)
+    {
+        if (p->session_specifier == session_specifier)
+        {
+            break;
+        }
+        p = p->next;
+    }
+    return p;
+}
+
+CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const         ins,
+                                   const FrameModel* const       model,
+                                   const uint8_t                 iface_index,
+                                   const CanardRxMetadata* const rx_meta,
+                                   CanardTransfer* const         out_transfer);
+CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const         ins,
+                                   const FrameModel* const       model,
+                                   const uint8_t                 iface_index,
+                                   const CanardRxMetadata* const rx_meta,
+                                   CanardTransfer* const         out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(model != NULL);
     CANARD_ASSERT(model->payload != NULL);
     CANARD_ASSERT(out_transfer != NULL);
+
+    uint32_t session_specifier = UINT32_MAX;
+    if (model->transfer_kind == CanardTransferKindMessage)
+    {
+        session_specifier = makeMessageSessionSpecifier(model->port_id, model->source_node_id);
+    }
+    else if ((model->transfer_kind == CanardTransferKindRequest) ||
+             (model->transfer_kind == CanardTransferKindResponse))
+    {
+        session_specifier = makeServiceSessionSpecifier(model->port_id,
+                                                        model->transfer_kind == CanardTransferKindRequest,
+                                                        model->source_node_id,
+                                                        model->destination_node_id);
+    }
+    else
+    {
+        CANARD_ASSERT(false);  // Internal protocol violation. Not expected to happen.
+    }
+
+    (void) rx_meta;
+    CanardInternalRxSession* session = findRxSession(ins, session_specifier);
+    if (NULL == session)
+    {
+    }
 
     int8_t out = 0;
 
@@ -721,7 +798,19 @@ int8_t canardRxAccept(CanardInstance* const    ins,
         FrameModel model = {0};
         if (tryParseFrame(frame, &model))
         {
-            out = acceptFrame(ins, &model, iface_index, out_transfer);
+            const CanardRxMetadata rx_meta = callRxFilter(ins, &model);
+            if (rx_meta.transfer_id_timeout_usec > 0U)
+            {
+                if (model.source_node_id == CANARD_NODE_ID_UNSET)
+                {
+                    initRxTransferFromFrame(&model, out_transfer);
+                    out = 1;
+                }
+                else
+                {
+                    out = acceptFrame(ins, &model, iface_index, &rx_meta, out_transfer);
+                }
+            }
         }
         else
         {
