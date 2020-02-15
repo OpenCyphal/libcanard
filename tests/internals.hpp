@@ -16,9 +16,9 @@ struct TxQueueItem final
 {
     TxQueueItem* next = nullptr;
 
-    std::uint32_t id            = 0;
     std::uint64_t deadline_usec = 0;
     std::size_t   payload_size  = 0;
+    std::uint32_t id            = 0;
 
     std::array<std::uint8_t, 1> payload{};  // The real definition has a flex array here.
 
