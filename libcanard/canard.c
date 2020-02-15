@@ -10,7 +10,8 @@
 /// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
 /// To disable assertion checks completely, make it expand into `(void)(0)`.
 #ifndef CANARD_ASSERT
-#    define CANARD_ASSERT assert
+// Intentional violation of MISRA: assertion macro cannot be replaced with a function definition.
+#    define CANARD_ASSERT(x) assert(x)  // NOSONAR
 #endif
 
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
@@ -619,20 +620,119 @@ CANARD_INTERNAL bool tryParseFrame(const CanardFrame* const frame, FrameModel* c
     return valid;
 }
 
-CANARD_INTERNAL void initRxTransferFromFrame(const FrameModel* const model, CanardTransfer* const out_transfer);
-CANARD_INTERNAL void initRxTransferFromFrame(const FrameModel* const model, CanardTransfer* const out_transfer)
+CANARD_INTERNAL void initRxTransferFromFrame(const FrameModel* const frame, CanardTransfer* const out_transfer);
+CANARD_INTERNAL void initRxTransferFromFrame(const FrameModel* const frame, CanardTransfer* const out_transfer)
 {
-    CANARD_ASSERT(model != NULL);
-    CANARD_ASSERT(model->payload != NULL);
+    CANARD_ASSERT(frame != NULL);
+    CANARD_ASSERT(frame->payload != NULL);
     CANARD_ASSERT(out_transfer != NULL);
-    out_transfer->timestamp_usec = model->timestamp_usec;
-    out_transfer->priority       = model->priority;
-    out_transfer->transfer_kind  = model->transfer_kind;
-    out_transfer->port_id        = model->port_id;
-    out_transfer->remote_node_id = model->source_node_id;
-    out_transfer->transfer_id    = model->transfer_id;
-    out_transfer->payload_size   = model->payload_size;
-    out_transfer->payload        = model->payload;
+    out_transfer->timestamp_usec = frame->timestamp_usec;
+    out_transfer->priority       = frame->priority;
+    out_transfer->transfer_kind  = frame->transfer_kind;
+    out_transfer->port_id        = frame->port_id;
+    out_transfer->remote_node_id = frame->source_node_id;
+    out_transfer->transfer_id    = frame->transfer_id;
+    out_transfer->payload_size   = frame->payload_size;
+    out_transfer->payload        = frame->payload;
+}
+
+CANARD_INTERNAL int8_t updateRxSession(RxSession* const        rxs,
+                                       const FrameModel* const frame,
+                                       const uint8_t           iface_index,
+                                       CanardTransfer* const   out_transfer,
+                                       const CanardMicrosecond transfer_id_timeout_usec,
+                                       const size_t            payload_size_bytes_max);
+CANARD_INTERNAL int8_t updateRxSession(RxSession* const        rxs,
+                                       const FrameModel* const frame,
+                                       const uint8_t           iface_index,
+                                       CanardTransfer* const   out_transfer,
+                                       const CanardMicrosecond transfer_id_timeout_usec,
+                                       const size_t            payload_size_bytes_max)
+{
+    CANARD_ASSERT(rxs != NULL);
+    CANARD_ASSERT(frame != NULL);
+    CANARD_ASSERT(frame->payload != NULL);
+    CANARD_ASSERT(out_transfer != NULL);
+
+    int8_t out = 0;
+
+    (void) iface_index;
+    (void) transfer_id_timeout_usec;
+    (void) payload_size_bytes_max;
+
+    return out;
+}
+
+CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const   ins,
+                                   const FrameModel* const frame,
+                                   const uint8_t           iface_index,
+                                   CanardTransfer* const   out_transfer);
+CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const   ins,
+                                   const FrameModel* const frame,
+                                   const uint8_t           iface_index,
+                                   CanardTransfer* const   out_transfer)
+{
+    CANARD_ASSERT(ins != NULL);
+    CANARD_ASSERT(frame != NULL);
+    CANARD_ASSERT(frame->payload != NULL);
+    CANARD_ASSERT((CANARD_NODE_ID_UNSET == frame->destination_node_id) || (ins->node_id == frame->destination_node_id));
+    CANARD_ASSERT(out_transfer != NULL);
+
+    // Find subscription. This is the reason the function has a linear time complexity from the number of subscriptions.
+    CanardInternalRxSubscription* sub = ins->_rx_subscriptions[(size_t) frame->transfer_kind];
+    while ((sub != NULL) && (sub->port_id != frame->port_id))
+    {
+        sub = sub->next;
+    }
+
+    // If the subscription is not found, that means that the application doesn't want this transfer. Ignore the frame.
+    int8_t out = 0;
+    if (sub != NULL)
+    {
+        CANARD_ASSERT(sub->port_id == frame->port_id);
+        if (frame->source_node_id <= CANARD_NODE_ID_MAX)
+        {
+            // If such session does not exist, create it. This only makes sense if this is the first frame of a
+            // transfer, otherwise, we won't be able to receive the transfer anyway so we don't bother.
+            if ((NULL == sub->sessions[frame->source_node_id]) && frame->start_of_transfer)
+            {
+                RxSession* const rxs =
+                    (RxSession*) ins->heap_allocate(ins, sizeof(RxSession) + sub->payload_size_bytes_max);
+                sub->sessions[frame->source_node_id] = rxs;
+                if (rxs != NULL)
+                {
+                    rxs->transfer_timestamp_usec = frame->timestamp_usec;
+                    rxs->payload_size            = 0U;
+                    rxs->calculated_crc          = CRC_INITIAL;
+                    rxs->toggle_and_transfer_id  = TAIL_TOGGLE;
+                }
+                else
+                {
+                    out = -CANARD_ERROR_OUT_OF_MEMORY;
+                }
+            }
+            // There are two possible reasons why the session may not exist: 1. OOM; 2. SOT-miss.
+            if (sub->sessions[frame->source_node_id] != NULL)
+            {
+                CANARD_ASSERT(out == 0);
+                out = updateRxSession(sub->sessions[frame->source_node_id],
+                                      frame,
+                                      iface_index,
+                                      out_transfer,
+                                      sub->transfer_id_timeout_usec,
+                                      sub->payload_size_bytes_max);
+            }
+        }
+        else
+        {
+            CANARD_ASSERT(frame->source_node_id == CANARD_NODE_ID_UNSET);
+            // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
+            initRxTransferFromFrame(frame, out_transfer);
+            out = 1;
+        }
+    }
+    CANARD_ASSERT(out <= 1);
+    return out;
 }
 
 // ---------------------------------------- PUBLIC API ----------------------------------------
@@ -746,23 +846,18 @@ int8_t canardRxAccept(CanardInstance* const    ins,
         FrameModel model = {0};
         if (tryParseFrame(frame, &model))
         {
-            if (true)  // TODO stub
+            if ((CANARD_NODE_ID_UNSET == model.destination_node_id) || (ins->node_id == model.destination_node_id))
             {
-                if (model.source_node_id == CANARD_NODE_ID_UNSET)
-                {
-                    initRxTransferFromFrame(&model, out_transfer);
-                    out = 1;
-                }
-                else
-                {
-                    (void) iface_index;
-                    out = -1;  // TODO stub
-                }
+                out = acceptFrame(ins, &model, iface_index, out_transfer);
+            }
+            else
+            {
+                out = 0;  // Mis-addressed frame is obviously not an error.
             }
         }
         else
         {
-            out = 0;  // Bad input frame is obviously not an error.
+            out = 0;  // A non-UAVCAN/CAN input frame is obviously not an error.
         }
     }
     return out;
@@ -774,46 +869,49 @@ int8_t canardRxSubscribe(CanardInstance* const    ins,
                          const size_t             payload_size_bytes_max,
                          const CanardMicrosecond  transfer_id_timeout_usec)
 {
-    const uint8_t transfer_kind_index = (uint8_t) transfer_kind;
-    int8_t        out                 = -CANARD_ERROR_INVALID_ARGUMENT;
-    if ((ins != NULL) && (transfer_kind_index < CANARD_NUM_TRANSFER_KINDS))
+    int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
+    const size_t tk  = (size_t) transfer_kind;
+    if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
-        canardRxUnsubscribe(ins, transfer_kind, port_id);  // Reset to the initial state.
-
-        CanardInternalRxSubscription* const subs =
-            (CanardInternalRxSubscription*) ins->heap_allocate(ins, sizeof(CanardInternalRxSubscription));
-        if (subs != NULL)
+        out = canardRxUnsubscribe(ins, transfer_kind, port_id);  // Reset to the initial state.
+        if (out >= 0)
         {
-            for (size_t i = 0; i < SESSIONS_PER_SUBSCRIPTION; i++)
+            CanardInternalRxSubscription* const subs =
+                (CanardInternalRxSubscription*) ins->heap_allocate(ins, sizeof(CanardInternalRxSubscription));
+            if (subs != NULL)
             {
-                // The sessions will be created ad-hoc. Normally, for a low-jitter deterministic system,
-                // we could have pre-allocated sessions here, but that requires too much memory to be feasible.
-                subs->sessions[i] = NULL;
+                for (size_t i = 0; i < SESSIONS_PER_SUBSCRIPTION; i++)
+                {
+                    // The sessions will be created ad-hoc. Normally, for a low-jitter deterministic system,
+                    // we could have pre-allocated sessions here, but that requires too much memory to be feasible.
+                    subs->sessions[i] = NULL;
+                }
+                subs->transfer_id_timeout_usec = transfer_id_timeout_usec;
+                subs->payload_size_bytes_max   = payload_size_bytes_max;
+                subs->port_id                  = port_id;
+                subs->next                     = ins->_rx_subscriptions[tk];
+                ins->_rx_subscriptions[tk]     = subs;
+                out                            = (out > 0) ? 0 : 1;
             }
-            subs->transfer_id_timeout_usec = transfer_id_timeout_usec;
-            subs->payload_size_bytes_max   = payload_size_bytes_max;
-            subs->port_id                  = port_id;
-            subs->next                     = ins->_rx_subscriptions[transfer_kind_index];
-
-            ins->_rx_subscriptions[transfer_kind_index] = subs;
-
-            out = 0;
-        }
-        else
-        {
-            out = -CANARD_ERROR_OUT_OF_MEMORY;
+            else
+            {
+                out = -CANARD_ERROR_OUT_OF_MEMORY;
+            }
         }
     }
     return out;
 }
 
-void canardRxUnsubscribe(CanardInstance* const ins, const CanardTransferKind transfer_kind, const CanardPortID port_id)
+int8_t canardRxUnsubscribe(CanardInstance* const    ins,
+                           const CanardTransferKind transfer_kind,
+                           const CanardPortID       port_id)
 {
-    const uint8_t transfer_kind_index = (uint8_t) transfer_kind;
-    if ((ins != NULL) && (transfer_kind_index < CANARD_NUM_TRANSFER_KINDS))
+    int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
+    const size_t tk  = (size_t) transfer_kind;
+    if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
         CanardInternalRxSubscription* prev = NULL;
-        CanardInternalRxSubscription* subs = ins->_rx_subscriptions[transfer_kind_index];
+        CanardInternalRxSubscription* subs = ins->_rx_subscriptions[tk];
         while ((subs != NULL) && (subs->port_id != port_id))
         {
             prev = subs;
@@ -823,13 +921,15 @@ void canardRxUnsubscribe(CanardInstance* const ins, const CanardTransferKind tra
         if (subs != NULL)
         {
             CANARD_ASSERT(subs->port_id == port_id);
+            out = 1;
+
             if (prev != NULL)
             {
                 prev->next = subs->next;
             }
             else
             {
-                ins->_rx_subscriptions[transfer_kind_index] = subs->next;
+                ins->_rx_subscriptions[tk] = subs->next;
             }
 
             for (size_t i = 0; i < SESSIONS_PER_SUBSCRIPTION; i++)
@@ -839,5 +939,10 @@ void canardRxUnsubscribe(CanardInstance* const ins, const CanardTransferKind tra
             }
             ins->heap_free(ins, subs);
         }
+        else
+        {
+            out = 0;
+        }
     }
+    return out;
 }

@@ -322,13 +322,10 @@ void canardTxPop(CanardInstance* const ins);
 /// depending on whether the frame is of the message kind of of the service kind.
 /// Observe that the time complexity is invariant to the network configuration (such as the number of online nodes),
 /// which is an important design guarantee for real-time applications.
+/// Unicast frames where the destination does not equal the local node-ID are discarded in constant time.
 /// Frames that are not valid UAVCAN/CAN frames are discarded in constant time.
 ///
-/// A frame that initiates a new transfer may require up to two heap allocations: one of size
-/// sizeof(CanardInternalRxSession) (which never exceeds 64 bytes on any conventional platform),
-/// and the other of size CanardRxMetadata.payload_size_max, as returned by the application.
-/// The first allocation will not take place if a transfer under this session was seen earlier (i.e., the state
-/// already exists).
+/// HEAP MEMORY REQUIREMENT MODEL.
 int8_t canardRxAccept(CanardInstance* const    ins,
                       const CanardFrame* const frame,
                       const uint8_t            iface_index,
@@ -343,11 +340,23 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// will be either real-time function nodes where time determinism is critical, or bootloaders where time determinism
 /// is usually not required but the amount of available memory is not an issue (the main constraint is ROM, not RAM).
 ///
-/// HEAP MEMORY REQUIREMENT MODEL.
-/// RETURN VALUES.
-///
 /// If such subscription already exists, it will be removed first as if canardRxUnsubscribe() was
 /// invoked by the application, and then re-created anew with the new parameters.
+///
+/// Once a new RX session is allocated, it will never be removed as long as the subscription is active.
+/// The rationale for this behavior is that real-time networks typically do not change their configuration at runtime;
+/// hence, it is possible to reduce the worst-case computational complexity of the library routines by never
+/// deallocating sessions once allocated. If this behavior is found to be undesirable, the application can force
+/// deallocation of all unused states by re-creating the subscription anew.
+///
+/// HEAP MEMORY REQUIREMENT MODEL.
+///
+/// The return value is 1 if a new subscription has been created as requested.
+/// The return value is 0 if such subscription existed at the time the function was invoked. In this case,
+/// the existing subscription is terminated and then a new one is created in its place. Pending transfers may be lost.
+/// The return value is negative in case of an error: a negated invalid argument error code if any of the arguments are
+/// invalid, or the negated out-of-memory error if the new subscription could not be allocated due to the heap memory
+/// being exhausted.
 ///
 /// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
 int8_t canardRxSubscribe(CanardInstance* const    ins,
@@ -357,12 +366,18 @@ int8_t canardRxSubscribe(CanardInstance* const    ins,
                          const CanardMicrosecond  transfer_id_timeout_usec);
 
 /// Reverse the effect of canardRxSubscribe().
-/// If any of the arguments are invalid or if such subscription does not exist, the function has no effect.
 /// If the subscription is found, all its heap memory is de-allocated; to determine the amount of memory freed,
 /// please refer to the heap memory requirement models of canardRxSubscribe() and canardRxAccept().
+/// This function does not allocate new heap memory.
+///
+/// The return value is 1 if such subscription existed (and, therefore, it was removed).
+/// The return value is 0 if such subscription does not exist. In this case, the function has no effect.
+/// The return value is a negated invalid argument error if any of the input arguments are invalid.
 ///
 /// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
-void canardRxUnsubscribe(CanardInstance* const ins, const CanardTransferKind transfer_kind, const CanardPortID port_id);
+int8_t canardRxUnsubscribe(CanardInstance* const    ins,
+                           const CanardTransferKind transfer_kind,
+                           const CanardPortID       port_id);
 
 #ifdef __cplusplus
 }

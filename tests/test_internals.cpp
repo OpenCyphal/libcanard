@@ -29,8 +29,7 @@ TEST_CASE("SessionSpecifier")
 
 TEST_CASE("getPresentationLayerMTU")
 {
-    auto ins =
-        canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free, &helpers::rejectAllRxFilter);
+    auto ins = canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free);
     REQUIRE(63 == internals::getPresentationLayerMTU(&ins));  // This is the default.
     ins.mtu_bytes = 0;
     REQUIRE(7 == internals::getPresentationLayerMTU(&ins));
@@ -189,8 +188,7 @@ TEST_CASE("findTxQueueSupremum")
     using internals::findTxQueueSupremum;
     using TxQueueItem = internals::TxQueueItem;
 
-    auto ins =
-        canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free, &helpers::rejectAllRxFilter);
+    auto ins = canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free);
 
     const auto find = [&](std::uint32_t x) -> TxQueueItem* { return findTxQueueSupremum(&ins, x); };
 

@@ -29,18 +29,6 @@ inline void free(CanardInstance* const ins, void* const pointer)
 }
 }  // namespace dummy_allocator
 
-inline auto rejectAllRxFilter(const CanardInstance* const ins,
-                              const std::uint16_t         port_id,
-                              const CanardTransferKind    transfer_kind,
-                              const std::uint8_t          source_node_id) -> CanardRxMetadata
-{
-    (void) ins;
-    (void) port_id;
-    (void) transfer_kind;
-    (void) source_node_id;
-    return CanardRxMetadata{};
-}
-
 /// An allocator that sits on top of the standard malloc() providing additional testing capabilities.
 /// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
 class TestAllocator
@@ -123,9 +111,7 @@ public:
 /// An enhancing wrapper over the library to remove boilerplate from the tests.
 class Instance
 {
-    CanardInstance canard_ = canardInit(&Instance::trampolineAllocate,  //
-                                        &Instance::trampolineDeallocate,
-                                        &Instance::trampolineApplyRxFilter);
+    CanardInstance canard_ = canardInit(&Instance::trampolineAllocate, &Instance::trampolineDeallocate);
     TestAllocator  allocator_;
 
     static auto trampolineAllocate(CanardInstance* const ins, const std::size_t amount) -> void*
@@ -138,27 +124,6 @@ class Instance
     {
         auto p = reinterpret_cast<Instance*>(ins->user_reference);
         p->allocator_.deallocate(pointer);
-    }
-
-    static auto trampolineApplyRxFilter(const CanardInstance* const ins,
-                                        const std::uint16_t         port_id,
-                                        const CanardTransferKind    transfer_kind,
-                                        const std::uint8_t          source_node_id) -> CanardRxMetadata
-    {
-        auto p = reinterpret_cast<const Instance*>(ins->user_reference);
-        return p->applyRxFilter(port_id, transfer_kind, source_node_id);
-    }
-
-protected:
-    /// The default behavior is to discard everything. Override to change.
-    [[nodiscard]] virtual auto applyRxFilter(const std::uint16_t      port_id,
-                                             const CanardTransferKind transfer_kind,
-                                             const std::uint8_t       source_node_id) const -> CanardRxMetadata
-    {
-        (void) port_id;
-        (void) transfer_kind;
-        (void) source_node_id;
-        return {};
     }
 
 public:
