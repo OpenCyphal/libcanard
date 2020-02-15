@@ -88,7 +88,7 @@ typedef struct
     /// The useful data in the frame. The length value is not to be confused with DLC!
     size_t      payload_size;
     const void* payload;
-} CanardCANFrame;
+} CanardFrame;
 
 /// Conversion look-up tables between CAN DLC and data length.
 extern const uint8_t CanardCANDLCToLength[16];
@@ -289,7 +289,7 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 /// actions are performed.
 ///
 /// The time complexity is constant.
-int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_frame);
+int8_t canardTxPeek(const CanardInstance* const ins, CanardFrame* const out_frame);
 
 /// Remove and free the top element from the prioritized transmission queue.
 /// The application should invoke this function after the top frame obtained through canardTxPeek() has been
@@ -307,7 +307,13 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_f
 /// The time complexity is constant.
 void canardTxPop(CanardInstance* const ins);
 
-/// If any of the input pointers are NULL, does nothing and returns a negated invalid argument error immediately.
+/// The function does nothing and returns a negated invalid argument error immediately if any condition is true:
+///     - Any of the input arguments that are pointers are NULL.
+///     - The payload pointer of the input frame is NULL while its size is non-zero.
+///     - The CAN ID of the input frame is not less than 2**29=0x20000000.
+///
+/// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
+/// that is, any MTU is accepted.
 /// Any value of iface_index is accepted; that is, up to 256 redundant transports are supported.
 /// The interface from which the transfer is accepted is always the same as iface_index.
 /// A frame that initiates a new transfer may require up to two heap allocations: one of size
@@ -315,10 +321,10 @@ void canardTxPop(CanardInstance* const ins);
 /// and the other of size CanardRxMetadata.payload_size_max, as returned by the application.
 /// The first allocation will not take place if a transfer under this session was seen earlier (i.e., the state
 /// already exists).
-int8_t canardRxAccept(CanardInstance* const       ins,
-                      const CanardCANFrame* const frame,
-                      const uint8_t               iface_index,
-                      CanardTransfer* const       out_transfer);
+int8_t canardRxAccept(CanardInstance* const    ins,
+                      const CanardFrame* const frame,
+                      const uint8_t            iface_index,
+                      CanardTransfer* const    out_transfer);
 
 #ifdef __cplusplus
 }

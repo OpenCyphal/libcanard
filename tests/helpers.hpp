@@ -173,11 +173,11 @@ public:
 
     [[nodiscard]] auto txPush(const CanardTransfer& transfer) { return canardTxPush(&canard_, &transfer); }
 
-    [[nodiscard]] auto txPeek(CanardCANFrame& out_frame) const { return canardTxPeek(&canard_, &out_frame); }
+    [[nodiscard]] auto txPeek(CanardFrame& out_frame) const { return canardTxPeek(&canard_, &out_frame); }
 
     void txPop() { canardTxPop(&canard_); }
 
-    [[nodiscard]] auto rxAccept(const CanardCANFrame& frame, const uint8_t iface_index, CanardTransfer& out_transfer)
+    [[nodiscard]] auto rxAccept(const CanardFrame& frame, const uint8_t iface_index, CanardTransfer& out_transfer)
     {
         return canardRxAccept(&canard_, &frame, iface_index, &out_transfer);
     }

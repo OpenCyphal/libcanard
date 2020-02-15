@@ -125,7 +125,7 @@ TEST_CASE("TxBasic0")
     // Pop the queue.
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
     constexpr std::uint16_t CRC8 = 0x178DU;
-    CanardCANFrame          frame{};
+    CanardFrame             frame{};
     REQUIRE(1 == ins.txPeek(frame));
     REQUIRE(frame.payload_size == 12);
     REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 8));

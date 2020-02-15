@@ -86,6 +86,8 @@ CANARD_INTERNAL uint16_t crcAdd(const uint16_t crc, const size_t size, const voi
 #define FLAG_SERVICE_NOT_MESSAGE (UINT32_C(1) << 25U)
 #define FLAG_ANONYMOUS_MESSAGE (UINT32_C(1) << 24U)
 #define FLAG_REQUEST_NOT_RESPONSE (UINT32_C(1) << 24U)
+#define FLAG_RESERVED_23 (UINT32_C(1) << 23U)
+#define FLAG_RESERVED_07 (UINT32_C(1) << 7U)
 
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id);
 CANARD_INTERNAL uint32_t makeMessageSessionSpecifier(const uint16_t subject_id, const uint8_t src_node_id)
@@ -508,13 +510,101 @@ typedef struct CanardInternalRxSession
     size_t   payload_size;              ///< How many bytes received so far.
     uint8_t* payload;                   ///< Allocated once when the first frame of the transfer is recevied.
     uint64_t timestamp_usec;            ///< Time of last update of this session. Used for removal on timeout.
-    uint32_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
+    uint64_t transfer_id_timeout_usec;  ///< When (current time - update timestamp) exceeds this, it's dead.
     uint32_t session_specifier;         ///< Differentiates this session from other sessions.
     uint16_t calculated_crc;            ///< Updated with the received payload in real time.
     uint8_t  iface_index;               ///< Arbitrary value in [0, 255].
     uint8_t  transfer_id;
     bool     next_toggle;
 } CanardInternalRxSession;
+
+/// High-level transport frame model.
+typedef struct
+{
+    CanardPriority priority;
+
+    CanardTransferKind transfer_kind;
+    uint16_t           port_id;
+    uint8_t            source_node_id;
+    uint8_t            destination_node_id;
+
+    uint8_t transfer_id;
+    bool    start_of_transfer;
+    bool    end_of_transfer;
+    bool    toggle;
+
+    size_t         payload_size;
+    const uint8_t* payload;
+} FrameModel;
+
+/// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid UAVCAN/CAN frame.
+CANARD_INTERNAL bool tryParseFrame(const CanardFrame* const frame, FrameModel* const out_result);
+CANARD_INTERNAL bool tryParseFrame(const CanardFrame* const frame, FrameModel* const out_result)
+{
+    CANARD_ASSERT(frame != NULL);
+    CANARD_ASSERT(frame->extended_can_id <= CAN_EXT_ID_MASK);
+    CANARD_ASSERT(out_result != NULL);
+    bool valid = false;
+    if (frame->payload_size > 0)
+    {
+        CANARD_ASSERT(frame->payload != NULL);
+
+        // CAN ID parsing.
+        const uint32_t can_id      = frame->extended_can_id;
+        out_result->priority       = (CanardPriority)((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
+        out_result->source_node_id = (uint8_t)(can_id & CANARD_NODE_ID_MAX);
+        if (0 == (can_id & FLAG_SERVICE_NOT_MESSAGE))
+        {
+            valid                     = (0 == (can_id & FLAG_RESERVED_23)) && (0 == (can_id & FLAG_RESERVED_07));
+            out_result->transfer_kind = CanardTransferKindMessage;
+            out_result->port_id       = (uint16_t)((can_id >> OFFSET_SUBJECT_ID) & CANARD_SUBJECT_ID_MAX);
+            if ((can_id & FLAG_ANONYMOUS_MESSAGE) != 0)
+            {
+                out_result->source_node_id = CANARD_NODE_ID_UNSET;
+            }
+            out_result->destination_node_id = CANARD_NODE_ID_UNSET;
+        }
+        else
+        {
+            valid = (0 == (can_id & FLAG_RESERVED_23));
+            out_result->transfer_kind =
+                ((can_id & FLAG_REQUEST_NOT_RESPONSE) != 0) ? CanardTransferKindRequest : CanardTransferKindResponse;
+            out_result->port_id             = (uint16_t)((can_id >> OFFSET_SERVICE_ID) & CANARD_SERVICE_ID_MAX);
+            out_result->destination_node_id = (uint8_t)((can_id >> OFFSET_DST_NODE_ID) & CANARD_NODE_ID_MAX);
+        }
+
+        // Payload parsing.
+        out_result->payload_size = frame->payload_size - 1U;  // Cut off the tail byte.
+        out_result->payload      = (const uint8_t*) frame->payload;
+
+        // Tail byte parsing.
+        // Intentional MISRA violation: indexing on a pointer. This is done to avoid pointer arithmetics.
+        const uint8_t tail            = out_result->payload[out_result->payload_size];
+        out_result->transfer_id       = tail & CANARD_TRANSFER_ID_MAX;
+        out_result->start_of_transfer = ((tail & TAIL_START_OF_TRANSFER) != 0);
+        out_result->end_of_transfer   = ((tail & TAIL_END_OF_TRANSFER) != 0);
+        out_result->toggle            = ((tail & TAIL_TOGGLE) != 0);
+        valid                         = valid && (out_result->start_of_transfer ? out_result->toggle : true);
+    }
+    return valid;
+}
+
+CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const   ins,
+                                   const FrameModel* const model,
+                                   const uint8_t           iface_index,
+                                   CanardTransfer* const   out_transfer)
+{
+    CANARD_ASSERT(ins != NULL);
+    CANARD_ASSERT(model != NULL);
+    CANARD_ASSERT(model->payload != NULL);
+    CANARD_ASSERT(out_transfer != NULL);
+
+    int8_t out = 0;
+
+    (void) iface_index;
+
+    return out;
+}
 
 // ---------------------------------------- PUBLIC API ----------------------------------------
 
@@ -587,7 +677,7 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
     return out;
 }
 
-int8_t canardTxPeek(const CanardInstance* const ins, CanardCANFrame* const out_frame)
+int8_t canardTxPeek(const CanardInstance* const ins, CanardFrame* const out_frame)
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (out_frame != NULL))
@@ -619,15 +709,24 @@ void canardTxPop(CanardInstance* const ins)
     }
 }
 
-int8_t canardRxAccept(CanardInstance* const       ins,
-                      const CanardCANFrame* const frame,
-                      const uint8_t               iface_index,
-                      CanardTransfer* const       out_transfer)
+int8_t canardRxAccept(CanardInstance* const    ins,
+                      const CanardFrame* const frame,
+                      const uint8_t            iface_index,
+                      CanardTransfer* const    out_transfer)
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
-    if ((ins != NULL) && (frame != NULL) && (out_transfer != NULL))
+    if ((ins != NULL) && (out_transfer != NULL) && (frame != NULL) && (frame->extended_can_id <= CAN_EXT_ID_MASK) &&
+        ((frame->payload != NULL) || (frame->payload_size == 0)))
     {
-        (void) iface_index;
+        FrameModel model = {0};
+        if (tryParseFrame(frame, &model))
+        {
+            out = acceptFrame(ins, &model, iface_index, out_transfer);
+        }
+        else
+        {
+            out = 0;  // Bad input frame is obviously not an error.
+        }
     }
     return out;
 }
