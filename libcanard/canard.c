@@ -136,7 +136,7 @@ typedef struct CanardInternalTxQueueItem
     // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
     //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
     //    The pointer is bad because it requires us to use pointer arithmetics and adds sizeof(void*) of waste per item.
-    //  - Use a separate memory allocation for data. This is terribly wasteful.
+    //  - Use a separate memory allocation for data. This is terribly wasteful (both time & memory).
     uint8_t payload[];  // NOSONAR
 } CanardInternalTxQueueItem;
 
@@ -265,7 +265,7 @@ CANARD_INTERNAL CanardInternalTxQueueItem* allocateTxQueueItem(CanardInstance* c
                                                                const size_t            payload_size)
 {
     CANARD_ASSERT(ins != NULL);
-    CANARD_ASSERT(payload_size > 0U);  // UAVCAN/CAN doesn't allow zero-payload frames.
+    CANARD_ASSERT(payload_size > 0U);
     CanardInternalTxQueueItem* const out =
         (CanardInternalTxQueueItem*) ins->heap_allocate(ins, sizeof(CanardInternalTxQueueItem) + payload_size);
     if (out != NULL)
@@ -292,7 +292,7 @@ CANARD_INTERNAL CanardInternalTxQueueItem* findTxQueueSupremum(const CanardInsta
     }
     else
     {
-        // The linear search should be replaced with O(log n) at least. Please help us here.
+        // TODO The linear search should be replaced with O(log n) at least. Please help us here.
         while ((out != NULL) && (out->next != NULL) && (out->next->id <= can_id))
         {
             out = out->next;
@@ -520,7 +520,7 @@ typedef struct
     // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
     //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
     //    The pointer is bad because it requires us to use pointer arithmetics and adds sizeof(void*) of waste per item.
-    //  - Use a separate memory allocation for data. This is terribly wasteful.
+    //  - Use a separate memory allocation for data. This is terribly wasteful (both time & memory).
     uint8_t payload[];  // NOSONAR
 } RxSession;
 
@@ -613,7 +613,7 @@ CANARD_INTERNAL bool tryParseFrame(const CanardFrame* const frame, FrameModel* c
 
         // Final validation.
         valid = valid && (out_result->start_of_transfer ? out_result->toggle : true);  // Protocol version check.
-        valid = valid && ((out_result->source_node_id == CANARD_NODE_ID_UNSET)
+        valid = valid && ((CANARD_NODE_ID_UNSET == out_result->source_node_id)
                               ? (out_result->start_of_transfer && out_result->end_of_transfer)  // Single-frame.
                               : true);
     }
@@ -841,7 +841,7 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (out_transfer != NULL) && (frame != NULL) && (frame->extended_can_id <= CAN_EXT_ID_MASK) &&
-        ((frame->payload != NULL) || (frame->payload_size == 0)))
+        ((frame->payload != NULL) || (0 == frame->payload_size)))
     {
         FrameModel model = {0};
         if (tryParseFrame(frame, &model))
