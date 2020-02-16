@@ -140,11 +140,27 @@ typedef struct
 /// This is what we call a time-memory trade-off: we use a large look-up table to ensure deterministic runtime behavior.
 typedef struct CanardRxSubscription
 {
-    struct CanardRxSubscription*    _next;
+    struct CanardRxSubscription* _next;
+
+    /// The current architecture is a sort of an acceptable middle ground between worst-case execution time and memory
+    /// consumption. Instead of statically pre-allocating a dedicated RX session for each remote node-ID here in
+    /// this table, we only keep pointers, which are NULL by default, populating a new RX session dynamically
+    /// on an ad-hoc basis when we first receive a transfer from that node. This is still deterministic because our
+    /// memory allocation routines are assumed to be deterministic and we make at most one allocation per remote node,
+    /// but the disadvantage is that these additional operations increase the upper bound on the execution time.
+    /// Further, the pointers here add an extra indirection, which is bad for systems that leverage cached memory,
+    /// plus a pointer itself takes about 2-8 bytes of memory, too.
+    ///
+    /// A far more predictable and a much simpler approach is to pre-allocate states here statically instead of keeping
+    /// just pointers, but it would push the size of this instance from about 0.5 KiB to ~3 KiB for a typical 32-bit
+    /// system. Since this is a general-purpose library, we have to pick a middle ground so we use the more complex
+    /// but more memory-efficient approach. Implementations that are more optimized for low-jitter real-time
+    /// applications may prefer the other approach.
     struct CanardInternalRxSession* _sessions[CANARD_NODE_ID_MAX + 1U];
-    CanardMicrosecond               _transfer_id_timeout_usec;
-    size_t                          _payload_size_bytes_max;
-    CanardPortID                    _port_id;
+
+    CanardMicrosecond _transfer_id_timeout_usec;
+    size_t            _payload_size_bytes_max;
+    CanardPortID      _port_id;
 } CanardRxSubscription;
 
 typedef void* (*CanardMemoryAllocate)(CanardInstance* ins, size_t amount);
