@@ -27,7 +27,7 @@ extern "C" {
 /// in the negated form (i.e., code 2 returned as -2).
 /// API calls whose return type is not a signer integer cannot fail by contract.
 /// No other error states may occur in the library.
-/// By contract, a deterministic application with a properly sized heap will never encounter any of the listed errors.
+/// By contract, a deterministic application with a properly sized memory pool will never encounter errors.
 /// The error code 1 is not used because -1 is often used as a generic error code in 3rd-party code.
 #define CANARD_ERROR_INVALID_ARGUMENT 2
 #define CANARD_ERROR_OUT_OF_MEMORY 3
@@ -128,10 +128,29 @@ typedef struct
     const void* payload;
 } CanardTransfer;
 
-typedef void* (*CanardHeapAllocate)(CanardInstance* ins, size_t amount);
+/// Transfer subscription state. The application can register its interest in a particular kind of data exchanged
+/// over the bus by creating such subscription objects. Frames that carry data for which there is no active
+/// subscription will be dropped by the library.
+///
+/// WARNING: SUBSCRIPTION INSTANCES SHALL NOT BE COPIED OR MUTATED BY THE APPLICATION.
+/// Every field is named starting with an underscore to emphasize that the application shall not mess with it.
+/// Unfortunately, C, being such a limited language, does not allow us to construct a better API.
+///
+/// The memory footprint of a subscription is large. On a 32-bit platform it slightly exceeds half a KiB.
+/// This is what we call a time-memory trade-off: we use a large look-up table to ensure deterministic runtime behavior.
+typedef struct CanardRxSubscription
+{
+    struct CanardRxSubscription*    _next;
+    struct CanardInternalRxSession* _sessions[CANARD_NODE_ID_MAX + 1U];
+    CanardMicrosecond               _transfer_id_timeout_usec;
+    size_t                          _payload_size_bytes_max;
+    CanardPortID                    _port_id;
+} CanardRxSubscription;
+
+typedef void* (*CanardMemoryAllocate)(CanardInstance* ins, size_t amount);
 
 /// Free as in freedom.
-typedef void (*CanardHeapFree)(CanardInstance* ins, void* pointer);
+typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer);
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
 /// Fields whose names begin with an underscore SHALL NOT be accessed by the application,
@@ -162,35 +181,31 @@ struct CanardInstance
     /// They SHALL be valid function pointers at all times.
     ///
     /// The time complexity parameters given in the API documentation are made on the assumption that
-    /// the heap management functions (allocate and free) have constant time complexity O(1).
+    /// the memory management functions (allocate and free) have constant time complexity O(1).
     ///
-    /// There are only three API functions that may lead to allocation of heap memory:
+    /// There are only two API functions that may lead to allocation of memory:
     ///     - canardTxPush()
     ///     - canardRxAccept()
-    ///     - canardRxSubscribe()
     /// Their exact memory requirement model is specified in their documentation.
-    ///
-    /// By design, the library does not require the application to engage in manual memory management.
-    /// All pointers to heap memory are managed entirely by the library itself, thus eliminating the risk of
-    /// memory leaks in the application.
-    CanardHeapAllocate heap_allocate;
-    CanardHeapFree     heap_free;
+    CanardMemoryAllocate memory_allocate;
+    CanardMemoryFree     memory_free;
 
     /// These fields are for internal use only. Do not access from the application.
-    struct CanardInternalRxSubscription* _rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
-    struct CanardInternalTxQueueItem*    _tx_queue;
+    CanardRxSubscription*             _rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
+    struct CanardInternalTxQueueItem* _tx_queue;
 };
 
 /// Initialize a new library instance.
 /// The default values will be assigned as specified in the structure field documentation.
-/// The time complexity parameters given in the API documentation are made on the assumption that the heap management
+/// The time complexity parameters given in the API documentation are made on the assumption that the memory management
 /// functions (allocate and free) have constant complexity.
 /// If any of the pointers are NULL, the behavior is undefined.
 ///
-/// The instance does not hold any resources itself except the heap memory. If the instance should be de-initialized,
-/// the application shall clear the TX queue by calling the pop function repeatedly, and remove all RX subscriptions.
-/// Once that is done, the instance will be holding no memory resources, so it can be discarded freely.
-CanardInstance canardInit(const CanardHeapAllocate heap_allocate, const CanardHeapFree heap_free);
+/// The instance does not hold any resources itself except the allocated memory.
+/// If the instance should be de-initialized, the application shall clear the TX queue by calling the pop function
+/// repeatedly, and remove all RX subscriptions. Once that is done, the instance will be holding no memory resources,
+/// so it can be discarded freely.
+CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const CanardMemoryFree memory_free);
 
 /// Serializes a transfer into a sequence of transport frames, and inserts them into the prioritized transmission
 /// queue at the appropriate position. Afterwards, the application is supposed to take the enqueued frames from
@@ -219,7 +234,7 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate, const CanardHe
 ///       the counter is incremented by one.
 /// The recommended approach to storing the transfer-ID counters is to use static or member variables.
 /// Sophisticated applications may find this approach unsuitable, in which case O(1) static look-up tables
-/// or heap-allocated data structures should be considered.
+/// or other deterministic data structures should be considered.
 ///
 /// Returns the number of frames enqueued into the prioritized TX queue (which is always a positive number)
 /// in case of success. Returns a negated error code in case of failure. Zero cannot be returned.
@@ -237,14 +252,14 @@ CanardInstance canardInit(const CanardHeapAllocate heap_allocate, const CanardHe
 ///     - If the transfer-ID is above the maximum, the excessive bits are silently masked away
 ///       (i.e., the modulo is computed automatically, so the caller doesn't have to bother).
 ///
-/// An out-of-memory error is returned if a TX frame could not be allocated due to the heap being exhausted.
+/// An out-of-memory error is returned if a TX frame could not be allocated due to the memory being exhausted.
 /// In that case, all previously allocated frames will be purged automatically.
 /// In other words, either all frames of the transfer are enqueued successfully, or none are.
 ///
 /// The time complexity is O(s+t), where s is the amount of payload in the transfer, and t is the number of
 /// frames already enqueued in the transmission queue.
 ///
-/// The heap memory requirement is one allocation per transport frame.
+/// The memory allocation requirement is one allocation per transport frame.
 /// A single-frame transfer takes one allocation; a multi-frame transfer of N frames takes N allocations.
 /// The maximum size of each allocation is sizeof(CanardInternalTxQueueItem) plus MTU,
 /// where sizeof(CanardInternalTxQueueItem) is at most 32 bytes on any conventional platform (typically smaller).
@@ -309,29 +324,34 @@ void canardTxPop(CanardInstance* const ins);
 ///     - The received frame is a valid UAVCAN/CAN transport frame, but it did not complete a transfer, or it forms
 ///       an invalid frame sequence.
 ///
+/// The function returns 1 (one) if the new frame completed a transfer. In this case, the details of the transfer
+/// are stored into out_transfer, and the payload ownership is passed into that object. This means that the application
+/// is responsible for deallocating the payload buffer when the processing is done. This design is implemented to
+/// facilitate zero-copy data exchange across the protocol stack: once a buffer is allocated, the data is never copied
+/// around but only passed by reference.
+///
 /// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
 /// that is, any MTU is accepted.
-///
-/// Free the payload buffer? Keep it allocated forever, do not require the application to clean anything.
-/// This will also relieve us from allocating new storage for single-frame transfers.
 ///
 /// Any value of iface_index is accepted; that is, up to 256 redundant transports are supported.
 /// The interface from which the transfer is accepted is always the same as iface_index.
 ///
 /// The time complexity is O(n) where n is the number of subject-IDs or service-IDs subscribed to by the application,
-/// depending on whether the frame is of the message kind of of the service kind.
-/// Observe that the time complexity is invariant to the network configuration (such as the number of online nodes),
-/// which is an important design guarantee for real-time applications.
+/// depending on whether the frame is of the message kind of of the service kind. Observe that the time complexity
+/// is invariant to the network configuration (such as the number of online nodes), which is an important design
+/// guarantee for real-time applications. The time complexity is only dependent on the number of active subscriptions
+/// for a given transfer kind, which is well-controlled by the local application.
+///
 /// Unicast frames where the destination does not equal the local node-ID are discarded in constant time.
 /// Frames that are not valid UAVCAN/CAN frames are discarded in constant time.
 ///
-/// HEAP MEMORY REQUIREMENT MODEL.
+/// MEMORY ALLOCATION REQUIREMENT MODEL.
 int8_t canardRxAccept(CanardInstance* const    ins,
                       const CanardFrame* const frame,
                       const uint8_t            iface_index,
                       CanardTransfer* const    out_transfer);
 
-/// The library allocates large look-up tables to ensure that the temporal properties of its algorithms are
+/// Subscription instances have large look-up tables to ensure that the temporal properties of the algorithms are
 /// invariant to the network configuration (i.e., a node that is validated on a network containing one other node
 /// will provably perform identically on a network that contains X nodes).
 /// See for context: https://github.com/UAVCAN/libuavcan/issues/185#issuecomment-440354858.
@@ -346,35 +366,34 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// Once a new RX session is allocated, it will never be removed as long as the subscription is active.
 /// The rationale for this behavior is that real-time networks typically do not change their configuration at runtime;
 /// hence, it is possible to reduce the worst-case computational complexity of the library routines by never
-/// deallocating sessions once allocated. If this behavior is found to be undesirable, the application can force
-/// deallocation of all unused states by re-creating the subscription anew.
-///
-/// HEAP MEMORY REQUIREMENT MODEL.
+/// deallocating sessions once allocated. The size of an RX state is at most 32 bytes on any conventional platform.
+/// If this behavior is found to be undesirable, the application can force deallocation of all unused states by
+/// re-creating the subscription anew.
 ///
 /// The return value is 1 if a new subscription has been created as requested.
 /// The return value is 0 if such subscription existed at the time the function was invoked. In this case,
 /// the existing subscription is terminated and then a new one is created in its place. Pending transfers may be lost.
-/// The return value is negative in case of an error: a negated invalid argument error code if any of the arguments are
-/// invalid, or the negated out-of-memory error if the new subscription could not be allocated due to the heap memory
-/// being exhausted.
+/// The return value is a negated invalid argument error if any of the input arguments are invalid.
 ///
 /// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
-int8_t canardRxSubscribe(CanardInstance* const    ins,
-                         const CanardTransferKind transfer_kind,
-                         const CanardPortID       port_id,
-                         const size_t             payload_size_bytes_max,
-                         const CanardMicrosecond  transfer_id_timeout_usec);
+/// This function does not allocate new memory. The function may deallocate memory if such subscription already existed.
+int8_t canardRxSubscribe(CanardInstance* const       ins,
+                         const CanardTransferKind    transfer_kind,
+                         const CanardPortID          port_id,
+                         const size_t                payload_size_bytes_max,
+                         const CanardMicrosecond     transfer_id_timeout_usec,
+                         CanardRxSubscription* const out_subscription);
 
 /// Reverse the effect of canardRxSubscribe().
-/// If the subscription is found, all its heap memory is de-allocated; to determine the amount of memory freed,
-/// please refer to the heap memory requirement models of canardRxSubscribe() and canardRxAccept().
-/// This function does not allocate new heap memory.
+/// If the subscription is found, all its memory is de-allocated; to determine the amount of memory freed,
+/// please refer to the memory allocation requirement model of canardRxAccept().
 ///
 /// The return value is 1 if such subscription existed (and, therefore, it was removed).
 /// The return value is 0 if such subscription does not exist. In this case, the function has no effect.
 /// The return value is a negated invalid argument error if any of the input arguments are invalid.
 ///
 /// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
+/// This function does not allocate new memory.
 int8_t canardRxUnsubscribe(CanardInstance* const    ins,
                            const CanardTransferKind transfer_kind,
                            const CanardPortID       port_id);
