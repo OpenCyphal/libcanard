@@ -161,7 +161,7 @@ typedef struct CanardRxSubscription
     struct CanardInternalRxSession* _sessions[CANARD_NODE_ID_MAX + 1U];
 
     CanardMicrosecond _transfer_id_timeout_usec;
-    size_t            _payload_size_bytes_max;
+    size_t            _payload_size_max;
     CanardPortID      _port_id;
 } CanardRxSubscription;
 
@@ -348,6 +348,8 @@ void canardTxPop(CanardInstance* const ins);
 /// This design is chosen to facilitate zero-copy data exchange across the protocol stack: once a buffer is allocated,
 /// its data is never copied around but only passed by reference. This design allows us to reduce the worst-case
 /// execution time and reduce jitter caused by the linear time complexity of memcpy().
+/// There is a special case, however: if the payload_size_max is zero, the payload pointer will be NULL, since there
+/// is no data to store and so a buffer is not needed.
 ///
 /// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
 /// that is, any MTU is accepted.
@@ -360,8 +362,9 @@ void canardTxPop(CanardInstance* const ins);
 /// received transport frame (because it will be copied into an internal contiguous buffer).
 /// Observe that the time complexity is invariant to the network configuration (such as the number of online nodes),
 /// which is an important design guarantee for real-time applications.
-/// The time complexity is only dependent on the number of active subscriptions for a given transfer kind,
-/// and the MTU, both of which are easy to predict and account for.
+/// The execution time is only dependent on the number of active subscriptions for a given transfer kind,
+/// and the MTU, both of which are easy to predict and account for. Excepting the subscription search and the
+/// payload data copying, the entire RX pipeline contains neither loops nor recursion.
 ///
 /// Unicast frames where the destination does not equal the local node-ID are discarded in constant time.
 /// Frames that are not valid UAVCAN/CAN frames are discarded in constant time.
@@ -403,7 +406,7 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 int8_t canardRxSubscribe(CanardInstance* const       ins,
                          const CanardTransferKind    transfer_kind,
                          const CanardPortID          port_id,
-                         const size_t                payload_size_bytes_max,
+                         const size_t                payload_size_max,
                          const CanardMicrosecond     transfer_id_timeout_usec,
                          CanardRxSubscription* const out_subscription);
 
