@@ -134,7 +134,7 @@ TEST_CASE("rxSessionWritePayload")
     using exposed::rxSessionWritePayload;
     using exposed::rxSessionRestart;
 
-    Instance ins;
+    Instance  ins;
     RxSession rxs;
     rxs.toggle_and_transfer_id = 0U;
 
@@ -213,7 +213,7 @@ TEST_CASE("rxSessionWritePayload")
     REQUIRE(rxs.toggle_and_transfer_id == 33);
 
     // Double restart has no effect on memory.
-    rxs.calculated_crc = 0x1234U;
+    rxs.calculated_crc         = 0x1234U;
     rxs.toggle_and_transfer_id = 23;
     rxSessionRestart(&ins.getInstance(), &rxs);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
@@ -224,7 +224,7 @@ TEST_CASE("rxSessionWritePayload")
     REQUIRE(rxs.toggle_and_transfer_id == (32U | 24U));
 
     // Restart with a transfer-ID overflow.
-    rxs.calculated_crc = 0x1234U;
+    rxs.calculated_crc         = 0x1234U;
     rxs.toggle_and_transfer_id = 31;
     rxSessionRestart(&ins.getInstance(), &rxs);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
