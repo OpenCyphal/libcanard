@@ -693,6 +693,11 @@ CANARD_INTERNAL int8_t rxAcceptFrame(CanardInstance* const          ins,
                                      CanardInternalRxSession* const rxs,
                                      const FrameModel* const        frame,
                                      const size_t                   payload_size_max,
+                                     CanardTransfer* const          out_transfer);
+CANARD_INTERNAL int8_t rxAcceptFrame(CanardInstance* const          ins,
+                                     CanardInternalRxSession* const rxs,
+                                     const FrameModel* const        frame,
+                                     const size_t                   payload_size_max,
                                      CanardTransfer* const          out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
