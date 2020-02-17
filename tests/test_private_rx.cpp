@@ -4,4 +4,7 @@
 #include "exposed.hpp"
 #include "helpers.hpp"
 
-TEST_CASE("rxTryParseFrame") {}
+TEST_CASE("rxTryParseFrame")
+{
+    //
+}

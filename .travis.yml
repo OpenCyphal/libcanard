@@ -24,9 +24,9 @@ matrix:
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all  # The build wrapper comes from Sonar Cloud.
         - make test
-        # TODO: COMBINE COVERAGE FROM ALL EXECUTABLES!
-        - find CMakeFiles/test_public_cov.dir/ -name 'canard.c.*' -type f -print -exec mv -f {} . \;
-        - gcov-9 libcanard/canard.c --object-file canard*gcda --object-file canard*gcno
+        - find CMakeFiles/test_public_cov.dir/ -name 'canard*.c.*' -type f -print -exec mv -f {} . \;
+        - gcov-9 libcanard/canard.c --object-file canard.c.gcda --object-file canard.c.gcno
+        - gcov-9 libcanard/canard_dsdl.c --object-file canard_dsdl.c.gcda --object-file canard_dsdl.c.gcno
 
         # RELEASE
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
@@ -85,7 +85,7 @@ matrix:
       script:
         # This is a trivial test where we only check whether it compiles at all with all warnings enabled.
         # TODO: Write unit tests and run them on an emulator.
-        - avr-gcc libcanard/*.c -c -std=c99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wno-unused-parameter
+        - avr-gcc libcanard/*.c -c -std=c99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
 
 git:
   depth: false  # Disable shallow clone because it is incompatible with SonarCloud
