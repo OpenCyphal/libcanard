@@ -636,6 +636,11 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
                                             const size_t                   payload_size,
                                             const void* const              payload)
 {
+    CANARD_ASSERT(ins != NULL);
+    CANARD_ASSERT(rxs != NULL);
+    CANARD_ASSERT((payload != NULL) || (payload_size == 0U));
+    CANARD_ASSERT(rxs->payload_size <= payload_size_max);  // This invariant is enforced by the subscription logic.
+
     // Allocate the payload lazily, as late as possible.
     if ((NULL == rxs->payload) && (payload_size_max > 0U))
     {

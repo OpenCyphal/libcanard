@@ -46,7 +46,7 @@ struct TxQueueItem final
     auto operator=(const TxQueueItem &&) -> TxQueueItem& = delete;
 };
 
-struct CanardInternalRxSession
+struct RxSession
 {
     CanardMicrosecond transfer_timestamp_usec   = std::numeric_limits<std::uint64_t>::max();
     std::size_t       payload_size              = 0U;
@@ -100,10 +100,12 @@ auto txFindQueueSupremum(const CanardInstance* const ins, const std::uint32_t ca
 
 auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result) -> bool;
 
-auto rxSessionWritePayload(CanardInstance* const          ins,
-                           CanardInternalRxSession* const rxs,
-                           const std::size_t              payload_size_max,
-                           const std::size_t              payload_size,
-                           const void* const              payload) -> std::int8_t;
+auto rxSessionWritePayload(CanardInstance* const ins,
+                           RxSession* const      rxs,
+                           const std::size_t     payload_size_max,
+                           const std::size_t     payload_size,
+                           const void* const     payload) -> std::int8_t;
+
+void rxSessionRestart(CanardInstance* const ins, RxSession* const rxs);
 }
 }  // namespace exposed

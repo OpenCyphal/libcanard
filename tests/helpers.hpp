@@ -63,7 +63,7 @@ public:
     [[nodiscard]] auto allocate(const std::size_t amount)
     {
         void* p = nullptr;
-        if ((getTotalAllocatedAmount() + amount) <= ceiling_)
+        if ((amount > 0U) && ((getTotalAllocatedAmount() + amount) <= ceiling_))
         {
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
             p = std::malloc(amount);  // NOLINT
@@ -80,16 +80,19 @@ public:
 
     void deallocate(void* const pointer)
     {
-        const auto it = allocated_.find(pointer);
-        if (it == std::end(allocated_))
+        if (pointer != nullptr)
         {
-            throw std::logic_error("Heap corruption: an attempt to deallocate memory that is not allocated");
+            const auto it = allocated_.find(pointer);
+            if (it == std::end(allocated_))
+            {
+                throw std::logic_error("Heap corruption: an attempt to deallocate memory that is not allocated");
+            }
+            // Damage the memory to make sure it's not used after deallocation.
+            std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, &TestAllocator::getRandomByte);
+            // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
+            std::free(it->first);  // NOLINT
+            allocated_.erase(it);
         }
-        // Damage the memory to make sure it's not used after deallocation.
-        std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, &TestAllocator::getRandomByte);
-        // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
-        std::free(it->first);  // NOLINT
-        allocated_.erase(it);
     }
 
     [[nodiscard]] auto getNumAllocatedFragments() const { return std::size(allocated_); }

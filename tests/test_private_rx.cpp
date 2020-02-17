@@ -126,3 +126,126 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(!parse(888'888U, 0b100'10'0000110011'0100111'0011010U, {255, 0b100'00000U | 1U}));  // BAD TOGGLE
     REQUIRE(!parse(888'888U, 0b100'10'1000110011'0100111'0011010U, {255, 0b010'00000U | 1U}));  // BAD RESERVED
 }
+
+TEST_CASE("rxSessionWritePayload")
+{
+    using helpers::Instance;
+    using exposed::RxSession;
+    using exposed::rxSessionWritePayload;
+    using exposed::rxSessionRestart;
+
+    Instance ins;
+    RxSession rxs;
+    rxs.toggle_and_transfer_id = 0U;
+
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+
+    // Regular write, the RX state is uninitialized so a new allocation will take place.
+    REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 5, "\x00\x01\x02\x03\x04"));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    REQUIRE(rxs.payload_size == 5);
+    REQUIRE(rxs.payload != nullptr);
+    REQUIRE(rxs.payload[0] == 0);
+    REQUIRE(rxs.payload[1] == 1);
+    REQUIRE(rxs.payload[2] == 2);
+    REQUIRE(rxs.payload[3] == 3);
+    REQUIRE(rxs.payload[4] == 4);
+
+    // Appending the pre-allocated storage.
+    REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 4, "\x05\x06\x07\x08"));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    REQUIRE(rxs.payload_size == 9);
+    REQUIRE(rxs.payload != nullptr);
+    REQUIRE(rxs.payload[0] == 0);
+    REQUIRE(rxs.payload[1] == 1);
+    REQUIRE(rxs.payload[2] == 2);
+    REQUIRE(rxs.payload[3] == 3);
+    REQUIRE(rxs.payload[4] == 4);
+    REQUIRE(rxs.payload[5] == 5);
+    REQUIRE(rxs.payload[6] == 6);
+    REQUIRE(rxs.payload[7] == 7);
+    REQUIRE(rxs.payload[8] == 8);
+
+    // Implicit truncation -- too much payload, excess ignored.
+    REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 3, "\x09\x0A\x0B"));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    REQUIRE(rxs.payload_size == 10);
+    REQUIRE(rxs.payload != nullptr);
+    REQUIRE(rxs.payload[0] == 0);
+    REQUIRE(rxs.payload[1] == 1);
+    REQUIRE(rxs.payload[2] == 2);
+    REQUIRE(rxs.payload[3] == 3);
+    REQUIRE(rxs.payload[4] == 4);
+    REQUIRE(rxs.payload[5] == 5);
+    REQUIRE(rxs.payload[6] == 6);
+    REQUIRE(rxs.payload[7] == 7);
+    REQUIRE(rxs.payload[8] == 8);
+    REQUIRE(rxs.payload[9] == 9);
+
+    // Storage is already full, write ignored.
+    REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 3, "\x0C\x0D\x0E"));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    REQUIRE(rxs.payload_size == 10);
+    REQUIRE(rxs.payload != nullptr);
+    REQUIRE(rxs.payload[0] == 0);
+    REQUIRE(rxs.payload[1] == 1);
+    REQUIRE(rxs.payload[2] == 2);
+    REQUIRE(rxs.payload[3] == 3);
+    REQUIRE(rxs.payload[4] == 4);
+    REQUIRE(rxs.payload[5] == 5);
+    REQUIRE(rxs.payload[6] == 6);
+    REQUIRE(rxs.payload[7] == 7);
+    REQUIRE(rxs.payload[8] == 8);
+    REQUIRE(rxs.payload[9] == 9);
+
+    // Restart frees the buffer. The transfer-ID will be incremented, too.
+    rxSessionRestart(&ins.getInstance(), &rxs);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFFU);
+    REQUIRE(rxs.toggle_and_transfer_id == 33);
+
+    // Double restart has no effect on memory.
+    rxs.calculated_crc = 0x1234U;
+    rxs.toggle_and_transfer_id = 23;
+    rxSessionRestart(&ins.getInstance(), &rxs);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFFU);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 24U));
+
+    // Restart with a transfer-ID overflow.
+    rxs.calculated_crc = 0x1234U;
+    rxs.toggle_and_transfer_id = 31;
+    rxSessionRestart(&ins.getInstance(), &rxs);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFFU);
+    REQUIRE(rxs.toggle_and_transfer_id == 32U);
+
+    // Write into a zero-capacity storage. NULL at the output.
+    REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 0, 3, "\x00\x01\x02"));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+
+    // Write with OOM.
+    ins.getAllocator().setAllocationCeiling(5);
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 3, "\x00\x01\x02"));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+}
