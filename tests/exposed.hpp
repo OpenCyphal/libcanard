@@ -10,7 +10,7 @@
 
 /// Definitions that are not exposed by the library but that are needed for testing.
 /// Please keep them in sync with the library by manually updating as necessary.
-namespace internals
+namespace exposed
 {
 struct TxQueueItem final
 {
@@ -70,4 +70,4 @@ auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
 
 auto txFindQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
 }
-}  // namespace internals
+}  // namespace exposed

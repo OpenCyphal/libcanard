@@ -4,7 +4,7 @@
 #pragma once
 
 #include "canard.h"
-#include "internals.hpp"
+#include "exposed.hpp"
 #include <algorithm>
 #include <cstdarg>
 #include <numeric>
@@ -155,7 +155,7 @@ public:
 
     [[nodiscard]] auto getTxQueueRoot() const
     {
-        return reinterpret_cast<const internals::TxQueueItem*>(canard_._tx_queue);
+        return reinterpret_cast<const exposed::TxQueueItem*>(canard_._tx_queue);
     }
 
     [[nodiscard]] auto getTxQueueLength() const

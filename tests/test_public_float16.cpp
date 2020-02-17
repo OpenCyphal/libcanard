@@ -2,7 +2,7 @@
 // Copyright (c) 2016-2020 UAVCAN Development Team.
 
 #include "canard_dsdl.h"
-#include "internals.hpp"
+#include "exposed.hpp"
 #include <cmath>
 
 TEST_CASE("canardDSDLFloat16Pack")
