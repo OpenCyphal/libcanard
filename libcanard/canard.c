@@ -35,14 +35,10 @@
 
 // --------------------------------------------- COMMON CONSTANTS ---------------------------------------------
 
-#define TAIL_START_OF_TRANSFER 128U
-#define TAIL_END_OF_TRANSFER 64U
-#define TAIL_TOGGLE 32U
-
-#define CAN_EXT_ID_MASK ((UINT32_C(1) << 29U) - 1U)
-
 #define BITS_PER_BYTE 8U
 #define BYTE_MAX 0xFFU
+
+#define CAN_EXT_ID_MASK ((UINT32_C(1) << 29U) - 1U)
 
 #define PADDING_BYTE_VALUE 0U
 
@@ -56,6 +52,10 @@
 #define FLAG_REQUEST_NOT_RESPONSE (UINT32_C(1) << 24U)
 #define FLAG_RESERVED_23 (UINT32_C(1) << 23U)
 #define FLAG_RESERVED_07 (UINT32_C(1) << 7U)
+
+#define TAIL_START_OF_TRANSFER 128U
+#define TAIL_END_OF_TRANSFER 64U
+#define TAIL_TOGGLE 32U
 
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
 
