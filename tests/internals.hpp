@@ -49,25 +49,25 @@ extern "C" {
 
 auto crcAdd(const std::uint16_t crc, const std::size_t size, const void* const bytes) -> std::uint16_t;
 
-auto makeMessageSessionSpecifier(const std::uint16_t subject_id, const std::uint8_t src_node_id) -> std::uint32_t;
-auto makeServiceSessionSpecifier(const std::uint16_t service_id,
-                                 const bool          request_not_response,
-                                 const std::uint8_t  src_node_id,
-                                 const std::uint8_t  dst_node_id) -> std::uint32_t;
+auto txMakeMessageSessionSpecifier(const std::uint16_t subject_id, const std::uint8_t src_node_id) -> std::uint32_t;
+auto txMakeServiceSessionSpecifier(const std::uint16_t service_id,
+                                   const bool          request_not_response,
+                                   const std::uint8_t  src_node_id,
+                                   const std::uint8_t  dst_node_id) -> std::uint32_t;
 
-auto getPresentationLayerMTU(const CanardInstance* const ins) -> std::size_t;
+auto txGetPresentationLayerMTU(const CanardInstance* const ins) -> std::size_t;
 
-auto makeCANID(const CanardTransfer* const transfer,
-               const std::uint8_t          local_node_id,
-               const std::size_t           presentation_layer_mtu) -> std::int32_t;
+auto txMakeCANID(const CanardTransfer* const transfer,
+                 const std::uint8_t          local_node_id,
+                 const std::size_t           presentation_layer_mtu) -> std::int32_t;
 
-auto makeTailByte(const bool         start_of_transfer,
-                  const bool         end_of_transfer,
-                  const bool         toggle,
-                  const std::uint8_t transfer_id) -> std::uint8_t;
+auto txMakeTailByte(const bool         start_of_transfer,
+                    const bool         end_of_transfer,
+                    const bool         toggle,
+                    const std::uint8_t transfer_id) -> std::uint8_t;
 
-auto roundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
+auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
 
-auto findTxQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
+auto txFindQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
 }
 }  // namespace internals

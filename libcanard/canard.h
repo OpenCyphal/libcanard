@@ -87,7 +87,7 @@ typedef struct
 {
     /// For RX frames: reception timestamp.
     /// For TX frames: transmission deadline.
-    /// The time system may be arbitrary as long as the clock is monotonic (steady). Zero is not a valid timestamp.
+    /// The time system may be arbitrary as long as the clock is monotonic (steady).
     CanardMicrosecond timestamp_usec;
 
     /// 29-bit extended ID. The bits above 29-th are zero/ignored.
@@ -108,7 +108,7 @@ typedef struct
 {
     /// For RX transfers: reception timestamp.
     /// For TX transfers: transmission deadline.
-    /// The time system may be arbitrary as long as the clock is monotonic (steady). Zero is not a valid timestamp.
+    /// The time system may be arbitrary as long as the clock is monotonic (steady).
     CanardMicrosecond timestamp_usec;
 
     /// Per the Specification, all frames belonging to a given transfer shall share the same priority level.
