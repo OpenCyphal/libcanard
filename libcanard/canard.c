@@ -524,77 +524,73 @@ typedef struct CanardInternalRxSession
 /// High-level transport frame model.
 typedef struct
 {
-    CanardMicrosecond timestamp_usec;
-
-    CanardPriority priority;
-
+    CanardMicrosecond  timestamp_usec;
+    CanardPriority     priority;
     CanardTransferKind transfer_kind;
     CanardPortID       port_id;
     CanardNodeID       source_node_id;
     CanardNodeID       destination_node_id;
-
-    CanardTransferID transfer_id;
-    bool             start_of_transfer;
-    bool             end_of_transfer;
-    bool             toggle;
-
-    size_t         payload_size;
-    const uint8_t* payload;
+    CanardTransferID   transfer_id;
+    bool               start_of_transfer;
+    bool               end_of_transfer;
+    bool               toggle;
+    size_t             payload_size;
+    const void*        payload;
 } RxFrameModel;
 
 /// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid UAVCAN/CAN frame.
-CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result);
-CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result)
+CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out);
+CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out)
 {
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(frame->extended_can_id <= CAN_EXT_ID_MASK);
-    CANARD_ASSERT(out_result != NULL);
+    CANARD_ASSERT(out != NULL);
     bool valid = false;
     if (frame->payload_size > 0)
     {
         CANARD_ASSERT(frame->payload != NULL);
-        out_result->timestamp_usec = frame->timestamp_usec;
+        out->timestamp_usec = frame->timestamp_usec;
 
         // CAN ID parsing.
-        const uint32_t can_id      = frame->extended_can_id;
-        out_result->priority       = (CanardPriority)((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
-        out_result->source_node_id = (CanardNodeID)(can_id & CANARD_NODE_ID_MAX);
+        const uint32_t can_id = frame->extended_can_id;
+        out->priority         = (CanardPriority)((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
+        out->source_node_id   = (CanardNodeID)(can_id & CANARD_NODE_ID_MAX);
         if (0 == (can_id & FLAG_SERVICE_NOT_MESSAGE))
         {
-            valid                     = (0 == (can_id & FLAG_RESERVED_23)) && (0 == (can_id & FLAG_RESERVED_07));
-            out_result->transfer_kind = CanardTransferKindMessage;
-            out_result->port_id       = (CanardPortID)((can_id >> OFFSET_SUBJECT_ID) & CANARD_SUBJECT_ID_MAX);
+            valid              = (0 == (can_id & FLAG_RESERVED_23)) && (0 == (can_id & FLAG_RESERVED_07));
+            out->transfer_kind = CanardTransferKindMessage;
+            out->port_id       = (CanardPortID)((can_id >> OFFSET_SUBJECT_ID) & CANARD_SUBJECT_ID_MAX);
             if ((can_id & FLAG_ANONYMOUS_MESSAGE) != 0)
             {
-                out_result->source_node_id = CANARD_NODE_ID_UNSET;
+                out->source_node_id = CANARD_NODE_ID_UNSET;
             }
-            out_result->destination_node_id = CANARD_NODE_ID_UNSET;
+            out->destination_node_id = CANARD_NODE_ID_UNSET;
         }
         else
         {
             valid = (0 == (can_id & FLAG_RESERVED_23));
-            out_result->transfer_kind =
+            out->transfer_kind =
                 ((can_id & FLAG_REQUEST_NOT_RESPONSE) != 0) ? CanardTransferKindRequest : CanardTransferKindResponse;
-            out_result->port_id             = (CanardPortID)((can_id >> OFFSET_SERVICE_ID) & CANARD_SERVICE_ID_MAX);
-            out_result->destination_node_id = (CanardNodeID)((can_id >> OFFSET_DST_NODE_ID) & CANARD_NODE_ID_MAX);
+            out->port_id             = (CanardPortID)((can_id >> OFFSET_SERVICE_ID) & CANARD_SERVICE_ID_MAX);
+            out->destination_node_id = (CanardNodeID)((can_id >> OFFSET_DST_NODE_ID) & CANARD_NODE_ID_MAX);
         }
 
         // Payload parsing.
-        out_result->payload_size = frame->payload_size - 1U;  // Cut off the tail byte.
-        out_result->payload      = (const uint8_t*) frame->payload;
+        out->payload_size = frame->payload_size - 1U;  // Cut off the tail byte.
+        out->payload      = frame->payload;
 
         // Tail byte parsing.
-        // Intentional violation of MISRA: indexing on a pointer. This is done to avoid pointer arithmetics.
-        const uint8_t tail            = out_result->payload[out_result->payload_size];
-        out_result->transfer_id       = tail & CANARD_TRANSFER_ID_MAX;
-        out_result->start_of_transfer = ((tail & TAIL_START_OF_TRANSFER) != 0);
-        out_result->end_of_transfer   = ((tail & TAIL_END_OF_TRANSFER) != 0);
-        out_result->toggle            = ((tail & TAIL_TOGGLE) != 0);
+        // Intentional violation of MISRA: pointer arithmetics is required to locate the tail byte. Unavoidable.
+        const uint8_t tail     = *(((const uint8_t*) out->payload) + out->payload_size);  // NOSONAR
+        out->transfer_id       = tail & CANARD_TRANSFER_ID_MAX;
+        out->start_of_transfer = ((tail & TAIL_START_OF_TRANSFER) != 0);
+        out->end_of_transfer   = ((tail & TAIL_END_OF_TRANSFER) != 0);
+        out->toggle            = ((tail & TAIL_TOGGLE) != 0);
 
         // Final validation.
-        valid = valid && (out_result->start_of_transfer ? out_result->toggle : true);  // Protocol version check.
-        valid = valid && ((CANARD_NODE_ID_UNSET == out_result->source_node_id)
-                              ? (out_result->start_of_transfer && out_result->end_of_transfer)  // Single-frame.
+        valid = valid && (out->start_of_transfer ? out->toggle : true);  // Protocol version check.
+        valid = valid && ((CANARD_NODE_ID_UNSET == out->source_node_id)
+                              ? (out->start_of_transfer && out->end_of_transfer)  // Single-frame.
                               : true);
     }
     return valid;

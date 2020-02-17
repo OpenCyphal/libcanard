@@ -12,6 +12,8 @@
 /// Please keep them in sync with the library by manually updating as necessary.
 namespace exposed
 {
+using TransferCRC = std::uint16_t;
+
 struct TxQueueItem final
 {
     TxQueueItem* next = nullptr;
@@ -44,6 +46,32 @@ struct TxQueueItem final
     auto operator=(const TxQueueItem &&) -> TxQueueItem& = delete;
 };
 
+struct CanardInternalRxSession
+{
+    CanardMicrosecond transfer_timestamp_usec   = std::numeric_limits<std::uint64_t>::max();
+    std::size_t       payload_size              = 0U;
+    std::uint8_t*     payload                   = nullptr;
+    TransferCRC       calculated_crc            = 0U;
+    CanardTransferID  toggle_and_transfer_id    = std::numeric_limits<std::uint8_t>::max();
+    std::uint8_t      redundant_transport_index = std::numeric_limits<std::uint8_t>::max();
+};
+
+struct RxFrameModel
+{
+    CanardMicrosecond   timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
+    CanardPriority      priority            = CanardPriorityOptional;
+    CanardTransferKind  transfer_kind       = CanardTransferKindMessage;
+    CanardPortID        port_id             = std::numeric_limits<std::uint16_t>::max();
+    CanardNodeID        source_node_id      = CANARD_NODE_ID_UNSET;
+    CanardNodeID        destination_node_id = CANARD_NODE_ID_UNSET;
+    CanardTransferID    transfer_id         = std::numeric_limits<std::uint8_t>::max();
+    bool                start_of_transfer   = false;
+    bool                end_of_transfer     = false;
+    bool                toggle              = false;
+    std::size_t         payload_size        = 0U;
+    const std::uint8_t* payload             = nullptr;
+};
+
 // Extern C effectively discards the outer namespaces.
 extern "C" {
 
@@ -69,5 +97,13 @@ auto txMakeTailByte(const bool         start_of_transfer,
 auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
 
 auto txFindQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
+
+auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result) -> bool;
+
+auto rxSessionWritePayload(CanardInstance* const          ins,
+                           CanardInternalRxSession* const rxs,
+                           const std::size_t              payload_size_max,
+                           const std::size_t              payload_size,
+                           const void* const              payload) -> std::int8_t;
 }
 }  // namespace exposed

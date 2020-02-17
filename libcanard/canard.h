@@ -17,14 +17,14 @@ extern "C" {
 /// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 0
-#define CANARD_VERSION_MINOR 1
+#define CANARD_VERSION_MINOR 10
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR 0
 
 /// These error codes may be returned from the library API calls whose return type is a signed integer
-/// in the negated form (i.e., code 2 returned as -2).
+/// in the negated form (e.g., code 2 returned as -2).
 /// API calls whose return type is not a signer integer cannot fail by contract.
 /// No other error states may occur in the library.
 /// By contract, a deterministic application with a properly sized memory pool will never encounter errors.
@@ -352,7 +352,7 @@ void canardTxPop(CanardInstance* const ins);
 /// is no data to store and so a buffer is not needed.
 ///
 /// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
-/// that is, any MTU is accepted.
+/// that is, any MTU is accepted. The DLC compliance is not checked -- payload of any length (unlimited) is accepted.
 ///
 /// Any value of redundant_transport_index is accepted; that is, up to 256 redundant transports are supported.
 /// The index of the transport from which the transfer is accepted is always the same as redundant_transport_index.
