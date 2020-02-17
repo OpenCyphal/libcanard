@@ -37,17 +37,17 @@ uint16_t canardDSDLFloat16Pack(const CanardDSDLFloatNative value)
 {
     // The no-lint statements suppress the warnings about magic numbers.
     // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
-    const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT
+    const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT NOSONAR
     const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT NOSONAR
     const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT NOSONAR
     const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT NOSONAR
     Float32Bits       in         = {.real = value};                     // NOSONAR
-    const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT
+    const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT NOSONAR
     in.bits ^= sign;
     uint16_t out = 0;
     if (in.bits >= f32inf.bits)
     {
-        out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT
+        out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT NOSONAR
     }
     else
     {
@@ -58,9 +58,9 @@ uint16_t canardDSDLFloat16Pack(const CanardDSDLFloatNative value)
         {
             in.bits = f16inf.bits;
         }
-        out = (uint16_t)(in.bits >> 13U);  // NOLINT
+        out = (uint16_t)(in.bits >> 13U);  // NOLINT NOSONAR
     }
-    out |= (uint16_t)(sign >> 16U);  // NOLINT
+    out |= (uint16_t)(sign >> 16U);  // NOLINT NOSONAR
     return out;
 }
 
@@ -74,9 +74,9 @@ CanardDSDLFloatNative canardDSDLFloat16Unpack(const uint16_t value)
     out.real *= magic.real;
     if (out.real >= inf_nan.real)
     {
-        out.bits |= ((uint32_t) 0xFFU) << 23U;  // NOLINT
+        out.bits |= ((uint32_t) 0xFFU) << 23U;  // NOLINT NOSONAR
     }
-    out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT
+    out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT NOSONAR
     return out.real;
 }
 
