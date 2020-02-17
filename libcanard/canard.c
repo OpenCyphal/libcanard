@@ -44,7 +44,7 @@
 #define BITS_PER_BYTE 8U
 #define BYTE_MAX 0xFFU
 
-#define PADDING_BYTE 0U
+#define PADDING_BYTE_VALUE 0U
 
 // ---------------------------------------- TRANSFER CRC ----------------------------------------
 
@@ -339,7 +339,7 @@ CANARD_INTERNAL int32_t pushSingleFrameTransfer(CanardInstance* const   ins,
 
         // Clang-Tidy raises an error recommending the use of memset_s() instead.
         // We ignore this recommendation because it is not available in C99.
-        (void) memset(&tqi->payload[payload_size], PADDING_BYTE, padding_size);  // NOLINT
+        (void) memset(&tqi->payload[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
 
         tqi->payload[frame_payload_size - 1U] = makeTailByte(true, true, true, transfer_id);
         CanardInternalTxQueueItem* const sup  = findTxQueueSupremum(ins, can_id);
@@ -443,9 +443,9 @@ CANARD_INTERNAL int32_t pushMultiFrameTransfer(CanardInstance* const   ins,
             // Insert padding -- only in the last frame. Don't forget to include padding into the CRC.
             while ((frame_offset + CRC_SIZE_BYTES) < frame_payload_size)
             {
-                tail->payload[frame_offset] = PADDING_BYTE;
+                tail->payload[frame_offset] = PADDING_BYTE_VALUE;
                 ++frame_offset;
-                crc = crcAddByte(crc, PADDING_BYTE);
+                crc = crcAddByte(crc, PADDING_BYTE_VALUE);
             }
 
             // Insert the CRC.
@@ -783,21 +783,18 @@ CANARD_INTERNAL int8_t rxUpdate(CanardInstance* const          ins,
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(out_transfer != NULL);
 
-    const bool not_initialized = (0 == rxs->transfer_timestamp_usec);
-
     const bool tid_timed_out = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
                                ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
 
     const bool not_previous_tid =
         computeTransferIDDifference(rxs->toggle_and_transfer_id & CANARD_TRANSFER_ID_MAX, frame->transfer_id) > 1;
 
-    const bool need_restart = not_initialized || tid_timed_out || (frame->start_of_transfer && not_previous_tid);
+    const bool need_restart = tid_timed_out || (frame->start_of_transfer && not_previous_tid);
 
     if (need_restart)
     {
-        rxs->transfer_timestamp_usec   = frame->timestamp_usec;
         rxs->redundant_transport_index = redundant_transport_index;
-        rxs->toggle_and_transfer_id    = TAIL_TOGGLE | frame->transfer_id;
+        rxs->toggle_and_transfer_id    = (CanardTransferID)(TAIL_TOGGLE | frame->transfer_id);
     }
 
     int8_t out = 0;
@@ -834,6 +831,7 @@ CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const       ins,
     CANARD_ASSERT(subscription->_port_id == frame->port_id);
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(frame->payload != NULL);
+    CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
     CANARD_ASSERT((CANARD_NODE_ID_UNSET == frame->destination_node_id) || (ins->node_id == frame->destination_node_id));
     CANARD_ASSERT(out_transfer != NULL);
 
@@ -849,12 +847,12 @@ CANARD_INTERNAL int8_t acceptFrame(CanardInstance* const       ins,
             subscription->_sessions[frame->source_node_id] = rxs;
             if (rxs != NULL)
             {
-                rxs->transfer_timestamp_usec   = 0U;
+                rxs->transfer_timestamp_usec   = frame->timestamp_usec;
                 rxs->payload_size              = 0U;
                 rxs->payload                   = NULL;
                 rxs->calculated_crc            = CRC_INITIAL;
-                rxs->toggle_and_transfer_id    = TAIL_TOGGLE;
-                rxs->redundant_transport_index = 0U;
+                rxs->toggle_and_transfer_id    = (CanardTransferID)(TAIL_TOGGLE | frame->transfer_id);
+                rxs->redundant_transport_index = redundant_transport_index;
             }
             else
             {
