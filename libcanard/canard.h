@@ -87,7 +87,7 @@ typedef struct
 {
     /// For RX frames: reception timestamp.
     /// For TX frames: transmission deadline.
-    /// The time system may be arbitrary as long as the clock is monotonic (steady).
+    /// The time system may be arbitrary as long as the clock is monotonic (steady). Zero is not a valid timestamp.
     CanardMicrosecond timestamp_usec;
 
     /// 29-bit extended ID. The bits above 29-th are zero/ignored.
@@ -108,9 +108,11 @@ typedef struct
 {
     /// For RX transfers: reception timestamp.
     /// For TX transfers: transmission deadline.
-    /// The time system may be arbitrary as long as the clock is monotonic (steady).
+    /// The time system may be arbitrary as long as the clock is monotonic (steady). Zero is not a valid timestamp.
     CanardMicrosecond timestamp_usec;
 
+    /// Per the Specification, all frames belonging to a given transfer shall share the same priority level.
+    /// If this is not the case, then this field contains the priority level of the last frame to arrive.
     CanardPriority priority;
 
     CanardTransferKind transfer_kind;
@@ -342,21 +344,24 @@ void canardTxPop(CanardInstance* const ins);
 ///
 /// The function returns 1 (one) if the new frame completed a transfer. In this case, the details of the transfer
 /// are stored into out_transfer, and the payload ownership is passed into that object. This means that the application
-/// is responsible for deallocating the payload buffer when the processing is done. This design is implemented to
-/// facilitate zero-copy data exchange across the protocol stack: once a buffer is allocated, the data is never copied
-/// around but only passed by reference.
+/// is responsible for deallocating the payload buffer when the processing is done by invoking memory_free.
+/// This design is chosen to facilitate zero-copy data exchange across the protocol stack: once a buffer is allocated,
+/// its data is never copied around but only passed by reference. This design allows us to reduce the worst-case
+/// execution time and reduce jitter caused by the linear time complexity of memcpy().
 ///
 /// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
 /// that is, any MTU is accepted.
 ///
-/// Any value of iface_index is accepted; that is, up to 256 redundant transports are supported.
-/// The interface from which the transfer is accepted is always the same as iface_index.
+/// Any value of redundant_transport_index is accepted; that is, up to 256 redundant transports are supported.
+/// The index of the transport from which the transfer is accepted is always the same as redundant_transport_index.
 ///
-/// The time complexity is O(n) where n is the number of subject-IDs or service-IDs subscribed to by the application,
-/// depending on whether the frame is of the message kind of of the service kind. Observe that the time complexity
-/// is invariant to the network configuration (such as the number of online nodes), which is an important design
-/// guarantee for real-time applications. The time complexity is only dependent on the number of active subscriptions
-/// for a given transfer kind, which is well-controlled by the local application.
+/// The time complexity is O(n+s) where n is the number of subject-IDs or service-IDs subscribed to by the application,
+/// depending on whether the frame is of the message kind of of the service kind, and s is the amount of payload in the
+/// received transport frame (because it will be copied into an internal contiguous buffer).
+/// Observe that the time complexity is invariant to the network configuration (such as the number of online nodes),
+/// which is an important design guarantee for real-time applications.
+/// The time complexity is only dependent on the number of active subscriptions for a given transfer kind,
+/// and the MTU, both of which are easy to predict and account for.
 ///
 /// Unicast frames where the destination does not equal the local node-ID are discarded in constant time.
 /// Frames that are not valid UAVCAN/CAN frames are discarded in constant time.
@@ -364,7 +369,7 @@ void canardTxPop(CanardInstance* const ins);
 /// MEMORY ALLOCATION REQUIREMENT MODEL.
 int8_t canardRxAccept(CanardInstance* const    ins,
                       const CanardFrame* const frame,
-                      const uint8_t            iface_index,
+                      const uint8_t            redundant_transport_index,
                       CanardTransfer* const    out_transfer);
 
 /// Subscription instances have large look-up tables to ensure that the temporal properties of the algorithms are
@@ -385,6 +390,8 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// deallocating sessions once allocated. The size of an RX state is at most 32 bytes on any conventional platform.
 /// If this behavior is found to be undesirable, the application can force deallocation of all unused states by
 /// re-creating the subscription anew.
+///
+/// The transport fail-over timeout (if redundant transports are used) is the same as the transfer-ID timeout.
 ///
 /// The return value is 1 if a new subscription has been created as requested.
 /// The return value is 0 if such subscription existed at the time the function was invoked. In this case,
