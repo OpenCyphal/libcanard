@@ -52,6 +52,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wtype-limits -Wzero-as-null-pointer-con
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wsign-promo -Wold-style-cast")
 
 include_directories(catch ${library_dir})
+add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1)
 
 set(common_sources catch/main.cpp ${library_dir}/canard.c ${library_dir}/canard_dsdl.c)
 

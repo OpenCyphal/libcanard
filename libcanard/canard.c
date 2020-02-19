@@ -588,10 +588,15 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
         out->toggle            = ((tail & TAIL_TOGGLE) != 0);
 
         // Final validation.
-        valid = valid && (out->start_of_transfer ? out->toggle : true);  // Protocol version check.
-        valid = valid && ((CANARD_NODE_ID_UNSET == out->source_node_id)
-                              ? (out->start_of_transfer && out->end_of_transfer)  // Single-frame.
-                              : true);
+        // Protocol version check: if SOT is set, then the toggle shall also be set.
+        valid = valid && ((!out->start_of_transfer) || out->toggle);
+        // Anonymous transfers can be only single-frame transfers.
+        valid = valid &&
+                ((out->start_of_transfer && out->end_of_transfer) || (CANARD_NODE_ID_UNSET != out->source_node_id));
+        // Non-last frames of a multi-frame transfer shall contain at least some payload besides CRC.
+        // The specification requires that the MTU utilization shall be maximal but we don't want to rely on MTU here.
+        // This extension is spec-compatible.
+        valid = valid && ((out->payload_size > CRC_SIZE_BYTES) || out->end_of_transfer);
     }
     return valid;
 }
@@ -723,7 +728,16 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
         // Drop the last two bytes of the payload because we don't want to expose the transfer-CRC to the user.
         if (frame->end_of_transfer)
         {
-            payload_size = (payload_size > CRC_SIZE_BYTES) ? (payload_size - CRC_SIZE_BYTES) : 0U;
+            if (payload_size >= CRC_SIZE_BYTES)
+            {
+                payload_size -= CRC_SIZE_BYTES;
+            }
+            else
+            {
+                // Okay, some bytes of the payload were actually CRC. Backtrack to drop them from the output.
+                payload_size = 0U;
+                rxs->payload_size -= CRC_SIZE_BYTES - payload_size;
+            }
         }
     }
 
@@ -762,8 +776,8 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
 /// The UAVCAN/CAN v1 specification, which this library is an implementation of, does not provide any reference
 /// pseudocode. Instead, it takes a higher-level, more abstract approach, where only the high-level requirements
 /// are given and the particular algorithms are left to be implementation-defined. Such abstract approach is much
-/// advantageous because it allows implementers to choose whatever solution works best for the specific application
-/// at hand, while wire compatibility is still guaranteed by the high-level requirements given in the specification.
+/// advantageous because it allows implementers to choose whatever solution works best for the specific application at
+/// hand, while the wire compatibility is still guaranteed by the high-level requirements given in the specification.
 CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
                                       CanardInternalRxSession* const rxs,
                                       const RxFrameModel* const      frame,
@@ -790,12 +804,15 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     const bool not_previous_tid =
         rxComputeTransferIDDifference(rxs->toggle_and_transfer_id & CANARD_TRANSFER_ID_MAX, frame->transfer_id) > 1;
 
-    const bool need_restart = tid_timed_out || (frame->start_of_transfer && not_previous_tid);
+    const bool need_restart = tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) &&
+                                                frame->start_of_transfer && not_previous_tid);
 
     if (need_restart)
     {
-        rxs->redundant_transport_index = redundant_transport_index;
+        rxs->payload_size              = 0U;
+        rxs->calculated_crc            = CRC_INITIAL;
         rxs->toggle_and_transfer_id    = (CanardTransferID)(TAIL_TOGGLE | frame->transfer_id);
+        rxs->redundant_transport_index = redundant_transport_index;
     }
 
     int8_t out = 0;
@@ -805,7 +822,7 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     }
     else
     {
-        const bool correct_transport = (redundant_transport_index == rxs->redundant_transport_index);
+        const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
         const bool correct_toggle    = (frame->toggle == ((rxs->toggle_and_transfer_id & TAIL_TOGGLE) != 0));
         const bool correct_tid       = (frame->transfer_id == (rxs->toggle_and_transfer_id & CANARD_TRANSFER_ID_MAX));
         if (correct_transport && correct_toggle && correct_tid)

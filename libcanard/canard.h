@@ -17,7 +17,7 @@ extern "C" {
 /// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 0
-#define CANARD_VERSION_MINOR 10
+#define CANARD_VERSION_MINOR 100
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
@@ -255,7 +255,8 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
 /// or other deterministic data structures should be considered.
 ///
 /// Returns the number of frames enqueued into the prioritized TX queue (which is always a positive number)
-/// in case of success. Returns a negated error code in case of failure. Zero cannot be returned.
+/// in case of success (so that the application can track the number of items in the TX queue if necessary).
+/// Returns a negated error code in case of failure. Zero is never returned.
 ///
 /// An invalid argument error may be returned in the following cases:
 ///     - Any of the input arguments are NULL.
@@ -345,11 +346,21 @@ void canardTxPop(CanardInstance* const ins);
 /// The function returns 1 (one) if the new frame completed a transfer. In this case, the details of the transfer
 /// are stored into out_transfer, and the payload ownership is passed into that object. This means that the application
 /// is responsible for deallocating the payload buffer when the processing is done by invoking memory_free.
-/// This design is chosen to facilitate zero-copy data exchange across the protocol stack: once a buffer is allocated,
-/// its data is never copied around but only passed by reference. This design allows us to reduce the worst-case
-/// execution time and reduce jitter caused by the linear time complexity of memcpy().
+/// This design is chosen to facilitate almost zero-copy data exchange across the protocol stack: once a buffer is
+/// allocated, its data is never copied around but only passed by reference. This design allows us to reduce the
+/// worst-case execution time and reduce jitter caused by the linear time complexity of memcpy().
 /// There is a special case, however: if the payload_size_max is zero, the payload pointer will be NULL, since there
 /// is no data to store and so a buffer is not needed.
+///
+/// One data copy still has to take place, though: it's the copy from the frame payload into the contiguous buffer.
+/// In CAN, the MTU is small (at most 64 bytes for CAN FD), so the extra copy does not cost us much here,
+/// but it allows us to completely decouple the lifetime of the input frame buffer from the lifetime of the final
+/// transfer object, regardless of whether it's a single-frame or a multi-frame transfer.
+/// If we were building, say, an UAVCAN/UDP library, then we would likely resort to a different design, where the
+/// frame buffer is allocated once from the heap (which may be done from the interrupt handler if the heap is
+/// sufficiently deterministic; an example of a suitable real-time heap is https://github.com/pavel-kirienko/o1heap),
+/// and in the case of single-frame transfer it is then carried over to the application without copying.
+/// This design somewhat complicates the driver layer though.
 ///
 /// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
 /// that is, any MTU is accepted. The DLC compliance is not checked -- payload of any length (unlimited) is accepted.

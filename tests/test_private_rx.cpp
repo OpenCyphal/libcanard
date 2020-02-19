@@ -249,3 +249,314 @@ TEST_CASE("rxSessionWritePayload")
     REQUIRE(rxs.payload_size == 0);
     REQUIRE(rxs.payload == nullptr);
 }
+
+TEST_CASE("rxSessionUpdate")
+{
+    using helpers::Instance;
+    using exposed::RxSession;
+    using exposed::RxFrameModel;
+    using exposed::rxSessionUpdate;
+    using exposed::crcAdd;
+
+    Instance ins;
+    ins.getAllocator().setAllocationCeiling(10);
+
+    RxFrameModel frame;
+    frame.timestamp_usec      = 10'000'000;
+    frame.priority            = CanardPrioritySlow;
+    frame.transfer_kind       = CanardTransferKindMessage;
+    frame.port_id             = 22'222;
+    frame.source_node_id      = 55;
+    frame.destination_node_id = CANARD_NODE_ID_UNSET;
+    frame.transfer_id         = 11;
+    frame.start_of_transfer   = true;
+    frame.end_of_transfer     = true;
+    frame.toggle              = true;
+    frame.payload_size        = 3;
+    frame.payload             = reinterpret_cast<const uint8_t*>("\x01\x01\x01");
+
+    RxSession rxs;
+    rxs.redundant_transport_index = 1;
+
+    CanardTransfer transfer{};
+
+    const auto update = [&](const std::uint8_t  redundant_transport_index,
+                            const std::uint64_t tid_timeout_usec,
+                            const std::size_t   payload_size_max) {
+        return rxSessionUpdate(&ins.getInstance(),
+                               &rxs,
+                               &frame,
+                               redundant_transport_index,
+                               tid_timeout_usec,
+                               payload_size_max,
+                               &transfer);
+    };
+
+    const auto crc = [](const char* const string) { return crcAdd(0xFFFF, std::strlen(string), string); };
+
+    // Accept one transfer.
+    REQUIRE(1 == update(1, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 10'000'000);
+    REQUIRE(rxs.payload_size == 0);   // Handed over to the output transfer.
+    REQUIRE(rxs.payload == nullptr);  // Handed over to the output transfer.
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 12U));  // Incremented.
+    REQUIRE(rxs.redundant_transport_index == 1);
+    REQUIRE(transfer.timestamp_usec == 10'000'000);
+    REQUIRE(transfer.priority == CanardPrioritySlow);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.remote_node_id == 55);
+    REQUIRE(transfer.transfer_id == 11);
+    REQUIRE(transfer.payload_size == 3);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x01\x01", 3));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    ins.getAllocator().deallocate(transfer.payload);
+
+    // Valid next transfer, wrong transport.
+    frame.timestamp_usec = 10'000'100;
+    frame.transfer_id    = 12;
+    frame.payload        = reinterpret_cast<const uint8_t*>("\x02\x02\x02");
+    REQUIRE(0 == update(2, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 10'000'000);
+    REQUIRE(rxs.payload_size == 0);   // Handed over to the output transfer.
+    REQUIRE(rxs.payload == nullptr);  // Handed over to the output transfer.
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 12U));  // Incremented.
+    REQUIRE(rxs.redundant_transport_index == 1);
+
+    // Correct transport.
+    frame.timestamp_usec = 10'000'050;
+    frame.payload        = reinterpret_cast<const uint8_t*>("\x03\x03\x03");
+    REQUIRE(1 == update(1, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 10'000'050);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 1);
+    REQUIRE(transfer.timestamp_usec == 10'000'050);
+    REQUIRE(transfer.priority == CanardPrioritySlow);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.remote_node_id == 55);
+    REQUIRE(transfer.transfer_id == 12);
+    REQUIRE(transfer.payload_size == 3);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x03\x03\x03", 3));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    ins.getAllocator().deallocate(transfer.payload);
+
+    // Same TID.
+    frame.timestamp_usec = 10'000'200;
+    frame.transfer_id    = 12;
+    frame.payload        = reinterpret_cast<const uint8_t*>("\x04\x04\x04");
+    REQUIRE(0 == update(1, 1'000'200, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 10'000'050);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 1);
+
+    // Restart due to TID timeout, switch iface.
+    frame.timestamp_usec = 20'000'000;
+    frame.transfer_id    = 12;
+    frame.payload        = reinterpret_cast<const uint8_t*>("\x05\x05\x05");
+    REQUIRE(1 == update(0, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'000);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(transfer.timestamp_usec == 20'000'000);
+    REQUIRE(transfer.priority == CanardPrioritySlow);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.remote_node_id == 55);
+    REQUIRE(transfer.transfer_id == 12);
+    REQUIRE(transfer.payload_size == 3);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x05\x05\x05", 3));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    ins.getAllocator().deallocate(transfer.payload);
+
+    // Multi-frame, first.
+    frame.timestamp_usec  = 20'000'100;
+    frame.transfer_id     = 13;
+    frame.end_of_transfer = false;
+    frame.payload_size    = 4;
+    frame.payload         = reinterpret_cast<const uint8_t*>("\x06\x06\x06\x06");
+    REQUIRE(0 == update(0, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);
+    REQUIRE(rxs.payload_size == 4);
+    REQUIRE(0 == std::memcmp(rxs.payload, "\x06\x06\x06\x06", 4));
+    REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06"));
+    REQUIRE(rxs.toggle_and_transfer_id == (0U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+
+    // Multi-frame, middle.
+    frame.timestamp_usec    = 20'000'200;
+    frame.start_of_transfer = false;
+    frame.end_of_transfer   = false;
+    frame.toggle            = false;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x07\x07\x07\x07");
+    REQUIRE(0 == update(0, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);
+    REQUIRE(rxs.payload_size == 8);
+    REQUIRE(0 == std::memcmp(rxs.payload, "\x06\x06\x06\x06\x07\x07\x07\x07", 8));
+    REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x07\x07\x07\x07"));
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+
+    // Multi-frame, last, bad toggle.
+    frame.timestamp_usec    = 20'000'300;
+    frame.start_of_transfer = false;
+    frame.end_of_transfer   = true;
+    frame.toggle            = false;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x08\x08\x08\x08");
+    REQUIRE(0 == update(0, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);
+    REQUIRE(rxs.payload_size == 8);
+    REQUIRE(0 == std::memcmp(rxs.payload, "\x06\x06\x06\x06\x07\x07\x07\x07", 8));
+    REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x07\x07\x07\x07"));
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+
+    // Multi-frame, last.
+    frame.timestamp_usec    = 20'000'400;
+    frame.start_of_transfer = false;
+    frame.end_of_transfer   = true;
+    frame.toggle            = true;
+    frame.payload_size      = 6;  // The payload is IMPLICITLY TRUNCATED, and the CRC IS STILL VALIDATED.
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x09\x09\x09\x09`\x9a");
+    REQUIRE(1 == update(0, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);  // First frame.
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 14U));
+    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(transfer.timestamp_usec == 20'000'100);
+    REQUIRE(transfer.priority == CanardPrioritySlow);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.remote_node_id == 55);
+    REQUIRE(transfer.transfer_id == 13);
+    REQUIRE(transfer.payload_size == 10);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x06\x06\x06\x06\x07\x07\x07\x07\x09\x09", 10));  // Truncated.
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    ins.getAllocator().deallocate(transfer.payload);
+
+    // Restart by TID timeout, not the first frame.
+    frame.timestamp_usec    = 30'000'000;
+    frame.transfer_id       = 12;  // Goes back.
+    frame.start_of_transfer = false;
+    frame.end_of_transfer   = false;
+    frame.toggle            = true;
+    frame.payload_size      = 3;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A");
+    REQUIRE(0 == update(2, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);  // No change.
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 13U));
+    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+
+    // Restart by TID mismatch.
+    frame.timestamp_usec    = 20'000'200;  // Goes back.
+    frame.transfer_id       = 11;          // Goes back.
+    frame.start_of_transfer = true;
+    frame.end_of_transfer   = false;
+    frame.toggle            = true;
+    frame.payload_size      = 3;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x0B\x0B\x0B");
+    REQUIRE(0 == update(2, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'200);
+    REQUIRE(rxs.payload_size == 3);
+    REQUIRE(0 == std::memcmp(rxs.payload, "\x0B\x0B\x0B", 3));
+    REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B"));
+    REQUIRE(rxs.toggle_and_transfer_id == (0U | 11U));
+    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+
+    // Duplicate start rejected (toggle mismatch).
+    frame.timestamp_usec    = 20'000'300;
+    frame.transfer_id       = 11;
+    frame.start_of_transfer = true;
+    frame.end_of_transfer   = true;
+    frame.toggle            = true;
+    frame.payload_size      = 3;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x0C\x0C\x0C");
+    REQUIRE(0 == update(2, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'200);
+    REQUIRE(rxs.payload_size == 3);
+    REQUIRE(0 == std::memcmp(rxs.payload, "\x0B\x0B\x0B", 3));
+    REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B"));
+    REQUIRE(rxs.toggle_and_transfer_id == (0U | 11U));
+    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+
+    // Continue & finalize.
+    frame.timestamp_usec    = 20'000'400;
+    frame.transfer_id       = 11;
+    frame.start_of_transfer = false;
+    frame.end_of_transfer   = true;
+    frame.toggle            = false;
+    frame.payload_size      = 5;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x0D\x0D\x0D\xDA\xF2");  // CRC at the end.
+    REQUIRE(1 == update(2, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 20'000'200);
+    REQUIRE(rxs.payload_size == 0);
+    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.calculated_crc == 0xFFFF);
+    REQUIRE(rxs.toggle_and_transfer_id == (32U | 12U));
+    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(transfer.timestamp_usec == 20'000'200);
+    REQUIRE(transfer.priority == CanardPrioritySlow);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.remote_node_id == 55);
+    REQUIRE(transfer.transfer_id == 11);
+    REQUIRE(transfer.payload_size == 6);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x0B\x0B\x0B\x0D\x0D\x0D", 6));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+    ins.getAllocator().deallocate(transfer.payload);
+
+    // CRC SPLIT --  first frame
+    frame.timestamp_usec    = 30'000'000;
+    frame.transfer_id       = 0;
+    frame.start_of_transfer = true;
+    frame.end_of_transfer   = false;
+    frame.toggle            = true;
+    frame.payload_size      = 4;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x15");
+    REQUIRE(0 == update(0, 1'000'000, 10));
+    REQUIRE(rxs.transfer_timestamp_usec == 30'000'000);
+    REQUIRE(rxs.payload_size == 4);
+    REQUIRE(0 == std::memcmp(rxs.payload, "\x0E\x0E\x0E\x15", 4));
+    REQUIRE(rxs.calculated_crc == crc("\x0E\x0E\x0E\x15"));
+    REQUIRE(rxs.toggle_and_transfer_id == 0);
+    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
+
+    // BAD CRC
+
+    // OOM
+}

@@ -107,5 +107,13 @@ auto rxSessionWritePayload(CanardInstance* const ins,
                            const void* const     payload) -> std::int8_t;
 
 void rxSessionRestart(CanardInstance* const ins, RxSession* const rxs);
+
+auto rxSessionUpdate(CanardInstance* const     ins,
+                     RxSession* const          rxs,
+                     const RxFrameModel* const frame,
+                     const std::uint8_t        redundant_transport_index,
+                     const CanardMicrosecond   transfer_id_timeout_usec,
+                     const std::size_t         payload_size_max,
+                     CanardTransfer* const     out_transfer) -> std::int8_t;
 }
 }  // namespace exposed

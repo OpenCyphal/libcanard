@@ -78,6 +78,14 @@ public:
         return p;
     }
 
+    /// This overload is needed to avoid unnecessary const_cast<> in tests.
+    /// The casts are needed because allocated memory is pointed to by const-qualified pointers.
+    /// This is due to certain fundamental limitations of C; see the API docs for info.
+    void deallocate(const void* const pointer)
+    {
+        deallocate(const_cast<void*>(pointer));  // NOLINT
+    }
+
     void deallocate(void* const pointer)
     {
         if (pointer != nullptr)
