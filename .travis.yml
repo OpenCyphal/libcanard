@@ -38,12 +38,12 @@ matrix:
         - make all VERBOSE=1 && make test
 
         # ANALYSIS
-        - sonar-scanner -Dsonar.projectKey=libcanard                        \
-                        -Dsonar.organization=uavcan                         \
-                        -Dsonar.sources=libcanard                           \
-                        -Dsonar.cfamily.gcov.reportsPath=.                  \
-                        -Dsonar.cfamily.build-wrapper-output=sonar-dump     \
-                        -Dsonar.cfamily.cache.enabled=false                 \
+        - 'sonar-scanner -Dsonar.projectKey=libcanard
+                         -Dsonar.organization=uavcan
+                         -Dsonar.sources=libcanard
+                         -Dsonar.cfamily.gcov.reportsPath=.
+                         -Dsonar.cfamily.build-wrapper-output=sonar-dump
+                         -Dsonar.cfamily.cache.enabled=false'
 
     # -------------------- Clang 9 --------------------
     - language: cpp
