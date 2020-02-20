@@ -40,6 +40,8 @@
 
 #define CAN_EXT_ID_MASK ((UINT32_C(1) << 29U) - 1U)
 
+#define MFT_NON_LAST_FRAME_PAYLOAD_MIN 7U
+
 #define PADDING_BYTE_VALUE 0U
 
 #define OFFSET_PRIORITY 26U
@@ -593,10 +595,10 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
         // Anonymous transfers can be only single-frame transfers.
         valid = valid &&
                 ((out->start_of_transfer && out->end_of_transfer) || (CANARD_NODE_ID_UNSET != out->source_node_id));
-        // Non-last frames of a multi-frame transfer shall contain at least some payload besides CRC.
-        // The specification requires that the MTU utilization shall be maximal but we don't want to rely on MTU here.
-        // This extension is spec-compatible.
-        valid = valid && ((out->payload_size > CRC_SIZE_BYTES) || out->end_of_transfer);
+        // Non-last frames of a multi-frame transfer shall utilize the MTU fully.
+        valid = valid && ((out->payload_size >= MFT_NON_LAST_FRAME_PAYLOAD_MIN) || out->end_of_transfer);
+        // A frame that is a part of a multi-frame transfer cannot be empty (tail byte not included).
+        valid = valid && ((out->payload_size > 0) || (out->start_of_transfer && out->end_of_transfer));
     }
     return valid;
 }
@@ -728,15 +730,20 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
         // Drop the last two bytes of the payload because we don't want to expose the transfer-CRC to the user.
         if (frame->end_of_transfer)
         {
+            CANARD_ASSERT(rxs->payload_size >= MFT_NON_LAST_FRAME_PAYLOAD_MIN);  // Enforced in rxTryParseFrame().
             if (payload_size >= CRC_SIZE_BYTES)
             {
                 payload_size -= CRC_SIZE_BYTES;
             }
             else
             {
-                // Okay, some bytes of the payload were actually CRC. Backtrack to drop them from the output.
-                payload_size = 0U;
-                rxs->payload_size -= CRC_SIZE_BYTES - payload_size;
+                // Edge case: this frame contains only a part of the transfer CRC and no payload.
+                // This means that the last byte of the accepted payload is actually a part of the transfer CRC.
+                // Backtrack to drop it from the output.
+                const size_t backtrack = CRC_SIZE_BYTES - payload_size;
+                payload_size           = 0U;
+                CANARD_ASSERT(rxs->payload_size >= backtrack);
+                rxs->payload_size -= backtrack;
             }
         }
     }
