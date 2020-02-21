@@ -153,9 +153,30 @@ public:
 
     void txPop() { canardTxPop(&canard_); }
 
-    [[nodiscard]] auto rxAccept(const CanardFrame& frame, const uint8_t iface_index, CanardTransfer& out_transfer)
+    [[nodiscard]] auto rxAccept(const CanardFrame& frame,
+                                const uint8_t      redundant_transport_index,
+                                CanardTransfer&    out_transfer)
     {
-        return canardRxAccept(&canard_, &frame, iface_index, &out_transfer);
+        return canardRxAccept(&canard_, &frame, redundant_transport_index, &out_transfer);
+    }
+
+    [[nodiscard]] auto rxSubscribe(const CanardTransferKind transfer_kind,
+                                   const CanardPortID       port_id,
+                                   const std::size_t        payload_size_max,
+                                   const CanardMicrosecond  transfer_id_timeout_usec,
+                                   CanardRxSubscription&    out_subscription)
+    {
+        return canardRxSubscribe(&canard_,
+                                 transfer_kind,
+                                 port_id,
+                                 payload_size_max,
+                                 transfer_id_timeout_usec,
+                                 &out_subscription);
+    }
+
+    [[nodiscard]] auto rxUnsubscribe(const CanardTransferKind transfer_kind, const CanardPortID port_id)
+    {
+        return canardRxUnsubscribe(&canard_, transfer_kind, port_id);
     }
 
     [[nodiscard]] auto getNodeID() const { return canard_.node_id; }
