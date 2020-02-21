@@ -559,7 +559,6 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
         out->source_node_id   = (CanardNodeID)(can_id & CANARD_NODE_ID_MAX);
         if (0 == (can_id & FLAG_SERVICE_NOT_MESSAGE))
         {
-            valid              = (0 == (can_id & FLAG_RESERVED_23)) && (0 == (can_id & FLAG_RESERVED_07));
             out->transfer_kind = CanardTransferKindMessage;
             out->port_id       = (CanardPortID)((can_id >> OFFSET_SUBJECT_ID) & CANARD_SUBJECT_ID_MAX);
             if ((can_id & FLAG_ANONYMOUS_MESSAGE) != 0)
@@ -567,14 +566,18 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
                 out->source_node_id = CANARD_NODE_ID_UNSET;
             }
             out->destination_node_id = CANARD_NODE_ID_UNSET;
+            // Reserved bits may be unreserved in the future.
+            valid = (0 == (can_id & FLAG_RESERVED_23)) && (0 == (can_id & FLAG_RESERVED_07));
         }
         else
         {
-            valid = (0 == (can_id & FLAG_RESERVED_23));
             out->transfer_kind =
                 ((can_id & FLAG_REQUEST_NOT_RESPONSE) != 0) ? CanardTransferKindRequest : CanardTransferKindResponse;
             out->port_id             = (CanardPortID)((can_id >> OFFSET_SERVICE_ID) & CANARD_SERVICE_ID_MAX);
             out->destination_node_id = (CanardNodeID)((can_id >> OFFSET_DST_NODE_ID) & CANARD_NODE_ID_MAX);
+            // The reserved bit may be unreserved in the future. It may be used to extend the service-ID to 10 bits.
+            // Per Specification, source cannot be the same as the destination.
+            valid = (0 == (can_id & FLAG_RESERVED_23)) && (out->source_node_id != out->destination_node_id);
         }
 
         // Payload parsing.
