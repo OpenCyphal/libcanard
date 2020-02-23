@@ -27,7 +27,7 @@ typedef union  // NOSONAR
     uint32_t              bits;
     CanardDSDLFloatNative real;
 } Float32Bits;
-static_assert(4 == sizeof(Float32Bits), "Unsupported float model");
+_Static_assert(4 == sizeof(Float32Bits), "Unsupported float model");
 
 uint16_t canardDSDLFloat16Pack(const CanardDSDLFloatNative value)
 {
