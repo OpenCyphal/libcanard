@@ -104,7 +104,7 @@ typedef struct CanardInternalTxQueueItem
     //  - Make the payload pointer point to the remainder of the allocated memory following this structure.
     //    The pointer is bad because it requires us to use pointer arithmetics.
     //  - Use a separate memory allocation for data. This is terribly wasteful (both time & memory).
-    uint8_t payload_buffer[];
+    uint8_t payload_buffer[];  // NOSONAR
 } CanardInternalTxQueueItem;
 
 CANARD_PRIVATE uint32_t txMakeMessageSessionSpecifier(const CanardPortID subject_id, const CanardNodeID src_node_id);
