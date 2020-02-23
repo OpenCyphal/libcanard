@@ -280,9 +280,9 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
 ///
 /// The memory allocation requirement is one allocation per transport frame.
 /// A single-frame transfer takes one allocation; a multi-frame transfer of N frames takes N allocations.
-/// The maximum size of each allocation is sizeof(CanardInternalTxQueueItem) plus MTU,
-/// where sizeof(CanardInternalTxQueueItem) is at most 32 bytes on any conventional platform (typically smaller).
-/// For example, if the MTU is 64 bytes, the allocation size will never exceed 96 bytes on any conventional platform.
+/// The maximum size of each allocation is sizeof(CanardInternalTxQueueItem) plus MTU size padded to max_align_t,
+/// where sizeof(CanardInternalTxQueueItem) is at most 40 bytes on any conventional platform (typically smaller).
+/// For example, if the MTU is 64 bytes, the allocation size will never exceed 104 bytes on any conventional platform.
 int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
 /// Access the top element of the prioritized transmission queue. The queue itself is not modified (i.e., the
@@ -301,11 +301,9 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 ///
 /// If the queue is non-empty, the return value is 1 (one) and the out_frame is populated with the data from
 /// the top element (i.e., the next frame awaiting transmission).
-/// The payload pointer of the out_frame will point to the data buffer of the accessed frame;
-/// the pointer retains validity until the element is removed from the queue by calling canardTxPop().
-/// The payload pointer retains validity even if more frames are added to the transmission queue.
-/// If the returned frame instance is not needed, it can be dropped -- no deinitialization procedures are needed
-/// since it does not own any memory itself.
+/// The payload pointer of the out_frame will point to a dynamically allocated storage.
+/// The payload pointer retains validity until explicitly freed by the application.
+/// The payload pointer shall not be freed before the entry is removed from the queue by calling canardTxPop().
 ///
 /// If either of the arguments are NULL, the negated invalid argument error code is returned and no other
 /// actions are performed.
@@ -322,7 +320,10 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardFrame* const out_fram
 ///     The calling code shall take that into account to eliminate the possibility of data loss due to the frame
 ///     at the top of the queue being unexpectedly replaced between calls of canardTxPeek() and this function.
 ///
-/// Invocation of this function invalidates the payload pointer of the top frame because the underlying buffer is freed.
+/// AFTER this function is invoked, the application shall free the memory pointed to by the payload data pointer.
+/// The time between invocation and the payload buffer deallocation can be arbitrary because the ownership is fully
+/// transferred to the application. This design is intended to facilitate zero-copy enqueueing and transmission.
+/// The payload memory SHALL NOT be freed UNTIL this function is invoked.
 ///
 /// If the input argument is NULL or if the transmission queue is empty, the function has no effect.
 ///
@@ -401,7 +402,7 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// Once a new RX session is allocated, it will never be removed as long as the subscription is active.
 /// The rationale for this behavior is that real-time networks typically do not change their configuration at runtime;
 /// hence, it is possible to reduce the worst-case computational complexity of the library routines by never
-/// deallocating sessions once allocated. The size of an RX state is at most 32 bytes on any conventional platform.
+/// deallocating sessions once allocated. The size of an RX state is at most 48 bytes on any conventional platform.
 /// If this behavior is found to be undesirable, the application can force deallocation of all unused states by
 /// re-creating the subscription anew.
 ///

@@ -6,9 +6,11 @@
 #include "canard.h"
 #include "exposed.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cstdarg>
+#include <cstdlib>
+#include <mutex>
 #include <numeric>
-#include <random>
 #include <unordered_map>
 
 namespace helpers
@@ -29,20 +31,20 @@ inline void free(CanardInstance* const ins, void* const pointer)
 }
 }  // namespace dummy_allocator
 
+/// We can't use the recommended true random std::random because it cannot be seeded by Catch2 (the testing framework).
+template <typename T>
+inline auto getRandomNatural(const T upper_open) -> T
+{
+    return static_cast<T>(static_cast<std::size_t>(std::rand()) % upper_open);  // NOLINT
+}
+
 /// An allocator that sits on top of the standard malloc() providing additional testing capabilities.
 /// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
 class TestAllocator
 {
+    mutable std::recursive_mutex           lock_;
     std::unordered_map<void*, std::size_t> allocated_;
-    std::size_t                            ceiling_ = std::numeric_limits<std::size_t>::max();
-
-    static auto getRandomByte()
-    {
-        static std::random_device                           rd;
-        static std::mt19937                                 gen(rd());
-        static std::uniform_int_distribution<std::uint16_t> dis(0, 255U);
-        return static_cast<std::byte>(dis(gen));
-    }
+    std::atomic<std::size_t>               ceiling_ = std::numeric_limits<std::size_t>::max();
 
 public:
     TestAllocator()                      = default;
@@ -53,6 +55,7 @@ public:
 
     virtual ~TestAllocator()
     {
+        std::unique_lock locker(lock_);
         for (auto [ptr, _] : allocated_)
         {
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
@@ -62,7 +65,8 @@ public:
 
     [[nodiscard]] auto allocate(const std::size_t amount)
     {
-        void* p = nullptr;
+        std::unique_lock locker(lock_);
+        void*            p = nullptr;
         if ((amount > 0U) && ((getTotalAllocatedAmount() + amount) <= ceiling_))
         {
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
@@ -72,7 +76,10 @@ public:
                 throw std::bad_alloc();  // This is a test suite failure, not a failed test. Mind the difference.
             }
             // Random-fill the memory to make sure no assumptions are made about its contents.
-            std::generate_n(reinterpret_cast<std::byte*>(p), amount, &TestAllocator::getRandomByte);
+            std::uniform_int_distribution<std::uint16_t> dist(0, 255U);
+            std::generate_n(reinterpret_cast<std::byte*>(p), amount, [&]() {
+                return static_cast<std::byte>(getRandomNatural(256U));
+            });
             allocated_.emplace(p, amount);
         }
         return p;
@@ -90,24 +97,33 @@ public:
     {
         if (pointer != nullptr)
         {
-            const auto it = allocated_.find(pointer);
+            std::unique_lock locker(lock_);
+            const auto       it = allocated_.find(pointer);
             if (it == std::end(allocated_))
             {
                 throw std::logic_error("Heap corruption: an attempt to deallocate memory that is not allocated");
             }
             // Damage the memory to make sure it's not used after deallocation.
-            std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, &TestAllocator::getRandomByte);
+            std::uniform_int_distribution<std::uint16_t> dist(0, 255U);
+            std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, [&]() {
+                return static_cast<std::byte>(getRandomNatural(256U));
+            });
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
             std::free(it->first);  // NOLINT
             allocated_.erase(it);
         }
     }
 
-    [[nodiscard]] auto getNumAllocatedFragments() const { return std::size(allocated_); }
+    [[nodiscard]] auto getNumAllocatedFragments() const
+    {
+        std::unique_lock locker(lock_);
+        return std::size(allocated_);
+    }
 
     [[nodiscard]] auto getTotalAllocatedAmount() const -> std::size_t
     {
-        std::size_t out = 0U;
+        std::unique_lock locker(lock_);
+        std::size_t      out = 0U;
         for (auto [_, size] : allocated_)
         {
             out += size;
@@ -115,7 +131,7 @@ public:
         return out;
     }
 
-    [[nodiscard]] auto getAllocationCeiling() const { return ceiling_; }
+    [[nodiscard]] auto getAllocationCeiling() const { return static_cast<std::size_t>(ceiling_); }
     void               setAllocationCeiling(const std::size_t amount) { ceiling_ = amount; }
 };
 

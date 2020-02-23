@@ -4,16 +4,12 @@
 #include "canard_dsdl.h"
 #include <assert.h>
 
-#ifndef CANARD_ASSERT
-#    define CANARD_ASSERT assert
+#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
+#    error "Unsupported language: ISO C11 or a newer version is required."
 #endif
 
-#ifndef static_assert
-// Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
-#    define static_assert(x, ...) typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
-#    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                              // NOSONAR
-// Intentional violation of MISRA: the paste operator ## cannot be avoided in this context.
-#    define _static_assert_gl_impl(a, b) a##b  // NOSONAR
+#ifndef CANARD_ASSERT
+#    define CANARD_ASSERT assert
 #endif
 
 #if CANARD_DSDL_PLATFORM_TWOS_COMPLEMENT

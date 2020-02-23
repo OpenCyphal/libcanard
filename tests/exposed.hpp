@@ -16,18 +16,13 @@ using TransferCRC = std::uint16_t;
 
 struct TxQueueItem final
 {
-    TxQueueItem* next = nullptr;
-
     std::uint64_t deadline_usec = 0;
+    TxQueueItem*  next          = nullptr;
+    std::uint8_t* payload       = nullptr;
     std::size_t   payload_size  = 0;
     std::uint32_t id            = 0;
 
-    std::array<std::uint8_t, 1> payload{};  // The real definition has a flex array here.
-
-    [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
-    {
-        return *(payload.data() + offset);
-    }
+    [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t { return payload[offset]; }
 
     [[nodiscard]] auto getTailByte() const
     {
@@ -49,11 +44,13 @@ struct TxQueueItem final
 struct RxSession
 {
     CanardMicrosecond transfer_timestamp_usec   = std::numeric_limits<std::uint64_t>::max();
+    std::size_t       total_payload_size        = 0U;
     std::size_t       payload_size              = 0U;
     std::uint8_t*     payload                   = nullptr;
     TransferCRC       calculated_crc            = 0U;
-    CanardTransferID  toggle_and_transfer_id    = std::numeric_limits<std::uint8_t>::max();
+    CanardTransferID  transfer_id               = std::numeric_limits<std::uint8_t>::max();
     std::uint8_t      redundant_transport_index = std::numeric_limits<std::uint8_t>::max();
+    bool              toggle                    = false;
 };
 
 struct RxFrameModel

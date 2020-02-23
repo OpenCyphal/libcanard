@@ -21,16 +21,8 @@
 #    define CANARD_PRIVATE static inline
 #endif
 
-#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
-#    error "Unsupported language: ISO C99 or a newer version is required."
-#endif
-
-#ifndef static_assert
-// Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
-#    define static_assert(x, ...) typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
-#    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                              // NOSONAR
-// Intentional violation of MISRA: the paste operator ## cannot be avoided in this context.
-#    define _static_assert_gl_impl(a, b) a##b  // NOSONAR
+#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
+#    error "Unsupported language: ISO C11 or a newer version is required."
 #endif
 
 // --------------------------------------------- COMMON CONSTANTS ---------------------------------------------
@@ -58,6 +50,8 @@
 #define TAIL_START_OF_TRANSFER 128U
 #define TAIL_END_OF_TRANSFER 64U
 #define TAIL_TOGGLE 32U
+
+#define INITIAL_TOGGLE_STATE true
 
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
 
@@ -97,24 +91,18 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, cons
 // --------------------------------------------- TRANSMISSION ---------------------------------------------
 
 /// The memory requirement model provided in the documentation assumes that the maximum size of this structure never
-/// exceeds 32 bytes on any conventional platform. The sizeof() of this structure, per the C standard, assumes that
+/// exceeds 40 bytes on any conventional platform. The sizeof() of this structure, per the C standard, assumes that
 /// the length of the flex array member is zero.
 /// A user that needs a detailed analysis of the worst-case memory consumption may compute the size of this structure
 /// for the particular platform at hand manually or by evaluating its sizeof().
 /// The fields are ordered to minimize the amount of padding on all conventional platforms.
 typedef struct CanardInternalTxQueueItem
 {
+    CanardMicrosecond                 deadline_usec;
     struct CanardInternalTxQueueItem* next;
-
-    CanardMicrosecond deadline_usec;
-    size_t            payload_size;
-    uint32_t          id;
-
-    // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
-    //  - Use pointer, make it point to the remainder of the allocated memory following this structure.
-    //    The pointer is bad because it requires us to use pointer arithmetics and adds sizeof(void*) of waste per item.
-    //  - Use a separate memory allocation for data. This is terribly wasteful (both time & memory).
-    uint8_t payload[];  // NOSONAR
+    uint8_t*                          payload;
+    size_t                            payload_size;
+    uint32_t                          id;
 } CanardInternalTxQueueItem;
 
 CANARD_PRIVATE uint32_t txMakeMessageSessionSpecifier(const CanardPortID subject_id, const CanardNodeID src_node_id);
@@ -268,13 +256,30 @@ CANARD_PRIVATE CanardInternalTxQueueItem* txAllocateQueueItem(CanardInstance* co
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(payload_size > 0U);
-    CanardInternalTxQueueItem* const out =
-        (CanardInternalTxQueueItem*) ins->memory_allocate(ins, sizeof(CanardInternalTxQueueItem) + payload_size);
-    if (out != NULL)
+
+    // Increase the size of the payload if necessary to ensure that the following structure is well-aligned.
+    static_assert((_Alignof(max_align_t) & (_Alignof(max_align_t) - 1U)) == 0U, "Max align shall be a power of 2");
+    static const size_t max_align            = _Alignof(max_align_t);
+    const size_t        aligned_payload_size = (payload_size + max_align - 1U) & ~(max_align - 1U);
+    CANARD_ASSERT(aligned_payload_size >= payload_size);
+    CANARD_ASSERT(aligned_payload_size < (payload_size + max_align));
+
+    // Allocate one fragment of dynamic memory to store both the payload buffer and the metadata.
+    // The payload buffer is allocated in the beginning of the fragment. This allows us to hand it over to the
+    // application later so that when it is deallocated the metadata storage is also destroyed.
+    CanardInternalTxQueueItem* out = NULL;
+    uint8_t* const ptr = (uint8_t*) ins->memory_allocate(ins, sizeof(CanardInternalTxQueueItem) + aligned_payload_size);
+    if (ptr != NULL)
     {
+        out = (CanardInternalTxQueueItem*) (void*) (ptr + aligned_payload_size);
+        // Normally, we should check that the pointer is aligned here. We don't do that here because there is a bug
+        // in Glibc on x86: the alignment of malloc() is 8 bytes, whereas alignof(max_align_t) is 16 bytes.
+        // I tried filing it but their bug tracker requires registration via email, so I sent them one.
+        // Until the bug in Glibc is fixed, the assertion check should not be here because it would fail the unit tests.
         out->next          = NULL;
         out->deadline_usec = deadline_usec;
         out->payload_size  = payload_size;
+        out->payload       = ptr;
         out->id            = id;
     }
     return out;
@@ -334,13 +339,11 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardInstance* const   ins,
         {
             CANARD_ASSERT(payload != NULL);
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-            // We ignore this recommendation because it is not available in C99.
-            (void) memcpy(&tqi->payload[0], payload, payload_size);  // NOLINT
+            (void) memcpy(tqi->payload, payload, payload_size);  // NOLINT
         }
 
         // Clang-Tidy raises an error recommending the use of memset_s() instead.
-        // We ignore this recommendation because it is not available in C99.
-        (void) memset(&tqi->payload[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
+        (void) memset(tqi->payload + payload_size, PADDING_BYTE_VALUE, padding_size);  // NOLINT
 
         tqi->payload[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
         CanardInternalTxQueueItem* const sup  = txFindQueueSupremum(ins, can_id);
@@ -394,7 +397,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
     size_t         offset                = 0U;
     TransferCRC    crc                   = crcAdd(CRC_INITIAL, payload_size, payload);
     bool           start_of_transfer     = true;
-    bool           toggle                = true;
+    bool           toggle                = INITIAL_TOGGLE_STATE;
     const uint8_t* payload_ptr           = (const uint8_t*) payload;
 
     while (offset < payload_size_with_crc)
@@ -432,8 +435,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
                 move_size = frame_payload_size;
             }
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-            // We ignore this recommendation because it is not available in C99.
-            (void) memcpy(&tail->payload[0], payload_ptr, move_size);  // NOLINT
+            (void) memcpy(tail->payload, payload_ptr, move_size);  // NOLINT
             frame_offset = frame_offset + move_size;
             offset += move_size;
             payload_ptr += move_size;
@@ -509,18 +511,20 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
 #define RX_SESSIONS_PER_SUBSCRIPTION (CANARD_NODE_ID_MAX + 1U)
 
 /// The memory requirement model provided in the documentation assumes that the maximum size of this structure never
-/// exceeds 32 bytes on any conventional platform.
+/// exceeds 48 bytes on any conventional platform.
 /// A user that needs a detailed analysis of the worst-case memory consumption may compute the size of this structure
 /// for the particular platform at hand manually or by evaluating its sizeof().
 /// The fields are ordered to minimize the amount of padding on all conventional platforms.
 typedef struct CanardInternalRxSession
 {
     CanardMicrosecond transfer_timestamp_usec;  ///< Timestamp of the last received start-of-transfer.
+    size_t            total_payload_size;       ///< The payload size before the implicit truncation, including the CRC.
     size_t            payload_size;             ///< How many bytes received so far.
     uint8_t*          payload;                  ///< Dynamically allocated and handed off to the application when done.
     TransferCRC       calculated_crc;           ///< Updated with the received payload in real time.
-    CanardTransferID  toggle_and_transfer_id;   ///< Toggle and transfer-ID combined into one field to reduce footprint.
+    CanardTransferID  transfer_id;
     uint8_t           redundant_transport_index;  ///< Arbitrary value in [0, 255].
+    bool              toggle;
 } CanardInternalRxSession;
 
 /// High-level transport frame model.
@@ -594,7 +598,7 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
 
         // Final validation.
         // Protocol version check: if SOT is set, then the toggle shall also be set.
-        valid = valid && ((!out->start_of_transfer) || out->toggle);
+        valid = valid && ((!out->start_of_transfer) || (out->toggle == INITIAL_TOGGLE_STATE));
         // Anonymous transfers can be only single-frame transfers.
         valid = valid &&
                 ((out->start_of_transfer && out->end_of_transfer) || (CANARD_NODE_ID_UNSET != out->source_node_id));
@@ -626,6 +630,8 @@ CANARD_PRIVATE void rxInitTransferFromFrame(const RxFrameModel* const frame, Can
 CANARD_PRIVATE uint8_t rxComputeTransferIDDifference(const uint8_t a, const uint8_t b);
 CANARD_PRIVATE uint8_t rxComputeTransferIDDifference(const uint8_t a, const uint8_t b)
 {
+    CANARD_ASSERT(a <= CANARD_TRANSFER_ID_MAX);
+    CANARD_ASSERT(b <= CANARD_TRANSFER_ID_MAX);
     int16_t diff = (int16_t)(((int16_t) a) - ((int16_t) b));
     if (diff < 0)
     {
@@ -650,6 +656,9 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
     CANARD_ASSERT(rxs != NULL);
     CANARD_ASSERT((payload != NULL) || (payload_size == 0U));
     CANARD_ASSERT(rxs->payload_size <= payload_size_max);  // This invariant is enforced by the subscription logic.
+    CANARD_ASSERT(rxs->payload_size <= rxs->total_payload_size);
+
+    rxs->total_payload_size += payload_size;
 
     // Allocate the payload lazily, as late as possible.
     if ((NULL == rxs->payload) && (payload_size_max > 0U))
@@ -693,11 +702,13 @@ CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRx
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
     ins->memory_free(ins, rxs->payload);  // May be NULL, which is OK.
-    rxs->payload        = NULL;
-    rxs->payload_size   = 0U;
-    rxs->calculated_crc = CRC_INITIAL;
-    rxs->toggle_and_transfer_id =
-        (CanardTransferID)(TAIL_TOGGLE | ((rxs->toggle_and_transfer_id + 1U) & CANARD_TRANSFER_ID_MAX));
+    rxs->total_payload_size = 0U;
+    rxs->payload_size       = 0U;
+    rxs->payload            = NULL;
+    rxs->calculated_crc     = CRC_INITIAL;
+    rxs->transfer_id        = (CanardTransferID)((rxs->transfer_id + 1U) & CANARD_TRANSFER_ID_MAX);
+    // The transport index is retained.
+    rxs->toggle = INITIAL_TOGGLE_STATE;
 }
 
 CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
@@ -723,35 +734,15 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
         rxs->transfer_timestamp_usec = frame->timestamp_usec;
     }
 
-    size_t     payload_size = frame->payload_size;
     const bool single_frame = frame->start_of_transfer && frame->end_of_transfer;
     if (!single_frame)
     {
         // Update the CRC. Observe that the implicit truncation rule may apply here: the payload may be
         // truncated, but its CRC is validated always anyway.
         rxs->calculated_crc = crcAdd(rxs->calculated_crc, frame->payload_size, frame->payload);
-        // Drop the last two bytes of the payload because we don't want to expose the transfer-CRC to the user.
-        if (frame->end_of_transfer)
-        {
-            CANARD_ASSERT(rxs->payload_size >= MFT_NON_LAST_FRAME_PAYLOAD_MIN);  // Enforced in rxTryParseFrame().
-            if (payload_size >= CRC_SIZE_BYTES)
-            {
-                payload_size -= CRC_SIZE_BYTES;
-            }
-            else
-            {
-                // Edge case: this frame contains only a part of the transfer CRC and no payload.
-                // This means that the last byte of the accepted payload is actually a part of the transfer CRC.
-                // Backtrack to drop it from the output.
-                const size_t backtrack = CRC_SIZE_BYTES - payload_size;
-                payload_size           = 0U;
-                CANARD_ASSERT(rxs->payload_size >= backtrack);
-                rxs->payload_size -= backtrack;
-            }
-        }
     }
 
-    int8_t out = rxSessionWritePayload(ins, rxs, payload_size_max, payload_size, frame->payload);
+    int8_t out = rxSessionWritePayload(ins, rxs, payload_size_max, frame->payload_size, frame->payload);
     if (out < 0)
     {
         CANARD_ASSERT(-CANARD_ERROR_OUT_OF_MEMORY == out);
@@ -762,21 +753,28 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
         CANARD_ASSERT(0 == out);
         if (single_frame || (CRC_RESIDUE == rxs->calculated_crc))
         {
+            out = 1;  // One transfer received, notify the application.
             rxInitTransferFromFrame(frame, out_transfer);
             out_transfer->timestamp_usec = rxs->transfer_timestamp_usec;
             out_transfer->payload_size   = rxs->payload_size;
             out_transfer->payload        = rxs->payload;
 
-            rxs->payload = NULL;  // Ownership passed over to the application, nullify to prevent freeing.
+            // Cut off the CRC from the payload if it's there -- we don't want to expose it to the user.
+            CANARD_ASSERT(rxs->total_payload_size >= rxs->payload_size);
+            const size_t truncated_amount = rxs->total_payload_size - rxs->payload_size;
+            if (!single_frame && (CRC_SIZE_BYTES > truncated_amount))  // Single-frame transfers don't have CRC.
+            {
+                CANARD_ASSERT(out_transfer->payload_size >= (CRC_SIZE_BYTES - truncated_amount));
+                out_transfer->payload_size -= CRC_SIZE_BYTES - truncated_amount;
+            }
 
-            out = 1;  // One transfer received, notify the application.
+            rxs->payload = NULL;  // Ownership passed over to the application, nullify to prevent freeing.
         }
         rxSessionRestart(ins, rxs);  // Successful completion.
     }
     else
     {
-        const CanardTransferID tog  = (0 == (rxs->toggle_and_transfer_id & TAIL_TOGGLE)) ? TAIL_TOGGLE : 0U;
-        rxs->toggle_and_transfer_id = (CanardTransferID)(tog | (rxs->toggle_and_transfer_id & CANARD_TRANSFER_ID_MAX));
+        rxs->toggle = !rxs->toggle;
     }
     return out;
 }
@@ -807,21 +805,24 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     CANARD_ASSERT(rxs != NULL);
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(out_transfer != NULL);
+    CANARD_ASSERT(rxs->transfer_id <= CANARD_TRANSFER_ID_MAX);
+    CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
 
     const bool tid_timed_out = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
                                ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
 
-    const bool not_previous_tid =
-        rxComputeTransferIDDifference(rxs->toggle_and_transfer_id & CANARD_TRANSFER_ID_MAX, frame->transfer_id) > 1;
+    const bool not_previous_tid = rxComputeTransferIDDifference(rxs->transfer_id, frame->transfer_id) > 1;
 
     const bool need_restart = tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) &&
                                                 frame->start_of_transfer && not_previous_tid);
 
     if (need_restart)
     {
+        rxs->total_payload_size        = 0U;
         rxs->payload_size              = 0U;
         rxs->calculated_crc            = CRC_INITIAL;
-        rxs->toggle_and_transfer_id    = (CanardTransferID)(TAIL_TOGGLE | frame->transfer_id);
+        rxs->transfer_id               = frame->transfer_id;
+        rxs->toggle                    = INITIAL_TOGGLE_STATE;
         rxs->redundant_transport_index = redundant_transport_index;
     }
 
@@ -833,8 +834,8 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     else
     {
         const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
-        const bool correct_toggle    = (frame->toggle == ((rxs->toggle_and_transfer_id & TAIL_TOGGLE) != 0));
-        const bool correct_tid       = (frame->transfer_id == (rxs->toggle_and_transfer_id & CANARD_TRANSFER_ID_MAX));
+        const bool correct_toggle    = (frame->toggle == rxs->toggle);
+        const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
         if (correct_transport && correct_toggle && correct_tid)
         {
             out = rxSessionAcceptFrame(ins, rxs, frame, payload_size_max, out_transfer);
@@ -876,11 +877,13 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
             if (rxs != NULL)
             {
                 rxs->transfer_timestamp_usec   = frame->timestamp_usec;
+                rxs->total_payload_size        = 0U;
                 rxs->payload_size              = 0U;
                 rxs->payload                   = NULL;
                 rxs->calculated_crc            = CRC_INITIAL;
-                rxs->toggle_and_transfer_id    = (CanardTransferID)(TAIL_TOGGLE | frame->transfer_id);
+                rxs->transfer_id               = frame->transfer_id;
                 rxs->redundant_transport_index = redundant_transport_index;
+                rxs->toggle                    = INITIAL_TOGGLE_STATE;
             }
             else
             {
@@ -988,7 +991,7 @@ int8_t canardTxPeek(const CanardInstance* const ins, CanardFrame* const out_fram
             out_frame->timestamp_usec  = tqi->deadline_usec;
             out_frame->extended_can_id = tqi->id;
             out_frame->payload_size    = tqi->payload_size;
-            out_frame->payload         = &tqi->payload[0];
+            out_frame->payload         = tqi->payload;
             out                        = 1;
         }
         else
@@ -1004,7 +1007,7 @@ void canardTxPop(CanardInstance* const ins)
     if ((ins != NULL) && (ins->_tx_queue != NULL))
     {
         CanardInternalTxQueueItem* const next = ins->_tx_queue->next;
-        ins->memory_free(ins, ins->_tx_queue);
+        // The memory is NOT deallocated. The application is responsible for that.
         ins->_tx_queue = next;
     }
 }
