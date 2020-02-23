@@ -74,8 +74,10 @@ function(gen_test_matrix name files compile_definitions)
     endif ()
 endfunction()
 
-gen_test_matrix(test_private "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp" CANARD_EXPOSE_PRIVATE=1)
+gen_test_matrix(test_private
+                "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_dsdl.cpp"
+                CANARD_EXPOSE_PRIVATE=1)
 
 gen_test_matrix(test_public
-                "test_public_float16.cpp;test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
+                "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
                 "")

@@ -4,19 +4,70 @@
 #include "canard_dsdl.h"
 #include <assert.h>
 
+// --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
+
+/// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
+/// To disable assertion checks completely, make it expand into `(void)(0)`.
+#ifndef CANARD_ASSERT
+// Intentional violation of MISRA: assertion macro cannot be replaced with a function definition.
+#    define CANARD_ASSERT(x) assert(x)  // NOSONAR
+#endif
+
+/// This macro is needed only for testing and for library development. Do not redefine this in production.
+#if defined(CANARD_EXPOSE_PRIVATE) && CANARD_EXPOSE_PRIVATE
+#    define CANARD_PRIVATE
+#else
+#    define CANARD_PRIVATE static inline
+#endif
+
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
 #    error "Unsupported language: ISO C11 or a newer version is required."
 #endif
 
-#ifndef CANARD_ASSERT
-#    define CANARD_ASSERT assert
-#endif
+// --------------------------------------------- COMMON CONSTANTS ---------------------------------------------
+
+#define BYTE_SIZE 8U
+#define BYTE_MAX 0xFFU
+
+// --------------------------------------------- PRIMITIVE SERIALIZATION ---------------------------------------------
 
 #if CANARD_DSDL_PLATFORM_TWOS_COMPLEMENT
 
-// TODO implement
+/// Per the DSDL specification, it is assumed that 1 byte = 8 bits.
+CANARD_PRIVATE void copyBitArray(const size_t         length_bit,
+                                 const size_t         src_offset_bit,
+                                 const size_t         dst_offset_bit,
+                                 const uint8_t* const src,
+                                 uint8_t* const       dst)
+{
+    CANARD_ASSERT((src != NULL) || (length_bit == 0U));
+    CANARD_ASSERT((dst != NULL) || (length_bit == 0U));
+    size_t       src_off  = src_offset_bit;
+    size_t       dst_off  = dst_offset_bit;
+    const size_t last_bit = src_off + length_bit;
+    while (last_bit > src_off)
+    {
+        const uint8_t src_mod = (uint8_t)(src_off % BYTE_SIZE);
+        const uint8_t dst_mod = (uint8_t)(dst_off % BYTE_SIZE);
+        const uint8_t max_mod = (src_mod > dst_mod) ? src_mod : dst_mod;
+        size_t        size    = BYTE_SIZE - max_mod;
+        if (size > (last_bit - src_off))
+        {
+            size = last_bit - src_off;
+        }
+        const uint8_t mask       = (uint8_t)((((BYTE_MAX << BYTE_SIZE) >> size) & BYTE_MAX) >> dst_mod);
+        const uint8_t in         = (uint8_t)(((uint32_t) src[src_off / BYTE_SIZE] << src_mod) >> dst_mod);
+        const uint8_t a          = dst[dst_off / BYTE_SIZE] & (uint8_t) ~mask;
+        const uint8_t b          = in & mask;
+        dst[dst_off / BYTE_SIZE] = a | b;
+        src_off += size;
+        dst_off += size;
+    }
+}
 
 #endif  // CANARD_DSDL_PLATFORM_TWOS_COMPLEMENT
+
+// --------------------------------------------- FLOAT16 SUPPORT ---------------------------------------------
 
 #if CANARD_DSDL_PLATFORM_IEEE754
 

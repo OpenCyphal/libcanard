@@ -112,5 +112,11 @@ auto rxSessionUpdate(CanardInstance* const     ins,
                      const CanardMicrosecond   transfer_id_timeout_usec,
                      const std::size_t         payload_size_max,
                      CanardTransfer* const     out_transfer) -> std::int8_t;
+
+void copyBitArray(const std::size_t         length_bit,
+                  const std::size_t         src_offset_bit,
+                  const std::size_t         dst_offset_bit,
+                  const std::uint8_t* const src,
+                  std::uint8_t* const       dst);
 }
 }  // namespace exposed

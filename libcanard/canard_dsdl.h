@@ -5,6 +5,7 @@
 // It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
 // The functions are fully stateless (pure); read their documentation comments for usage information.
 // This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
+// High-integrity applications are not recommended to use this extension because it relies on unsafe memory operations.
 
 #ifndef CANARD_DSDL_H_INCLUDED
 #define CANARD_DSDL_H_INCLUDED
@@ -28,11 +29,13 @@ extern "C" {
 #if CANARD_DSDL_PLATFORM_TWOS_COMPLEMENT
 
 /// This function may be used to serialize values for later transmission in a UAVCAN transfer.
-/// It serializes a primitive value -- boolean, integer, character, or floating point -- and puts it at the
-/// specified bit offset in the specified contiguous buffer.
-/// Simple objects can also be serialized manually instead of using this function.
+/// It serializes a primitive value -- boolean, integer, character, or floating point -- following the DSDL
+/// primitive serialization rules, and puts it at the specified bit offset in the destination buffer.
 ///
 /// The function is only available if the platform uses two's complement signed integer representation.
+///
+/// If any of the input pointers are NULL or the value of length_bit is not specified in the table,
+/// the function has no effect.
 ///
 /// The type of the value pointed to by 'value' is defined as follows:
 ///
@@ -53,10 +56,14 @@ void canardDSDLPrimitiveSerialize(void* const       destination,
                                   const uint8_t     length_bit,
                                   const void* const value);
 
-/// This function may be used to extract values from received UAVCAN transfers. It deserializes a scalar value --
-/// boolean, integer, character, or floating point -- from the specified bit position in the source buffer.
+/// This function may be used to extract values from received UAVCAN transfers.
+/// It deserializes a scalar value -- boolean, integer, character, or floating point -- from the specified
+/// bit position in the source buffer.
 ///
 /// The function is only available if the platform uses two's complement signed integer representation.
+///
+/// If any of the input pointers are NULL or the value of length_bit is not specified in the table,
+/// the function has no effect.
 ///
 /// The type of the value pointed to by 'out_value' is defined as follows:
 ///
