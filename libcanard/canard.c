@@ -587,7 +587,7 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
 
         // Final validation.
         // Protocol version check: if SOT is set, then the toggle shall also be set.
-        valid = valid && ((!out->start_of_transfer) || (out->toggle == INITIAL_TOGGLE_STATE));
+        valid = valid && ((!out->start_of_transfer) || (INITIAL_TOGGLE_STATE == out->toggle));
         // Anonymous transfers can be only single-frame transfers.
         valid = valid &&
                 ((out->start_of_transfer && out->end_of_transfer) || (CANARD_NODE_ID_UNSET != out->source_node_id));
@@ -753,7 +753,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
             // Cut off the CRC from the payload if it's there -- we don't want to expose it to the user.
             CANARD_ASSERT(rxs->total_payload_size >= rxs->payload_size);
             const size_t truncated_amount = rxs->total_payload_size - rxs->payload_size;
-            if (!single_frame && (CRC_SIZE_BYTES > truncated_amount))  // Single-frame transfers don't have CRC.
+            if ((!single_frame) && (CRC_SIZE_BYTES > truncated_amount))  // Single-frame transfers don't have CRC.
             {
                 CANARD_ASSERT(out_transfer->payload_size >= (CRC_SIZE_BYTES - truncated_amount));
                 out_transfer->payload_size -= CRC_SIZE_BYTES - truncated_amount;
