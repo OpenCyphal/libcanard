@@ -37,6 +37,7 @@ if (NOT NO_STATIC_ANALYSIS)
 endif ()
 
 # C options
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -pedantic -fstrict-aliasing")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wtype-limits")
@@ -56,25 +57,25 @@ add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1)
 
 set(common_sources catch/main.cpp ${library_dir}/canard.c ${library_dir}/canard_dsdl.c)
 
-function(gen_test name files compile_definitions compile_features compile_flags link_flags)
+function(gen_test name files compile_definitions compile_flags link_flags)
     add_executable(${name} ${common_sources} ${files})
     target_compile_definitions(${name} PUBLIC ${compile_definitions})
-    target_compile_features(${name} PUBLIC ${compile_features})
+    target_link_libraries(${name} pthread)
     set_target_properties(${name} PROPERTIES COMPILE_FLAGS "${compile_flags}" LINK_FLAGS "${link_flags}")
     add_test("run_${name}" "${name}" --rng-seed time)
 endfunction()
 
 function(gen_test_matrix name files compile_definitions)
-    gen_test("${name}_c99_x64" "${files}" "${compile_definitions}" c_std_99 "-m64" "-m64")
-    gen_test("${name}_c99_x32" "${files}" "${compile_definitions}" c_std_99 "-m32" "-m32")
-    gen_test("${name}_c11_x64" "${files}" "${compile_definitions}" c_std_11 "-m64" "-m64")
-    gen_test("${name}_c11_x32" "${files}" "${compile_definitions}" c_std_11 "-m32" "-m32")
+    gen_test("${name}_x64" "${files}" "${compile_definitions}" "-m64" "-m64")
+    gen_test("${name}_x32" "${files}" "${compile_definitions}" "-m32" "-m32")
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
-        gen_test("${name}_cov" "${files}" "${compile_definitions}" c_std_11 "-g -O0 --coverage" "--coverage")
+        gen_test("${name}_cov" "${files}" "${compile_definitions}" "-g -O0 --coverage" "--coverage")
     endif ()
 endfunction()
 
 gen_test_matrix(test_private "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp" CANARD_EXPOSE_PRIVATE=1)
 
-gen_test_matrix(test_public "test_public_float16.cpp;test_public_tx.cpp;test_public_rx.cpp;test_self.cpp" "")
+gen_test_matrix(test_public
+                "test_public_float16.cpp;test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
+                "")
