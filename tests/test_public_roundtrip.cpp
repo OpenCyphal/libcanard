@@ -128,34 +128,33 @@ TEST_CASE("RoundtripSimple")
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         while (true)
         {
-            std::int8_t result = 0;
-            CanardFrame frame{};
+            const CanardFrame* frame = nullptr;
             {
                 std::lock_guard locker(lock);
-                result = ins_tx.txPeek(frame);  // Peek-pop form an atomic transaction.
-                ins_tx.txPop();                 // No effect if the queue is empty.
-                if (result > 0)
+                frame = ins_tx.txPeek();  // Peek-pop form an atomic transaction.
+                ins_tx.txPop();           // No effect if the queue is empty.
+                if (frame != nullptr)
                 {
                     REQUIRE(frames_in_flight > 0);
                     --frames_in_flight;
                 }
             }
 
-            if (result == 1)
+            if (frame != nullptr)
             {
-                const auto tail = reinterpret_cast<const std::uint8_t*>(frame.payload)[frame.payload_size - 1U];
-                log_file << frame.timestamp_usec << " "                                                          //
-                         << std::hex << std::setfill('0') << std::setw(8) << frame.extended_can_id               //
-                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << frame.payload_size << "] "  //
-                         << (bool(tail & 128U) ? 'S' : ' ')                                                      //
-                         << (bool(tail & 64U) ? 'E' : ' ')                                                       //
-                         << (bool(tail & 32U) ? 'T' : ' ')                                                       //
-                         << " " << std::uint16_t(tail & 31U)                                                     //
+                const auto tail = reinterpret_cast<const std::uint8_t*>(frame->payload)[frame->payload_size - 1U];
+                log_file << frame->timestamp_usec << " "                                                          //
+                         << std::hex << std::setfill('0') << std::setw(8) << frame->extended_can_id               //
+                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << frame->payload_size << "] "  //
+                         << (bool(tail & 128U) ? 'S' : ' ')                                                       //
+                         << (bool(tail & 64U) ? 'E' : ' ')                                                        //
+                         << (bool(tail & 32U) ? 'T' : ' ')                                                        //
+                         << " " << std::uint16_t(tail & 31U)                                                      //
                          << '\n';
 
                 CanardTransfer transfer{};
-                result = ins_rx.rxAccept(frame, 0, transfer);
-                REQUIRE(0 == ins_rx.rxAccept(frame, 1, transfer));  // Redundant interface will never be used here.
+                std::int8_t    result = ins_rx.rxAccept(*frame, 0, transfer);
+                REQUIRE(0 == ins_rx.rxAccept(*frame, 1, transfer));  // Redundant interface will never be used here.
                 if (result == 1)
                 {
                     CanardTransfer reference{};  // Fetch the reference transfer from the list of pending.
@@ -195,14 +194,13 @@ TEST_CASE("RoundtripSimple")
             }
             else
             {
-                REQUIRE(result == 0);
                 if (!keep_going)
                 {
                     break;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            ins_tx.getAllocator().deallocate(frame.payload);
+            ins_tx.getAllocator().deallocate(frame);
 
             if (std::chrono::steady_clock::now() > deadline)
             {

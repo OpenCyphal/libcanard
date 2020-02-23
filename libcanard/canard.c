@@ -90,19 +90,21 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, cons
 
 // --------------------------------------------- TRANSMISSION ---------------------------------------------
 
-/// The memory requirement model provided in the documentation assumes that the maximum size of this structure never
-/// exceeds 40 bytes on any conventional platform. The sizeof() of this structure, per the C standard, assumes that
-/// the length of the flex array member is zero.
-/// A user that needs a detailed analysis of the worst-case memory consumption may compute the size of this structure
-/// for the particular platform at hand manually or by evaluating its sizeof().
-/// The fields are ordered to minimize the amount of padding on all conventional platforms.
+/// This is a subclass of CanardFrame. A pointer to this type can be cast to CanardFrame safely.
+/// This is standard-compliant. The paragraph 6.7.2.1.15 says:
+///     A pointer to a structure object, suitably converted, points to its initial member (or if that member is a
+///     bit-field, then to the unit in which it resides), and vice versa. There may be unnamed padding within a
+///     structure object, but not at its beginning.
 typedef struct CanardInternalTxQueueItem
 {
-    CanardMicrosecond                 deadline_usec;
+    CanardFrame                       frame;
     struct CanardInternalTxQueueItem* next;
-    uint8_t*                          payload;
-    size_t                            payload_size;
-    uint32_t                          id;
+
+    // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
+    //  - Make the payload pointer point to the remainder of the allocated memory following this structure.
+    //    The pointer is bad because it requires us to use pointer arithmetics.
+    //  - Use a separate memory allocation for data. This is terribly wasteful (both time & memory).
+    uint8_t payload_buffer[];
 } CanardInternalTxQueueItem;
 
 CANARD_PRIVATE uint32_t txMakeMessageSessionSpecifier(const CanardPortID subject_id, const CanardNodeID src_node_id);
@@ -256,31 +258,15 @@ CANARD_PRIVATE CanardInternalTxQueueItem* txAllocateQueueItem(CanardInstance* co
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(payload_size > 0U);
-
-    // Increase the size of the payload if necessary to ensure that the following structure is well-aligned.
-    static_assert((_Alignof(max_align_t) & (_Alignof(max_align_t) - 1U)) == 0U, "Max align shall be a power of 2");
-    static const size_t max_align            = _Alignof(max_align_t);
-    const size_t        aligned_payload_size = (payload_size + max_align - 1U) & ~(max_align - 1U);
-    CANARD_ASSERT(aligned_payload_size >= payload_size);
-    CANARD_ASSERT(aligned_payload_size < (payload_size + max_align));
-
-    // Allocate one fragment of dynamic memory to store both the payload buffer and the metadata.
-    // The payload buffer is allocated in the beginning of the fragment. This allows us to hand it over to the
-    // application later so that when it is deallocated the metadata storage is also destroyed.
-    CanardInternalTxQueueItem* out = NULL;
-    uint8_t* const ptr = (uint8_t*) ins->memory_allocate(ins, sizeof(CanardInternalTxQueueItem) + aligned_payload_size);
-    if (ptr != NULL)
+    CanardInternalTxQueueItem* const out =
+        (CanardInternalTxQueueItem*) ins->memory_allocate(ins, sizeof(CanardInternalTxQueueItem) + payload_size);
+    if (out != NULL)
     {
-        out = (CanardInternalTxQueueItem*) (void*) (ptr + aligned_payload_size);
-        // Normally, we should check that the pointer is aligned here. We don't do that here because there is a bug
-        // in Glibc on x86: the alignment of malloc() is 8 bytes, whereas alignof(max_align_t) is 16 bytes.
-        // I tried filing it but their bug tracker requires registration via email, so I sent them one.
-        // Until the bug in Glibc is fixed, the assertion check should not be here because it would fail the unit tests.
-        out->next          = NULL;
-        out->deadline_usec = deadline_usec;
-        out->payload_size  = payload_size;
-        out->payload       = ptr;
-        out->id            = id;
+        out->next                  = NULL;
+        out->frame.timestamp_usec  = deadline_usec;
+        out->frame.payload_size    = payload_size;
+        out->frame.payload         = out->payload_buffer;
+        out->frame.extended_can_id = id;
     }
     return out;
 }
@@ -293,19 +279,19 @@ CANARD_PRIVATE CanardInternalTxQueueItem* txFindQueueSupremum(const CanardInstan
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
     CanardInternalTxQueueItem* out = ins->_tx_queue;
-    if ((NULL == out) || (out->id > can_id))
+    if ((NULL == out) || (out->frame.extended_can_id > can_id))
     {
         out = NULL;
     }
     else
     {
         // TODO The linear search should be replaced with O(log n) at least. Please help us here.
-        while ((out != NULL) && (out->next != NULL) && (out->next->id <= can_id))
+        while ((out != NULL) && (out->next != NULL) && (out->next->frame.extended_can_id <= can_id))
         {
             out = out->next;
         }
     }
-    CANARD_ASSERT((out == NULL) || (out->id <= can_id));
+    CANARD_ASSERT((out == NULL) || (out->frame.extended_can_id <= can_id));
     return out;
 }
 
@@ -339,14 +325,16 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardInstance* const   ins,
         {
             CANARD_ASSERT(payload != NULL);
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-            (void) memcpy(tqi->payload, payload, payload_size);  // NOLINT
+            // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+            (void) memcpy(&tqi->payload_buffer[0], payload, payload_size);  // NOLINT
         }
 
         // Clang-Tidy raises an error recommending the use of memset_s() instead.
-        (void) memset(tqi->payload + payload_size, PADDING_BYTE_VALUE, padding_size);  // NOLINT
+        // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+        (void) memset(&tqi->payload_buffer[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
 
-        tqi->payload[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
-        CanardInternalTxQueueItem* const sup  = txFindQueueSupremum(ins, can_id);
+        tqi->payload_buffer[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
+        CanardInternalTxQueueItem* const sup         = txFindQueueSupremum(ins, can_id);
         if (sup != NULL)
         {
             tqi->next = sup->next;
@@ -435,7 +423,8 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
                 move_size = frame_payload_size;
             }
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
-            (void) memcpy(tail->payload, payload_ptr, move_size);  // NOLINT
+            // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+            (void) memcpy(&tail->payload_buffer[0], payload_ptr, move_size);  // NOLINT
             frame_offset = frame_offset + move_size;
             offset += move_size;
             payload_ptr += move_size;
@@ -447,7 +436,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
             // Insert padding -- only in the last frame. Don't forget to include padding into the CRC.
             while ((frame_offset + CRC_SIZE_BYTES) < frame_payload_size)
             {
-                tail->payload[frame_offset] = PADDING_BYTE_VALUE;
+                tail->payload_buffer[frame_offset] = PADDING_BYTE_VALUE;
                 ++frame_offset;
                 crc = crcAddByte(crc, PADDING_BYTE_VALUE);
             }
@@ -455,21 +444,21 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
             // Insert the CRC.
             if ((frame_offset < frame_payload_size) && (offset == payload_size))
             {
-                tail->payload[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
+                tail->payload_buffer[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
                 ++frame_offset;
                 ++offset;
             }
             if ((frame_offset < frame_payload_size) && (offset > payload_size))
             {
-                tail->payload[frame_offset] = (uint8_t)(crc & BYTE_MAX);
+                tail->payload_buffer[frame_offset] = (uint8_t)(crc & BYTE_MAX);
                 ++frame_offset;
                 ++offset;
             }
         }
 
         // Finalize the frame.
-        CANARD_ASSERT((frame_offset + 1U) == tail->payload_size);
-        tail->payload[frame_offset] =
+        CANARD_ASSERT((frame_offset + 1U) == tail->frame.payload_size);
+        tail->payload_buffer[frame_offset] =
             txMakeTailByte(start_of_transfer, offset >= payload_size_with_crc, toggle, transfer_id);
         start_of_transfer = false;
         toggle            = !toggle;
@@ -683,6 +672,8 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
         // the other one is the search of the matching subscription state.
         // Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
         // Intentional violation of MISRA: indexing on a pointer. This is done to avoid pointer arithmetics.
+        // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+        // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
         (void) memcpy(&rxs->payload[rxs->payload_size], payload, bytes_to_copy);  // NOLINT NOSONAR
         rxs->payload_size += bytes_to_copy;
         CANARD_ASSERT(rxs->payload_size <= payload_size_max);
@@ -980,24 +971,19 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
     return out;
 }
 
-int8_t canardTxPeek(const CanardInstance* const ins, CanardFrame* const out_frame)
+const CanardFrame* canardTxPeek(const CanardInstance* const ins)
 {
-    int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
-    if ((ins != NULL) && (out_frame != NULL))
+    const CanardFrame* out = NULL;
+    if ((ins != NULL) && (ins->_tx_queue != NULL))
     {
-        const CanardInternalTxQueueItem* const tqi = ins->_tx_queue;
-        if (tqi != NULL)
-        {
-            out_frame->timestamp_usec  = tqi->deadline_usec;
-            out_frame->extended_can_id = tqi->id;
-            out_frame->payload_size    = tqi->payload_size;
-            out_frame->payload         = tqi->payload;
-            out                        = 1;
-        }
-        else
-        {
-            out = 0;
-        }
+        // Return pointer to the TX queue item typed as CanardFrame. Later, the application will be able to free
+        // the memory allocated for the TX queue item using this pointer typed as CanardFrame. Although it may look
+        // sketchy, this is actually safe and standard-compliant. The paragraph 6.7.2.1.15 of the C standard says:
+        //     A pointer to a structure object, suitably converted, points to its initial member (or if that member is a
+        //     bit-field, then to the unit in which it resides), and vice versa. There may be unnamed padding within a
+        //     structure object, but not at its beginning.
+        out = &ins->_tx_queue->frame;
+        CANARD_ASSERT(((void*) out) == ((void*) ins->_tx_queue));
     }
     return out;
 }
@@ -1006,9 +992,8 @@ void canardTxPop(CanardInstance* const ins)
 {
     if ((ins != NULL) && (ins->_tx_queue != NULL))
     {
-        CanardInternalTxQueueItem* const next = ins->_tx_queue->next;
         // The memory is NOT deallocated. The application is responsible for that.
-        ins->_tx_queue = next;
+        ins->_tx_queue = ins->_tx_queue->next;
     }
 }
 

@@ -280,9 +280,7 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
 ///
 /// The memory allocation requirement is one allocation per transport frame.
 /// A single-frame transfer takes one allocation; a multi-frame transfer of N frames takes N allocations.
-/// The maximum size of each allocation is sizeof(CanardInternalTxQueueItem) plus MTU size padded to max_align_t,
-/// where sizeof(CanardInternalTxQueueItem) is at most 40 bytes on any conventional platform (typically smaller).
-/// For example, if the MTU is 64 bytes, the allocation size will never exceed 104 bytes on any conventional platform.
+/// The maximum size of each allocation is sizeof(CanardFrame) plus a pointer size plus MTU size.
 int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
 
 /// Access the top element of the prioritized transmission queue. The queue itself is not modified (i.e., the
@@ -297,33 +295,30 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 /// the driver layer to implement the discardment of timed-out transport frames. The library does not check it,
 /// so a frame that is already timed out may be returned here.
 ///
-/// If the queue is empty, the return value is zero and the out_frame is not modified.
+/// If the queue is empty or if the argument is NULL, the returned value is NULL.
 ///
-/// If the queue is non-empty, the return value is 1 (one) and the out_frame is populated with the data from
-/// the top element (i.e., the next frame awaiting transmission).
-/// The payload pointer of the out_frame will point to a dynamically allocated storage.
-/// The payload pointer retains validity until explicitly freed by the application.
-/// The payload pointer shall not be freed before the entry is removed from the queue by calling canardTxPop().
+/// If the queue is non-empty, the returned value is a pointer to its top element (i.e., the next frame to transmit).
+/// The returned pointer points to an object allocated in the dynamic storage; it should be freed by the application
+/// by calling CanardInstance::memory_free(). The memory shall not be freed before the entry is removed from the
+/// queue by calling canardTxPop(); this is because until canardTxPop() is executed, the library retains ownership
+/// of the object. The payload pointer retains validity until explicitly freed by the application; in other words,
+/// calling canardTxPop() does not invalidate the object.
 ///
-/// If either of the arguments are NULL, the negated invalid argument error code is returned and no other
-/// actions are performed.
+/// The payload buffer is located shortly after the object itself, in the same memory fragment. The application shall
+/// not attempt to free its memory.
 ///
 /// The time complexity is constant.
-int8_t canardTxPeek(const CanardInstance* const ins, CanardFrame* const out_frame);
+const CanardFrame* canardTxPeek(const CanardInstance* const ins);
 
-/// Remove and free the top element from the prioritized transmission queue.
-/// The application should invoke this function after the top frame obtained through canardTxPeek() has been
-/// processed and need not be kept anymore (e.g., transmitted successfully, timed out, errored, etc.).
+/// Transfer the ownership of the top element of the prioritized transmission queue to the application.
+/// The application should invoke this function to remove the top element from the prioritized transmission queue.
+/// While the element is removed, it is not invalidated: it is the responsibility of the application to deallocate
+/// the memory used by the object later. The object SHALL NOT be deallocated UNTIL this function is invoked.
 ///
 /// WARNING:
 ///     Invocation of canardTxPush() may add new elements at the top of the prioritized transmission queue.
 ///     The calling code shall take that into account to eliminate the possibility of data loss due to the frame
 ///     at the top of the queue being unexpectedly replaced between calls of canardTxPeek() and this function.
-///
-/// AFTER this function is invoked, the application shall free the memory pointed to by the payload data pointer.
-/// The time between invocation and the payload buffer deallocation can be arbitrary because the ownership is fully
-/// transferred to the application. This design is intended to facilitate zero-copy enqueueing and transmission.
-/// The payload memory SHALL NOT be freed UNTIL this function is invoked.
 ///
 /// If the input argument is NULL or if the transmission queue is empty, the function has no effect.
 ///

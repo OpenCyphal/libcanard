@@ -183,16 +183,16 @@ TEST_CASE("txFindQueueSupremum")
     REQUIRE(nullptr == find((1UL << 29U) - 1U));
 
     TxQueueItem a{};
-    a.id          = 1000;
-    ins._tx_queue = reinterpret_cast<CanardInternalTxQueueItem*>(&a);
+    a.frame.extended_can_id = 1000;
+    ins._tx_queue           = reinterpret_cast<CanardInternalTxQueueItem*>(&a);
 
     REQUIRE(nullptr == find(999));
     REQUIRE(&a == find(1000));
     REQUIRE(&a == find(1001));
 
     TxQueueItem b{};
-    b.id   = 1010;
-    a.next = &b;
+    b.frame.extended_can_id = 1010;
+    a.next                  = &b;
 
     REQUIRE(nullptr == find(999));
     REQUIRE(&a == find(1000));
@@ -202,12 +202,12 @@ TEST_CASE("txFindQueueSupremum")
     REQUIRE(&b == find(1011));
 
     TxQueueItem c{};
-    c.id          = 990;
-    c.next        = &a;
-    ins._tx_queue = reinterpret_cast<CanardInternalTxQueueItem*>(&c);
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->id == 990);  // Make sure the list is assembled correctly.
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->id == 1000);
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->id == 1010);
+    c.frame.extended_can_id = 990;
+    c.next                  = &a;
+    ins._tx_queue           = reinterpret_cast<CanardInternalTxQueueItem*>(&c);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->frame.extended_can_id == 990);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->frame.extended_can_id == 1000);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->frame.extended_can_id == 1010);
     REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->next == nullptr);
 
     REQUIRE(nullptr == find(989));

@@ -16,18 +16,18 @@ using TransferCRC = std::uint16_t;
 
 struct TxQueueItem final
 {
-    std::uint64_t deadline_usec = 0;
-    TxQueueItem*  next          = nullptr;
-    std::uint8_t* payload       = nullptr;
-    std::size_t   payload_size  = 0;
-    std::uint32_t id            = 0;
+    CanardFrame  frame{};
+    TxQueueItem* next = nullptr;
 
-    [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t { return payload[offset]; }
+    [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
+    {
+        return reinterpret_cast<const std::uint8_t*>(frame.payload)[offset];
+    }
 
     [[nodiscard]] auto getTailByte() const
     {
-        REQUIRE(payload_size >= 1U);
-        return getPayloadByte(payload_size - 1U);
+        REQUIRE(frame.payload_size >= 1U);
+        return getPayloadByte(frame.payload_size - 1U);
     }
 
     [[nodiscard]] auto isStartOfTransfer() const { return (getTailByte() & 128U) != 0; }

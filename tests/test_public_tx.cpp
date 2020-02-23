@@ -43,9 +43,9 @@ TEST_CASE("TxBasic0")
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     REQUIRE(10 < alloc.getTotalAllocatedAmount());
     REQUIRE(80 > alloc.getTotalAllocatedAmount());
-    REQUIRE(ins.getTxQueueRoot()->deadline_usec == 1'000'000'000'000ULL);
-    REQUIRE(ins.getTxQueueRoot()->payload_size == 12);      // Three bytes of padding.
-    REQUIRE(ins.getTxQueueRoot()->getPayloadByte(0) == 0);  // Payload start.
+    REQUIRE(ins.getTxQueueRoot()->frame.timestamp_usec == 1'000'000'000'000ULL);
+    REQUIRE(ins.getTxQueueRoot()->frame.payload_size == 12);  // Three bytes of padding.
+    REQUIRE(ins.getTxQueueRoot()->getPayloadByte(0) == 0);    // Payload start.
     REQUIRE(ins.getTxQueueRoot()->getPayloadByte(1) == 1);
     REQUIRE(ins.getTxQueueRoot()->getPayloadByte(2) == 2);
     REQUIRE(ins.getTxQueueRoot()->getPayloadByte(3) == 3);
@@ -77,22 +77,22 @@ TEST_CASE("TxBasic0")
     {
         auto q = ins.getTxQueueRoot();
         REQUIRE(q != nullptr);
-        REQUIRE(q->deadline_usec == 1'000'000'000'000ULL);
-        REQUIRE(q->payload_size == 12);
+        REQUIRE(q->frame.timestamp_usec == 1'000'000'000'000ULL);
+        REQUIRE(q->frame.payload_size == 12);
         REQUIRE(q->isStartOfTransfer());
         REQUIRE(q->isEndOfTransfer());
         REQUIRE(q->isToggleBitSet());
         q = q->next;
         REQUIRE(q != nullptr);
-        REQUIRE(q->deadline_usec == 1'000'000'000'100ULL);
-        REQUIRE(q->payload_size == 8);
+        REQUIRE(q->frame.timestamp_usec == 1'000'000'000'100ULL);
+        REQUIRE(q->frame.payload_size == 8);
         REQUIRE(q->isStartOfTransfer());
         REQUIRE(!q->isEndOfTransfer());
         REQUIRE(q->isToggleBitSet());
         q = q->next;
         REQUIRE(q != nullptr);
-        REQUIRE(q->deadline_usec == 1'000'000'000'100ULL);
-        REQUIRE(q->payload_size == 4);  // One leftover, two CRC, one tail.
+        REQUIRE(q->frame.timestamp_usec == 1'000'000'000'100ULL);
+        REQUIRE(q->frame.payload_size == 4);  // One leftover, two CRC, one tail.
         REQUIRE(!q->isStartOfTransfer());
         REQUIRE(q->isEndOfTransfer());
         REQUIRE(!q->isToggleBitSet());
@@ -124,54 +124,58 @@ TEST_CASE("TxBasic0")
 
     // Pop the queue.
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
-    constexpr std::uint16_t CRC8 = 0x178DU;
-    CanardFrame             frame{};
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 12);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 8));
-    REQUIRE(0 == reinterpret_cast<const std::uint8_t*>(frame.payload)[8]);   // Padding.
-    REQUIRE(0 == reinterpret_cast<const std::uint8_t*>(frame.payload)[9]);   // Padding.
-    REQUIRE(0 == reinterpret_cast<const std::uint8_t*>(frame.payload)[10]);  // Padding.
-    REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[11]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'000'000ULL);
-    frame = {};
-    REQUIRE(1 == ins.txPeek(frame));  // Make sure we get the same frame again.
-    REQUIRE(frame.payload_size == 12);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 8));
-    REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[11]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'000'000ULL);
+    constexpr std::uint16_t CRC8  = 0x178DU;
+    const CanardFrame*      frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 12);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 8));
+    REQUIRE(0 == reinterpret_cast<const std::uint8_t*>(frame->payload)[8]);   // Padding.
+    REQUIRE(0 == reinterpret_cast<const std::uint8_t*>(frame->payload)[9]);   // Padding.
+    REQUIRE(0 == reinterpret_cast<const std::uint8_t*>(frame->payload)[10]);  // Padding.
+    REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[11]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'000'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);  // Make sure we get the same frame again.
+    REQUIRE(frame->payload_size == 12);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 8));
+    REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[11]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'000'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(2 == ins.getTxQueueLength());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 8);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 7));
-    REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[7]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'000'100ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 8);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 7));
+    REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[7]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'000'100ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(1 == ins.getTxQueueLength());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 4);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 7U, 1));
-    REQUIRE((CRC8 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[1]);
-    REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[2]);
-    REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[3]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'000'100ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 4);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data() + 7U, 1));
+    REQUIRE((CRC8 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
+    REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[2]);
+    REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[3]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'000'100ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(nullptr == ins.getTxQueueRoot());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
-    REQUIRE(0 == ins.txPeek(frame));
+    frame = ins.txPeek();
+    REQUIRE(nullptr == frame);
     ins.txPop();  // Invocation when empty has no effect.
     ins.txPop();
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(nullptr == ins.getTxQueueRoot());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
-    REQUIRE(0 == ins.txPeek(frame));
+    frame = ins.txPeek();
+    REQUIRE(nullptr == frame);
 
     alloc.setAllocationCeiling(1000);
 
@@ -189,36 +193,39 @@ TEST_CASE("TxBasic0")
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
     REQUIRE(220 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 32);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 31));
-    REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'001'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 31));
+    REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(2 == ins.getTxQueueLength());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 32);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 31U, 30));
-    REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[30]);
-    REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'001'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data() + 31U, 30));
+    REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[30]);
+    REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(1 == ins.getTxQueueLength());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 2);  // The last byte of CRC plus the tail byte.
-    REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[0]);
-    REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[1]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'001'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 2);  // The last byte of CRC plus the tail byte.
+    REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
+    REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
-    // Multi-frame, success. CRC is in the last frame.
+    // Multi-frame, success. CRC is in the last frame->
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
     ins.setMTU(32);
@@ -232,32 +239,35 @@ TEST_CASE("TxBasic0")
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
     REQUIRE(220 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 32);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 31));
-    REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'002'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 31));
+    REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(2 == ins.getTxQueueLength());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 32);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 31U, 31));
-    REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[31]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'002'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 32);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data() + 31U, 31));
+    REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(1 == ins.getTxQueueLength());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 3);  // The CRC plus the tail byte.
-    REQUIRE((CRC62 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[0]);
-    REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[1]);
-    REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[2]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'002'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 3);  // The CRC plus the tail byte.
+    REQUIRE((CRC62 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
+    REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
+    REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[2]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -273,27 +283,29 @@ TEST_CASE("TxBasic0")
     REQUIRE(2 == ins.getTxQueueLength());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     // Read the generated frames.
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 64);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data(), 63));
-    REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[63]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'003'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 64);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 63));
+    REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[63]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'003'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(1 == ins.getTxQueueLength());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 64);
-    REQUIRE(0 == std::memcmp(frame.payload, payload.data() + 63U, 49));
-    REQUIRE(std::all_of(reinterpret_cast<const std::uint8_t*>(frame.payload) + 49,  // Check padding.
-                        reinterpret_cast<const std::uint8_t*>(frame.payload) + 61,
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 64);
+    REQUIRE(0 == std::memcmp(frame->payload, payload.data() + 63U, 49));
+    REQUIRE(std::all_of(reinterpret_cast<const std::uint8_t*>(frame->payload) + 49,  // Check padding.
+                        reinterpret_cast<const std::uint8_t*>(frame->payload) + 61,
                         [](auto x) { return x == 0U; }));
-    REQUIRE((CRC112Padding12 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[61]);    // CRC
-    REQUIRE((CRC112Padding12 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame.payload)[62]);  // CRC
-    REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[63]);        // Tail
-    REQUIRE(frame.timestamp_usec == 1'000'000'003'000ULL);
+    REQUIRE((CRC112Padding12 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[61]);    // CRC
+    REQUIRE((CRC112Padding12 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[62]);  // CRC
+    REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[63]);        // Tail
+    REQUIRE(frame->timestamp_usec == 1'000'000'003'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -306,22 +318,24 @@ TEST_CASE("TxBasic0")
     REQUIRE(1 == ins.getTxQueueLength());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     REQUIRE(60 > alloc.getTotalAllocatedAmount());
-    REQUIRE(ins.getTxQueueRoot()->deadline_usec == 1'000'000'004'000ULL);
-    REQUIRE(ins.getTxQueueRoot()->payload_size == 1);
+    REQUIRE(ins.getTxQueueRoot()->frame.timestamp_usec == 1'000'000'004'000ULL);
+    REQUIRE(ins.getTxQueueRoot()->frame.payload_size == 1);
     REQUIRE(ins.getTxQueueRoot()->isStartOfTransfer());
     REQUIRE(ins.getTxQueueRoot()->isEndOfTransfer());
     REQUIRE(ins.getTxQueueRoot()->isToggleBitSet());
-    REQUIRE(1 == ins.txPeek(frame));
-    REQUIRE(frame.payload_size == 1);
-    REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(frame.payload)[0]);
-    REQUIRE(frame.timestamp_usec == 1'000'000'004'000ULL);
+    frame = ins.txPeek();
+    REQUIRE(nullptr != frame);
+    REQUIRE(frame->payload_size == 1);
+    REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
+    REQUIRE(frame->timestamp_usec == 1'000'000'004'000ULL);
     ins.txPop();
-    ins.getAllocator().deallocate(frame.payload);
+    ins.getAllocator().deallocate(frame);
     REQUIRE(0 == ins.getTxQueueLength());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Nothing left to peek at.
-    REQUIRE(0 == ins.txPeek(frame));
+    frame = ins.txPeek();
+    REQUIRE(nullptr == frame);
 
     // Error handling.
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr));
@@ -331,9 +345,7 @@ TEST_CASE("TxBasic0")
     transfer.payload      = nullptr;
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == ins.txPush(transfer));
 
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPeek(nullptr, nullptr));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPeek(nullptr, &frame));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPeek(&ins.getInstance(), nullptr));
+    REQUIRE(nullptr == canardTxPeek(nullptr));
 
     canardTxPop(&ins.getInstance());  // No effect.
 }

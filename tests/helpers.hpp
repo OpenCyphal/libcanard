@@ -99,10 +99,7 @@ public:
         {
             std::unique_lock locker(lock_);
             const auto       it = allocated_.find(pointer);
-            if (it == std::end(allocated_))
-            {
-                throw std::logic_error("Heap corruption: an attempt to deallocate memory that is not allocated");
-            }
+            REQUIRE(it != std::end(allocated_));  // Catch an attempt to deallocate memory that is not allocated.
             // Damage the memory to make sure it's not used after deallocation.
             std::uniform_int_distribution<std::uint16_t> dist(0, 255U);
             std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, [&]() {
@@ -165,7 +162,7 @@ public:
 
     [[nodiscard]] auto txPush(const CanardTransfer& transfer) { return canardTxPush(&canard_, &transfer); }
 
-    [[nodiscard]] auto txPeek(CanardFrame& out_frame) const { return canardTxPeek(&canard_, &out_frame); }
+    [[nodiscard]] auto txPeek() const { return canardTxPeek(&canard_); }
 
     void txPop() { canardTxPop(&canard_); }
 
