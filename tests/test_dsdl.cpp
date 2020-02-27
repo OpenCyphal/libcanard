@@ -43,7 +43,11 @@ TEST_CASE("copyBitArray")
 {
     using exposed::copyBitArray;
 
-    copyBitArray(0, 0, 0, nullptr, nullptr);
+    {
+        uint8_t a = 0;
+        uint8_t b = 0;
+        copyBitArray(0, 0, 0, &a, &b);
+    }
 
     const auto test = [&](const size_t                     length_bit,
                           const size_t                     src_offset_bit,
@@ -58,7 +62,10 @@ TEST_CASE("copyBitArray")
         return std::equal(std::begin(ref), std::end(ref), std::begin(result));
     };
 
-    REQUIRE(test(0, 0, 0, {}, {}, {}));
     REQUIRE(test(8, 0, 0, {0xFF}, {0x00}, {0xFF}));
     REQUIRE(test(16, 0, 0, {0xFF, 0xFF}, {0x00, 0x00}, {0xFF, 0xFF}));
+    REQUIRE(test(12, 0, 0, {0xFF, 0x0A}, {0x55, 0x00}, {0xFF, 0x0A}));
+    REQUIRE(test(12, 0, 0, {0xFF, 0x0A}, {0x00, 0xF0}, {0xFF, 0xFA}));
+    REQUIRE(test(12, 0, 4, {0xFF, 0x0A}, {0x53, 0x55}, {0xF3, 0xAF}));
+    REQUIRE(test(8, 4, 4, {0x55, 0x55}, {0xAA, 0xAA}, {0x5A, 0xA5}));
 }

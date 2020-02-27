@@ -3,6 +3,7 @@
 
 #include "canard_dsdl.h"
 #include <assert.h>
+#include <string.h>
 
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
 
@@ -26,42 +27,79 @@
 
 // --------------------------------------------- COMMON CONSTANTS ---------------------------------------------
 
-#define BYTE_SIZE 8U
+/// Per the DSDL specification, it is assumed that 1 byte = 8 bits.
+#define BYTE_WIDTH 8U
 #define BYTE_MAX 0xFFU
 
 // --------------------------------------------- PRIMITIVE SERIALIZATION ---------------------------------------------
 
 #if CANARD_DSDL_PLATFORM_TWOS_COMPLEMENT
 
-/// Per the DSDL specification, it is assumed that 1 byte = 8 bits.
+CANARD_PRIVATE size_t chooseMin(size_t a, size_t b)
+{
+    return (a < b) ? a : b;
+}
+
+/// The algorithm was originally designed by Ben Dyer for Libuavcan v0:
+/// https://github.com/UAVCAN/libuavcan/blob/ba696029f9625d7ea3eb00/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12-L58
+/// This version is modified for v1 where the bit order is the opposite.
+/// If both offsets and the length are byte-aligned, the algorithm degenerates into memcpy().
+/// The source and the destination shall not overlap.
 CANARD_PRIVATE void copyBitArray(const size_t         length_bit,
                                  const size_t         src_offset_bit,
                                  const size_t         dst_offset_bit,
                                  const uint8_t* const src,
                                  uint8_t* const       dst)
 {
-    CANARD_ASSERT((src != NULL) || (length_bit == 0U));
-    CANARD_ASSERT((dst != NULL) || (length_bit == 0U));
-    size_t       src_off  = src_offset_bit;
-    size_t       dst_off  = dst_offset_bit;
-    const size_t last_bit = src_off + length_bit;
-    while (last_bit > src_off)
+    CANARD_ASSERT((src != NULL) && (dst != NULL) && (src != dst));
+    CANARD_ASSERT((src < dst) ? ((src + ((src_offset_bit + length_bit + BYTE_WIDTH) / BYTE_WIDTH)) <= dst)
+                              : ((dst + ((dst_offset_bit + length_bit + BYTE_WIDTH) / BYTE_WIDTH)) <= src));
+    if (((length_bit % BYTE_WIDTH) == 0U) &&      //
+        ((src_offset_bit % BYTE_WIDTH) == 0U) &&  //
+        ((dst_offset_bit % BYTE_WIDTH) == 0U))
     {
-        const uint8_t src_mod = (uint8_t)(src_off % BYTE_SIZE);
-        const uint8_t dst_mod = (uint8_t)(dst_off % BYTE_SIZE);
-        const uint8_t max_mod = (src_mod > dst_mod) ? src_mod : dst_mod;
-        size_t        size    = BYTE_SIZE - max_mod;
-        if (size > (last_bit - src_off))
+        // Intentional violation of MISRA: Pointer arithmetics.
+        // This is done to remove the API constraint that offsets be under 8 bits.
+        // Fewer constraints reduce the chance of API misuse.
+        (void) memcpy(dst + (dst_offset_bit / BYTE_WIDTH),  // NOSONAR NOLINT
+                      src + (src_offset_bit / BYTE_WIDTH),  // NOSONAR
+                      length_bit / BYTE_WIDTH);
+    }
+    else
+    {
+        size_t       src_off  = src_offset_bit;
+        size_t       dst_off  = dst_offset_bit;
+        const size_t last_bit = src_off + length_bit;
+        while (last_bit > src_off)
         {
-            size = last_bit - src_off;
+            const uint8_t src_mod = (uint8_t)(src_off % BYTE_WIDTH);
+            const uint8_t dst_mod = (uint8_t)(dst_off % BYTE_WIDTH);
+            const uint8_t max_mod = (src_mod > dst_mod) ? src_mod : dst_mod;
+
+            const size_t size = chooseMin(BYTE_WIDTH - max_mod, last_bit - src_off);
+            CANARD_ASSERT((size > 0U) && (size <= BYTE_WIDTH));
+
+            const uint8_t mask = (uint8_t)((((1U << size) - 1U) << dst_mod) & BYTE_MAX);
+            CANARD_ASSERT((mask > 0U) && (mask <= BYTE_MAX));
+
+            // Intentional violation of MISRA: indexing on a pointer.
+            // This simplifies the implementation greatly and avoids pointer arithmetics.
+            const uint8_t in =
+                (uint8_t)((uint8_t)(src[src_off / BYTE_WIDTH] >> src_mod) << dst_mod) & BYTE_MAX;  // NOSONAR
+
+            // Intentional violation of MISRA: indexing on a pointer.
+            // This simplifies the implementation greatly and avoids pointer arithmetics.
+            const uint8_t a = dst[dst_off / BYTE_WIDTH] & ((uint8_t) ~mask);  // NOSONAR
+            const uint8_t b = in & mask;
+
+            // Intentional violation of MISRA: indexing on a pointer.
+            // This simplifies the implementation greatly and avoids pointer arithmetics.
+            dst[dst_off / BYTE_WIDTH] = a | b;  // NOSONAR
+
+            src_off += size;
+            dst_off += size;
         }
-        const uint8_t mask       = (uint8_t)((((BYTE_MAX << BYTE_SIZE) >> size) & BYTE_MAX) >> dst_mod);
-        const uint8_t in         = (uint8_t)(((uint32_t) src[src_off / BYTE_SIZE] << src_mod) >> dst_mod);
-        const uint8_t a          = dst[dst_off / BYTE_SIZE] & (uint8_t) ~mask;
-        const uint8_t b          = in & mask;
-        dst[dst_off / BYTE_SIZE] = a | b;
-        src_off += size;
-        dst_off += size;
+        CANARD_ASSERT(last_bit == src_off);
     }
 }
 
