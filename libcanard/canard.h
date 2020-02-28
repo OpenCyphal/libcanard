@@ -1,5 +1,6 @@
 // This software is distributed under the terms of the MIT License.
 // Copyright (c) 2016-2020 UAVCAN Development Team.
+// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 // Contributors: https://github.com/UAVCAN/libcanard/contributors.
 // READ THE DOCUMENTATION IN README.md.
 
