@@ -289,3 +289,28 @@ TEST_CASE("canardDSDLSerialize_heartbeat")
     REQUIRE(std::size(dest) == std::size(Reference));
     REQUIRE_THAT(dest, Catch::Matchers::Equals(Reference));
 }
+
+TEST_CASE("canardDSDLDeserialize_aligned")
+{
+    // The reference values for the following test have been taken from the PyUAVCAN test suite.
+    const std::vector<std::uint8_t> Reference({0xA7, 0xEF, 0xCD, 0xAB, 0x90, 0x78, 0x56, 0x34, 0x12, 0x88, 0xA9, 0xCB,
+                                               0xED, 0xFE, 0xFF, 0x00, 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0,
+                                               0x3F, 0x00, 0x00, 0x80, 0x3F, 0x00, 0x7C, 0xDA, 0x0E, 0xDA, 0xBE, 0xFE,
+                                               0x01, 0xAD, 0xDE, 0xEF, 0xBE, 0xC5, 0x67, 0xC5, 0x0B});
+    const std::uint8_t* const       buf = Reference.data();
+
+    REQUIRE(canardDSDLGetBit(buf, 1, 0));
+    REQUIRE(!canardDSDLGetBit(buf, 1, 3));
+    REQUIRE(!canardDSDLGetBit(buf, 0, 0));  // IZER
+
+    REQUIRE(0b1010'0111 == canardDSDLGetU8(buf, 45, 0, 8));
+
+    REQUIRE(0x1234'5678'90ab'cdef == canardDSDLGetI64(buf, 45, 8, 64));
+    REQUIRE(0x1234'5678'90ab'cdef == canardDSDLGetU64(buf, 45, 8, 64));
+    REQUIRE(0xef == canardDSDLGetU8(buf, 45, 8, 64));
+
+    REQUIRE(-0x1234'5678 == canardDSDLGetI32(buf, 45, 72, 32));
+    REQUIRE(-2 == canardDSDLGetI16(buf, 45, 104, 16));
+    REQUIRE(0 == canardDSDLGetU8(buf, 45, 120, 8));
+    REQUIRE(127 == canardDSDLGetI8(buf, 45, 128, 8));
+}

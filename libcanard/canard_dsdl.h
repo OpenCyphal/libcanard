@@ -24,11 +24,12 @@ typedef double CanardDSDLFloat64;
 
 /// Serialize a DSDL field value at the specified bit offset from the beginning of the destination buffer.
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
+/// One-bit-wide signed integers are processed without raising an error or a deviation but the result is unspecified.
 /// Arguments:
 ///     buf     Destination buffer where the result will be stored.
 ///     off_bit Offset, in bits, from the beginning of the buffer. May exceed one byte.
 ///     value   The value itself (promoted to 64-bit for unification).
-///     len_bit Length of the serialized representation, in bits. Zero has no effect.
+///     len_bit Length of the serialized representation, in bits. Zero has no effect. Values above 64 are saturated.
 void canardDSDLSetBit(uint8_t* const buf, const size_t off_bit, const bool value);
 void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t value, const uint8_t len_bit);
 void canardDSDLSetIxx(uint8_t* const buf, const size_t off_bit, const int64_t value, const uint8_t len_bit);
@@ -41,18 +42,19 @@ void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDL
 /// by the DSDL specification (see Implicit Zero Extension Rule, IZER).
 /// If len_bit is greater than the return type, extra bits will be truncated per regular narrowing conversion rules.
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
+/// One-bit-wide signed integers are processed without raising an error or a deviation but the result is unspecified.
 /// Returns the deserialized value. If the value spills over the buffer boundary, the spilled bits are taken as zero.
 /// Arguments:
 ///     buf      Source buffer where the serialized representation will be read from.
 ///     buf_size The size of the source buffer, in bytes. Reads past this limit will be assumed to return zero bits.
 ///     off_bit  Offset, in bits, from the beginning of the buffer. May exceed one byte.
-///     len_bit  Length of the serialized representation, in bits. Zero returns zero.
+///     len_bit  Length of the serialized representation, in bits. Zero returns zero. Out-of-range values are saturated.
 bool     canardDSDLGetBit(const uint8_t* const buf, const size_t buf_size, const size_t off_bit);
-uint8_t  canardDSDLGetU08(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
+uint8_t  canardDSDLGetU8(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
 uint16_t canardDSDLGetU16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
 uint32_t canardDSDLGetU32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
 uint64_t canardDSDLGetU64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
-int8_t   canardDSDLGetI08(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
+int8_t   canardDSDLGetI8(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
 int16_t  canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
 int32_t  canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
 int64_t  canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit);
