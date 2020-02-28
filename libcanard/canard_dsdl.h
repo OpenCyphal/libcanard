@@ -34,8 +34,9 @@ extern "C" {
 ///
 /// The function is only available if the platform uses two's complement signed integer representation.
 ///
-/// If any of the input pointers are NULL or the value of length_bit is not specified in the table,
-/// the function has no effect.
+/// If any of the input pointers are NULL or the value of length_bit is not specified in the table, zero is returned.
+///
+/// If the source and the destination areas overlap, the behavior is undefined.
 ///
 /// The type of the value pointed to by 'value' is defined as follows:
 ///
@@ -48,13 +49,14 @@ extern "C" {
 ///  | [33, 64]   | uint64_t, int64_t, or 64-bit float       |
 ///
 /// @param destination   Destination buffer where the result will be stored.
-/// @param offset_bit    Offset, in bits, from the beginning of the destination buffer.
+/// @param offset_bit    Offset, in bits, from the beginning of the destination buffer. May exceed one byte.
 /// @param length_bit    Length of the value, in bits; see the table.
 /// @param value         Pointer to the value; see the table.
-void canardDSDLPrimitiveSerialize(void* const       destination,
-                                  const size_t      offset_bit,
-                                  const uint8_t     length_bit,
-                                  const void* const value);
+/// @returns (offset_bit + length_bit) on success, zero if any of the arguments are invalid.
+size_t canardDSDLPrimitiveSerialize(uint8_t* const    destination,
+                                    const size_t      offset_bit,
+                                    const uint8_t     length_bit,
+                                    const void* const value);
 
 /// This function may be used to extract values from received UAVCAN transfers.
 /// It deserializes a scalar value -- boolean, integer, character, or floating point -- from the specified
@@ -62,8 +64,9 @@ void canardDSDLPrimitiveSerialize(void* const       destination,
 ///
 /// The function is only available if the platform uses two's complement signed integer representation.
 ///
-/// If any of the input pointers are NULL or the value of length_bit is not specified in the table,
-/// the function has no effect.
+/// If any of the input pointers are NULL or the value of length_bit is not specified in the table, zero is returned.
+///
+/// If the source and the destination areas overlap, the behavior is undefined.
 ///
 /// The type of the value pointed to by 'out_value' is defined as follows:
 ///
@@ -80,16 +83,19 @@ void canardDSDLPrimitiveSerialize(void* const       destination,
 ///  | [33, 64]   | false       | uint64_t                                 |
 ///  | [33, 64]   | true        | int64_t, or 64-bit float IEEE 754        |
 ///
-/// @param source       The source buffer where the data will be read from.
-/// @param offset_bit   Offset, in bits, from the beginning of the source buffer.
-/// @param length_bit   Length of the value, in bits; see the table.
-/// @param is_signed    True if the value can be negative (i.e., sign bit extension is needed); see the table.
-/// @param out_value    Pointer to the output storage; see the table.
-void canardDSDLPrimitiveDeserialize(const void* const source,
-                                    const size_t      offset_bit,
-                                    const uint8_t     length_bit,
-                                    const bool        is_signed,
-                                    void* const       out_value);
+/// @param source               The source buffer where the data will be read from.
+/// @param source_size_bytes    Bytes above this size will be assumed to equal zero, per the zero extension rule.
+/// @param offset_bit           Offset, in bits, from the beginning of the source buffer. May exceed one byte.
+/// @param length_bit           Length of the value, in bits; see the table.
+/// @param is_signed            True if the value can be negative (i.e., sign bit extension is needed); see the table.
+/// @param out_value            Pointer to the output storage; see the table.
+/// @returns (offset_bit + length_bit) on success, zero if any of the arguments are invalid.
+size_t canardDSDLPrimitiveDeserialize(const uint8_t* const source,
+                                      const size_t         source_size_bytes,
+                                      const size_t         offset_bit,
+                                      const uint8_t        length_bit,
+                                      const bool           is_signed,
+                                      void* const          out_value);
 
 #endif  // CANARD_DSDL_PLATFORM_TWOS_COMPLEMENT
 

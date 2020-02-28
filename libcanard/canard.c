@@ -15,7 +15,7 @@
 #endif
 
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
-#if defined(CANARD_EXPOSE_PRIVATE) && CANARD_EXPOSE_PRIVATE
+#if defined(CANARD_CONFIG_EXPOSE_PRIVATE) && CANARD_CONFIG_EXPOSE_PRIVATE
 #    define CANARD_PRIVATE
 #else
 #    define CANARD_PRIVATE static inline
