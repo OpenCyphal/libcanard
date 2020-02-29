@@ -25,6 +25,7 @@ typedef double CanardDSDLFloat64;
 /// Serialize a DSDL field value at the specified bit offset from the beginning of the destination buffer.
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
 /// One-bit-wide signed integers are processed without raising an error but the result is unspecified.
+/// The floating point functions are only available if the target platform has an IEEE 754-compatible float model.
 ///
 /// Arguments:
 ///     buf     Destination buffer where the result will be stored.
@@ -41,6 +42,7 @@ void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDL
 /// Deserialize a DSDL field value located at the specified bit offset from the beginning of the source buffer.
 /// If the deserialized value extends beyond the end of the buffer, the missing bits are taken as zero, as required
 /// by the DSDL specification (see Implicit Zero Extension Rule, IZER).
+/// The floating point functions are only available if the target platform has an IEEE 754-compatible float model.
 ///
 /// If len_bit is greater than the return type, extra bits will be truncated per regular narrowing conversion rules.
 /// If len_bit is shorter than the return type, missing bits will be zero per regular integer promotion rules.

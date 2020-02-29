@@ -38,13 +38,11 @@
 #    error "Unsupported language: ISO C11 or a newer version is required."
 #endif
 
-#define CANARD_DSDL_PLATFORM_IEEE754                                                              \
-    ((FLT_RADIX == 2) && (FLT_MANT_DIG == 24) && (FLT_MIN_EXP == -125) && (FLT_MAX_EXP == 128) && \
-     (DBL_MANT_DIG == 53) && (DBL_MIN_EXP == -1021) && (DBL_MAX_EXP == 1024))
-_Static_assert(CANARD_DSDL_PLATFORM_IEEE754,
-               "Currently, the module requires that the target platform shall use an IEEE 754-compatible floating "
-               "point model. It is possible to support other platforms, but this has not been done yet. "
-               "If your platform is not IEEE 754-compatible, please reach the maintainers via http://forum.uavcan.org");
+/// If your platform is not IEEE 754-compatible and you need floats, please reach https://forum.uavcan.org.
+#define CANARD_DSDL_PLATFORM_IEEE754_FLOAT \
+    ((FLT_RADIX == 2) && (FLT_MANT_DIG == 24) && (FLT_MIN_EXP == -125) && (FLT_MAX_EXP == 128))
+#define CANARD_DSDL_PLATFORM_IEEE754_DOUBLE \
+    ((FLT_RADIX == 2) && (DBL_MANT_DIG == 53) && (DBL_MIN_EXP == -1021) && (DBL_MAX_EXP == 1024))
 
 // --------------------------------------------- COMMON ITEMS ---------------------------------------------
 
@@ -55,69 +53,6 @@ _Static_assert(CANARD_DSDL_PLATFORM_IEEE754,
 #define WIDTH16 16U
 #define WIDTH32 32U
 #define WIDTH64 64U
-
-// --------------------------------------------- FLOAT16 SUPPORT ---------------------------------------------
-
-_Static_assert(WIDTH32 == sizeof(CanardDSDLFloat32) * BYTE_WIDTH, "Unsupported floating point model");
-_Static_assert(WIDTH64 == sizeof(CanardDSDLFloat64) * BYTE_WIDTH, "Unsupported floating point model");
-
-// Intentional violation of MISRA: we need this union because the alternative is far more error prone.
-// We have to rely on low-level data representation details to do the conversion; unions are helpful.
-typedef union  // NOSONAR
-{
-    uint32_t          bits;
-    CanardDSDLFloat32 real;
-} Float32Bits;
-_Static_assert(4 == sizeof(Float32Bits), "Unsupported float model");
-
-CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value);
-CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
-{
-    // The no-lint statements suppress the warnings about magic numbers.
-    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
-    const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT NOSONAR
-    const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT NOSONAR
-    const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT NOSONAR
-    const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT NOSONAR
-    Float32Bits       in         = {.real = value};                     // NOSONAR
-    const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT NOSONAR
-    in.bits ^= sign;
-    uint16_t out = 0;
-    if (in.bits >= f32inf.bits)
-    {
-        out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT NOSONAR
-    }
-    else
-    {
-        in.bits &= round_mask;
-        in.real *= magic.real;
-        in.bits -= round_mask;
-        if (in.bits > f16inf.bits)
-        {
-            in.bits = f16inf.bits;
-        }
-        out = (uint16_t)(in.bits >> 13U);  // NOLINT NOSONAR
-    }
-    out |= (uint16_t)(sign >> 16U);  // NOLINT NOSONAR
-    return out;
-}
-
-CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value);
-CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value)
-{
-    // The no-lint statements suppress the warnings about magic numbers.
-    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
-    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT NOSONAR
-    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};             // NOLINT NOSONAR
-    Float32Bits       out     = {.bits = ((uint32_t)(value & 0x7FFFU)) << 13U};  // NOLINT NOSONAR
-    out.real *= magic.real;
-    if (out.real >= inf_nan.real)
-    {
-        out.bits |= ((uint32_t) 0xFFU) << 23U;  // NOLINT NOSONAR
-    }
-    out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT NOSONAR
-    return out.real;
-}
 
 // --------------------------------------------- PRIMITIVE SERIALIZATION ---------------------------------------------
 
@@ -209,7 +144,7 @@ CANARD_PRIVATE size_t getBitCopySize(const size_t  buf_size_bytes,
     return chooseMin(remaining_bit, chooseMin(requested_length_bit, value_length_bit));
 }
 
-// --------------------------------------------- PUBLIC API ---------------------------------------------
+// --------------------------------------------- PUBLIC API - INTEGER ---------------------------------------------
 
 void canardDSDLSetBit(uint8_t* const buf, const size_t off_bit, const bool value)
 {
@@ -246,41 +181,6 @@ void canardDSDLSetIxx(uint8_t* const buf, const size_t off_bit, const int64_t va
     // 6.3.1.3.3: if the new type is unsigned, the value is converted by repeatedly adding or subtracting one more
     // than the maximum value that can be represented in the new type until the value is in the range of the new type.
     canardDSDLSetUxx(buf, off_bit, (uint64_t) value, len_bit);
-}
-
-void canardDSDLSetF16(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat32 value)
-{
-    canardDSDLSetUxx(buf, off_bit, float16Pack(value), WIDTH16);
-}
-
-void canardDSDLSetF32(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat32 value)
-{
-    // Intentional violation of MISRA: use union to perform fast conversion from an IEEE 754-compatible native
-    // representation into a serializable integer. The assumptions about the target platform properties are made
-    // clear. In the future we may add a more generic conversion that is platform-invariant.
-    _Static_assert(CANARD_DSDL_PLATFORM_IEEE754, "IEEE 754 required");
-    union  // NOSONAR
-    {
-        CanardDSDLFloat32 fl;
-        uint32_t          in;
-    } const tmp = {value};  // NOSONAR
-    _Static_assert(WIDTH32 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
-    canardDSDLSetUxx(buf, off_bit, tmp.in, sizeof(tmp) * BYTE_WIDTH);
-}
-
-void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat64 value)
-{
-    // Intentional violation of MISRA: use union to perform fast conversion from an IEEE 754-compatible native
-    // representation into a serializable integer. The assumptions about the target platform properties are made
-    // clear. In the future we may add a more generic conversion that is platform-invariant.
-    _Static_assert(CANARD_DSDL_PLATFORM_IEEE754, "IEEE 754 required");
-    union  // NOSONAR
-    {
-        CanardDSDLFloat64 fl;
-        uint64_t          in;
-    } const tmp = {value};  // NOSONAR
-    _Static_assert(WIDTH64 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
-    canardDSDLSetUxx(buf, off_bit, tmp.in, sizeof(tmp) * BYTE_WIDTH);
 }
 
 bool canardDSDLGetBit(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
@@ -388,9 +288,98 @@ int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const 
     return neg ? (int64_t)((-(int64_t) ~val) - 1) : (int64_t) val;
 }
 
+// --------------------------------------------- PUBLIC API - FLOAT16 ---------------------------------------------
+
+#if CANARD_DSDL_PLATFORM_IEEE754_FLOAT
+
+_Static_assert(WIDTH32 == sizeof(CanardDSDLFloat32) * BYTE_WIDTH, "Unsupported floating point model");
+
+// Intentional violation of MISRA: we need this union because the alternative is far more error prone.
+// We have to rely on low-level data representation details to do the conversion; unions are helpful.
+typedef union  // NOSONAR
+{
+    uint32_t          bits;
+    CanardDSDLFloat32 real;
+} Float32Bits;
+
+CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value);
+CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
+{
+    // The no-lint statements suppress the warnings about magic numbers.
+    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
+    const uint32_t    round_mask = ~(uint32_t) 0x0FFFU;                 // NOLINT NOSONAR
+    const Float32Bits f32inf     = {.bits = ((uint32_t) 255U) << 23U};  // NOLINT NOSONAR
+    const Float32Bits f16inf     = {.bits = ((uint32_t) 31U) << 23U};   // NOLINT NOSONAR
+    const Float32Bits magic      = {.bits = ((uint32_t) 15U) << 23U};   // NOLINT NOSONAR
+    Float32Bits       in         = {.real = value};                     // NOSONAR
+    const uint32_t    sign       = in.bits & (((uint32_t) 1U) << 31U);  // NOLINT NOSONAR
+    in.bits ^= sign;
+    uint16_t out = 0;
+    if (in.bits >= f32inf.bits)
+    {
+        out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT NOSONAR
+    }
+    else
+    {
+        in.bits &= round_mask;
+        in.real *= magic.real;
+        in.bits -= round_mask;
+        if (in.bits > f16inf.bits)
+        {
+            in.bits = f16inf.bits;
+        }
+        out = (uint16_t)(in.bits >> 13U);  // NOLINT NOSONAR
+    }
+    out |= (uint16_t)(sign >> 16U);  // NOLINT NOSONAR
+    return out;
+}
+
+CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value);
+CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value)
+{
+    // The no-lint statements suppress the warnings about magic numbers.
+    // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
+    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT NOSONAR
+    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};             // NOLINT NOSONAR
+    Float32Bits       out     = {.bits = ((uint32_t)(value & 0x7FFFU)) << 13U};  // NOLINT NOSONAR
+    out.real *= magic.real;
+    if (out.real >= inf_nan.real)
+    {
+        out.bits |= ((uint32_t) 0xFFU) << 23U;  // NOLINT NOSONAR
+    }
+    out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT NOSONAR
+    return out.real;
+}
+
+void canardDSDLSetF16(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat32 value)
+{
+    canardDSDLSetUxx(buf, off_bit, float16Pack(value), WIDTH16);
+}
+
 CanardDSDLFloat32 canardDSDLGetF16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
 {
     return float16Unpack(canardDSDLGetU16(buf, buf_size, off_bit, WIDTH16));
+}
+
+#endif  // CANARD_DSDL_PLATFORM_IEEE754_FLOAT
+
+// --------------------------------------------- PUBLIC API - FLOAT32 ---------------------------------------------
+
+#if CANARD_DSDL_PLATFORM_IEEE754_FLOAT
+
+_Static_assert(WIDTH32 == sizeof(CanardDSDLFloat32) * BYTE_WIDTH, "Unsupported floating point model");
+
+void canardDSDLSetF32(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat32 value)
+{
+    // Intentional violation of MISRA: use union to perform fast conversion from an IEEE 754-compatible native
+    // representation into a serializable integer. The assumptions about the target platform properties are made
+    // clear. In the future we may add a more generic conversion that is platform-invariant.
+    union  // NOSONAR
+    {
+        CanardDSDLFloat32 fl;
+        uint32_t          in;
+    } const tmp = {value};  // NOSONAR
+    canardDSDLSetUxx(buf, off_bit, tmp.in, sizeof(tmp) * BYTE_WIDTH);
 }
 
 CanardDSDLFloat32 canardDSDLGetF32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
@@ -398,27 +387,46 @@ CanardDSDLFloat32 canardDSDLGetF32(const uint8_t* const buf, const size_t buf_si
     // Intentional violation of MISRA: use union to perform fast conversion to an IEEE 754-compatible native
     // representation into a serializable integer. The assumptions about the target platform properties are made
     // clear. In the future we may add a more generic conversion that is platform-invariant.
-    _Static_assert(CANARD_DSDL_PLATFORM_IEEE754, "IEEE 754 required");
     union  // NOSONAR
     {
         uint32_t          in;
         CanardDSDLFloat32 fl;
     } const tmp = {canardDSDLGetU32(buf, buf_size, off_bit, WIDTH32)};  // NOSONAR
-    _Static_assert(WIDTH32 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
     return tmp.fl;
 }
+
+#endif  // CANARD_DSDL_PLATFORM_IEEE754_FLOAT
+
+// --------------------------------------------- PUBLIC API - FLOAT64 ---------------------------------------------
+
+#if CANARD_DSDL_PLATFORM_IEEE754_DOUBLE
+
+_Static_assert(WIDTH64 == sizeof(CanardDSDLFloat64) * BYTE_WIDTH, "Unsupported floating point model");
 
 CanardDSDLFloat64 canardDSDLGetF64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
 {
     // Intentional violation of MISRA: use union to perform fast conversion to an IEEE 754-compatible native
     // representation into a serializable integer. The assumptions about the target platform properties are made
     // clear. In the future we may add a more generic conversion that is platform-invariant.
-    _Static_assert(CANARD_DSDL_PLATFORM_IEEE754, "IEEE 754 required");
     union  // NOSONAR
     {
         uint64_t          in;
         CanardDSDLFloat64 fl;
     } const tmp = {canardDSDLGetU64(buf, buf_size, off_bit, WIDTH64)};  // NOSONAR
-    _Static_assert(WIDTH64 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
     return tmp.fl;
 }
+
+void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat64 value)
+{
+    // Intentional violation of MISRA: use union to perform fast conversion from an IEEE 754-compatible native
+    // representation into a serializable integer. The assumptions about the target platform properties are made
+    // clear. In the future we may add a more generic conversion that is platform-invariant.
+    union  // NOSONAR
+    {
+        CanardDSDLFloat64 fl;
+        uint64_t          in;
+    } const tmp = {value};  // NOSONAR
+    canardDSDLSetUxx(buf, off_bit, tmp.in, sizeof(tmp) * BYTE_WIDTH);
+}
+
+#endif  // CANARD_DSDL_PLATFORM_IEEE754_DOUBLE
