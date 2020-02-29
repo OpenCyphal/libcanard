@@ -25,13 +25,9 @@ matrix:
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all  # The build wrapper comes from Sonar Cloud.
         - make test
 
-        # COVERAGE (this is a quick hack, please fix)
-        - find CMakeFiles/test_public_cov.dir/ -name 'canard*.c.*' -type f -print -exec mv -f {} . \;
-        - gcov-9 libcanard/canard.c      -o canard.c.gcda      -o canard.c.gcno      -t > public_canard.gcov
-        - gcov-9 libcanard/canard_dsdl.c -o canard_dsdl.c.gcda -o canard_dsdl.c.gcno -t > public_canard_dsdl.gcov
-        - find CMakeFiles/test_private_cov.dir/ -name 'canard*.c.*' -type f -print -exec mv -f {} . \;
-        - gcov-9 libcanard/canard.c      -o canard.c.gcda      -o canard.c.gcno      -t > private_canard.gcov
-        - gcov-9 libcanard/canard_dsdl.c -o canard_dsdl.c.gcda -o canard_dsdl.c.gcno -t > private_canard_dsdl.gcov
+        # COVERAGE
+        - gcov-9 CMakeFiles/test_private_cov.dir/**/*.gcno -t > private.gcov
+        - gcov-9 CMakeFiles/test_public_cov.dir/**/*.gcno -t > public.gcov
 
         # RELEASE
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
