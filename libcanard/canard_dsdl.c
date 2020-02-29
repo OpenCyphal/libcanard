@@ -81,9 +81,9 @@ CANARD_PRIVATE void copyBitArray(const size_t         length_bit,
     CANARD_ASSERT((src != NULL) && (dst != NULL) && (src != dst));
     CANARD_ASSERT((src < dst) ? ((src + ((src_offset_bit + length_bit + BYTE_WIDTH) / BYTE_WIDTH)) <= dst)
                               : ((dst + ((dst_offset_bit + length_bit + BYTE_WIDTH) / BYTE_WIDTH)) <= src));
-    if (((length_bit % BYTE_WIDTH) == 0U) &&      //
-        ((src_offset_bit % BYTE_WIDTH) == 0U) &&  //
-        ((dst_offset_bit % BYTE_WIDTH) == 0U))
+    if ((0U == (length_bit % BYTE_WIDTH)) &&      //
+        (0U == (src_offset_bit % BYTE_WIDTH)) &&  //
+        (0U == (dst_offset_bit % BYTE_WIDTH)))
     {
         // Intentional violation of MISRA: Pointer arithmetics.
         // This is done to remove the API constraint that offsets be under 8 bits.

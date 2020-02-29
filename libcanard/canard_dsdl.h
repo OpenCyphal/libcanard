@@ -2,11 +2,11 @@
 // Copyright (c) 2016-2020 UAVCAN Development Team.
 // Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 //
-// This is a trivial optional extension library that contains basic DSDL  serialization routines.
+// This is a trivial optional extension library that contains basic DSDL serialization routines.
 // It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
 // The functions are fully stateless (pure); read their documentation comments for usage information.
 // This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
-// High-integrity applications are not recommended to use this extension because it relies on unsafe memory operations.
+// Some high-integrity applications may prefer avoid this extension because it relies on unsafe memory operations.
 
 #ifndef CANARD_DSDL_H_INCLUDED
 #define CANARD_DSDL_H_INCLUDED
