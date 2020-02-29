@@ -155,7 +155,7 @@ void canardDSDLSetBit(uint8_t* const buf, const size_t off_bit, const bool value
 
 void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t value, const uint8_t len_bit)
 {
-    _Static_assert(WIDTH64 == sizeof(uint64_t) * BYTE_WIDTH, "Unexpected size of uint64_t");
+    _Static_assert(WIDTH64 == (sizeof(uint64_t) * BYTE_WIDTH), "Unexpected size of uint64_t");
     CANARD_ASSERT(buf != NULL);
     const size_t saturated_len_bit = chooseMin(len_bit, WIDTH64);
 #if CANARD_DSDL_CONFIG_LITTLE_ENDIAN
@@ -185,7 +185,7 @@ void canardDSDLSetIxx(uint8_t* const buf, const size_t off_bit, const int64_t va
 
 bool canardDSDLGetBit(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
 {
-    return canardDSDLGetU8(buf, buf_size, off_bit, 1U) == 1U;
+    return 1U == canardDSDLGetU8(buf, buf_size, off_bit, 1U);
 }
 
 uint8_t canardDSDLGetU8(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
@@ -261,7 +261,7 @@ int8_t canardDSDLGetI8(const uint8_t* const buf, const size_t buf_size, const si
     uint8_t    val = canardDSDLGetU8(buf, buf_size, off_bit, len_bit);
     const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
     val            = ((len_bit < BYTE_WIDTH) && neg) ? (uint8_t)(val | ~((1ULL << len_bit) - 1U)) : val;
-    return neg ? (int8_t)((-(int8_t) ~val) - 1) : (int8_t) val;
+    return neg ? (int8_t)((-(int8_t)(uint8_t) ~val) - 1) : (int8_t) val;
 }
 
 int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
@@ -269,7 +269,7 @@ int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const 
     uint16_t   val = canardDSDLGetU16(buf, buf_size, off_bit, len_bit);
     const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
     val            = ((len_bit < WIDTH16) && neg) ? (uint16_t)(val | ~((1ULL << len_bit) - 1U)) : val;
-    return neg ? (int16_t)((-(int16_t) ~val) - 1) : (int16_t) val;
+    return neg ? (int16_t)((-(int16_t)(uint16_t) ~val) - 1) : (int16_t) val;
 }
 
 int32_t canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
@@ -292,7 +292,7 @@ int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const 
 
 #if CANARD_DSDL_PLATFORM_IEEE754_FLOAT
 
-_Static_assert(WIDTH32 == sizeof(CanardDSDLFloat32) * BYTE_WIDTH, "Unsupported floating point model");
+_Static_assert(WIDTH32 == (sizeof(CanardDSDLFloat32) * BYTE_WIDTH), "Unsupported floating point model");
 
 // Intentional violation of MISRA: we need this union because the alternative is far more error prone.
 // We have to rely on low-level data representation details to do the conversion; unions are helpful.
@@ -367,7 +367,7 @@ CanardDSDLFloat32 canardDSDLGetF16(const uint8_t* const buf, const size_t buf_si
 
 #if CANARD_DSDL_PLATFORM_IEEE754_FLOAT
 
-_Static_assert(WIDTH32 == sizeof(CanardDSDLFloat32) * BYTE_WIDTH, "Unsupported floating point model");
+_Static_assert(WIDTH32 == (sizeof(CanardDSDLFloat32) * BYTE_WIDTH), "Unsupported floating point model");
 
 void canardDSDLSetF32(uint8_t* const buf, const size_t off_bit, const CanardDSDLFloat32 value)
 {
@@ -401,7 +401,7 @@ CanardDSDLFloat32 canardDSDLGetF32(const uint8_t* const buf, const size_t buf_si
 
 #if CANARD_DSDL_PLATFORM_IEEE754_DOUBLE
 
-_Static_assert(WIDTH64 == sizeof(CanardDSDLFloat64) * BYTE_WIDTH, "Unsupported floating point model");
+_Static_assert(WIDTH64 == (sizeof(CanardDSDLFloat64) * BYTE_WIDTH), "Unsupported floating point model");
 
 CanardDSDLFloat64 canardDSDLGetF64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
 {
