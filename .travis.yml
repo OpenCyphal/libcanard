@@ -26,8 +26,12 @@ matrix:
         - make test
 
         # COVERAGE
-        - gcov-9 CMakeFiles/test_private_cov.dir/**/*.gcno -t > private.gcov
-        - gcov-9 CMakeFiles/test_public_cov.dir/**/*.gcno -t > public.gcov
+        - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard.*gcno         > private_canard.gcov
+        - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard_dsdl.*gcno    > private_canard_dsdl.gcov
+        - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard.*gcno      > private_le_canard.gcov
+        - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard_dsdl.*gcno > private_le_canard_dsdl.gcov
+        - gcov-9 -t CMakeFiles/test_public_cov.dir/**/canard.*gcno          > public_canard.gcov
+        - gcov-9 -t CMakeFiles/test_public_cov.dir/**/canard_dsdl.*gcno     > public_canard_dsdl.gcov
 
         # RELEASE
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
