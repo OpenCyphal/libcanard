@@ -24,11 +24,12 @@ typedef double CanardDSDLFloat64;
 
 /// Serialize a DSDL field value at the specified bit offset from the beginning of the destination buffer.
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
-/// One-bit-wide signed integers are processed without raising an error or a deviation but the result is unspecified.
+/// One-bit-wide signed integers are processed without raising an error but the result is unspecified.
+///
 /// Arguments:
 ///     buf     Destination buffer where the result will be stored.
 ///     off_bit Offset, in bits, from the beginning of the buffer. May exceed one byte.
-///     value   The value itself (promoted to 64-bit for unification).
+///     value   The value itself (in case of integers it is promoted to 64-bit for unification).
 ///     len_bit Length of the serialized representation, in bits. Zero has no effect. Values above 64 are saturated.
 void canardDSDLSetBit(uint8_t* const buf, const size_t off_bit, const bool value);
 void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t value, const uint8_t len_bit);
@@ -40,10 +41,15 @@ void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDL
 /// Deserialize a DSDL field value located at the specified bit offset from the beginning of the source buffer.
 /// If the deserialized value extends beyond the end of the buffer, the missing bits are taken as zero, as required
 /// by the DSDL specification (see Implicit Zero Extension Rule, IZER).
+///
 /// If len_bit is greater than the return type, extra bits will be truncated per regular narrowing conversion rules.
+/// If len_bit is shorter than the return type, missing bits will be zero per regular integer promotion rules.
+/// Essentially, for integers, it would be enough to have 64-bit versions only; narrower variants exist only to avoid
+/// narrowing type conversions of the result (and some small performance gains).
+///
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
-/// One-bit-wide signed integers are processed without raising an error or a deviation but the result is unspecified.
-/// Returns the deserialized value. If the value spills over the buffer boundary, the spilled bits are taken as zero.
+/// One-bit-wide signed integers are processed without raising an error but the result is unspecified.
+///
 /// Arguments:
 ///     buf      Source buffer where the serialized representation will be read from.
 ///     buf_size The size of the source buffer, in bytes. Reads past this limit will be assumed to return zero bits.

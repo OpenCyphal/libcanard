@@ -282,7 +282,7 @@ TEST_CASE("canardDSDLSerialize_heartbeat")
     };
 
     set_u(34, 2, 3);           // mode
-    set_u(0, 0xdeadbeef, 32);  // uptime
+    set_u(0, 0xDEADBEEF, 32);  // uptime
     set_u(37, 0x7FFFF, 19);    // vssc
     set_u(32, 2, 2);           // health
 
@@ -313,4 +313,137 @@ TEST_CASE("canardDSDLDeserialize_aligned")
     REQUIRE(-2 == canardDSDLGetI16(buf, 45, 104, 16));
     REQUIRE(0 == canardDSDLGetU8(buf, 45, 120, 8));
     REQUIRE(127 == canardDSDLGetI8(buf, 45, 128, 8));
+    REQUIRE(Approx(1.0) == canardDSDLGetF64(buf, 45, 136));
+    REQUIRE(Approx(1.0F) == canardDSDLGetF32(buf, 45, 200));
+    REQUIRE(std::isinf(canardDSDLGetF16(buf, 45, 232)));
+
+    REQUIRE(0x0EDA == canardDSDLGetU16(buf, 45, 248, 12));
+    REQUIRE(0 == canardDSDLGetU8(buf, 45, 260, 4));
+    REQUIRE(0xBEDA == canardDSDLGetU16(buf, 45, 264, 16));
+    REQUIRE(-2 == canardDSDLGetI16(buf, 45, 280, 9));
+    REQUIRE(0 == canardDSDLGetI16(buf, 45, 289, 7));
+    REQUIRE(0 == canardDSDLGetU16(buf, 45, 289, 7));
+    REQUIRE(0 == canardDSDLGetI8(buf, 45, 289, 7));
+    REQUIRE(0 == canardDSDLGetU8(buf, 45, 289, 7));
+
+    REQUIRE(0xDEAD == canardDSDLGetU16(buf, 45, 296, 16));
+    REQUIRE(0xBEEF == canardDSDLGetU16(buf, 45, 312, 16));
+    REQUIRE(0xDEAD == canardDSDLGetU32(buf, 45, 296, 16));
+    REQUIRE(0xBEEF == canardDSDLGetU32(buf, 45, 312, 16));
+    REQUIRE(0xDEAD == canardDSDLGetU64(buf, 45, 296, 16));
+    REQUIRE(0xBEEF == canardDSDLGetU64(buf, 45, 312, 16));
+    REQUIRE(0xAD == canardDSDLGetU8(buf, 45, 296, 16));
+    REQUIRE(0xEF == canardDSDLGetU8(buf, 45, 312, 16));
+    REQUIRE(0x00AD == canardDSDLGetU16(buf, 38, 296, 16));
+    REQUIRE(0x0000 == canardDSDLGetU32(buf, 37, 296, 16));
+
+    REQUIRE(canardDSDLGetBit(buf, 45, 328));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 329));
+    REQUIRE(canardDSDLGetBit(buf, 45, 330));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 331));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 332));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 333));
+    REQUIRE(canardDSDLGetBit(buf, 45, 334));
+    REQUIRE(canardDSDLGetBit(buf, 45, 335));
+    REQUIRE(canardDSDLGetBit(buf, 45, 336));
+    REQUIRE(canardDSDLGetBit(buf, 45, 337));
+    REQUIRE(canardDSDLGetBit(buf, 45, 338));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 339));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 340));
+    REQUIRE(canardDSDLGetBit(buf, 45, 341));
+    REQUIRE(canardDSDLGetBit(buf, 45, 342));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 343));
+
+    REQUIRE(canardDSDLGetBit(buf, 45, 344));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 345));
+    REQUIRE(canardDSDLGetBit(buf, 45, 346));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 347));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 348));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 349));
+    REQUIRE(canardDSDLGetBit(buf, 45, 350));
+    REQUIRE(canardDSDLGetBit(buf, 45, 351));
+    REQUIRE(canardDSDLGetBit(buf, 45, 352));
+    REQUIRE(canardDSDLGetBit(buf, 45, 353));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 354));
+    REQUIRE(canardDSDLGetBit(buf, 45, 355));
+    REQUIRE(!canardDSDLGetBit(buf, 45, 356));
+
+    REQUIRE(0 == canardDSDLGetU8(buf, 45, 357, 3));
+
+    REQUIRE(!canardDSDLGetBit(buf, 44, 355));
+}
+
+TEST_CASE("canardDSDLDeserialize_unaligned")
+{
+    // The reference values for the following test have been taken from the PyUAVCAN test suite.
+    const std::vector<std::uint8_t> Reference({
+        0xC5, 0x2F, 0x57, 0x82, 0xC6, 0xCA, 0x12, 0x34, 0x56, 0xD9, 0xBF, 0xEC, 0x06, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x80, 0xFF, 0x01, 0x00, 0x00, 0xFC, 0x01, 0xE0, 0x6F, 0xF5, 0x7E, 0xF7, 0x05  //
+    });
+    const std::uint8_t* const       buf = Reference.data();
+
+    REQUIRE(canardDSDLGetBit(buf, 31, 0));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 1));
+    REQUIRE(canardDSDLGetBit(buf, 31, 2));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 3));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 4));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 5));
+    REQUIRE(canardDSDLGetBit(buf, 31, 6));
+    REQUIRE(canardDSDLGetBit(buf, 31, 7));
+    REQUIRE(canardDSDLGetBit(buf, 31, 8));
+    REQUIRE(canardDSDLGetBit(buf, 31, 9));
+    REQUIRE(canardDSDLGetBit(buf, 31, 10));
+
+    REQUIRE(canardDSDLGetBit(buf, 31, 11));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 12));
+    REQUIRE(canardDSDLGetBit(buf, 31, 13));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 14));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 15));
+    REQUIRE(canardDSDLGetBit(buf, 31, 16));
+    REQUIRE(canardDSDLGetBit(buf, 31, 17));
+    REQUIRE(canardDSDLGetBit(buf, 31, 18));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 19));
+    REQUIRE(canardDSDLGetBit(buf, 31, 20));
+
+    REQUIRE(0x12 == canardDSDLGetU8(buf, 31, 21, 8));
+    REQUIRE(0x34 == canardDSDLGetU8(buf, 31, 29, 8));
+    REQUIRE(0x56 == canardDSDLGetU8(buf, 31, 37, 8));
+
+    REQUIRE(!canardDSDLGetBit(buf, 31, 45));
+    REQUIRE(canardDSDLGetBit(buf, 31, 46));
+    REQUIRE(canardDSDLGetBit(buf, 31, 47));
+
+    REQUIRE(0x12 == canardDSDLGetU8(buf, 31, 48, 8));
+    REQUIRE(0x34 == canardDSDLGetU8(buf, 31, 56, 8));
+    REQUIRE(0x56 == canardDSDLGetU8(buf, 31, 64, 8));
+
+    REQUIRE(canardDSDLGetBit(buf, 31, 72));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 73));
+    REQUIRE(!canardDSDLGetBit(buf, 31, 74));
+    REQUIRE(canardDSDLGetBit(buf, 31, 75));
+    REQUIRE(canardDSDLGetBit(buf, 31, 76));
+
+    REQUIRE(-2 == canardDSDLGetI8(buf, 31, 77, 8));
+    REQUIRE(0b11101100101 == canardDSDLGetU16(buf, 31, 85, 11));
+    REQUIRE(0b110 == canardDSDLGetU8(buf, 31, 96, 3));
+
+    REQUIRE(Approx(1.0) == canardDSDLGetF64(buf, 31, 99));
+    REQUIRE(Approx(1.0F) == canardDSDLGetF32(buf, 31, 163));
+    REQUIRE(std::isinf(canardDSDLGetF16(buf, 31, 195)));
+    REQUIRE(0.0F > canardDSDLGetF16(buf, 31, 195));
+
+    REQUIRE(0xDEAD == canardDSDLGetU16(buf, 31, 211, 16));
+    REQUIRE(0xBEEF == canardDSDLGetU16(buf, 31, 227, 16));
+    REQUIRE(0 == canardDSDLGetU8(buf, 31, 243, 5));
+}
+
+TEST_CASE("canardDSDLDeserialize_heartbeat")
+{
+    // The reference values were taken from the PyUAVCAN test.
+    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 234, 255, 255});
+    const std::uint8_t* const       buf = Reference.data();
+    REQUIRE(2 == canardDSDLGetU8(buf, 7, 34, 3));            // mode
+    REQUIRE(0xDEADBEEF == canardDSDLGetU32(buf, 7, 0, 32));  // uptime
+    REQUIRE(0x7FFFF == canardDSDLGetU32(buf, 7, 37, 19));    // vssc
+    REQUIRE(2 == canardDSDLGetU8(buf, 7, 32, 2));            // health
 }

@@ -195,14 +195,18 @@ CANARD_PRIVATE void copyBitArray(const size_t         length_bit,
     }
 }
 
-CANARD_PRIVATE size_t getBitCopySize(const size_t buf_size_bytes,
-                                     const size_t offset_bit,
-                                     const size_t copy_length_bit);
-CANARD_PRIVATE size_t getBitCopySize(const size_t buf_size_bytes, const size_t offset_bit, const size_t copy_length_bit)
+CANARD_PRIVATE size_t getBitCopySize(const size_t  buf_size_bytes,
+                                     const size_t  offset_bit,
+                                     const size_t  requested_length_bit,
+                                     const uint8_t value_length_bit);
+CANARD_PRIVATE size_t getBitCopySize(const size_t  buf_size_bytes,
+                                     const size_t  offset_bit,
+                                     const size_t  requested_length_bit,
+                                     const uint8_t value_length_bit)
 {
     const size_t buf_size_bit  = buf_size_bytes * BYTE_WIDTH;
     const size_t remaining_bit = buf_size_bit - chooseMin(buf_size_bit, offset_bit);
-    return chooseMin(remaining_bit, copy_length_bit);
+    return chooseMin(remaining_bit, chooseMin(requested_length_bit, value_length_bit));
 }
 
 // --------------------------------------------- PUBLIC API ---------------------------------------------
@@ -210,8 +214,8 @@ CANARD_PRIVATE size_t getBitCopySize(const size_t buf_size_bytes, const size_t o
 void canardDSDLSetBit(uint8_t* const buf, const size_t off_bit, const bool value)
 {
     CANARD_ASSERT(buf != NULL);
-    const uint8_t x = value ? 1U : 0U;
-    copyBitArray(1U, 0U, off_bit, &x, buf);
+    const uint8_t val = value ? 1U : 0U;
+    copyBitArray(1U, 0U, off_bit, &val, buf);
 }
 
 void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t value, const uint8_t len_bit)
@@ -222,15 +226,16 @@ void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t v
 #if CANARD_DSDL_CONFIG_LITTLE_ENDIAN
     copyBitArray(saturated_len_bit, 0U, off_bit, (const uint8_t*) &value, buf);
 #else
-    uint8_t  tmp[sizeof(uint64_t)] = {0};
-    uint64_t x                     = value;
-    size_t   i                     = 0;
-    while (x > 0U)  // This conversion is independent of the native byte order. Slow but works everywhere.
-    {
-        tmp[i] = (uint8_t)(x & BYTE_MAX);
-        x >>= BYTE_WIDTH;
-        ++i;
-    }
+    const uint8_t tmp[sizeof(uint64_t)] = {
+        (uint8_t)((value >> 0U) & BYTE_MAX),   // Suppress warnings about the magic numbers. Their purpose is clear.
+        (uint8_t)((value >> 8U) & BYTE_MAX),   // NOLINT NOSONAR
+        (uint8_t)((value >> 16U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 24U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 32U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 40U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 48U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 56U) & BYTE_MAX),  // NOLINT NOSONAR
+    };
     copyBitArray(saturated_len_bit, 0U, off_bit, &tmp[0], buf);
 #endif
 }
@@ -258,7 +263,7 @@ void canardDSDLSetF32(uint8_t* const buf, const size_t off_bit, const CanardDSDL
     {
         CanardDSDLFloat32 fl;
         uint32_t          in;
-    } tmp = {value};  // NOSONAR
+    } const tmp = {value};  // NOSONAR
     _Static_assert(WIDTH32 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
     canardDSDLSetUxx(buf, off_bit, tmp.in, sizeof(tmp) * BYTE_WIDTH);
 }
@@ -273,7 +278,7 @@ void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDL
     {
         CanardDSDLFloat64 fl;
         uint64_t          in;
-    } tmp = {value};  // NOSONAR
+    } const tmp = {value};  // NOSONAR
     _Static_assert(WIDTH64 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
     canardDSDLSetUxx(buf, off_bit, tmp.in, sizeof(tmp) * BYTE_WIDTH);
 }
@@ -286,20 +291,22 @@ bool canardDSDLGetBit(const uint8_t* const buf, const size_t buf_size, const siz
 uint8_t canardDSDLGetU8(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     CANARD_ASSERT(buf != NULL);
-    const size_t copy_size = getBitCopySize(buf_size, off_bit, chooseMin(len_bit, BYTE_WIDTH));
-    uint8_t      x         = 0;
-    copyBitArray(copy_size, off_bit, 0U, buf, &x);
-    return x;
+    const size_t copy_size = getBitCopySize(buf_size, off_bit, len_bit, BYTE_WIDTH);
+    CANARD_ASSERT(copy_size <= (sizeof(uint8_t) * BYTE_WIDTH));
+    uint8_t val = 0;
+    copyBitArray(copy_size, off_bit, 0U, buf, &val);
+    return val;
 }
 
 uint16_t canardDSDLGetU16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     CANARD_ASSERT(buf != NULL);
-    const size_t copy_size = getBitCopySize(buf_size, off_bit, chooseMin(len_bit, WIDTH16));
+    const size_t copy_size = getBitCopySize(buf_size, off_bit, len_bit, WIDTH16);
+    CANARD_ASSERT(copy_size <= (sizeof(uint16_t) * BYTE_WIDTH));
 #if CANARD_DSDL_CONFIG_LITTLE_ENDIAN
-    uint16_t x = 0U;
-    copyBitArray(copy_size, off_bit, 0U, buf, (uint8_t*) &x);
-    return x;
+    uint16_t val = 0U;
+    copyBitArray(copy_size, off_bit, 0U, buf, (uint8_t*) &val);
+    return val;
 #else
     uint8_t tmp[sizeof(uint16_t)] = {0};
     copyBitArray(copy_size, off_bit, 0U, buf, &tmp[0]);
@@ -310,73 +317,75 @@ uint16_t canardDSDLGetU16(const uint8_t* const buf, const size_t buf_size, const
 uint32_t canardDSDLGetU32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     CANARD_ASSERT(buf != NULL);
-    const size_t copy_size = getBitCopySize(buf_size, off_bit, chooseMin(len_bit, WIDTH32));
-    uint32_t     x         = 0U;
+    const size_t copy_size = getBitCopySize(buf_size, off_bit, len_bit, WIDTH32);
+    CANARD_ASSERT(copy_size <= (sizeof(uint32_t) * BYTE_WIDTH));
 #if CANARD_DSDL_CONFIG_LITTLE_ENDIAN
-    copyBitArray(copy_size, off_bit, 0U, buf, (uint8_t*) &x);
+    uint32_t val = 0U;
+    copyBitArray(copy_size, off_bit, 0U, buf, (uint8_t*) &val);
+    return val;
 #else
     uint8_t tmp[sizeof(uint32_t)] = {0};
     copyBitArray(copy_size, off_bit, 0U, buf, &tmp[0]);
-    for (size_t i = sizeof(tmp); i > 0U; --i)
-    {
-        x <<= BYTE_WIDTH;
-        CANARD_ASSERT(i > 0U);
-        x |= tmp[i - 1U];
-    }
+    return tmp[0] |                      // Suppress warnings about the magic numbers. Their purpose is clear here.
+           ((uint32_t) tmp[1] << 8U) |   // NOLINT NOSONAR
+           ((uint32_t) tmp[2] << 16U) |  // NOLINT NOSONAR
+           ((uint32_t) tmp[3] << 24U);   // NOLINT NOSONAR
 #endif
-    return x;
 }
 
 uint64_t canardDSDLGetU64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     CANARD_ASSERT(buf != NULL);
-    const size_t copy_size = getBitCopySize(buf_size, off_bit, chooseMin(len_bit, WIDTH64));
-    uint64_t     x         = 0U;
+    const size_t copy_size = getBitCopySize(buf_size, off_bit, len_bit, WIDTH64);
+    CANARD_ASSERT(copy_size <= (sizeof(uint64_t) * BYTE_WIDTH));
 #if CANARD_DSDL_CONFIG_LITTLE_ENDIAN
-    copyBitArray(copy_size, off_bit, 0U, buf, (uint8_t*) &x);
+    uint64_t val = 0U;
+    copyBitArray(copy_size, off_bit, 0U, buf, (uint8_t*) &val);
+    return val;
 #else
     uint8_t tmp[sizeof(uint64_t)] = {0};
     copyBitArray(copy_size, off_bit, 0U, buf, &tmp[0]);
-    for (size_t i = sizeof(tmp); i > 0U; --i)
-    {
-        x <<= BYTE_WIDTH;
-        CANARD_ASSERT(i > 0U);
-        x |= tmp[i - 1U];
-    }
+    return tmp[0] |                      // Suppress warnings about the magic numbers. Their purpose is clear here.
+           ((uint64_t) tmp[1] << 8U) |   // NOLINT NOSONAR
+           ((uint64_t) tmp[2] << 16U) |  // NOLINT NOSONAR
+           ((uint64_t) tmp[3] << 24U) |  // NOLINT NOSONAR
+           ((uint64_t) tmp[4] << 32U) |  // NOLINT NOSONAR
+           ((uint64_t) tmp[5] << 40U) |  // NOLINT NOSONAR
+           ((uint64_t) tmp[6] << 48U) |  // NOLINT NOSONAR
+           ((uint64_t) tmp[7] << 56U);   // NOLINT NOSONAR
 #endif
-    return x;
 }
 
 int8_t canardDSDLGetI8(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint8_t    u        = canardDSDLGetU8(buf, buf_size, off_bit, len_bit);
-    const bool negative = (len_bit > 0U) && ((u & (1ULL << (len_bit - 1U))) != 0U);
-    u |= ((len_bit < BYTE_WIDTH) && negative) ? ((uint8_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return negative ? ((-(int8_t) ~u) - 1) : (int8_t) u;
+    uint8_t    val = canardDSDLGetU8(buf, buf_size, off_bit, len_bit);
+    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
+    val |= ((len_bit < BYTE_WIDTH) && neg) ? ((uint8_t) ~((1ULL << len_bit) - 1U)) : 0U;
+    return neg ? ((-(int8_t) ~val) - 1) : (int8_t) val;
 }
 
 int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint16_t   u        = canardDSDLGetU16(buf, buf_size, off_bit, len_bit);
-    const bool negative = (len_bit > 0U) && ((u & (1ULL << (len_bit - 1U))) != 0U);
-    u |= ((len_bit < WIDTH16) && negative) ? ((uint16_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return negative ? ((-(int16_t) ~u) - 1) : (int16_t) u;
+    uint16_t   val = canardDSDLGetU16(buf, buf_size, off_bit, len_bit);
+    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
+    val |= ((len_bit < WIDTH16) && neg) ? ((uint16_t) ~((1ULL << len_bit) - 1U)) : 0U;
+    return neg ? ((-(int16_t) ~val) - 1) : (int16_t) val;
 }
 
 int32_t canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint32_t   u        = canardDSDLGetU32(buf, buf_size, off_bit, len_bit);
-    const bool negative = (len_bit > 0U) && ((u & (1ULL << (len_bit - 1U))) != 0U);
-    u |= ((len_bit < WIDTH32) && negative) ? ((uint32_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return negative ? ((-(int32_t) ~u) - 1) : (int32_t) u;
+    uint32_t   val = canardDSDLGetU32(buf, buf_size, off_bit, len_bit);
+    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
+    val |= ((len_bit < WIDTH32) && neg) ? ((uint32_t) ~((1ULL << len_bit) - 1U)) : 0U;
+    return neg ? ((-(int32_t) ~val) - 1) : (int32_t) val;
 }
 
 int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint64_t   u        = canardDSDLGetU64(buf, buf_size, off_bit, len_bit);
-    const bool negative = (len_bit > 0U) && ((u & (1ULL << (len_bit - 1U))) != 0U);
-    u |= ((len_bit < WIDTH64) && negative) ? ((uint64_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return negative ? ((-(int64_t) ~u) - 1) : (int64_t) u;
+    uint64_t   val = canardDSDLGetU64(buf, buf_size, off_bit, len_bit);
+    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
+    val |= ((len_bit < WIDTH64) && neg) ? ((uint64_t) ~((1ULL << len_bit) - 1U)) : 0U;
+    return neg ? ((-(int64_t) ~val) - 1) : (int64_t) val;
 }
 
 CanardDSDLFloat32 canardDSDLGetF16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
@@ -394,7 +403,7 @@ CanardDSDLFloat32 canardDSDLGetF32(const uint8_t* const buf, const size_t buf_si
     {
         uint32_t          in;
         CanardDSDLFloat32 fl;
-    } tmp = {canardDSDLGetU32(buf, buf_size, off_bit, WIDTH32)};  // NOSONAR
+    } const tmp = {canardDSDLGetU32(buf, buf_size, off_bit, WIDTH32)};  // NOSONAR
     _Static_assert(WIDTH32 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
     return tmp.fl;
 }
@@ -409,7 +418,7 @@ CanardDSDLFloat64 canardDSDLGetF64(const uint8_t* const buf, const size_t buf_si
     {
         uint64_t          in;
         CanardDSDLFloat64 fl;
-    } tmp = {canardDSDLGetU64(buf, buf_size, off_bit, WIDTH64)};  // NOSONAR
+    } const tmp = {canardDSDLGetU64(buf, buf_size, off_bit, WIDTH64)};  // NOSONAR
     _Static_assert(WIDTH64 == sizeof(tmp) * BYTE_WIDTH, "IEEE 754 required");
     return tmp.fl;
 }
