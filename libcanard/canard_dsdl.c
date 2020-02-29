@@ -310,7 +310,7 @@ uint16_t canardDSDLGetU16(const uint8_t* const buf, const size_t buf_size, const
 #else
     uint8_t tmp[sizeof(uint16_t)] = {0};
     copyBitArray(copy_size, off_bit, 0U, buf, &tmp[0]);
-    return tmp[0] | (uint16_t)(((uint16_t) tmp[1]) << BYTE_WIDTH);
+    return (uint16_t)(tmp[0] | (uint16_t)(((uint16_t) tmp[1]) << BYTE_WIDTH));
 #endif
 }
 
@@ -326,10 +326,10 @@ uint32_t canardDSDLGetU32(const uint8_t* const buf, const size_t buf_size, const
 #else
     uint8_t tmp[sizeof(uint32_t)] = {0};
     copyBitArray(copy_size, off_bit, 0U, buf, &tmp[0]);
-    return tmp[0] |                      // Suppress warnings about the magic numbers. Their purpose is clear here.
-           ((uint32_t) tmp[1] << 8U) |   // NOLINT NOSONAR
-           ((uint32_t) tmp[2] << 16U) |  // NOLINT NOSONAR
-           ((uint32_t) tmp[3] << 24U);   // NOLINT NOSONAR
+    return (uint32_t)(tmp[0] |                      // Suppress warnings about the magic numbers.
+                      ((uint32_t) tmp[1] << 8U) |   // NOLINT NOSONAR
+                      ((uint32_t) tmp[2] << 16U) |  // NOLINT NOSONAR
+                      ((uint32_t) tmp[3] << 24U));  // NOLINT NOSONAR
 #endif
 }
 
@@ -345,14 +345,14 @@ uint64_t canardDSDLGetU64(const uint8_t* const buf, const size_t buf_size, const
 #else
     uint8_t tmp[sizeof(uint64_t)] = {0};
     copyBitArray(copy_size, off_bit, 0U, buf, &tmp[0]);
-    return tmp[0] |                      // Suppress warnings about the magic numbers. Their purpose is clear here.
-           ((uint64_t) tmp[1] << 8U) |   // NOLINT NOSONAR
-           ((uint64_t) tmp[2] << 16U) |  // NOLINT NOSONAR
-           ((uint64_t) tmp[3] << 24U) |  // NOLINT NOSONAR
-           ((uint64_t) tmp[4] << 32U) |  // NOLINT NOSONAR
-           ((uint64_t) tmp[5] << 40U) |  // NOLINT NOSONAR
-           ((uint64_t) tmp[6] << 48U) |  // NOLINT NOSONAR
-           ((uint64_t) tmp[7] << 56U);   // NOLINT NOSONAR
+    return (uint64_t)(tmp[0] |                      // Suppress warnings about the magic numbers.
+                      ((uint64_t) tmp[1] << 8U) |   // NOLINT NOSONAR
+                      ((uint64_t) tmp[2] << 16U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[3] << 24U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[4] << 32U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[5] << 40U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[6] << 48U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[7] << 56U));  // NOLINT NOSONAR
 #endif
 }
 
@@ -360,32 +360,32 @@ int8_t canardDSDLGetI8(const uint8_t* const buf, const size_t buf_size, const si
 {
     uint8_t    val = canardDSDLGetU8(buf, buf_size, off_bit, len_bit);
     const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val |= ((len_bit < BYTE_WIDTH) && neg) ? ((uint8_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return neg ? ((-(int8_t) ~val) - 1) : (int8_t) val;
+    val            = ((len_bit < BYTE_WIDTH) && neg) ? (uint8_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    return neg ? (int8_t)((-(int8_t) ~val) - 1) : (int8_t) val;
 }
 
 int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     uint16_t   val = canardDSDLGetU16(buf, buf_size, off_bit, len_bit);
     const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val |= ((len_bit < WIDTH16) && neg) ? ((uint16_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return neg ? ((-(int16_t) ~val) - 1) : (int16_t) val;
+    val            = ((len_bit < WIDTH16) && neg) ? (uint16_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    return neg ? (int16_t)((-(int16_t) ~val) - 1) : (int16_t) val;
 }
 
 int32_t canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     uint32_t   val = canardDSDLGetU32(buf, buf_size, off_bit, len_bit);
     const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val |= ((len_bit < WIDTH32) && neg) ? ((uint32_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return neg ? ((-(int32_t) ~val) - 1) : (int32_t) val;
+    val            = ((len_bit < WIDTH32) && neg) ? (uint32_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    return neg ? (int32_t)((-(int32_t) ~val) - 1) : (int32_t) val;
 }
 
 int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
     uint64_t   val = canardDSDLGetU64(buf, buf_size, off_bit, len_bit);
     const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val |= ((len_bit < WIDTH64) && neg) ? ((uint64_t) ~((1ULL << len_bit) - 1U)) : 0U;
-    return neg ? ((-(int64_t) ~val) - 1) : (int64_t) val;
+    val            = ((len_bit < WIDTH64) && neg) ? (uint64_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    return neg ? (int64_t)((-(int64_t) ~val) - 1) : (int64_t) val;
 }
 
 CanardDSDLFloat32 canardDSDLGetF16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit)
