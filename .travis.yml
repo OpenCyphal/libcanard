@@ -19,11 +19,14 @@ matrix:
             - g++-9-multilib
             - gcc-9-multilib
             - linux-libc-dev:i386
+      env:
+        - CC=gcc-9
+        - CXX=g++-9
       script:
         # ANALYSIS
         # Using the build wrapper from Sonar and collecting the code coverage.
         # Define NDEBUG=1 to avoid assertion checks being reported as uncovered statements.
-        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
+        - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
@@ -39,12 +42,12 @@ matrix:
         - make clean
 
         # DEBUG
-        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
+        - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
         - make all VERBOSE=1 && make test
         - make clean
 
         # RELEASE
-        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
         - make all VERBOSE=1 && make test
         - make clean
 
