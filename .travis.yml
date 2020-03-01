@@ -20,14 +20,12 @@ matrix:
             - gcc-9-multilib
             - linux-libc-dev:i386
       script:
-        # DEBUG -- using the build wrapper from Sonar and collecting the code coverage.
-        # FIXME: We define NDEBUG=1 to prevent our coverage tracking tools from reporting assertion checks as uncovered
-        #        statements. We need to find a better solution.
+        # ANALYSIS
+        # Using the build wrapper from Sonar and collecting the code coverage.
+        # Define NDEBUG=1 to avoid assertion checks being reported as uncovered statements.
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
-
-        # ANALYSIS
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
@@ -38,10 +36,17 @@ matrix:
                          -Dsonar.cfamily.gcov.reportsPath=.
                          -Dsonar.cfamily.build-wrapper-output=sonar-dump
                          -Dsonar.cfamily.cache.enabled=false'
+        - make clean
+
+        # DEBUG
+        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
+        - make all VERBOSE=1 && make test
+        - make clean
 
         # RELEASE
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
         - make all VERBOSE=1 && make test
+        - make clean
 
     # -------------------- Clang 9 --------------------
     - language: cpp

@@ -106,8 +106,8 @@ CANARD_PRIVATE void copyBitArray(const size_t         length_bit,
             const uint8_t size = (uint8_t) chooseMin(BYTE_WIDTH - max_mod, last_bit - src_off);
             CANARD_ASSERT((size > 0U) && (size <= BYTE_WIDTH));
 
-            // Suppress a false error from Clang-Tidy that size is being over-shifted. It's not, we check for that.
-            const uint8_t mask = (uint8_t)((((1U << size) - 1U) << dst_mod) & BYTE_MAX);  // NOLINT
+            // Suppress a false warning from Clang-Tidy & Sonar that size is being over-shifted. It's not.
+            const uint8_t mask = (uint8_t)((((1U << size) - 1U) << dst_mod) & BYTE_MAX);  // NOLINT NOSONAR
             CANARD_ASSERT(mask > 0U);
 
             // Intentional violation of MISRA: indexing on a pointer.
