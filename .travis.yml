@@ -20,22 +20,16 @@ matrix:
             - gcc-9-multilib
             - linux-libc-dev:i386
       script:
-        # DEBUG (use the build wrapper from Sonar)
-        # FIXME: We are using NDEBUG=1 to avoid assertion checks being marked as uncovered by tests. This is not OK.
-        # FIXME: There are issues with coverage measurement in SonarQube, we need a cleaner workaround.
+        # DEBUG -- using the build wrapper from Sonar and collecting the code coverage.
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
-        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all CFLAGS='-DNDEBUG=1'
+        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
 
-        # COVERAGE
-        - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard.*gcno         > private_canard.gcov
-        - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard_dsdl.*gcno    > private_canard_dsdl.gcov
-        - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard.*gcno      > private_le_canard.gcov
-        - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard_dsdl.*gcno > private_le_canard_dsdl.gcov
-        - gcov-9 -t CMakeFiles/test_public_cov.dir/**/canard.*gcno          > public_canard.gcov
-        - gcov-9 -t CMakeFiles/test_public_cov.dir/**/canard_dsdl.*gcno     > public_canard_dsdl.gcov
-
         # ANALYSIS
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        - bash <(curl -s https://codecov.io/bash)
         - 'sonar-scanner -Dsonar.projectKey=libcanard
                          -Dsonar.organization=uavcan
                          -Dsonar.sources=libcanard
