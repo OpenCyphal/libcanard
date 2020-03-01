@@ -20,25 +20,20 @@ matrix:
             - gcc-9-multilib
             - linux-libc-dev:i386
       script:
-        # DEBUG
+        # DEBUG (use the build wrapper from Sonar)
+        # FIXME: We are using NDEBUG=1 to avoid assertion checks being marked as uncovered by tests. This is not OK.
+        # FIXME: There are issues with coverage measurement in SonarQube, we need a cleaner workaround.
         - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
-        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all  # The build wrapper comes from Sonar Cloud.
+        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all CFLAGS='-DNDEBUG=1'
         - make test
 
         # COVERAGE
-        # FIXME: Rebuilding everything with NDEBUG=1 to avoid assertion checks being marked as uncovered by tests.
-        # FIXME: There are issues with coverage measurement in SonarQube, we need a cleaner workaround.
-        - make clean && make -j8 CFLAGS='-DNDEBUG=1'
         - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard.*gcno         > private_canard.gcov
         - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard_dsdl.*gcno    > private_canard_dsdl.gcov
         - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard.*gcno      > private_le_canard.gcov
         - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard_dsdl.*gcno > private_le_canard_dsdl.gcov
         - gcov-9 -t CMakeFiles/test_public_cov.dir/**/canard.*gcno          > public_canard.gcov
         - gcov-9 -t CMakeFiles/test_public_cov.dir/**/canard_dsdl.*gcno     > public_canard_dsdl.gcov
-
-        # RELEASE
-        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
-        - make all VERBOSE=1 && make test
 
         # ANALYSIS
         - 'sonar-scanner -Dsonar.projectKey=libcanard
@@ -47,6 +42,10 @@ matrix:
                          -Dsonar.cfamily.gcov.reportsPath=.
                          -Dsonar.cfamily.build-wrapper-output=sonar-dump
                          -Dsonar.cfamily.cache.enabled=false'
+
+        # RELEASE
+        - CC=gcc-9 && CXX=g++-9 && cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - make all VERBOSE=1 && make test
 
     # -------------------- Clang 9 --------------------
     - language: cpp
