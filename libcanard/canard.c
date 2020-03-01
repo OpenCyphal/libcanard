@@ -612,8 +612,7 @@ CANARD_PRIVATE void rxInitTransferFromFrame(const RxFrameModel* const frame, Can
     out_transfer->port_id        = frame->port_id;
     out_transfer->remote_node_id = frame->source_node_id;
     out_transfer->transfer_id    = frame->transfer_id;
-    out_transfer->payload_size   = frame->payload_size;
-    out_transfer->payload        = frame->payload;
+    // Payload not populated.
 }
 
 /// The implementation is borrowed from the Specification.
@@ -899,8 +898,26 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
     {
         CANARD_ASSERT(frame->source_node_id == CANARD_NODE_ID_UNSET);
         // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
-        rxInitTransferFromFrame(frame, out_transfer);
-        out = 1;
+        // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
+        // independent of the input data and the memory shall be free-able.
+        const size_t payload_size = (subscription->_payload_size_max < frame->payload_size)
+                                        ? subscription->_payload_size_max
+                                        : frame->payload_size;
+        void* const payload = ins->memory_allocate(ins, payload_size);
+        if (payload != NULL)
+        {
+            rxInitTransferFromFrame(frame, out_transfer);
+            out_transfer->payload_size = payload_size;
+            out_transfer->payload      = payload;
+            // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+            // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+            (void) memcpy(payload, frame->payload, payload_size);  // NOLINT
+            out = 1;
+        }
+        else
+        {
+            out = -CANARD_ERROR_OUT_OF_MEMORY;
+        }
     }
     return out;
 }

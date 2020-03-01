@@ -190,6 +190,98 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000000000));
 }
 
+TEST_CASE("RxAnonymous")
+{
+    using helpers::Instance;
+    using exposed::RxSession;
+
+    Instance       ins;
+    CanardTransfer transfer{};
+
+    const auto accept = [&](const std::uint8_t               redundant_transport_index,
+                            const CanardMicrosecond          timestamp_usec,
+                            const std::uint32_t              extended_can_id,
+                            const std::vector<std::uint8_t>& payload) {
+        static std::vector<std::uint8_t> payload_storage;
+        payload_storage = payload;
+        CanardFrame frame{};
+        frame.timestamp_usec  = timestamp_usec;
+        frame.extended_can_id = extended_can_id;
+        frame.payload_size    = std::size(payload);
+        frame.payload         = payload_storage.data();
+        return ins.rxAccept(frame, redundant_transport_index, transfer);
+    };
+
+    ins.getAllocator().setAllocationCeiling(16);
+
+    // A valid anonymous transfer for which there is no subscription.
+    REQUIRE(0 == accept(0, 100'000'000, 0b001'01'0'110110011001100'0'0100111, {0b111'00000}));
+
+    // Create a message subscription.
+    CanardRxSubscription sub_msg{};
+    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b110110011001100, 16, 2'000'000, sub_msg));  // New.
+
+    // Accepted anonymous message.
+    REQUIRE(1 == accept(0,
+                        100'000'001,
+                        0b001'01'0'110110011001100'0'0100111,  //
+                        {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 0b111'00000}));
+    REQUIRE(transfer.timestamp_usec == 100'000'001);
+    REQUIRE(transfer.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
+    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.payload_size == 16);  // Truncated.
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
+    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)  // No RX states!
+    {
+        REQUIRE(_session == nullptr);
+    }
+
+    // Anonymous message not accepted because OOM. The transfer shall remain unmodified by the call, so we re-check it.
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
+            accept(0, 100'000'001, 0b001'01'0'110110011001100'0'0100111, {3, 2, 1, 0b111'00000}));
+    REQUIRE(transfer.timestamp_usec == 100'000'001);
+    REQUIRE(transfer.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
+    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.payload_size == 16);  // Truncated.
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
+    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)  // No RX states!
+    {
+        REQUIRE(_session == nullptr);
+    }
+
+    // Release the memory.
+    ins.getAllocator().deallocate(transfer.payload);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
+
+    // Accepted anonymous message with small payload.
+    REQUIRE(1 == accept(0, 100'000'001, 0b001'01'0'110110011001100'0'0100111, {1, 2, 3, 4, 5, 6, 0b111'00000}));
+    REQUIRE(transfer.timestamp_usec == 100'000'001);
+    REQUIRE(transfer.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
+    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.payload_size == 6);  // NOT truncated.
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06", 0));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 6);   // Smaller allocation.
+    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)  // No RX states!
+    {
+        REQUIRE(_session == nullptr);
+    }
+}
+
 TEST_CASE("RxSubscriptionErrors")
 {
     using helpers::Instance;
