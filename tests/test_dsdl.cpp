@@ -42,6 +42,10 @@ TEST_CASE("canardDSDLFloat16")
         REQUIRE(Approx(x) == float16Unpack(float16Pack(x)));
         x += 0.5F;
     }
+
+    REQUIRE(0b0111110000000000 == float16Pack(float16Unpack(0b0111110000000000)));  // +inf
+    REQUIRE(0b1111110000000000 == float16Pack(float16Unpack(0b1111110000000000)));  // -inf
+    REQUIRE(0b0111111111111111 == float16Pack(float16Unpack(0b0111111111111111)));  // nan
 }
 
 TEST_CASE("copyBitArray")
@@ -288,6 +292,73 @@ TEST_CASE("canardDSDLSerialize_heartbeat")
 
     REQUIRE(std::size(dest) == std::size(Reference));
     REQUIRE_THAT(dest, Catch::Matchers::Equals(Reference));
+}
+
+TEST_CASE("canardDSDLDeserialize_manual")
+{
+    const std::array<std::uint8_t, 16> data{
+        {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77, 0x77}};
+    REQUIRE(0xFF == canardDSDLGetU8(data.data(), 8, 0, 8));
+    REQUIRE(0xFF == canardDSDLGetU8(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI8(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI8(data.data(), 8, 0, 8));
+    REQUIRE(-1 == canardDSDLGetI8(data.data(), 8, 0, 7));
+    REQUIRE(-1 == canardDSDLGetI8(data.data(), 8, 0, 2));
+
+    REQUIRE(0xFFFF == canardDSDLGetU16(data.data(), 8, 0, 16));
+    REQUIRE(0xFFFF == canardDSDLGetU16(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI16(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI16(data.data(), 8, 0, 16));
+    REQUIRE(-1 == canardDSDLGetI16(data.data(), 8, 0, 15));
+    REQUIRE(-1 == canardDSDLGetI16(data.data(), 8, 0, 2));
+
+    REQUIRE(0xFFFFFFFF == canardDSDLGetU32(data.data(), 8, 0, 32));
+    REQUIRE(0xFFFFFFFF == canardDSDLGetU32(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI32(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI32(data.data(), 8, 0, 32));
+    REQUIRE(-1 == canardDSDLGetI32(data.data(), 8, 0, 31));
+    REQUIRE(-1 == canardDSDLGetI32(data.data(), 8, 0, 2));
+
+    REQUIRE(0xFFFFFFFFFFFFFFFF == canardDSDLGetU64(data.data(), 8, 0, 64));
+    REQUIRE(0xFFFFFFFFFFFFFFFF == canardDSDLGetU64(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI64(data.data(), 8, 0, 255));
+    REQUIRE(-1 == canardDSDLGetI64(data.data(), 8, 0, 64));
+    REQUIRE(-1 == canardDSDLGetI64(data.data(), 8, 0, 63));
+    REQUIRE(-1 == canardDSDLGetI64(data.data(), 8, 0, 2));
+
+    REQUIRE(0 == canardDSDLGetI8(data.data(), 8, 0, 0));
+    REQUIRE(0 == canardDSDLGetI16(data.data(), 8, 0, 0));
+    REQUIRE(0 == canardDSDLGetI32(data.data(), 8, 0, 0));
+    REQUIRE(0 == canardDSDLGetI64(data.data(), 8, 0, 0));
+
+    REQUIRE(0 == canardDSDLGetI8(data.data(), 0, 0, 255));
+    REQUIRE(0 == canardDSDLGetI16(data.data(), 0, 0, 255));
+    REQUIRE(0 == canardDSDLGetI32(data.data(), 0, 0, 255));
+    REQUIRE(0 == canardDSDLGetI64(data.data(), 0, 0, 255));
+
+    REQUIRE(0x77 == canardDSDLGetU8(data.data(), 16, 64, 8));
+    REQUIRE(0x77 == canardDSDLGetU8(data.data(), 16, 64, 255));
+    REQUIRE(0x77 == canardDSDLGetI8(data.data(), 16, 64, 255));
+    REQUIRE(0x77 == canardDSDLGetI8(data.data(), 16, 64, 8));
+    REQUIRE(0 > canardDSDLGetI8(data.data(), 16, 64, 7));
+
+    REQUIRE(0x7777 == canardDSDLGetU16(data.data(), 16, 64, 16));
+    REQUIRE(0x7777 == canardDSDLGetU16(data.data(), 16, 64, 255));
+    REQUIRE(0x7777 == canardDSDLGetI16(data.data(), 16, 64, 255));
+    REQUIRE(0x7777 == canardDSDLGetI16(data.data(), 16, 64, 16));
+    REQUIRE(0 > canardDSDLGetI16(data.data(), 16, 64, 15));
+
+    REQUIRE(0x77777777 == canardDSDLGetU32(data.data(), 16, 64, 32));
+    REQUIRE(0x77777777 == canardDSDLGetU32(data.data(), 16, 64, 255));
+    REQUIRE(0x77777777 == canardDSDLGetI32(data.data(), 16, 64, 255));
+    REQUIRE(0x77777777 == canardDSDLGetI32(data.data(), 16, 64, 32));
+    REQUIRE(0 > canardDSDLGetI32(data.data(), 16, 64, 31));
+
+    REQUIRE(0x7777777777777777 == canardDSDLGetU64(data.data(), 16, 64, 64));
+    REQUIRE(0x7777777777777777 == canardDSDLGetU64(data.data(), 16, 64, 255));
+    REQUIRE(0x7777777777777777 == canardDSDLGetI64(data.data(), 16, 64, 255));
+    REQUIRE(0x7777777777777777 == canardDSDLGetI64(data.data(), 16, 64, 64));
+    REQUIRE(0 > canardDSDLGetI64(data.data(), 16, 64, 63));
 }
 
 TEST_CASE("canardDSDLDeserialize_aligned")

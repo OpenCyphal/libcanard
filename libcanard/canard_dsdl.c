@@ -259,33 +259,37 @@ uint64_t canardDSDLGetU64(const uint8_t* const buf, const size_t buf_size, const
 
 int8_t canardDSDLGetI8(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint8_t    val = canardDSDLGetU8(buf, buf_size, off_bit, len_bit);
-    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val            = ((len_bit < BYTE_WIDTH) && neg) ? (uint8_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    const uint8_t sat = (uint8_t) chooseMin(len_bit, BYTE_WIDTH);
+    uint8_t       val = canardDSDLGetU8(buf, buf_size, off_bit, sat);
+    const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
+    val               = ((sat < BYTE_WIDTH) && neg) ? (uint8_t)(val | ~((1U << sat) - 1U)) : val;  // Sign extension
     return neg ? (int8_t)((-(int8_t)(uint8_t) ~val) - 1) : (int8_t) val;
 }
 
 int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint16_t   val = canardDSDLGetU16(buf, buf_size, off_bit, len_bit);
-    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val            = ((len_bit < WIDTH16) && neg) ? (uint16_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    const uint8_t sat = (uint8_t) chooseMin(len_bit, WIDTH16);
+    uint16_t      val = canardDSDLGetU16(buf, buf_size, off_bit, sat);
+    const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
+    val               = ((sat < WIDTH16) && neg) ? (uint16_t)(val | ~((1U << sat) - 1U)) : val;  // Sign extension
     return neg ? (int16_t)((-(int16_t)(uint16_t) ~val) - 1) : (int16_t) val;
 }
 
 int32_t canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint32_t   val = canardDSDLGetU32(buf, buf_size, off_bit, len_bit);
-    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val            = ((len_bit < WIDTH32) && neg) ? (uint32_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    const uint8_t sat = (uint8_t) chooseMin(len_bit, WIDTH32);
+    uint32_t      val = canardDSDLGetU32(buf, buf_size, off_bit, sat);
+    const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
+    val               = ((sat < WIDTH32) && neg) ? (uint32_t)(val | ~((1UL << sat) - 1U)) : val;  // Sign extension
     return neg ? (int32_t)((-(int32_t) ~val) - 1) : (int32_t) val;
 }
 
 int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
 {
-    uint64_t   val = canardDSDLGetU64(buf, buf_size, off_bit, len_bit);
-    const bool neg = (len_bit > 0U) && ((val & (1ULL << (len_bit - 1U))) != 0U);
-    val            = ((len_bit < WIDTH64) && neg) ? (uint64_t)(val | ~((1ULL << len_bit) - 1U)) : val;
+    const uint8_t sat = (uint8_t) chooseMin(len_bit, WIDTH64);
+    uint64_t      val = canardDSDLGetU64(buf, buf_size, off_bit, sat);
+    const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
+    val               = ((sat < WIDTH64) && neg) ? (uint64_t)(val | ~((1ULL << sat) - 1U)) : val;  // Sign extension
     return neg ? (int64_t)((-(int64_t) ~val) - 1) : (int64_t) val;
 }
 
