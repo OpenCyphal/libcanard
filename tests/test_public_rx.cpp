@@ -83,6 +83,21 @@ TEST_CASE("RxBasic0")
     }
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
 
+    // Create a second response subscription.
+    CanardRxSubscription sub_res2{};
+    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000000000, 10, 1'000, sub_res2));
+    REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1] == &sub_res2);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next == &sub_res);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000000000);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_payload_size_max == 10);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 1'000);
+    for (auto _session : ins.getInstance()._rx_subscriptions[1]->_sessions)
+    {
+        REQUIRE(_session == nullptr);
+    }
+    REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
+
     // Accepted message.
     REQUIRE(1 == accept(0, 100'000'001, 0b001'00'0'110110011001100'0'0100111, {0b111'00000}));
     REQUIRE(transfer.timestamp_usec == 100'000'001);
@@ -160,11 +175,19 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 10 + 20));
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_sessions[0b0011011] != nullptr);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next->_sessions[0b0011011] != nullptr);
 
     // Bad frames shall be rejected silently.
     REQUIRE(0 == accept(0, 900'000'000, 0b100'10'0000111100'0011010'0011011, {5, 0b110'00011}));
     REQUIRE(0 == accept(0, 900'000'001, 0b100'10'0000111100'0011010'0011011, {}));
+
+    // Unsubscribe.
+    REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindRequest, 0b0000110011));
+    REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindRequest, 0b0000110011));
+    REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000111100));
+    REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000111100));
+    REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000000000));
+    REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000000000));
 }
 
 TEST_CASE("RxSubscriptionErrors")
@@ -186,4 +209,13 @@ TEST_CASE("RxSubscriptionErrors")
 
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(nullptr, CanardTransferKindMessage, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(&ins.getInstance(), kind.value, 0));
+
+    CanardFrame frame{};
+    frame.payload_size = 1U;
+    CanardTransfer transfer{};
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, &transfer));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, &frame, 0, &transfer));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), nullptr, 0, &transfer));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, nullptr, 0, nullptr));
 }

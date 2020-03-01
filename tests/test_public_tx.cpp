@@ -337,6 +337,17 @@ TEST_CASE("TxBasic0")
     frame = ins.txPeek();
     REQUIRE(nullptr == frame);
 
+    // Invalid transfer.
+    transfer.payload = payload.data();
+    transfer.timestamp_usec = 1'000'000'005'000ULL;
+    transfer.transfer_kind  = CanardTransferKindMessage;
+    transfer.remote_node_id = 42;
+    transfer.transfer_id    = 123;
+    transfer.payload_size   = 8;
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == ins.txPush(transfer));
+    frame = ins.txPeek();
+    REQUIRE(nullptr == frame);
+
     // Error handling.
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &transfer));
