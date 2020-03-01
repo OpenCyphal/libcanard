@@ -338,7 +338,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(nullptr == frame);
 
     // Invalid transfer.
-    transfer.payload = payload.data();
+    transfer.payload        = payload.data();
     transfer.timestamp_usec = 1'000'000'005'000ULL;
     transfer.transfer_kind  = CanardTransferKindMessage;
     transfer.remote_node_id = 42;
