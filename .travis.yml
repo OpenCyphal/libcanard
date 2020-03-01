@@ -26,6 +26,9 @@ matrix:
         - make test
 
         # COVERAGE
+        # FIXME: Rebuilding everything with NDEBUG=1 to avoid assertion checks being marked as uncovered by tests.
+        # FIXME: There are issues with coverage measurement in SonarQube, we need a cleaner workaround.
+        - make clean && make -j8 CFLAGS='-DNDEBUG=1'
         - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard.*gcno         > private_canard.gcov
         - gcov-9 -t CMakeFiles/test_private_cov.dir/**/canard_dsdl.*gcno    > private_canard_dsdl.gcov
         - gcov-9 -t CMakeFiles/test_private_le_cov.dir/**/canard.*gcno      > private_le_canard.gcov
