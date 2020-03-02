@@ -400,8 +400,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
         ++out;
         const size_t frame_payload_size_with_tail =
             ((payload_size_with_crc - offset) < presentation_layer_mtu)
-                ? txRoundFramePayloadSizeUp((payload_size_with_crc - offset) +
-                                            1U)  // Add padding only in the last frame.
+                ? txRoundFramePayloadSizeUp((payload_size_with_crc - offset) + 1U)  // Padding in the last frame only.
                 : (presentation_layer_mtu + 1U);
         CanardInternalTxQueueItem* const tqi =
             txAllocateQueueItem(ins, can_id, deadline_usec, frame_payload_size_with_tail);

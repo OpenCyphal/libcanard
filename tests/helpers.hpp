@@ -13,6 +13,14 @@
 #include <numeric>
 #include <unordered_map>
 
+#if !(defined(CANARD_VERSION_MAJOR) && defined(CANARD_VERSION_MINOR))
+#    error "Library version not defined"
+#endif
+
+#if !(defined(CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR) && defined(CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR))
+#    error "UAVCAN specification version not defined"
+#endif
+
 namespace helpers
 {
 namespace dummy_allocator
