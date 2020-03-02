@@ -1,8 +1,41 @@
+// LIBCANARD
+//
+// Libcanard is a compact implementation of the UAVCAN/CAN protocol for high-integrity real-time embedded systems.
+// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4K RAM.
+// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
+// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64 bit,
+// little- and big-endian, RTOS-based or bare metal, etc., as long as there is a standards-compliant C11 compiler.
+//
+// INTEGRATION
+//
+// The library is intended to be integrated into the end application by simply copying the file canard.c into the
+// source tree of the project; it does not require any special compilation options and should work out of the box.
+// There are optional build configuration options defined near the top of canard.c; they may be used to fine-tune
+// the library for the target platform (but it is not necessary). This header file should be located at the same
+// directory with canard.c, or its location should be in the include look-up paths of the compiler.
+//
+// As explained in this documentation, the library requires a deterministic constant-time bounded-fragmentation dynamic
+// memory allocator. If your target platform does not provide a deterministic memory manager (most platforms don't),
+// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
+//
+// There is an optional two-file extension library canard_dsdl.c + canard_dsdl.h which can be used alongside
+// this core library to simplify DSDL object serialization and deserialization. It is intended to be integrated in
+// the same manner. Please read its usage manual for further information.
+//
+// If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
+// at https://forum.uavcan.org.
+//
+// ARCHITECTURE
+//
+//
+//
+//
+//
+//
 // This software is distributed under the terms of the MIT License.
 // Copyright (c) 2016-2020 UAVCAN Development Team.
 // Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 // Contributors: https://github.com/UAVCAN/libcanard/contributors.
-// READ THE DOCUMENTATION IN README.md.
 
 #ifndef CANARD_H_INCLUDED
 #define CANARD_H_INCLUDED
@@ -24,21 +57,21 @@ extern "C" {
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR 0
 
-/// These error codes may be returned from the library API calls whose return type is a signed integer
-/// in the negated form (e.g., code 2 returned as -2).
-/// API calls whose return type is not a signer integer cannot fail by contract.
+/// These error codes may be returned from the library API calls whose return type is a signed integer in the negated
+/// form (e.g., error code 2 returned as -2). A non-negative return value represents success.
+/// API calls whose return type is not a signed integer cannot fail by contract.
 /// No other error states may occur in the library.
-/// By contract, a deterministic application with a properly sized memory pool will never encounter errors.
+/// By contract, a well-characterized application with a properly sized memory pool will never encounter errors.
 /// The error code 1 is not used because -1 is often used as a generic error code in 3rd-party code.
 #define CANARD_ERROR_INVALID_ARGUMENT 2
 #define CANARD_ERROR_OUT_OF_MEMORY 3
 
-/// MTU values for supported protocols.
-/// Per the recommendations given in the UAVCAN specification, other MTU values should not be used.
+/// MTU values for the supported protocols.
+/// Per the recommendations given in the UAVCAN/CAN Specification, other MTU values should not be used.
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD 64U
 
-/// Parameter ranges are inclusive; the lower bound is zero for all. Refer to the specification for more info.
+/// Parameter ranges are inclusive; the lower bound is zero for all. See UAVCAN/CAN Specification for background.
 #define CANARD_SUBJECT_ID_MAX 32767U
 #define CANARD_SERVICE_ID_MAX 511U
 #define CANARD_NODE_ID_MAX 127U
@@ -50,18 +83,18 @@ extern "C" {
 /// Library functions treat all values above CANARD_NODE_ID_MAX as anonymous.
 #define CANARD_NODE_ID_UNSET 255U
 
-/// If not specified, the transfer-ID timeout will take this value for all new input sessions.
+/// This is the recommended transfer-ID timeout value given in the UAVCAN Specification. The application may choose
+/// different values per subscription (i.e., per data specifier) depending on its timing requirements.
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
 
 // Forward declarations.
 typedef struct CanardInstance CanardInstance;
+typedef uint64_t              CanardMicrosecond;
+typedef uint16_t              CanardPortID;
+typedef uint8_t               CanardNodeID;
+typedef uint8_t               CanardTransferID;
 
-typedef uint64_t CanardMicrosecond;
-typedef uint16_t CanardPortID;
-typedef uint8_t  CanardNodeID;
-typedef uint8_t  CanardTransferID;
-
-/// Transfer priority level mnemonics per the recommendations given in the UAVCAN specification.
+/// Transfer priority level mnemonics per the recommendations given in the UAVCAN Specification.
 typedef enum
 {
     CanardPriorityExceptional = 0,
@@ -74,7 +107,7 @@ typedef enum
     CanardPriorityOptional    = 7,
 } CanardPriority;
 
-/// Transfer kinds are defined by the UAVCAN specification.
+/// Transfer kinds as defined by the UAVCAN Specification.
 typedef enum
 {
     CanardTransferKindMessage  = 0,  ///< Multicast, from publisher to all subscribers.
@@ -84,6 +117,7 @@ typedef enum
 #define CANARD_NUM_TRANSFER_KINDS 3
 
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
+/// CAN frames with 11-bit ID are not used by UAVCAN/CAN and so they are not supported by the library.
 typedef struct
 {
     /// For RX frames: reception timestamp.

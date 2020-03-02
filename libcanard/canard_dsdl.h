@@ -1,12 +1,24 @@
+// LIBCANARD DSDL helper
+//
+// This is a trivial optional extension library for Libcanard that contains basic DSDL field serialization routines.
+// It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
+// The functions are fully stateless and straightforward to use; read their documentation comments for usage info.
+//
+// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
+// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
+//
+// This library is designed to be compatible with any instruction set architecture (including big endian platforms)
+// but the floating point functionality will be automatically disabled at compile time if the target platform does not
+// use an IEEE 754-compatible floating point model. Support for other floating point models may be implemented later.
+// If your application requires non-IEEE-754 floats, please reach out to the maintainers via https://forum.uavcan.org.
+//
+// To use the library, copy the files canard_dsdl.c and canard_dsdl.h into the source tree of the application.
+// No special compilation options are required. There are optional build configuration options defined near the top
+// of canard_dsdl.c; they may be used to fine-tune the library for the target platform (but it is not necessary).
+//
 // This software is distributed under the terms of the MIT License.
 // Copyright (c) 2016-2020 UAVCAN Development Team.
 // Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-//
-// This is a trivial optional extension library that contains basic DSDL serialization routines.
-// It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
-// The functions are fully stateless (pure); read their documentation comments for usage information.
-// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
-// Some high-integrity applications may prefer avoid this extension because it relies on unsafe memory operations.
 
 #ifndef CANARD_DSDL_H_INCLUDED
 #define CANARD_DSDL_H_INCLUDED
@@ -31,7 +43,7 @@ typedef double CanardDSDLFloat64;
 ///     buf     Destination buffer where the result will be stored.
 ///     off_bit Offset, in bits, from the beginning of the buffer. May exceed one byte.
 ///     value   The value itself (in case of integers it is promoted to 64-bit for unification).
-///     len_bit Length of the serialized representation, in bits. Zero has no effect. Values above 64 are saturated.
+///     len_bit Length of the serialized representation, in bits. Zero has no effect. Values above 64 bit are saturated.
 void canardDSDLSetBit(uint8_t* const buf, const size_t off_bit, const bool value);
 void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t value, const uint8_t len_bit);
 void canardDSDLSetIxx(uint8_t* const buf, const size_t off_bit, const int64_t value, const uint8_t len_bit);
@@ -44,10 +56,10 @@ void canardDSDLSetF64(uint8_t* const buf, const size_t off_bit, const CanardDSDL
 /// by the DSDL specification (see Implicit Zero Extension Rule, IZER).
 /// The floating point functions are only available if the target platform has an IEEE 754-compatible float model.
 ///
-/// If len_bit is greater than the return type, extra bits will be truncated per regular narrowing conversion rules.
-/// If len_bit is shorter than the return type, missing bits will be zero per regular integer promotion rules.
+/// If len_bit is greater than the return type, extra bits will be truncated per standard narrowing conversion rules.
+/// If len_bit is shorter than the return type, missing bits will be zero per standard integer promotion rules.
 /// Essentially, for integers, it would be enough to have 64-bit versions only; narrower variants exist only to avoid
-/// narrowing type conversions of the result (and some small performance gains).
+/// narrowing type conversions of the result and for some performance gains.
 ///
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
 /// One-bit-wide signed integers are processed without raising an error but the result is unspecified.

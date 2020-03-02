@@ -9,12 +9,9 @@
 
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
 
-/// This option allows the user to improve the primitive (de-)serialization performance if the target platform
-/// is little endian.
 /// There are two implementations of the primitive (de-)serialization algorithms: a generic one, which is invariant
 /// to the native byte order (and therefore compatible with any platform), and the optimized one which is compatible
-/// with little-endian platforms only.
-/// By default, the slow generic algorithm is used.
+/// with little-endian platforms only. By default, the slow generic algorithm is used.
 /// If the target platform is little-endian, the user can enable this option to use the optimized algorithm.
 #ifndef CANARD_DSDL_CONFIG_LITTLE_ENDIAN
 #    define CANARD_DSDL_CONFIG_LITTLE_ENDIAN false
@@ -30,8 +27,8 @@
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
 #if defined(CANARD_CONFIG_EXPOSE_PRIVATE) && CANARD_CONFIG_EXPOSE_PRIVATE
 #    define CANARD_PRIVATE
-#else
-#    define CANARD_PRIVATE static inline
+#else  // Consider defining an extra compilation option that turns this into "static inline"?
+#    define CANARD_PRIVATE static
 #endif
 
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
@@ -178,7 +175,7 @@ void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t v
 
 void canardDSDLSetIxx(uint8_t* const buf, const size_t off_bit, const int64_t value, const uint8_t len_bit)
 {
-    // The naive sign conversion seems to be safe and portable according to the C standard:
+    // The naive sign conversion is safe and portable according to the C standard:
     // 6.3.1.3.3: if the new type is unsigned, the value is converted by repeatedly adding or subtracting one more
     // than the maximum value that can be represented in the new type until the value is in the range of the new type.
     canardDSDLSetUxx(buf, off_bit, (uint64_t) value, len_bit);

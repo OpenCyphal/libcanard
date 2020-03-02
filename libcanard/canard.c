@@ -18,8 +18,8 @@
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
 #if defined(CANARD_CONFIG_EXPOSE_PRIVATE) && CANARD_CONFIG_EXPOSE_PRIVATE
 #    define CANARD_PRIVATE
-#else
-#    define CANARD_PRIVATE static inline
+#else  // Consider defining an extra compilation option that turns this into "static inline"?
+#    define CANARD_PRIVATE static
 #endif
 
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
@@ -65,13 +65,19 @@ typedef uint16_t TransferCRC;
 CANARD_PRIVATE TransferCRC crcAddByte(const TransferCRC crc, const uint8_t byte);
 CANARD_PRIVATE TransferCRC crcAddByte(const TransferCRC crc, const uint8_t byte)
 {
-    static const TransferCRC TopBit = 0x8000U;
-    static const TransferCRC Poly   = 0x1021U;
-    TransferCRC              out    = crc ^ (uint16_t)((uint16_t)(byte) << BITS_PER_BYTE);
-    for (uint8_t i = 0; i < BITS_PER_BYTE; i++)  // Should we use a table instead? Adds 512 bytes of ROM.
-    {
-        out = ((out & TopBit) != 0U) ? ((uint16_t)(out << 1U) ^ Poly) : (uint16_t)(out << 1U);
-    }
+    static const TransferCRC Top  = 0x8000U;
+    static const TransferCRC Poly = 0x1021U;
+    TransferCRC              out  = crc ^ (uint16_t)((uint16_t)(byte) << BITS_PER_BYTE);
+    // Consider adding a compilation option that replaces this with a CRC table. Adds 512 bytes of ROM.
+    // Do not fold this into a loop because a size-optimizing compiler won't unroll it degrading the performance.
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
     return out;
 }
 
