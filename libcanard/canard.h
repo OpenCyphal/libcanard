@@ -22,6 +22,9 @@
 // this core library to simplify DSDL object serialization and deserialization. It is intended to be integrated in
 // the same manner. Please read its usage manual for further information.
 //
+// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
+// UAVCAN Development Team may be found at https://github.com/UAVCAN/platform_specific_components.
+//
 // If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
 // at https://forum.uavcan.org.
 //
