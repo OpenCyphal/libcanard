@@ -92,7 +92,7 @@ If you need access, please get in touch with the UAVCAN Development Team members
 ### IDE
 
 The recommended development environment is JetBrains CLion. The root project file is `tests/CMakeLists.txt`.
-The repository contains the spelling dictionaries for CLion located under `**/.idea/`, make sure to use them.
+The repository contains the spelling dictionaries for CLion located under `.idea/`, make sure to use them.
 
 ## Testing
 
