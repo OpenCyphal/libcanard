@@ -1,93 +1,93 @@
-//          LIBCANARD
-//
-// Libcanard is a compact implementation of the UAVCAN/CAN protocol for high-integrity real-time embedded systems.
-// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4K RAM.
-// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
-// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64 bit,
-// little- and big-endian, RTOS-based or bare metal, etc., as long as there is a standards-compliant C11 compiler.
-//
-//          INTEGRATION
-//
-// The library is intended to be integrated into the end application by simply copying the file canard.c into the
-// source tree of the project; it does not require any special compilation options and should work out of the box.
-// There are optional build configuration options defined near the top of canard.c; they may be used to fine-tune
-// the library for the target platform (but it is not necessary). This header file should be located at the same
-// directory with canard.c, or its location should be in the include look-up paths of the compiler.
-//
-// As explained in this documentation, the library requires a deterministic constant-time bounded-fragmentation dynamic
-// memory allocator. If your target platform does not provide a deterministic memory manager (most platforms don't),
-// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
-//
-// There is an optional two-file extension library canard_dsdl.c + canard_dsdl.h which can be used alongside
-// this core library to simplify DSDL object serialization and deserialization. It is intended to be integrated in
-// the same manner. Please read its usage manual for further information.
-//
-// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
-// UAVCAN Development Team may be found at https://github.com/UAVCAN/platform_specific_components.
-//
-// If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
-// at https://forum.uavcan.org.
-//
-//          ARCHITECTURE
-//
-// UAVCAN, as a protocol stack, is composed of two layers: TRANSPORT and PRESENTATION. The transport layer is portable
-// across different transport protocols, one of which is CAN (FD), formally referred to as UAVCAN/CAN. This library
-// is focused on UAVCAN/CAN only and it will not support other transports. The presentation layer is implemented
-// through the DSDL language and the associated data type regulation policies. Much like the UAVCAN stack itself,
-// this library consists of two major components:
-//
-//      1. TRANSPORT -- the UAVCAN/CAN transport layer implementation. This is implemented in canard.c/.h,
-//         the documentation for which you are currently reading. This is the core part of the library.
-//
-//      2. PRESENTATION -- the optional DSDL support extension library. This is implemented in canard_dsdl.c/.h,
-//         an optional component which may be used by some applications where automatic DSDL code generation is
-//         not used. Normally, applications may prefer to rely on auto-generated code using DSDL-to-C translators
-//         such as Nunavut (https://github.com/UAVCAN/nunavut).
-//
-// The DSDL extension is trivial and there is not much to document -- please refer to its header file for details.
-//
-// This transport layer implementation consists of two components: the transmission (TX) pipeline and the
-// reception (RX) pipeline.
-//
-// The TX and RX pipelines are completely independent from each other except that they both rely on the same
-// dynamic memory manager. The TX pipeline uses the dynamic memory to store outgoing CAN frames in the prioritized
-// transmission queue. The RX pipeline uses the dynamic memory to store contiguous payload buffers for received
-// transfers and for keeping the transfer reassembly state machine data. The exact memory consumption model is defined
-// for both pipelines, so it is possible to statically determine the minimum size of the dynamic memory pool required
-// to guarantee that a given application will never encounter an out-of-memory error at runtime.
-//
-// Much like with dynamic memory, the time complexity of every API function is well-characterized, allowing the
-// application to guarantee predictable real-time performance.
-//
-// The TX pipeline is managed with the help of three API functions. When the application needs to emit a transfer,
-// it invokes canardTxPush(). The function splits the transfer into CAN frames and stores them into the prioritized
-// transmission queue. The application then picks the CAN frames from the queue one-by-one by calling canardTxPeek()
-// followed by canardTxPop() -- the former allows the application to look at the frame and the latter tells the library
-// that the frame shall be removed from the queue. The returned frames need to be deallocated by the application.
-//
-// The RX pipeline is managed with the help of three API functions. The main function canardRxAccept() takes a
-// received CAN frame and updates the appropriate transfer reassembly state machine. The functions canardRxSubscribe()
-// and its counterpart canardRxUnsubscribe() instruct the library which transfers should be received (by default, all
-// transfers are ignored); also the subscription function specifies vital transfer reassembly parameters such as the
-// maximum payload size (i.e., the maximum size of a serialized representation of a DSDL object) and the transfer-ID
-// timeout. Transfers that carry more payload than the configured maximum per subscription are truncated following the
-// Implicit Truncation Rule (ITR) defined by the UAVCAN Specification -- the rule is implemented to facilitate
-// backward-compatible DSDL data type extensibility.
-//
-// The library supports an unlimited number of redundant interfaces.
-//
-// The library is not thread-safe: if used in a concurrent environment, it is the responsibility of the application
-// to provide adequate synchronization.
-//
-// The library is purely reactive: it does not perform any background processing and does not require periodic
-// servicing. Its internal state is only updated as a response to well-specified explicit API calls.
-//
-// --------------------------------------------------------------------------------------------------------------------
-//
-// This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
-// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
-// Contributors: https://github.com/UAVCAN/libcanard/contributors.
+///          LIBCANARD
+///
+/// Libcanard is a compact implementation of the UAVCAN/CAN protocol for high-integrity real-time embedded systems.
+/// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4K RAM.
+/// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
+/// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
+/// bit, little- and big-endian, RTOS-based or bare metal, etc., as long as there is a standards-compliant C11 compiler.
+///
+///          INTEGRATION
+///
+/// The library is intended to be integrated into the end application by simply copying the file canard.c into the
+/// source tree of the project; it does not require any special compilation options and should work out of the box.
+/// There are optional build configuration options defined near the top of canard.c; they may be used to fine-tune
+/// the library for the target platform (but it is not necessary). This header file should be located at the same
+/// directory with canard.c, or its location should be in the include look-up paths of the compiler.
+///
+/// As explained in this documentation, the library requires a deterministic constant-time bounded-fragmentation dynamic
+/// memory allocator. If your target platform does not provide a deterministic memory manager (most platforms don't),
+/// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
+///
+/// There is an optional two-file extension library canard_dsdl.c + canard_dsdl.h which can be used alongside
+/// this core library to simplify DSDL object serialization and deserialization. It is intended to be integrated in
+/// the same manner. Please read its usage manual for further information.
+///
+/// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
+/// UAVCAN Development Team may be found at https://github.com/UAVCAN/platform_specific_components.
+///
+/// If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
+/// at https://forum.uavcan.org.
+///
+///          ARCHITECTURE
+///
+/// UAVCAN, as a protocol stack, is composed of two layers: TRANSPORT and PRESENTATION. The transport layer is portable
+/// across different transport protocols, one of which is CAN (FD), formally referred to as UAVCAN/CAN. This library
+/// is focused on UAVCAN/CAN only and it will not support other transports. The presentation layer is implemented
+/// through the DSDL language and the associated data type regulation policies. Much like the UAVCAN stack itself,
+/// this library consists of two major components:
+///
+///      1. TRANSPORT -- the UAVCAN/CAN transport layer implementation. This is implemented in canard.c/.h,
+///         the documentation for which you are currently reading. This is the core component of the library.
+///
+///      2. PRESENTATION -- the optional DSDL support extension library. This is implemented in canard_dsdl.c/.h,
+///         an optional component which may be used by some applications where automatic DSDL code generation is
+///         not used. Normally, applications may prefer to rely on auto-generated code using DSDL-to-C translators
+///         such as Nunavut (https://github.com/UAVCAN/nunavut).
+///
+/// The DSDL extension is trivial and there is not much to document -- please refer to its header file for details.
+///
+/// This transport layer implementation consists of two components: the transmission (TX) pipeline and the
+/// reception (RX) pipeline.
+///
+/// The TX and RX pipelines are completely independent from each other except that they both rely on the same
+/// dynamic memory manager. The TX pipeline uses the dynamic memory to store outgoing CAN frames in the prioritized
+/// transmission queue. The RX pipeline uses the dynamic memory to store contiguous payload buffers for received
+/// transfers and for keeping the transfer reassembly state machine data. The exact memory consumption model is defined
+/// for both pipelines, so it is possible to statically determine the minimum size of the dynamic memory pool required
+/// to guarantee that a given application will never encounter an out-of-memory error at runtime.
+///
+/// Much like with dynamic memory, the time complexity of every API function is well-characterized, allowing the
+/// application to guarantee predictable real-time performance.
+///
+/// The TX pipeline is managed with the help of three API functions. When the application needs to emit a transfer,
+/// it invokes canardTxPush(). The function splits the transfer into CAN frames and stores them into the prioritized
+/// transmission queue. The application then picks the CAN frames from the queue one-by-one by calling canardTxPeek()
+/// followed by canardTxPop() -- the former allows the application to look at the frame and the latter tells the library
+/// that the frame shall be removed from the queue. The returned frames need to be deallocated by the application.
+///
+/// The RX pipeline is managed with the help of three API functions. The main function canardRxAccept() takes a
+/// received CAN frame and updates the appropriate transfer reassembly state machine. The functions canardRxSubscribe()
+/// and its counterpart canardRxUnsubscribe() instruct the library which transfers should be received (by default, all
+/// transfers are ignored); also the subscription function specifies vital transfer reassembly parameters such as the
+/// maximum payload size (i.e., the maximum size of a serialized representation of a DSDL object) and the transfer-ID
+/// timeout. Transfers that carry more payload than the configured maximum per subscription are truncated following the
+/// Implicit Truncation Rule (ITR) defined by the UAVCAN Specification -- the rule is implemented to facilitate
+/// backward-compatible DSDL data type extensibility.
+///
+/// The library supports a practically unlimited number of redundant transports.
+///
+/// The library is not thread-safe: if used in a concurrent environment, it is the responsibility of the application
+/// to provide adequate synchronization.
+///
+/// The library is purely reactive: it does not perform any background processing and does not require periodic
+/// servicing. Its internal state is only updated as a response to well-specified explicit API calls.
+///
+/// --------------------------------------------------------------------------------------------------------------------
+///
+/// This software is distributed under the terms of the MIT License.
+/// Copyright (c) 2016-2020 UAVCAN Development Team.
+/// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+/// Contributors: https://github.com/UAVCAN/libcanard/contributors.
 
 #ifndef CANARD_H_INCLUDED
 #define CANARD_H_INCLUDED
