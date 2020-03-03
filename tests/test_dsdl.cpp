@@ -10,7 +10,6 @@
 TEST_CASE("float16Pack")
 {
     using exposed::float16Pack;
-    // Reference values were generated manually with libuavcan and numpy.float16().
     REQUIRE(0b0000000000000000 == float16Pack(0.0F));
     REQUIRE(0b0011110000000000 == float16Pack(1.0F));
     REQUIRE(0b1100000000000000 == float16Pack(-2.0F));
@@ -22,7 +21,6 @@ TEST_CASE("float16Pack")
 TEST_CASE("float16Unpack")
 {
     using exposed::float16Unpack;
-    // Reference values were generated manually with libuavcan and numpy.float16().
     REQUIRE(Approx(0.0F) == float16Unpack(0b0000000000000000));
     REQUIRE(Approx(1.0F) == float16Unpack(0b0011110000000000));
     REQUIRE(Approx(-2.0F) == float16Unpack(0b1100000000000000));

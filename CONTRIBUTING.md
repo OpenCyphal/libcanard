@@ -11,8 +11,7 @@ The implementation and the API should be kept simple.
 The core library `canard.c` (that is, excluding the optional DSDL presentation layer extension) shall never become
 larger than 1000 logical lines of code.
 This restriction ensures that the library is kept simple and easy to validate and verify.
-There will be no high-level abstractions -- if that is desired, other implementations should be used,
-such as, for example, Libuavcan.
+There will be no high-level abstractions -- if that is desired, other implementations of UAVCAN should be used.
 
 The library is intended for deeply embedded systems where the resources may be scarce.
 The ROM footprint is of a particular concern because the library should be usable with embedded bootloaders.
@@ -24,7 +23,6 @@ Do not put anything else in there.
 
 The tests are located under `/tests/`.
 This directory also contains the top `CMakeLists.txt` needed to build and run the tests on the local machine.
-Essentially, this directory can be considered to be the project root.
 
 There is no separate storage for the documentation because it is written directly in the header files.
 This works for Libcanard because it is sufficiently compact and simple.

@@ -1,6 +1,6 @@
-// This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
-// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+/// This software is distributed under the terms of the MIT License.
+/// Copyright (c) 2016-2020 UAVCAN Development Team.
+/// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 
 #include "canard_dsdl.h"
 #include <assert.h>
@@ -35,7 +35,7 @@
 #    error "Unsupported language: ISO C11 or a newer version is required."
 #endif
 
-/// If your platform is not IEEE 754-compatible and you need floats, please reach https://forum.uavcan.org.
+/// Detect whether the target platform is compatible with IEEE 754.
 #define CANARD_DSDL_PLATFORM_IEEE754_FLOAT \
     ((FLT_RADIX == 2) && (FLT_MANT_DIG == 24) && (FLT_MIN_EXP == -125) && (FLT_MAX_EXP == 128))
 #define CANARD_DSDL_PLATFORM_IEEE754_DOUBLE \
@@ -43,7 +43,7 @@
 
 // --------------------------------------------- COMMON ITEMS ---------------------------------------------
 
-/// Per the DSDL specification, it is assumed that 1 byte = 8 bits.
+/// Per the DSDL specification, 1 byte = 8 bits.
 #define BYTE_WIDTH 8U
 #define BYTE_MAX 0xFFU
 

@@ -1,24 +1,24 @@
-// LIBCANARD DSDL helper
-//
-// This is a trivial optional extension library for Libcanard that contains basic DSDL field serialization routines.
-// It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
-// The functions are fully stateless and straightforward to use; read their documentation comments for usage info.
-//
-// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
-// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
-//
-// This library is designed to be compatible with any instruction set architecture (including big endian platforms)
-// but the floating point functionality will be automatically disabled at compile time if the target platform does not
-// use an IEEE 754-compatible floating point model. Support for other floating point models may be implemented later.
-// If your application requires non-IEEE-754 floats, please reach out to the maintainers via https://forum.uavcan.org.
-//
-// To use the library, copy the files canard_dsdl.c and canard_dsdl.h into the source tree of the application.
-// No special compilation options are required. There are optional build configuration options defined near the top
-// of canard_dsdl.c; they may be used to fine-tune the library for the target platform (but it is not necessary).
-//
-// This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
-// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+///          LIBCANARD DSDL helper
+///
+/// This is a trivial optional extension library for Libcanard that contains basic DSDL field serialization routines.
+/// It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
+/// The functions are fully stateless and straightforward to use; read their documentation comments for usage info.
+///
+/// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
+/// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
+///
+/// This library is designed to be compatible with any instruction set architecture (including big endian platforms)
+/// but the floating point functionality will be automatically disabled at compile time if the target platform does not
+/// use an IEEE 754-compatible floating point model. Support for other floating point models may be implemented later.
+/// If your application requires non-IEEE-754 floats, please reach out to the maintainers via https://forum.uavcan.org.
+///
+/// To use the library, copy the files canard_dsdl.c and canard_dsdl.h into the source tree of the application.
+/// No special compilation options are required. There are optional build configuration options defined near the top
+/// of canard_dsdl.c; they may be used to fine-tune the library for the target platform (but it is not necessary).
+///
+/// This software is distributed under the terms of the MIT License.
+/// Copyright (c) 2016-2020 UAVCAN Development Team.
+/// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
 
 #ifndef CANARD_DSDL_H_INCLUDED
 #define CANARD_DSDL_H_INCLUDED

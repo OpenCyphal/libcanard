@@ -62,8 +62,8 @@ const CanardTransfer transfer = {
     .port_id        = 1234,                       // This is the subject-ID.
     .remote_node_id = CANARD_NODE_ID_UNSET,       // Messages cannot be unicast, so use UNSET.
     .transfer_id    = my_message_transfer_id,
-    .payload_size   = 45,
-    .payload        = "Sancho, it strikes me thou art in great fear.",
+    .payload_size   = 47,  // In this example: a string 45 characters long, 9-bit length prefix, 7-bit padding.
+    .payload        = "\x00Z" "Sancho, it strikes me thou art in great fear.",
 };
 ++my_message_transfer_id;  // The transfer-ID shall be incremented after every transmission on this subject.
 int32_t result = canardTxPush(&ins, &transfer);

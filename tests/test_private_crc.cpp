@@ -11,7 +11,7 @@ TEST_CASE("TransferCRC")
     crc = crcAdd(crc, 1, "1");
     crc = crcAdd(crc, 1, "2");
     crc = crcAdd(crc, 1, "3");
-    REQUIRE(0x5BCEU == crc);  // Using Libuavcan as reference
+    REQUIRE(0x5BCEU == crc);
     crc = crcAdd(crc, 6, "456789");
     REQUIRE(0x29B1U == crc);
 }

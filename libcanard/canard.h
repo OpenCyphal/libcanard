@@ -296,7 +296,6 @@ typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer);
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
 /// The application may directly alter the fields whose names do not begin with an underscore.
-/// Fields whose names begin with an underscore SHALL NOT be accessed by the application.
 struct CanardInstance
 {
     /// User pointer that can link this instance with other objects.
@@ -327,7 +326,7 @@ struct CanardInstance
     ///
     /// The following API functions may allocate memory:   canardRxAccept(), canardTxPush().
     /// The following API functions may deallocate memory: canardRxAccept(), canardRxSubscribe(), canardRxUnsubscribe().
-    /// The exact memory requirement model is specified for each function in its documentation.
+    /// The exact memory requirement and usage model is specified for each function in its documentation.
     CanardMemoryAllocate memory_allocate;
     CanardMemoryFree     memory_free;
 
@@ -400,7 +399,7 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 /// frames of serialized transfers pushed into the prioritized transmission queue by canardTxPush().
 ///
 /// Nodes with redundant transports should replicate every frame into each of the transport interfaces.
-/// Such replication may require additional buffering in the driver layer, depending on the implementation.
+/// Such replication may require additional buffering in the media I/O layer, depending on the implementation.
 ///
 /// The timestamp values of returned frames are initialized with the timestamp value of the transfer instance they
 /// originate from. Timestamps are used to specify the transmission deadline. It is up to the application and/or
@@ -424,7 +423,7 @@ const CanardFrame* canardTxPeek(const CanardInstance* const ins);
 
 /// This function transfers the ownership of the top element of the prioritized transmission queue to the application.
 /// The application should invoke this function to remove the top element from the prioritized transmission queue.
-/// The element is removed but it is not invalidated: it is the responsibility of the application to deallocate
+/// The element is removed but it is not invalidated; it is the responsibility of the application to deallocate
 /// the memory used by the object later. The object SHALL NOT be deallocated UNTIL this function is invoked.
 ///
 /// WARNING:
@@ -461,7 +460,8 @@ void canardTxPop(CanardInstance* const ins);
 ///        the time complexity by never deallocating sessions.
 ///        The size of a session instance is at most 48 bytes on any conventional platform (typically much smaller).
 ///
-///     2. New memory for the transfer payload buffer is allocated when a new transfer is initiated.
+///     2. New memory for the transfer payload buffer is allocated when a new transfer is initiated, unless the buffer
+///        was already allocated at the time.
 ///        This event occurs when a transport frame that matches a known subscription is received and it begins a
 ///        new transfer (that is, the start-of-frame flag is set and it is not a duplicate).
 ///        The amount of the allocated memory is payload_size_max as configured via canardRxSubscribe().
@@ -479,10 +479,11 @@ void canardTxPop(CanardInstance* const ins);
 ///     (sizeof(session instance) + payload_size_max) * number_of_nodes
 ///
 /// Where sizeof(session instance) and payload_size_max are defined above, and number_of_nodes is the number of remote
-/// nodes emitting transfers that match the subscription. If the dynamic memory pool is sized correctly, the
-/// application is guaranteed to never encounter an out-of-memory (OOM) error at runtime. The actual size of the
-/// dynamic memory pool is typically larger; for a detailed treatment of the problem and the related theory please
-/// refer to the documentation of O1Heap -- a deterministic memory allocator for hard real-time embedded systems.
+/// nodes emitting transfers that match the subscription (which cannot exceed (CANARD_NODE_ID_MAX-1) by design).
+/// If the dynamic memory pool is sized correctly, the application is guaranteed to never encounter an
+/// out-of-memory (OOM) error at runtime. The actual size of the dynamic memory pool is typically larger;
+/// for a detailed treatment of the problem and the related theory please refer to the documentation of O1Heap --
+/// a deterministic memory allocator for hard real-time embedded systems.
 ///
 /// The time complexity is O(n+p) where n is the number of subject-IDs or service-IDs subscribed to by the application,
 /// depending on the transfer kind of the supplied frame, and p is the amount of payload in the received frame
@@ -497,7 +498,7 @@ void canardTxPop(CanardInstance* const ins);
 /// are stored into out_transfer, and the transfer payload buffer ownership is passed to that object. The lifetime
 /// of the resulting transfer object is not related to the lifetime of the input transport frame (that is, even if
 /// it is a single-frame transfer, its payload is copied out into a new dynamically allocated buffer storage).
-/// If the payload_size_max is zero, the payload pointer will be NULL, since there is no data to store and so a
+/// If the payload_size_max is zero, the payload pointer may be NULL, since there is no data to store and so a
 /// buffer is not needed. The application is responsible for deallocating the payload buffer when the processing
 /// is done by invoking memory_free on the transfer payload pointer.
 ///
@@ -542,8 +543,8 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// called the Implicit Truncation Rule (ITR) and it is intended to facilitate extensibility of data types while
 /// preserving backward compatibility. The transfer CRC is validated regardless of whether its payload is truncated.
 ///
-/// The transport fail-over timeout (if redundant transports are used) is the same as the transfer-ID timeout.
-/// It may be reduced in a future release of the library, but it will not affect backward compatibility.
+/// The redundant transport fail-over timeout (if redundant transports are used) is the same as the transfer-ID timeout.
+/// It may be reduced in a future release of the library, but it will not affect the backward compatibility.
 ///
 /// The return value is 1 if a new subscription has been created as requested.
 /// The return value is 0 if such subscription existed at the time the function was invoked. In this case,
@@ -551,12 +552,12 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// The return value is a negated invalid argument error if any of the input arguments are invalid.
 ///
 /// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
-/// This function does not allocate new memory. The function may deallocate memory if such subscription already existed.
+/// This function does not allocate new memory. The function may deallocate memory if such subscription already
+/// existed; the deallocation behavior is specified in the documentation for canardRxUnsubscribe().
 ///
 /// Subscription instances have large look-up tables to ensure that the temporal properties of the algorithms are
 /// invariant to the network configuration (i.e., a node that is validated on a network containing one other node
 /// will provably perform identically on a network that contains X nodes).
-/// Some background is available at https://github.com/UAVCAN/libuavcan/issues/185#issuecomment-440354858.
 /// This is a conscious time-memory trade-off. It may have adverse effects on RAM-constrained applications,
 /// but this is considered tolerable because it is expected that the types of applications leveraging Libcanard
 /// will be either real-time function nodes where time determinism is critical, or bootloaders where time determinism
