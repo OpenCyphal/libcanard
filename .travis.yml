@@ -32,7 +32,6 @@ matrix:
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
         - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
-        - bash <(curl -s https://codecov.io/bash)
         - 'sonar-scanner -Dsonar.projectKey=libcanard
                          -Dsonar.organization=uavcan
                          -Dsonar.sources=libcanard
