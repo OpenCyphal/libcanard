@@ -1,7 +1,13 @@
-///          LIBCANARD
+///                         __   __   _______   __   __   _______   _______   __   __
+///                        |  | |  | /   _   ` |  | |  | /   ____| /   _   ` |  ` |  |
+///                        |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   `|  |
+///                        |  |_|  | |   _   | `  `_/  / |  |____  |   _   | |  |`   |
+///                        `_______/ |__| |__|  `_____/  `_______| |__| |__| |__| `__|
+///                            |      |            |         |      |         |
+///                        ----o------o------------o---------o------o---------o-------
 ///
 /// Libcanard is a compact implementation of the UAVCAN/CAN protocol for high-integrity real-time embedded systems.
-/// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4K RAM.
+/// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4..8K RAM.
 /// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
 /// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
 /// bit, little- and big-endian, RTOS-based or bare metal, etc., as long as there is a standards-compliant C11 compiler.
@@ -10,8 +16,8 @@
 ///
 /// The library is intended to be integrated into the end application by simply copying the file canard.c into the
 /// source tree of the project; it does not require any special compilation options and should work out of the box.
-/// There are optional build configuration options defined near the top of canard.c; they may be used to fine-tune
-/// the library for the target platform (but it is not necessary). This header file should be located at the same
+/// There are optional build configuration macros defined near the top of canard.c; they may be used to fine-tune
+/// the library for the target platform (but it is not necessary). This header file should be located in the same
 /// directory with canard.c, or its location should be in the include look-up paths of the compiler.
 ///
 /// As explained in this documentation, the library requires a deterministic constant-time bounded-fragmentation dynamic
@@ -177,10 +183,15 @@ typedef struct
     /// The time system may be arbitrary as long as the clock is monotonic (steady).
     CanardMicrosecond timestamp_usec;
 
-    /// 29-bit extended ID. The bits above 29-th are zero/ignored.
+    /// 29-bit extended ID. The bits above 29-th shall be zero.
     uint32_t extended_can_id;
 
     /// The useful data in the frame. The length value is not to be confused with DLC!
+    /// For RX frames: the library does not expect the lifetime of the pointee to extend beyond the point of return
+    /// from the API function. That is, the pointee can be invalidated immediately after the frame has been processed.
+    /// For TX frames: the frame and the payload are allocated within the same dynamic memory fragment, so their
+    /// lifetimes are identical; when the frame is freed, the payload is invalidated.
+    /// A more detailed overview of the dataflow and related resource management issues is provided in the API docs.
     size_t      payload_size;
     const void* payload;
 } CanardFrame;
@@ -238,6 +249,10 @@ typedef struct
     /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
     /// The const pointer makes it incompatible with memory deallocation function, this is due to the limitations of C;
     /// therefore, when freeing the memory allocated for the payload, cast away the pointer's const qualifier.
+    /// For RX transfers: the application is required to free the payload buffer after the transfer is processed.
+    /// For TX transfers: the library does not expect the lifetime of the payload buffer to extend beyond the point
+    /// of return from the API function because the payload is copied into the TX frame objects.
+    /// A more detailed overview of the dataflow and related resource management issues is provided in the API docs.
     size_t      payload_size;
     const void* payload;
 } CanardTransfer;

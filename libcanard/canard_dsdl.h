@@ -1,8 +1,15 @@
-///          LIBCANARD DSDL helper
+///                         __   __   _______   __   __   _______   _______   __   __
+///                        |  | |  | /   _   ` |  | |  | /   ____| /   _   ` |  ` |  |
+///                        |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   `|  |
+///                        |  |_|  | |   _   | `  `_/  / |  |____  |   _   | |  |`   |
+///                        `_______/ |__| |__|  `_____/  `_______| |__| |__| |__| `__|
+///                            |      |            |         |      |         |
+///                        ----o------o------------o---------o------o---------o-------
 ///
-/// This is a trivial optional extension library for Libcanard that contains basic DSDL field serialization routines.
-/// It is intended for use in simple applications where auto-generated DSDL serialization logic is not available.
-/// The functions are fully stateless and straightforward to use; read their documentation comments for usage info.
+/// This is a DSDL serialization helper for libcanard -- a trivial optional extension library that contains basic
+/// DSDL field serialization routines. It is intended for use in simple applications where auto-generated DSDL
+/// serialization logic is not available. The functions are fully stateless and straightforward to use;
+/// read their documentation comments for usage info.
 ///
 /// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
 /// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.

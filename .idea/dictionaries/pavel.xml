@@ -10,6 +10,7 @@
       <w>cfamily</w>
       <w>coverity</w>
       <w>crtp</w>
+      <w>dataflow</w>
       <w>ddtid</w>
       <w>deallocated</w>
       <w>deallocating</w>
@@ -47,6 +48,7 @@
       <w>nutt</w>
       <w>permill</w>
       <w>pkut</w>
+      <w>pointee</w>
       <w>prescaler</w>
       <w>prio</w>
       <w>pseudocode</w>
