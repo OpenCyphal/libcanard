@@ -187,6 +187,7 @@ typedef struct
     uint32_t extended_can_id;
 
     /// The useful data in the frame. The length value is not to be confused with DLC!
+    /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
     /// For RX frames: the library does not expect the lifetime of the pointee to extend beyond the point of return
     /// from the API function. That is, the pointee can be invalidated immediately after the frame has been processed.
     /// For TX frames: the frame and the payload are allocated within the same dynamic memory fragment, so their
