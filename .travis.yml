@@ -1,4 +1,6 @@
 dist: xenial
+env:
+  - CTEST_OUTPUT_ON_FAILURE=1
 
 matrix:
   include:
@@ -17,11 +19,36 @@ matrix:
             - g++-9-multilib
             - gcc-9-multilib
             - linux-libc-dev:i386
+      env:
+        - CC=gcc-9
+        - CXX=g++-9
       script:
-        - CC=gcc-9 && CXX=g++-9 && cmake tests
-        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all  # The build wrapper comes from Sonar Cloud.
-        - ./run_tests --rng-seed time
-        - sonar-scanner
+        # ANALYSIS
+        # Using the build wrapper from Sonar and collecting the code coverage.
+        # Define NDEBUG=1 to avoid assertion checks being reported as uncovered statements.
+        - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
+        - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
+        - make test
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        - 'sonar-scanner -Dsonar.projectKey=libcanard
+                         -Dsonar.organization=uavcan
+                         -Dsonar.sources=libcanard
+                         -Dsonar.cfamily.gcov.reportsPath=.
+                         -Dsonar.cfamily.build-wrapper-output=sonar-dump
+                         -Dsonar.cfamily.cache.enabled=false'
+        - make clean
+
+        # DEBUG
+        - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
+        - make all VERBOSE=1 && make test
+        - make clean
+
+        # RELEASE
+        - cmake tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - make all VERBOSE=1 && make test
+        - make clean
 
     # -------------------- Clang 9 --------------------
     - language: cpp
@@ -29,32 +56,55 @@ matrix:
         apt:
           sources:
             - ubuntu-toolchain-r-test
-          packages:
-            - libstdc++-7-dev:i386
+          packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
+            - g++-9
+            - g++-9-multilib
+            - gcc-9-multilib
             - linux-libc-dev:i386
             - libc6-dev-i386
+            - libstdc++-7-dev:i386
       script:
+        # Set up the toolchain.
         - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests
-        - make
-        - ./run_tests --rng-seed time
+        - sudo apt install clang-tidy-9 clang-format-9
+        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
-    # -------------------- Static analysis --------------------
-    - language: cpp
-      script:
-        - sudo rm -rf /usr/local/clang*
-        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-        - sudo apt install clang-format-9 clang-tidy-9
-        - sudo ln -sf $(which clang-format-9) /usr/bin/clang-format
-        - sudo ln -sf $(which clang-tidy-9) /usr/bin/clang-tidy
+        # DEBUG
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Debug
+        - make VERBOSE=1 && make test
+        - make clean
 
-        # TODO: invoke clang-tidy.
+        # RELEASE
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Release
+        - make VERBOSE=1 && make test
+        - make clean
 
-        # Code style enforcement.
-        - ./format.sh
+        # RELWITHDEBINFO
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        - make VERBOSE=1 && make test
+        - make clean
+
+        # MINSIZEREL
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=MinSizeRel
+        - make VERBOSE=1 && make test
+        - make clean
+
+        # Format check
+        - make format VERBOSE=1
         - 'modified="$(git status --porcelain --untracked-files=no)"'
-        - 'if [ -n "$modified" ]; then echo "Run format.sh to reformat the code."; exit 1; fi'
+        - 'if [ -n "$modified" ]; then echo "Run make format to reformat the code properly."; exit 1; fi'
+
+    # -------------------- AVR GCC --------------------
+    - language: c
+      addons:
+        apt:
+          packages:
+            - gcc-avr
+            - avr-libc
+      script:
+        # This is a trivial test where we only check whether it compiles at all with all warnings enabled.
+        # TODO: Write unit tests and run them on an emulator.
+        - avr-gcc libcanard/*.c -c -std=c11 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
 
 git:
   depth: false  # Disable shallow clone because it is incompatible with SonarCloud
