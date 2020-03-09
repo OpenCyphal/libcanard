@@ -20,6 +20,29 @@ Contribute: [`CONTRIBUTING.md`](/CONTRIBUTING.md)
 
 Ask questions: [forum.uavcan.org](https://forum.uavcan.org)
 
+## Features
+
+- Full test coverage and static analysis.
+- Partial compliance with automatically enforceable MISRA C rules (compliance report not available).
+- Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
+- Purely reactive API without the need for background servicing.
+- Support for the Classic CAN and CAN FD.
+- Support for redundant transports.
+- Compatibility with 8/16/32/64-bit platforms.
+- Compatibility with extremely resource-constrained baremetal environments starting from ca. 32K ROM, 4..8K RAM.
+- Implemented in less than 1500 logical lines of code.
+
+## Platforms
+
+The library is designed to be usable without modification with any conventional 8/16/32/64-bit platform,
+including deeply embedded baremetal platforms, as long as there is a standard-compliant C11 compiler available.
+The platform-specific media IO layer (driver) is supposed to be provided by the application.
+
+The UAVCAN Development Team maintains a collection of various platform-specific components in a separate repository
+at <https://github.com/UAVCAN/platform_specific_components>.
+Users are encouraged to search through that repository for drivers, examples, and other pieces that may be
+reused in the target application to speed up the design of the media IO layer (driver) for the application.
+
 ## Example
 
 The example augments the documentation but does not replace it.
