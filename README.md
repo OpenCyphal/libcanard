@@ -107,9 +107,9 @@ prioritized transmission queue into the CAN driver (or several, if redundant int
 ```c
 for (const CanardFrame* txf = NULL; (txf = canardTxPeek(&ins)) != NULL;)  // Look at the top of the TX queue.
 {
-    if (txf->timestamp_usec < getCurrentMicroseconds())  // Check if the frame has timed out.
+    if (txf->timestamp_usec < getCurrentMicroseconds())  // Ensure TX deadline not expired.
     {
-        if (!pleaseTransmit(&txf))             // Send the frame. Redundant interfaces may be used here.
+        if (!pleaseTransmit(txf))              // Send the frame. Redundant interfaces may be used here.
         {
             break;                             // If the driver is busy, break and retry later.
         }
@@ -123,12 +123,19 @@ Transfer reception is done by feeding frames into the transfer reassembly state 
 But first, we need to subscribe:
 
 ```c
-CanardRxSubscription my_subscription;
-(void) canardRxSubscribe(&ins,
-                         CanardTransferKindResponse,  // Indicate that we want service responses.
+CanardRxSubscription heartbeat_subscription;
+(void) canardRxSubscribe(&ins,   // Subscribe to messages uavcan.node.Heartbeat.
+                         CanardTransferKindMessage,
+                         32085,  // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
+                         7,      // The maximum payload size (max DSDL object size) from the DSDL definition.
+                         &heartbeat_subscription);
+
+CanardRxSubscription my_service_subscription;
+(void) canardRxSubscribe(&ins,                        // Subscribe to an arbitrary service response.
+                         CanardTransferKindResponse,
                          123,                         // The Service-ID to subscribe to.
                          1024,                        // The maximum payload size (max DSDL object size).
-                         &my_subscription);
+                         &my_service_subscription);
 ```
 
 We can subscribe and unsubscribe at runtime as many times as we want.
