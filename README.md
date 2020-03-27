@@ -107,7 +107,7 @@ prioritized transmission queue into the CAN driver (or several, if redundant int
 ```c
 for (const CanardFrame* txf = NULL; (txf = canardTxPeek(&ins)) != NULL;)  // Look at the top of the TX queue.
 {
-    if (txf->timestamp_usec < getCurrentMicroseconds())  // Ensure TX deadline not expired.
+    if (txf->timestamp_usec > getCurrentMicroseconds())  // Ensure TX deadline not expired.
     {
         if (!pleaseTransmit(txf))              // Send the frame. Redundant interfaces may be used here.
         {
