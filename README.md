@@ -36,7 +36,19 @@ Ask questions: [forum.uavcan.org](https://forum.uavcan.org)
 
 The library is designed to be usable without modification with any conventional 8/16/32/64-bit platform,
 including deeply embedded baremetal platforms, as long as there is a standard-compliant C11 compiler available.
-The platform-specific media IO layer (driver) is supposed to be provided by the application.
+The platform-specific media IO layer (driver) is supposed to be provided by the application:
+
+    +---------------------------------+
+    |           Application           |
+    +-------+-----------------+-------+
+            |                 |
+    +-------+-------+ +-------+-------+
+    |   Libcanard   | |  Media layer  |
+    +---------------+ +-------+-------+
+                              |
+                      +-------+-------+
+                      |    Hardware   |
+                      +---------------+
 
 The UAVCAN Development Team maintains a collection of various platform-specific components in a separate repository
 at <https://github.com/UAVCAN/platform_specific_components>.
