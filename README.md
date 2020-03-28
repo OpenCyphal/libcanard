@@ -140,6 +140,7 @@ CanardRxSubscription heartbeat_subscription;
                          CanardTransferKindMessage,
                          32085,  // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
                          7,      // The maximum payload size (max DSDL object size) from the DSDL definition.
+                         CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
 
 CanardRxSubscription my_service_subscription;
@@ -147,6 +148,7 @@ CanardRxSubscription my_service_subscription;
                          CanardTransferKindResponse,
                          123,                         // The Service-ID to subscribe to.
                          1024,                        // The maximum payload size (max DSDL object size).
+                         CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &my_service_subscription);
 ```
 
