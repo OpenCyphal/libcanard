@@ -559,6 +559,7 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// called the Implicit Truncation Rule (ITR) and it is intended to facilitate extensibility of data types while
 /// preserving backward compatibility. The transfer CRC is validated regardless of whether its payload is truncated.
 ///
+/// The default transfer-ID timeout value is defined as CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC; use it if not sure.
 /// The redundant transport fail-over timeout (if redundant transports are used) is the same as the transfer-ID timeout.
 /// It may be reduced in a future release of the library, but it will not affect the backward compatibility.
 ///
