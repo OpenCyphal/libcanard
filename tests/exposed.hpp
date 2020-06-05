@@ -113,12 +113,6 @@ auto rxSessionUpdate(CanardInstance* const     ins,
                      const std::size_t         payload_size_max,
                      CanardTransfer* const     out_transfer) -> std::int8_t;
 
-void copyBitArray(const std::size_t         length_bit,
-                  const std::size_t         src_offset_bit,
-                  const std::size_t         dst_offset_bit,
-                  const std::uint8_t* const src,
-                  std::uint8_t* const       dst);
-
 auto float16Pack(const float value) -> std::uint16_t;
 auto float16Unpack(const std::uint16_t value) -> float;
 }
