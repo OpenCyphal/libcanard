@@ -148,13 +148,13 @@ class Instance
 
     static auto trampolineAllocate(CanardInstance* const ins, const std::size_t amount) -> void*
     {
-        auto p = reinterpret_cast<Instance*>(ins->user_reference);
+        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
         return p->allocator_.allocate(amount);
     }
 
     static void trampolineDeallocate(CanardInstance* const ins, void* const pointer)
     {
-        auto p = reinterpret_cast<Instance*>(ins->user_reference);
+        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
         p->allocator_.deallocate(pointer);
     }
 
@@ -214,7 +214,7 @@ public:
     [[nodiscard]] auto getTxQueueLength() const
     {
         std::size_t out = 0U;
-        auto        p   = getTxQueueRoot();
+        const auto* p   = getTxQueueRoot();
         while (p != nullptr)
         {
             ++out;

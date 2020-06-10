@@ -46,14 +46,12 @@ TEST_CASE("canardDSDLFloat16")
     REQUIRE(0b0111111111111111 == float16Pack(float16Unpack(0b0111111111111111)));  // nan
 }
 
-TEST_CASE("copyBitArray")
+TEST_CASE("canardDSDLCopyBits")
 {
-    using exposed::copyBitArray;
-
     {
         uint8_t a = 0;
         uint8_t b = 0;
-        copyBitArray(0, 0, 0, &a, &b);
+        canardDSDLCopyBits(0, 0, 0, &a, &b);
     }
 
     const auto test = [&](const size_t                     length_bit,
@@ -65,7 +63,7 @@ TEST_CASE("copyBitArray")
         REQUIRE(length_bit <= (dst.size() * 8));
         REQUIRE(length_bit <= (src.size() * 8));
         std::vector<std::uint8_t> result = dst;
-        copyBitArray(length_bit, src_offset_bit, dst_offset_bit, src.data(), result.data());
+        canardDSDLCopyBits(length_bit, src_offset_bit, dst_offset_bit, src.data(), result.data());
         return std::equal(std::begin(ref), std::end(ref), std::begin(result));
     };
 
