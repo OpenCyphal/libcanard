@@ -525,8 +525,8 @@ void canardTxPop(CanardInstance* const ins);
 ///     - The payload pointer of the input frame is NULL while its size is non-zero.
 ///     - The CAN ID of the input frame is not less than 2**29=0x20000000.
 ///
-/// The function drops the frame and returns zero if any of the following conditions are true (the general policy is
-/// that protocol errors are not escalated because they do not construe a node-local error):
+/// The function returns zero if any of the following conditions are true (the general policy is that protocol
+/// errors are not escalated because they do not construe a node-local error):
 ///     - The received frame is not a valid UAVCAN/CAN transport frame.
 ///     - The received frame is a valid UAVCAN/CAN transport frame, but there is no matching subscription,
 ///       the frame did not complete a transfer, the frame forms an invalid frame sequence, the frame is a duplicate,
