@@ -138,7 +138,7 @@ But first, we need to subscribe:
 CanardRxSubscription heartbeat_subscription;
 (void) canardRxSubscribe(&ins,   // Subscribe to messages uavcan.node.Heartbeat.
                          CanardTransferKindMessage,
-                         32085,  // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
+                         7509,   // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
                          7,      // The maximum payload size (max DSDL object size) from the DSDL definition.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
