@@ -130,7 +130,7 @@ extern "C" {
 #define CANARD_MTU_CAN_FD 64U
 
 /// Parameter ranges are inclusive; the lower bound is zero for all. See UAVCAN/CAN Specification for background.
-#define CANARD_SUBJECT_ID_MAX 32767U
+#define CANARD_SUBJECT_ID_MAX 8191U
 #define CANARD_SERVICE_ID_MAX 511U
 #define CANARD_NODE_ID_MAX 127U
 #define CANARD_PRIORITY_MAX 7U
