@@ -7,7 +7,7 @@
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=ncloc)](https://sonarcloud.io/dashboard?id=libcanard)
 [![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.uavcan.org&color=1700b3)](https://forum.uavcan.org)
 
-Libcanard is a compact implementation of the UAVCAN/CAN protocol stack in C11 for high-integrity real-time
+Libcanard is a compact implementation of the UAVCAN/CAN protocol stack in C99 for high-integrity real-time
 embedded systems.
 
 [UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
@@ -35,7 +35,7 @@ Ask questions: [forum.uavcan.org](https://forum.uavcan.org)
 ## Platforms
 
 The library is designed to be usable without modification with any conventional 8/16/32/64-bit platform,
-including deeply embedded baremetal platforms, as long as there is a standard-compliant C11 compiler available.
+including deeply embedded baremetal platforms, as long as there is a standard-compliant C99 compiler available.
 The platform-specific media IO layer (driver) is supposed to be provided by the application:
 
     +---------------------------------+
