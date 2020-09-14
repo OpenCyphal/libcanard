@@ -7,6 +7,7 @@
 #include "catch.hpp"
 #include <cstdarg>
 #include <cstdint>
+#include <limits>
 
 /// Definitions that are not exposed by the library but that are needed for testing.
 /// Please keep them in sync with the library by manually updating as necessary.
