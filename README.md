@@ -139,18 +139,30 @@ CanardRxSubscription heartbeat_subscription;
 (void) canardRxSubscribe(&ins,   // Subscribe to messages uavcan.node.Heartbeat.
                          CanardTransferKindMessage,
                          7509,   // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
-                         7,      // The maximum payload size (max DSDL object size) from the DSDL definition.
+                         7,      // The extent (the maximum possible payload size); pick a huge value if not sure.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
 
 CanardRxSubscription my_service_subscription;
-(void) canardRxSubscribe(&ins,                        // Subscribe to an arbitrary service response.
-                         CanardTransferKindResponse,
-                         123,                         // The Service-ID to subscribe to.
-                         1024,                        // The maximum payload size (max DSDL object size).
+(void) canardRxSubscribe(&ins,   // Subscribe to an arbitrary service response.
+                         CanardTransferKindResponse,  // Specify that we want service responses, not requests.
+                         123,    // The Service-ID whose responses we will receive.
+                         1024,   // The extent (the maximum payload size); pick a huge value if not sure.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &my_service_subscription);
 ```
+
+The "extent" refers to the minimum amount of memory required to hold any serialized representation of any compatible
+version of a data type.
+This parameter is determined by the data type author at the data type definition time.
+It is typically larger than the maximum object size in order to allow the data type author to introduce more
+fields in the future versions of the type;
+for example, `MyMessage.1.0` may have the maximum size of 100 bytes and the extent 200 bytes;
+a revised version `MyMessage.1.1` may have the maximum size anywhere between 0 and 200 bytes.
+It is always safe to pick a larger value if not sure.
+You will find a more rigorous description in the UAVCAN Specification.
+
+In Libcanard we use the term "subscription" not only for subjects (messages), but also for services, for simplicity.
 
 We can subscribe and unsubscribe at runtime as many times as we want.
 Normally, however, an embedded application would subscribe once and roll with it.
