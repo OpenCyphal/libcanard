@@ -5,6 +5,13 @@
 #include "helpers.hpp"
 #include <cstring>
 
+// clang-tidy mistakenly suggests to avoid C arrays here, which is clearly an error
+template <typename P, std::size_t N>
+auto ensureAllNullptr(P* (&arr)[N]) -> bool  // NOLINT
+{
+    return std::all_of(std::begin(arr), std::end(arr), [](const auto* const x) { return x == nullptr; });
+}
+
 TEST_CASE("RxBasic0")
 {
     using helpers::Instance;
@@ -46,10 +53,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_port_id == 0b0110011001100);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_extent == 16);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_transfer_id_timeout_usec == 1'000'000);
-    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));
     REQUIRE(ins.getInstance()._rx_subscriptions[1] == nullptr);
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == nullptr);
 
@@ -63,10 +67,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[2]->_port_id == 0b0000110011);
     REQUIRE(ins.getInstance()._rx_subscriptions[2]->_extent == 20);
     REQUIRE(ins.getInstance()._rx_subscriptions[2]->_transfer_id_timeout_usec == 3'000'000);
-    for (auto _session : ins.getInstance()._rx_subscriptions[2]->_sessions)
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[2]->_sessions));
 
     // Create a response subscription.
     CanardRxSubscription sub_res{};
@@ -77,10 +78,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000111100);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_extent == 10);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 100'000);
-    for (auto _session : ins.getInstance()._rx_subscriptions[1]->_sessions)
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[1]->_sessions));
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
 
     // Create a second response subscription.
@@ -92,10 +90,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000000000);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_extent == 10);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 1'000);
-    for (auto _session : ins.getInstance()._rx_subscriptions[1]->_sessions)
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[1]->_sessions));
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
 
     // Accepted message.
@@ -111,7 +106,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 16));
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_sessions[0b0100111] != nullptr);
-    auto msg_payload = transfer.payload;  // Will need it later.
+    const auto* msg_payload = transfer.payload;  // Will need it later.
 
     // Provide the space for an extra session and its payload.
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) * 2 + 16 + 20);
@@ -236,10 +231,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)  // No RX states!
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));  // No RX states!
 
     // Anonymous message not accepted because OOM. The transfer shall remain unmodified by the call, so we re-check it.
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
@@ -254,10 +246,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)  // No RX states!
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));  // No RX states!
 
     // Release the memory.
     ins.getAllocator().deallocate(transfer.payload);
@@ -276,10 +265,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 6);   // Smaller allocation.
-    for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)  // No RX states!
-    {
-        REQUIRE(_session == nullptr);
-    }
+    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));  // No RX states!
 }
 
 TEST_CASE("RxSubscriptionErrors")

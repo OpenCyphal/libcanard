@@ -11,11 +11,11 @@ TEST_CASE("TestAllocator")
     REQUIRE(0 == al.getNumAllocatedFragments());
     REQUIRE(std::numeric_limits<std::size_t>::max() == al.getAllocationCeiling());
 
-    auto a = al.allocate(123);
+    auto* a = al.allocate(123);
     REQUIRE(1 == al.getNumAllocatedFragments());
     REQUIRE(123 == al.getTotalAllocatedAmount());
 
-    auto b = al.allocate(456);
+    auto* b = al.allocate(456);
     REQUIRE(2 == al.getNumAllocatedFragments());
     REQUIRE(579 == al.getTotalAllocatedAmount());
 
@@ -25,7 +25,7 @@ TEST_CASE("TestAllocator")
     REQUIRE(2 == al.getNumAllocatedFragments());
     REQUIRE(579 == al.getTotalAllocatedAmount());
 
-    auto c = al.allocate(21);
+    auto* c = al.allocate(21);
     REQUIRE(3 == al.getNumAllocatedFragments());
     REQUIRE(600 == al.getTotalAllocatedAmount());
 
@@ -33,7 +33,7 @@ TEST_CASE("TestAllocator")
     REQUIRE(2 == al.getNumAllocatedFragments());
     REQUIRE(477 == al.getTotalAllocatedAmount());
 
-    auto d = al.allocate(100);
+    auto* d = al.allocate(100);
     REQUIRE(3 == al.getNumAllocatedFragments());
     REQUIRE(577 == al.getTotalAllocatedAmount());
 
