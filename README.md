@@ -223,3 +223,9 @@ result = canardTxPush(&ins, &my_transfer);
 
 Full API specification is available in the documentation.
 If you find the examples to be unclear or incorrect, please, open a ticket.
+
+## Revisions
+
+### v1.0
+
+The initial release.
