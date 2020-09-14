@@ -37,7 +37,8 @@ matrix:
                          -Dsonar.sources=libcanard
                          -Dsonar.cfamily.gcov.reportsPath=.
                          -Dsonar.cfamily.build-wrapper-output=sonar-dump
-                         -Dsonar.cfamily.cache.enabled=false'
+                         -Dsonar.cfamily.cache.enabled=false
+                         -Dsonar.cfamily.threads=1'
         - make clean
 
         # DEBUG
