@@ -16,7 +16,7 @@ set(library_dir "${CMAKE_SOURCE_DIR}/../libcanard")
 # If not suppressed, the tools used here shall be available, otherwise the build will fail.
 if (NOT NO_STATIC_ANALYSIS)
     # clang-tidy (separate config files per directory)
-    find_program(clang_tidy NAMES clang-tidy-10 clang-tidy-9 clang-tidy)
+    find_program(clang_tidy NAMES clang-tidy-12 clang-tidy-11 clang-tidy-10 clang-tidy)
     if (NOT clang_tidy)
         message(FATAL_ERROR "Could not locate clang-tidy")
     endif ()
@@ -25,7 +25,7 @@ if (NOT NO_STATIC_ANALYSIS)
     set(CMAKE_CXX_CLANG_TIDY ${clang_tidy})
 
     # clang-format
-    find_program(clang_format NAMES clang-format-10 clang-format-9 clang-format)
+    find_program(clang_format NAMES clang-format-12 clang-format-11 clang-format-10 clang-format)
     if (NOT clang_format)
         message(FATAL_ERROR "Could not locate clang-format")
     endif ()

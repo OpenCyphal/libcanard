@@ -50,7 +50,7 @@ matrix:
         - make all VERBOSE=1 && make test
         - make clean
 
-    # -------------------- Clang 9 --------------------
+    # -------------------- Clang --------------------
     - language: cpp
       addons:
         apt:
@@ -61,11 +61,9 @@ matrix:
             - g++-10-multilib
             - gcc-10-multilib
             - linux-libc-dev:i386
-            - libc6-dev-i386
-            - libstdc++-7-dev:i386
       script:
         # Set up the toolchain.
-        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
+        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 10
         - sudo apt install clang-tidy-10 clang-format-10
         - clang++-10 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
