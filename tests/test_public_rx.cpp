@@ -44,7 +44,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_next == nullptr);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_port_id == 0b0110011001100);
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_payload_size_max == 16);
+    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_extent == 16);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_transfer_id_timeout_usec == 1'000'000);
     for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)
     {
@@ -61,7 +61,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
     REQUIRE(ins.getInstance()._rx_subscriptions[2]->_next == nullptr);
     REQUIRE(ins.getInstance()._rx_subscriptions[2]->_port_id == 0b0000110011);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_payload_size_max == 20);
+    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_extent == 20);
     REQUIRE(ins.getInstance()._rx_subscriptions[2]->_transfer_id_timeout_usec == 3'000'000);
     for (auto _session : ins.getInstance()._rx_subscriptions[2]->_sessions)
     {
@@ -75,7 +75,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[1] == &sub_res);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next == nullptr);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000111100);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_payload_size_max == 10);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_extent == 10);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 100'000);
     for (auto _session : ins.getInstance()._rx_subscriptions[1]->_sessions)
     {
@@ -90,7 +90,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[1] == &sub_res2);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next == &sub_res);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000000000);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_payload_size_max == 10);
+    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_extent == 10);
     REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 1'000);
     for (auto _session : ins.getInstance()._rx_subscriptions[1]->_sessions)
     {

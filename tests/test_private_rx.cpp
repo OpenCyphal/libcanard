@@ -313,13 +313,13 @@ TEST_CASE("rxSessionUpdate")
 
     const auto update = [&](const std::uint8_t  redundant_transport_index,
                             const std::uint64_t tid_timeout_usec,
-                            const std::size_t   payload_size_max) {
+                            const std::size_t   extent) {
         return rxSessionUpdate(&ins.getInstance(),
                                &rxs,
                                &frame,
                                redundant_transport_index,
                                tid_timeout_usec,
-                               payload_size_max,
+                               extent,
                                &transfer);
     };
 
