@@ -108,8 +108,8 @@ extern "C" {
 
 /// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 0
-#define CANARD_VERSION_MINOR 100
+#define CANARD_VERSION_MAJOR 1
+#define CANARD_VERSION_MINOR 0
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
