@@ -1,4 +1,4 @@
-dist: xenial
+dist: focal
 env:
   - CTEST_OUTPUT_ON_FAILURE=1
 
@@ -15,13 +15,13 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-9
-            - g++-9-multilib
-            - gcc-9-multilib
+            - g++-10
+            - g++-10-multilib
+            - gcc-10-multilib
             - linux-libc-dev:i386
       env:
-        - CC=gcc-9
-        - CXX=g++-9
+        - CC=gcc-10
+        - CXX=g++-10
       script:
         # ANALYSIS
         # Using the build wrapper from Sonar and collecting the code coverage.
@@ -29,9 +29,9 @@ matrix:
         - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        - gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        - gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
+        - gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
         - 'sonar-scanner -Dsonar.projectKey=libcanard
                          -Dsonar.organization=uavcan
                          -Dsonar.sources=libcanard
@@ -57,35 +57,35 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
-            - g++-9
-            - g++-9-multilib
-            - gcc-9-multilib
+            - g++-10
+            - g++-10-multilib
+            - gcc-10-multilib
             - linux-libc-dev:i386
             - libc6-dev-i386
             - libstdc++-7-dev:i386
       script:
         # Set up the toolchain.
         - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-        - sudo apt install clang-tidy-9 clang-format-9
-        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
+        - sudo apt install clang-tidy-10 clang-format-10
+        - clang++-10 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
         # DEBUG
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Debug
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Debug
         - make VERBOSE=1 && make test
         - make clean
 
         # RELEASE
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Release
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Release
         - make VERBOSE=1 && make test
         - make clean
 
         # RELWITHDEBINFO
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
         - make VERBOSE=1 && make test
         - make clean
 
         # MINSIZEREL
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=MinSizeRel
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=MinSizeRel
         - make VERBOSE=1 && make test
         - make clean
 
