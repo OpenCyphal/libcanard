@@ -52,11 +52,11 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(!parse(543210U, 0U, {0, 1, 2, 3, 4, 5, 6}));  // MFT NON-LAST FRAME PAYLOAD CAN'T BE SHORTER THAN 7
 
     // MESSAGE
-    REQUIRE(parse(123456U, 0b001'00'0'110110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
+    REQUIRE(parse(123456U, 0b001'00'0'11'0110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
     REQUIRE(model.timestamp_usec == 123456U);
     REQUIRE(model.priority == CanardPriorityImmediate);
     REQUIRE(model.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(model.port_id == 0b110110011001100U);
+    REQUIRE(model.port_id == 0b0110011001100U);
     REQUIRE(model.source_node_id == 0b0100111U);
     REQUIRE(model.destination_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(model.transfer_id == 23U);
@@ -73,24 +73,24 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(model.payload[6] == 6);
     // SIMILAR BUT INVALID
     // NO TAIL BYTE
-    REQUIRE(!parse(123456U, 0b001'00'0'110110011001100'0'0100111U, {}));
+    REQUIRE(!parse(123456U, 0b001'00'0'11'0110011001100'0'0100111U, {}));
     // BAD TOGGLE
-    REQUIRE(!parse(123456U, 0b001'00'0'110110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b100'00000U | 23U}));
+    REQUIRE(!parse(123456U, 0b001'00'0'11'0110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b100'00000U | 23U}));
     // BAD RESERVED R07
-    REQUIRE(!parse(123456U, 0b001'00'0'110110011001100'1'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
+    REQUIRE(!parse(123456U, 0b001'00'0'11'0110011001100'1'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
     // BAD RESERVED R23
-    REQUIRE(!parse(123456U, 0b001'00'1'110110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
+    REQUIRE(!parse(123456U, 0b001'00'1'11'0110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
     // BAD RESERVED R07 R23
-    REQUIRE(!parse(123456U, 0b001'00'1'110110011001100'1'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
+    REQUIRE(!parse(123456U, 0b001'00'1'11'0110011001100'1'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
     // ANON NOT SINGLE FRAME
-    REQUIRE(!parse(123456U, 0b001'01'0'110110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
+    REQUIRE(!parse(123456U, 0b001'01'0'11'0110011001100'0'0100111U, {0, 1, 2, 3, 4, 5, 6, 0b101'00000U | 23U}));
 
     // ANONYMOUS MESSAGE
-    REQUIRE(parse(12345U, 0b010'01'0'000110011001101'0'0100111U, {0b111'00000U | 0U}));
+    REQUIRE(parse(12345U, 0b010'01'0'00'0110011001101'0'0100111U, {0b111'00000U | 0U}));
     REQUIRE(model.timestamp_usec == 12345U);
     REQUIRE(model.priority == CanardPriorityFast);
     REQUIRE(model.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(model.port_id == 0b000110011001101U);
+    REQUIRE(model.port_id == 0b0110011001101U);
     REQUIRE(model.source_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(model.destination_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(model.transfer_id == 0U);
@@ -98,12 +98,15 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(model.end_of_transfer);
     REQUIRE(model.toggle);
     REQUIRE(model.payload_size == 0);
+    // SAME BUT RESERVED 21 22 SET (and ignored)
+    REQUIRE(parse(12345U, 0b010'01'0'11'0110011001101'0'0100111U, {0b111'00000U | 0U}));
+    REQUIRE(model.port_id == 0b0110011001101U);
     // SIMILAR BUT INVALID
-    REQUIRE(!parse(12345U, 0b010'01'0'110110011001100'0'0100111U, {}));                   // NO TAIL BYTE
-    REQUIRE(!parse(12345U, 0b010'01'0'110110011001100'0'0100111U, {0b110'00000U | 0U}));  // BAD TOGGLE
-    REQUIRE(!parse(12345U, 0b010'01'0'110110011001100'1'0100111U, {0b111'00000U | 0U}));  // BAD RESERVED 07
-    REQUIRE(!parse(12345U, 0b010'01'1'110110011001100'0'0100111U, {0b111'00000U | 0U}));  // BAD RESERVED 23
-    REQUIRE(!parse(12345U, 0b010'01'1'110110011001100'1'0100111U, {0b111'00000U | 0U}));  // BAD RESERVED 07 23
+    REQUIRE(!parse(12345U, 0b010'01'0'11'0110011001100'0'0100111U, {}));                   // NO TAIL BYTE
+    REQUIRE(!parse(12345U, 0b010'01'0'11'0110011001100'0'0100111U, {0b110'00000U | 0U}));  // BAD TOGGLE
+    REQUIRE(!parse(12345U, 0b010'01'0'11'0110011001100'1'0100111U, {0b111'00000U | 0U}));  // BAD RESERVED 07
+    REQUIRE(!parse(12345U, 0b010'01'1'11'0110011001100'0'0100111U, {0b111'00000U | 0U}));  // BAD RESERVED 23
+    REQUIRE(!parse(12345U, 0b010'01'1'11'0110011001100'1'0100111U, {0b111'00000U | 0U}));  // BAD RESERVED 07 23
 
     // REQUEST
     REQUIRE(parse(999'999U, 0b011'11'0000110011'0011010'0100111U, {0, 1, 2, 3, 0b011'00000U | 31U}));
@@ -292,7 +295,7 @@ TEST_CASE("rxSessionUpdate")
     frame.timestamp_usec      = 10'000'000;
     frame.priority            = CanardPrioritySlow;
     frame.transfer_kind       = CanardTransferKindMessage;
-    frame.port_id             = 22'222;
+    frame.port_id             = 2'222;
     frame.source_node_id      = 55;
     frame.destination_node_id = CANARD_NODE_ID_UNSET;
     frame.transfer_id         = 11;
@@ -334,7 +337,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.timestamp_usec == 10'000'000);
     REQUIRE(transfer.priority == CanardPrioritySlow);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.port_id == 2'222);
     REQUIRE(transfer.remote_node_id == 55);
     REQUIRE(transfer.transfer_id == 11);
     REQUIRE(transfer.payload_size == 3);
@@ -370,7 +373,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.timestamp_usec == 10'000'050);
     REQUIRE(transfer.priority == CanardPrioritySlow);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.port_id == 2'222);
     REQUIRE(transfer.remote_node_id == 55);
     REQUIRE(transfer.transfer_id == 12);
     REQUIRE(transfer.payload_size == 3);
@@ -407,7 +410,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.timestamp_usec == 20'000'000);
     REQUIRE(transfer.priority == CanardPrioritySlow);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.port_id == 2'222);
     REQUIRE(transfer.remote_node_id == 55);
     REQUIRE(transfer.transfer_id == 12);
     REQUIRE(transfer.payload_size == 3);
@@ -485,7 +488,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.timestamp_usec == 20'000'100);
     REQUIRE(transfer.priority == CanardPrioritySlow);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.port_id == 2'222);
     REQUIRE(transfer.remote_node_id == 55);
     REQUIRE(transfer.transfer_id == 13);
     REQUIRE(transfer.payload_size == 16);
@@ -570,7 +573,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.timestamp_usec == 20'000'200);
     REQUIRE(transfer.priority == CanardPrioritySlow);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.port_id == 2'222);
     REQUIRE(transfer.remote_node_id == 55);
     REQUIRE(transfer.transfer_id == 11);
     REQUIRE(transfer.payload_size == 10);
@@ -617,7 +620,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.timestamp_usec == 30'000'000);
     REQUIRE(transfer.priority == CanardPrioritySlow);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 22'222);
+    REQUIRE(transfer.port_id == 2'222);
     REQUIRE(transfer.remote_node_id == 55);
     REQUIRE(transfer.transfer_id == 0);
     REQUIRE(transfer.payload_size == 7);  // ONE CRC BYTE BACKTRACKED!

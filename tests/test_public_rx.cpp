@@ -35,15 +35,15 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == nullptr);
 
     // A valid single-frame transfer for which there is no subscription.
-    REQUIRE(0 == accept(0, 100'000'000, 0b001'00'0'110110011001100'0'0100111, {0b111'00000}));
+    REQUIRE(0 == accept(0, 100'000'000, 0b001'00'0'11'0110011001100'0'0100111, {0b111'00000}));
 
     // Create a message subscription.
     CanardRxSubscription sub_msg{};
-    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b110110011001100, 32, 2'000'000, sub_msg));  // New.
-    REQUIRE(0 == ins.rxSubscribe(CanardTransferKindMessage, 0b110110011001100, 16, 1'000'000, sub_msg));  // Replaced.
+    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 32, 2'000'000, sub_msg));  // New.
+    REQUIRE(0 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 1'000'000, sub_msg));  // Replaced.
     REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_next == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_port_id == 0b110110011001100);
+    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_port_id == 0b0110011001100);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_payload_size_max == 16);
     REQUIRE(ins.getInstance()._rx_subscriptions[0]->_transfer_id_timeout_usec == 1'000'000);
     for (auto _session : ins.getInstance()._rx_subscriptions[0]->_sessions)
@@ -99,11 +99,11 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
 
     // Accepted message.
-    REQUIRE(1 == accept(0, 100'000'001, 0b001'00'0'110110011001100'0'0100111, {0b111'00000}));
+    REQUIRE(1 == accept(0, 100'000'001, 0b001'00'0'11'0110011001100'0'0100111, {0b111'00000}));
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.port_id == 0b0110011001100);
     REQUIRE(transfer.remote_node_id == 0b0100111);
     REQUIRE(transfer.transfer_id == 0);
     REQUIRE(transfer.payload_size == 0);
@@ -155,8 +155,8 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (3 * sizeof(RxSession) + 16 + 20));
 
     // Destroy the message subscription and the buffer to free up memory.
-    REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindMessage, 0b110110011001100));
-    REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindMessage, 0b110110011001100));  // Repeat, nothing to do.
+    REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindMessage, 0b0110011001100));  // Repeat, nothing to do.
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
     ins.getAllocator().deallocate(msg_payload);
@@ -215,21 +215,21 @@ TEST_CASE("RxAnonymous")
     ins.getAllocator().setAllocationCeiling(16);
 
     // A valid anonymous transfer for which there is no subscription.
-    REQUIRE(0 == accept(0, 100'000'000, 0b001'01'0'110110011001100'0'0100111, {0b111'00000}));
+    REQUIRE(0 == accept(0, 100'000'000, 0b001'01'0'11'0110011001100'0'0100111, {0b111'00000}));
 
     // Create a message subscription.
     CanardRxSubscription sub_msg{};
-    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b110110011001100, 16, 2'000'000, sub_msg));  // New.
+    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 2'000'000, sub_msg));  // New.
 
     // Accepted anonymous message.
     REQUIRE(1 == accept(0,
                         100'000'001,
-                        0b001'01'0'110110011001100'0'0100111,  //
+                        0b001'01'0'11'0110011001100'0'0100111,  //
                         {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 0b111'00000}));
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.port_id == 0b0110011001100);
     REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.transfer_id == 0);
     REQUIRE(transfer.payload_size == 16);  // Truncated.
@@ -243,11 +243,11 @@ TEST_CASE("RxAnonymous")
 
     // Anonymous message not accepted because OOM. The transfer shall remain unmodified by the call, so we re-check it.
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
-            accept(0, 100'000'001, 0b001'01'0'110110011001100'0'0100111, {3, 2, 1, 0b111'00000}));
+            accept(0, 100'000'001, 0b001'01'0'11'0110011001100'0'0100111, {3, 2, 1, 0b111'00000}));
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.port_id == 0b0110011001100);
     REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.transfer_id == 0);
     REQUIRE(transfer.payload_size == 16);  // Truncated.
@@ -265,11 +265,11 @@ TEST_CASE("RxAnonymous")
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 
     // Accepted anonymous message with small payload.
-    REQUIRE(1 == accept(0, 100'000'001, 0b001'01'0'110110011001100'0'0100111, {1, 2, 3, 4, 5, 6, 0b111'00000}));
+    REQUIRE(1 == accept(0, 100'000'001, 0b001'01'0'11'0110011001100'0'0100111, {1, 2, 3, 4, 5, 6, 0b111'00000}));
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b110110011001100);
+    REQUIRE(transfer.port_id == 0b0110011001100);
     REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.transfer_id == 0);
     REQUIRE(transfer.payload_size == 6);  // NOT truncated.

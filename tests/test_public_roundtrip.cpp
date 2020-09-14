@@ -35,7 +35,7 @@ TEST_CASE("RoundtripSimple")
         return static_cast<CanardPriority>(getRandomNatural(CANARD_PRIORITY_MAX + 1U));
     };
     std::array<TxState, 6> tx_states{
-        TxState{CanardTransferKindMessage, get_random_priority(), 32767, 1000},
+        TxState{CanardTransferKindMessage, get_random_priority(), 8191, 1000},
         TxState{CanardTransferKindMessage, get_random_priority(), 511, 0},
         TxState{CanardTransferKindMessage, get_random_priority(), 0, 13},
         TxState{CanardTransferKindRequest, get_random_priority(), 511, 900},

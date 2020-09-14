@@ -119,7 +119,8 @@ CANARD_PRIVATE uint32_t txMakeMessageSessionSpecifier(const CanardPortID subject
 {
     CANARD_ASSERT(src_node_id <= CANARD_NODE_ID_MAX);
     CANARD_ASSERT(subject_id <= CANARD_SUBJECT_ID_MAX);
-    return src_node_id | ((uint32_t) subject_id << OFFSET_SUBJECT_ID);
+    const uint32_t tmp = subject_id | (CANARD_SUBJECT_ID_MAX + 1) | ((CANARD_SUBJECT_ID_MAX + 1) * 2);
+    return src_node_id | (tmp << OFFSET_SUBJECT_ID);
 }
 
 CANARD_PRIVATE uint32_t txMakeServiceSessionSpecifier(const CanardPortID service_id,
