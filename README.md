@@ -14,11 +14,12 @@ embedded systems.
 communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
 The acronym UAVCAN stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
 
-**READ THE DOCS: [`libcanard/canard.h`](/libcanard/canard.h)**
+**Read the docs in [`libcanard/canard.h`](/libcanard/canard.h)**
 
-Contribute: [`CONTRIBUTING.md`](/CONTRIBUTING.md)
+Find examples, starters, tutorials on the
+[UAVCAN forum](https://forum.uavcan.org/t/libcanard-examples-starters-tutorials/935).
 
-Ask questions: [forum.uavcan.org](https://forum.uavcan.org)
+If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 
 ## Features
 
