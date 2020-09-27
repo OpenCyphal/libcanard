@@ -35,7 +35,7 @@ Ask questions: [forum.uavcan.org](https://forum.uavcan.org)
 ## Platforms
 
 The library is designed to be usable without modification with any conventional 8/16/32/64-bit platform,
-including deeply embedded baremetal platforms, as long as there is a standard-compliant C99/C11 compiler available.
+including deeply embedded baremetal platforms, as long as there is a standard-compliant compiler available.
 The platform-specific media IO layer (driver) is supposed to be provided by the application:
 
     +---------------------------------+
