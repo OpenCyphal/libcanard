@@ -107,6 +107,8 @@ matrix:
         # TODO: Write unit tests and run them on an emulator.
         - avr-gcc libcanard/*.c -c -std=c99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wno-unused-local-typedefs
         - avr-gcc libcanard/*.c -c -std=c11 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
+        - avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wno-unused-local-typedefs
+        - avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
 
 git:
   depth: false  # Disable shallow clone because it is incompatible with SonarCloud
