@@ -10,8 +10,7 @@
 /// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4..8K RAM.
 /// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
 /// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
-/// bit, little- and big-endian, RTOS-based or baremetal, etc., as long as there is a standards-compliant C99/C11
-/// compiler.
+/// bit, little- and big-endian, RTOS-based or baremetal, etc., as long as there is a standards-compliant compiler.
 ///
 ///          INTEGRATION
 ///
