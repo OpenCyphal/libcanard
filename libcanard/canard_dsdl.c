@@ -35,10 +35,12 @@
 #    error "Unsupported language: ISO C99 or a newer version is required."
 #endif
 
-#if __STDC_VERSION__ < 201112L
+/// In general, _Static_assert is not present on C99 compilers, except for gnu99
+#if (__STDC_VERSION__ < 201112L) && !defined(_Static_assert)
 // Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
-#    define _Static_assert(x, ...) typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
-#    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                              // NOSONAR
+#    define _Static_assert(x, ...) \
+        typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
+#    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                    // NOSONAR
 // Intentional violation of MISRA: the paste operator ## cannot be avoided in this context.
 #    define _static_assert_gl_impl(a, b) a##b  // NOSONAR
 #endif
