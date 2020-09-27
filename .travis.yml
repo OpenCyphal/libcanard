@@ -69,20 +69,20 @@ matrix:
         - sudo apt install clang-tidy-9 clang-format-9
         - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
-        # # DEBUG
-        # - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Debug
-        # - make VERBOSE=1 && make test
-        # - make clean
+        # DEBUG
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Debug
+        - make VERBOSE=1 && make test
+        - make clean
 
-        # # RELEASE
-        # - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Release
-        # - make VERBOSE=1 && make test
-        # - make clean
+        # RELEASE
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Release
+        - make VERBOSE=1 && make test
+        - make clean
 
-        # # RELWITHDEBINFO
-        # - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
-        # - make VERBOSE=1 && make test
-        # - make clean
+        # RELWITHDEBINFO
+        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        - make VERBOSE=1 && make test
+        - make clean
 
         # MINSIZEREL
         - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=MinSizeRel
