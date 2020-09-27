@@ -37,7 +37,6 @@ if (NOT NO_STATIC_ANALYSIS)
 endif ()
 
 # C options
-set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -pedantic -fstrict-aliasing")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wtype-limits")
@@ -66,6 +65,8 @@ function(gen_test name files compile_definitions compile_flags link_flags)
 endfunction()
 
 function(gen_test_matrix name files compile_definitions)
+    gen_test("${name}_c99" "${files}" "${compile_definitions}" "-std=c99" "-std=c99")
+    gen_test("${name}_c11" "${files}" "${compile_definitions}" "-std=c11" "-std=c11")
     gen_test("${name}_x64" "${files}" "${compile_definitions}" "-m64" "-m64")
     gen_test("${name}_x32" "${files}" "${compile_definitions}" "-m32" "-m32")
     # Coverage is only available for GCC builds.
