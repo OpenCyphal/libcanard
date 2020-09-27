@@ -29,9 +29,12 @@ matrix:
         - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov_99.dir    -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov_99.dir -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov_99.dir     -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov_11.dir    -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov_11.dir -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov_11.dir     -name '*.gcno')
         - 'sonar-scanner -Dsonar.projectKey=libcanard
                          -Dsonar.organization=uavcan
                          -Dsonar.sources=libcanard
