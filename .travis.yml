@@ -128,6 +128,7 @@ matrix:
         # This is a trivial test where we only check whether it compiles at all with all warnings enabled.
         # TODO: Write unit tests and run them on an emulator.
         - avr-gcc -E libcanard/*.c -c -std=c11 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
+        - avr-gcc -E libcanard/*.c -c -std=gnu99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
         - avr-gcc libcanard/*.c -c -std=c99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
         - avr-gcc libcanard/*.c -c -std=c11 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
         - avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=at90can64 -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
