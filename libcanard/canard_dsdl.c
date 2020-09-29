@@ -36,7 +36,7 @@
 #endif
 
 /// In general, _Static_assert is not present on C99 compilers, except for gnu99
-#if (__STDC_VERSION__ < 201112L) && !defined(static_assert)
+#if !defined(static_assert)
 // Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
 #    define static_assert(x, ...) typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1]  // NOSONAR
 #    define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                              // NOSONAR
