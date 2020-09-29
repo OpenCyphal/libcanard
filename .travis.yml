@@ -29,12 +29,9 @@ matrix:
         - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov_99.dir    -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov_99.dir -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov_99.dir     -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov_11.dir    -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov_11.dir -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov_11.dir     -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
+        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
         - 'sonar-scanner -Dsonar.projectKey=libcanard
                          -Dsonar.organization=uavcan
                          -Dsonar.sources=libcanard
@@ -82,25 +79,6 @@ matrix:
         - make VERBOSE=1 && make test
         - make clean
     
-    # -------------------- Clang 9 (Part 2) --------------------
-    - language: cpp
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
-            - g++-9
-            - g++-9-multilib
-            - gcc-9-multilib
-            - linux-libc-dev:i386
-            - libc6-dev-i386
-            - libstdc++-7-dev:i386
-      script:
-        # Set up the toolchain.
-        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-        - sudo apt install clang-tidy-9 clang-format-9
-        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
-
         # RELWITHDEBINFO
         - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=RelWithDebInfo
         - make VERBOSE=1 && make test
