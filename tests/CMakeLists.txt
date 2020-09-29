@@ -71,8 +71,7 @@ function(gen_test_matrix name files compile_definitions)
     gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "-m32" "-m32" "11")
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
-        gen_test("${name}_cov_99" "${files}" "${compile_definitions}" "-g -O0 --coverage" "--coverage" "99")
-        gen_test("${name}_cov_11" "${files}" "${compile_definitions}" "-g -O0 --coverage" "--coverage" "11")
+        gen_test("${name}_cov" "${files}" "${compile_definitions}" "-g -O0 --coverage" "--coverage" "99")
     endif ()
 endfunction()
 
