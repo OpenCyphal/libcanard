@@ -480,7 +480,8 @@ void canardTxPop(CanardInstance* const ins);
 ///        was already allocated at the time.
 ///        This event occurs when a transport frame that matches a known subscription is received and it begins a
 ///        new transfer (that is, the start-of-frame flag is set and it is not a duplicate).
-///        The amount of the allocated memory equals the extent as configured via canardRxSubscribe().
+///        The amount of the allocated memory equals the extent as configured via canardRxSubscribe(); please read
+///        its documentation for further information about the extent and related edge cases.
 ///        The worst case occurs when every node on the bus initiates a multi-frame transfer for which there is a
 ///        matching subscription: in this case, the library will allocate number_of_nodes allocations, where each
 ///        allocation is the same size as the configured extent.
