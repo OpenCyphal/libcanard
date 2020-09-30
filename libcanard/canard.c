@@ -22,8 +22,8 @@
 #    define CANARD_PRIVATE static
 #endif
 
-#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 201112L)
-#    error "Unsupported language: ISO C11 or a newer version is required."
+#if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
+#    error "Unsupported language: ISO C99 or a newer version is required."
 #endif
 
 // --------------------------------------------- COMMON CONSTANTS ---------------------------------------------
