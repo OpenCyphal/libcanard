@@ -27,7 +27,10 @@ TEST_CASE("float16Unpack")
     REQUIRE(Approx(-65504.0F) == float16Unpack(0b1111101111111111));
     REQUIRE(std::isinf(float16Unpack(0b0111110000000000)));
 
-    REQUIRE(bool(std::isnan(float16Unpack(0b0111111111111111))));
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111111111111111))));  // quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111111000000000))));  // quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111110111111111))));  // signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111110000000001))));  // signaling
 }
 
 TEST_CASE("canardDSDLFloat16")
@@ -43,7 +46,10 @@ TEST_CASE("canardDSDLFloat16")
 
     REQUIRE(0b0111110000000000 == float16Pack(float16Unpack(0b0111110000000000)));  // +inf
     REQUIRE(0b1111110000000000 == float16Pack(float16Unpack(0b1111110000000000)));  // -inf
-    REQUIRE(0b0111111111111111 == float16Pack(float16Unpack(0b0111111111111111)));  // nan
+    REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111111111111111)));  // qNaN, extra bits stripped
+
+    // https://github.com/UAVCAN/nunavut/pull/115#issuecomment-703248946
+    // REQUIRE(0b0111110100000000 == float16Pack(float16Unpack(0b0111110111111111)));  // sNaN, extra bits stripped
 }
 
 TEST_CASE("canardDSDLCopyBits")
