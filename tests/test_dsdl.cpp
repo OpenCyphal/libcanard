@@ -5,6 +5,7 @@
 #include "exposed.hpp"
 #include <array>
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 TEST_CASE("float16Pack")
@@ -13,10 +14,16 @@ TEST_CASE("float16Pack")
     REQUIRE(0b0000000000000000 == float16Pack(0.0F));
     REQUIRE(0b0011110000000000 == float16Pack(1.0F));
     REQUIRE(0b1100000000000000 == float16Pack(-2.0F));
-    REQUIRE(0b0111110000000000 == float16Pack(999999.0F));      // +inf
-    REQUIRE(0b1111101111111111 == float16Pack(-65519.0F));      // -max
-    REQUIRE(0b0111111000000000 == float16Pack(std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
-    REQUIRE(0b0111110100000000 == float16Pack(std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
+    REQUIRE(0b0111110000000000 == float16Pack(999999.0F));  // +inf
+    REQUIRE(0b1111101111111111 == float16Pack(-65519.0F));  // -max
+
+    // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
+    // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
+    // represent it.
+    REQUIRE(0b0111111000000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
+    REQUIRE(0b1111111000000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
+    REQUIRE(0b0111110100000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
+    REQUIRE(0b1111110100000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
 }
 
 TEST_CASE("float16Unpack")
@@ -28,10 +35,53 @@ TEST_CASE("float16Unpack")
     REQUIRE(Approx(-65504.0F) == float16Unpack(0b1111101111111111));
     REQUIRE(std::isinf(float16Unpack(0b0111110000000000)));
 
-    REQUIRE(bool(std::isnan(float16Unpack(0b0111111111111111))));  // quiet
-    REQUIRE(bool(std::isnan(float16Unpack(0b0111111000000000))));  // quiet
-    REQUIRE(bool(std::isnan(float16Unpack(0b0111110111111111))));  // signaling
-    REQUIRE(bool(std::isnan(float16Unpack(0b0111110000000001))));  // signaling
+    const auto explode_sign_exp_mantissa = [](const float f) -> std::tuple<bool, std::uint8_t, std::uint32_t> {
+        std::uint32_t n = 0;
+        std::memcpy(&n, &f, 4);
+        return std::make_tuple((n & (1UL << 31U)) != 0,
+                               static_cast<std::uint8_t>((n >> 23U) & 0xFFU),
+                               n & ((1UL << 23U) - 1U));
+    };
+
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b0111111111111111));  // +qNaN
+        REQUIRE(!sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b0111111000000000));  // +qNaN
+        REQUIRE(!sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b1111111111111111));  // -qNaN
+        REQUIRE(sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b0111110111111111));  // +sNaN
+        REQUIRE(!sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b1111110000000001));  // -sNaN
+        REQUIRE(sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111111111111111))));  // +quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111111000000000))));  // +quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111111111111111))));  // -quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111111000000000))));  // -quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111110111111111))));  // +signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111110000000001))));  // +signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111110111111111))));  // -signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111110000000001))));  // -signaling
 }
 
 TEST_CASE("canardDSDLFloat16")
@@ -45,10 +95,15 @@ TEST_CASE("canardDSDLFloat16")
         x += 0.5F;
     }
 
+    // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
+    // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
+    // represent it.
     REQUIRE(0b0111110000000000 == float16Pack(float16Unpack(0b0111110000000000)));  // +inf
     REQUIRE(0b1111110000000000 == float16Pack(float16Unpack(0b1111110000000000)));  // -inf
-    REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111111111111111)));  // qNaN, extra bits stripped
-    REQUIRE(0b0111110100000000 == float16Pack(float16Unpack(0b0111110111111111)));  // sNaN, extra bits stripped
+    REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111111111111111)));  // +qNaN, extra bits stripped
+    REQUIRE(0b0111110100000000 == float16Pack(float16Unpack(0b0111110111111111)));  // +sNaN, extra bits stripped
+    REQUIRE(0b1111111000000000 == float16Pack(float16Unpack(0b1111111111111111)));  // -qNaN, extra bits stripped
+    REQUIRE(0b1111110100000000 == float16Pack(float16Unpack(0b1111110111111111)));  // -sNaN, extra bits stripped
 }
 
 TEST_CASE("canardDSDLCopyBits")

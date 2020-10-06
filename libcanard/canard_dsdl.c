@@ -325,7 +325,7 @@ CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
     if (in.bits >= f32inf.bits)
     {
         // The no-lint statements suppress the warnings about magic numbers.
-        if ((in.bits & 0x3FFFFFUL) != 0)  // NOLINT NOSONAR
+        if ((in.bits & 0x7FFFFFUL) != 0)  // NOLINT NOSONAR
         {
             if ((0x400000UL & in.bits) != 0)  // NOLINT NOSONAR
             {
