@@ -19,11 +19,12 @@ TEST_CASE("float16Pack")
 
     // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
     // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
-    // represent it.
+    // represent it. We do not differentiate between sNaN and qNaN because there is no platform-agnostic way to do
+    // that; see https://github.com/UAVCAN/nunavut/pull/115#issuecomment-704185463
     REQUIRE(0b0111111000000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
     REQUIRE(0b1111111000000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
-    REQUIRE(0b0111110100000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
-    REQUIRE(0b1111110100000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
+    REQUIRE(0b0111111000000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
+    REQUIRE(0b1111111000000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
 }
 
 TEST_CASE("float16Unpack")
@@ -95,15 +96,17 @@ TEST_CASE("canardDSDLFloat16")
         x += 0.5F;
     }
 
-    // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
-    // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
-    // represent it.
     REQUIRE(0b0111110000000000 == float16Pack(float16Unpack(0b0111110000000000)));  // +inf
     REQUIRE(0b1111110000000000 == float16Pack(float16Unpack(0b1111110000000000)));  // -inf
+
+    // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
+    // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
+    // represent it. We do not differentiate between sNaN and qNaN because there is no platform-agnostic way to do
+    // that; see https://github.com/UAVCAN/nunavut/pull/115#issuecomment-704185463
     REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111111111111111)));  // +qNaN, extra bits stripped
-    REQUIRE(0b0111110100000000 == float16Pack(float16Unpack(0b0111110111111111)));  // +sNaN, extra bits stripped
+    REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111110111111111)));  // +sNaN, extra bits stripped
     REQUIRE(0b1111111000000000 == float16Pack(float16Unpack(0b1111111111111111)));  // -qNaN, extra bits stripped
-    REQUIRE(0b1111110100000000 == float16Pack(float16Unpack(0b1111110111111111)));  // -sNaN, extra bits stripped
+    REQUIRE(0b1111111000000000 == float16Pack(float16Unpack(0b1111110111111111)));  // -sNaN, extra bits stripped
 }
 
 TEST_CASE("canardDSDLCopyBits")

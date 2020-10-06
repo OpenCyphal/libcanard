@@ -327,16 +327,7 @@ CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
         // The no-lint statements suppress the warnings about magic numbers.
         if ((in.bits & 0x7FFFFFUL) != 0)  // NOLINT NOSONAR
         {
-            if ((0x400000UL & in.bits) != 0)  // NOLINT NOSONAR
-            {
-                out = 0x7E00U;  // NOLINT NOSONAR
-            }
-            else
-            {
-                // Signalling NaN. We're allowed to discard any diagnostic data in the mantissa but at least one bit,
-                // other than the signalling bit, must be set to distinguish from INFINITY.
-                out = 0x7D00U;  // NOLINT NOSONAR
-            }
+            out = 0x7E00U;  // NOLINT NOSONAR
         }
         else
         {
