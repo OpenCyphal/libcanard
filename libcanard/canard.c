@@ -239,7 +239,7 @@ CANARD_PRIVATE uint8_t txMakeTailByte(const bool             start_of_transfer,
                                       const bool             toggle,
                                       const CanardTransferID transfer_id)
 {
-    CANARD_ASSERT(start_of_transfer ? toggle : true);
+    CANARD_ASSERT(start_of_transfer ? (toggle == INITIAL_TOGGLE_STATE) : true);
     return (uint8_t)((start_of_transfer ? TAIL_START_OF_TRANSFER : 0U) | (end_of_transfer ? TAIL_END_OF_TRANSFER : 0U) |
                      (toggle ? TAIL_TOGGLE : 0U) | (transfer_id & CANARD_TRANSFER_ID_MAX));
 }
