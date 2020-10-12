@@ -75,7 +75,7 @@ TEST_CASE("TxBasic0")
 
     // Check the TX queue.
     {
-        auto q = ins.getTxQueueRoot();
+        const auto* q = ins.getTxQueueRoot();
         REQUIRE(q != nullptr);
         REQUIRE(q->frame.timestamp_usec == 1'000'000'000'000ULL);
         REQUIRE(q->frame.payload_size == 12);

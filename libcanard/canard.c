@@ -119,7 +119,8 @@ CANARD_PRIVATE uint32_t txMakeMessageSessionSpecifier(const CanardPortID subject
 {
     CANARD_ASSERT(src_node_id <= CANARD_NODE_ID_MAX);
     CANARD_ASSERT(subject_id <= CANARD_SUBJECT_ID_MAX);
-    return src_node_id | ((uint32_t) subject_id << OFFSET_SUBJECT_ID);
+    const uint32_t tmp = subject_id | (CANARD_SUBJECT_ID_MAX + 1) | ((CANARD_SUBJECT_ID_MAX + 1) * 2);
+    return src_node_id | (tmp << OFFSET_SUBJECT_ID);
 }
 
 CANARD_PRIVATE uint32_t txMakeServiceSessionSpecifier(const CanardPortID service_id,
@@ -637,28 +638,28 @@ CANARD_PRIVATE uint8_t rxComputeTransferIDDifference(const uint8_t a, const uint
 
 CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
                                             CanardInternalRxSession* const rxs,
-                                            const size_t                   payload_size_max,
+                                            const size_t                   extent,
                                             const size_t                   payload_size,
                                             const void* const              payload);
 CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
                                             CanardInternalRxSession* const rxs,
-                                            const size_t                   payload_size_max,
+                                            const size_t                   extent,
                                             const size_t                   payload_size,
                                             const void* const              payload)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
     CANARD_ASSERT((payload != NULL) || (payload_size == 0U));
-    CANARD_ASSERT(rxs->payload_size <= payload_size_max);  // This invariant is enforced by the subscription logic.
+    CANARD_ASSERT(rxs->payload_size <= extent);  // This invariant is enforced by the subscription logic.
     CANARD_ASSERT(rxs->payload_size <= rxs->total_payload_size);
 
     rxs->total_payload_size += payload_size;
 
     // Allocate the payload lazily, as late as possible.
-    if ((NULL == rxs->payload) && (payload_size_max > 0U))
+    if ((NULL == rxs->payload) && (extent > 0U))
     {
         CANARD_ASSERT(rxs->payload_size == 0);
-        rxs->payload = ins->memory_allocate(ins, payload_size_max);
+        rxs->payload = ins->memory_allocate(ins, extent);
     }
 
     int8_t out = 0;
@@ -666,11 +667,11 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
     {
         // Copy the payload into the contiguous buffer. Apply the implicit truncation rule if necessary.
         size_t bytes_to_copy = payload_size;
-        if ((rxs->payload_size + bytes_to_copy) > payload_size_max)
+        if ((rxs->payload_size + bytes_to_copy) > extent)
         {
-            CANARD_ASSERT(rxs->payload_size <= payload_size_max);
-            bytes_to_copy = payload_size_max - rxs->payload_size;
-            CANARD_ASSERT((rxs->payload_size + bytes_to_copy) == payload_size_max);
+            CANARD_ASSERT(rxs->payload_size <= extent);
+            bytes_to_copy = extent - rxs->payload_size;
+            CANARD_ASSERT((rxs->payload_size + bytes_to_copy) == extent);
             CANARD_ASSERT(bytes_to_copy < payload_size);
         }
         // This memcpy() call here is one of the two variable-complexity operations in the RX pipeline;
@@ -681,12 +682,12 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
         (void) memcpy(&rxs->payload[rxs->payload_size], payload, bytes_to_copy);  // NOLINT NOSONAR
         rxs->payload_size += bytes_to_copy;
-        CANARD_ASSERT(rxs->payload_size <= payload_size_max);
+        CANARD_ASSERT(rxs->payload_size <= extent);
     }
     else
     {
         CANARD_ASSERT(rxs->payload_size == 0);
-        out = (payload_size_max > 0U) ? -CANARD_ERROR_OUT_OF_MEMORY : 0;
+        out = (extent > 0U) ? -CANARD_ERROR_OUT_OF_MEMORY : 0;
     }
     CANARD_ASSERT(out <= 0);
     return out;
@@ -710,12 +711,12 @@ CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRx
 CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
                                            CanardInternalRxSession* const rxs,
                                            const RxFrameModel* const      frame,
-                                           const size_t                   payload_size_max,
+                                           const size_t                   extent,
                                            CanardTransfer* const          out_transfer);
 CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
                                            CanardInternalRxSession* const rxs,
                                            const RxFrameModel* const      frame,
-                                           const size_t                   payload_size_max,
+                                           const size_t                   extent,
                                            CanardTransfer* const          out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
@@ -738,7 +739,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
         rxs->calculated_crc = crcAdd(rxs->calculated_crc, frame->payload_size, frame->payload);
     }
 
-    int8_t out = rxSessionWritePayload(ins, rxs, payload_size_max, frame->payload_size, frame->payload);
+    int8_t out = rxSessionWritePayload(ins, rxs, extent, frame->payload_size, frame->payload);
     if (out < 0)
     {
         CANARD_ASSERT(-CANARD_ERROR_OUT_OF_MEMORY == out);
@@ -787,14 +788,14 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
                                       const RxFrameModel* const      frame,
                                       const uint8_t                  redundant_transport_index,
                                       const CanardMicrosecond        transfer_id_timeout_usec,
-                                      const size_t                   payload_size_max,
+                                      const size_t                   extent,
                                       CanardTransfer* const          out_transfer);
 CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
                                       CanardInternalRxSession* const rxs,
                                       const RxFrameModel* const      frame,
                                       const uint8_t                  redundant_transport_index,
                                       const CanardMicrosecond        transfer_id_timeout_usec,
-                                      const size_t                   payload_size_max,
+                                      const size_t                   extent,
                                       CanardTransfer* const          out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
@@ -834,7 +835,7 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
         const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
         if (correct_transport && correct_toggle && correct_tid)
         {
-            out = rxSessionAcceptFrame(ins, rxs, frame, payload_size_max, out_transfer);
+            out = rxSessionAcceptFrame(ins, rxs, frame, extent, out_transfer);
         }
     }
     return out;
@@ -895,7 +896,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
                                   frame,
                                   redundant_transport_index,
                                   subscription->_transfer_id_timeout_usec,
-                                  subscription->_payload_size_max,
+                                  subscription->_extent,
                                   out_transfer);
         }
     }
@@ -905,9 +906,8 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
         // Anonymous transfers are stateless. No need to update the state machine, just blindly accept it.
         // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
         // independent of the input data and the memory shall be free-able.
-        const size_t payload_size = (subscription->_payload_size_max < frame->payload_size)
-                                        ? subscription->_payload_size_max
-                                        : frame->payload_size;
+        const size_t payload_size =
+            (subscription->_extent < frame->payload_size) ? subscription->_extent : frame->payload_size;
         void* const payload = ins->memory_allocate(ins, payload_size);
         if (payload != NULL)
         {
@@ -1071,7 +1071,7 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 int8_t canardRxSubscribe(CanardInstance* const       ins,
                          const CanardTransferKind    transfer_kind,
                          const CanardPortID          port_id,
-                         const size_t                payload_size_max,
+                         const size_t                extent,
                          const CanardMicrosecond     transfer_id_timeout_usec,
                          CanardRxSubscription* const out_subscription)
 {
@@ -1093,7 +1093,7 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
                 out_subscription->_sessions[i] = NULL;
             }
             out_subscription->_transfer_id_timeout_usec = transfer_id_timeout_usec;
-            out_subscription->_payload_size_max         = payload_size_max;
+            out_subscription->_extent                   = extent;
             out_subscription->_port_id                  = port_id;
             out_subscription->_next                     = ins->_rx_subscriptions[tk];
             ins->_rx_subscriptions[tk]                  = out_subscription;

@@ -324,7 +324,15 @@ CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
     uint16_t out = 0;
     if (in.bits >= f32inf.bits)
     {
-        out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT NOSONAR
+        // The no-lint statements suppress the warnings about magic numbers.
+        if ((in.bits & 0x7FFFFFUL) != 0)  // NOLINT NOSONAR
+        {
+            out = 0x7E00U;  // NOLINT NOSONAR
+        }
+        else
+        {
+            out = (in.bits > f32inf.bits) ? (uint16_t) 0x7FFFU : (uint16_t) 0x7C00U;  // NOLINT NOSONAR
+        }
     }
     else
     {

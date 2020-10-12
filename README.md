@@ -12,13 +12,14 @@ embedded systems.
 
 [UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
 communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
-The acronym UAVCAN stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
+The acronym UAVCAN stands for *Uncomplicated Application-level Vehicular Computing And Networking*.
 
-**READ THE DOCS: [`libcanard/canard.h`](/libcanard/canard.h)**
+**Read the docs in [`libcanard/canard.h`](/libcanard/canard.h).**
 
-Contribute: [`CONTRIBUTING.md`](/CONTRIBUTING.md)
+Find examples, starters, tutorials on the
+[UAVCAN forum](https://forum.uavcan.org/t/libcanard-examples-starters-tutorials/935).
 
-Ask questions: [forum.uavcan.org](https://forum.uavcan.org)
+If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 
 ## Features
 
@@ -138,19 +139,31 @@ But first, we need to subscribe:
 CanardRxSubscription heartbeat_subscription;
 (void) canardRxSubscribe(&ins,   // Subscribe to messages uavcan.node.Heartbeat.
                          CanardTransferKindMessage,
-                         32085,  // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
-                         7,      // The maximum payload size (max DSDL object size) from the DSDL definition.
+                         7509,   // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
+                         16,     // The extent (the maximum possible payload size); pick a huge value if not sure.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
 
 CanardRxSubscription my_service_subscription;
-(void) canardRxSubscribe(&ins,                        // Subscribe to an arbitrary service response.
-                         CanardTransferKindResponse,
-                         123,                         // The Service-ID to subscribe to.
-                         1024,                        // The maximum payload size (max DSDL object size).
+(void) canardRxSubscribe(&ins,   // Subscribe to an arbitrary service response.
+                         CanardTransferKindResponse,  // Specify that we want service responses, not requests.
+                         123,    // The Service-ID whose responses we will receive.
+                         1024,   // The extent (the maximum payload size); pick a huge value if not sure.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &my_service_subscription);
 ```
+
+The "extent" refers to the minimum amount of memory required to hold any serialized representation of any compatible
+version of the data type; or, on other words, it is the the maximum possible size of received objects.
+This parameter is determined by the data type author at the data type definition time.
+It is typically larger than the maximum object size in order to allow the data type author to introduce more
+fields in the future versions of the type;
+for example, `MyMessage.1.0` may have the maximum size of 100 bytes and the extent 200 bytes;
+a revised version `MyMessage.1.1` may have the maximum size anywhere between 0 and 200 bytes.
+It is always safe to pick a larger value if not sure.
+You will find a more rigorous description in the UAVCAN Specification.
+
+In Libcanard we use the term "subscription" not only for subjects (messages), but also for services, for simplicity.
 
 We can subscribe and unsubscribe at runtime as many times as we want.
 Normally, however, an embedded application would subscribe once and roll with it.
@@ -187,10 +200,10 @@ The DSDL serialization helper library can be used to (de-)serialize DSDL objects
 Here's a simple deserialization example for a `uavcan.node.Heartbeat.1.0` message:
 
 ```c
-uint8_t  mode   = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 34,  3);
+uint8_t  mode   = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 40,  8);
 uint32_t uptime = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size,  0, 32);
-uint32_t vssc   = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size, 37, 19);
-uint8_t  health = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 32,  2);
+uint8_t  vssc   = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size, 48,  8);
+uint8_t  health = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 32,  8);
 ```
 
 And the opposite:
@@ -198,10 +211,10 @@ And the opposite:
 ```c
 uint8_t buffer[7];
 //              destination offset   value bit-length
-canardDSDLSetUxx(&buffer[0], 34,          2,  3);   // mode
+canardDSDLSetUxx(&buffer[0], 40,          2,  8);   // mode
 canardDSDLSetUxx(&buffer[0],  0, 0xDEADBEEF, 32);   // uptime
-canardDSDLSetUxx(&buffer[0], 37,    0x7FFFF, 19);   // vssc
-canardDSDLSetUxx(&buffer[0], 32,          2,  2);   // health
+canardDSDLSetUxx(&buffer[0], 48,       0x7F,  8);   // vssc
+canardDSDLSetUxx(&buffer[0], 32,          2,  8);   // health
 // Now it can be transmitted:
 my_transfer->payload      = &buffer[0];
 my_transfer->payload_size = sizeof(buffer);
@@ -210,3 +223,9 @@ result = canardTxPush(&ins, &my_transfer);
 
 Full API specification is available in the documentation.
 If you find the examples to be unclear or incorrect, please, open a ticket.
+
+## Revisions
+
+### v1.0
+
+The initial release.

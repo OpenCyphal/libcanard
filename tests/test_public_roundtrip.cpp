@@ -23,7 +23,7 @@ TEST_CASE("RoundtripSimple")
         CanardTransferKind   transfer_kind{};
         CanardPriority       priority{};
         CanardPortID         port_id{};
-        std::size_t          payload_size_max{};
+        std::size_t          extent{};
         CanardTransferID     transfer_id{};
         CanardRxSubscription subscription{};
     };
@@ -35,7 +35,7 @@ TEST_CASE("RoundtripSimple")
         return static_cast<CanardPriority>(getRandomNatural(CANARD_PRIORITY_MAX + 1U));
     };
     std::array<TxState, 6> tx_states{
-        TxState{CanardTransferKindMessage, get_random_priority(), 32767, 1000},
+        TxState{CanardTransferKindMessage, get_random_priority(), 8191, 1000},
         TxState{CanardTransferKindMessage, get_random_priority(), 511, 0},
         TxState{CanardTransferKindMessage, get_random_priority(), 0, 13},
         TxState{CanardTransferKindRequest, get_random_priority(), 511, 900},
@@ -47,11 +47,11 @@ TEST_CASE("RoundtripSimple")
     {
         REQUIRE(1 == ins_rx.rxSubscribe(s.transfer_kind,
                                         s.port_id,
-                                        s.payload_size_max,
+                                        s.extent,
                                         CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                                         s.subscription));
         // The true worst case is 128 times larger, but there is only one transmitting node.
-        rx_worst_case_memory_consumption += sizeof(exposed::RxSession) + s.payload_size_max;
+        rx_worst_case_memory_consumption += sizeof(exposed::RxSession) + s.extent;
     }
     ins_rx.getAllocator().setAllocationCeiling(rx_worst_case_memory_consumption);  // This is guaranteed to be enough.
 
@@ -74,7 +74,7 @@ TEST_CASE("RoundtripSimple")
             auto& st = tx_states.at(getRandomNatural(std::size(tx_states)));
 
             // Generate random payload. The size may be larger than expected to test the implicit truncation rule.
-            const auto  payload_size = getRandomNatural(st.payload_size_max + 1024U);
+            const auto  payload_size = getRandomNatural(st.extent + 1024U);
             auto* const payload      = static_cast<std::uint8_t*>(std::malloc(payload_size));  // NOLINT
             std::generate_n(payload, payload_size, [&]() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
 

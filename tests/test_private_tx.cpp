@@ -6,8 +6,8 @@
 
 TEST_CASE("SessionSpecifier")
 {
-    REQUIRE(0b000'00'0011001100110011'0'1010101 ==
-            exposed::txMakeMessageSessionSpecifier(0b0011001100110011, 0b1010101));
+    REQUIRE(0b000'00'0'11'1001100110011'0'1010101 ==
+            exposed::txMakeMessageSessionSpecifier(0b1001100110011, 0b1010101));
     REQUIRE(0b000'11'0100110011'0101010'1010101 ==
             exposed::txMakeServiceSessionSpecifier(0b0100110011, true, 0b1010101, 0b0101010));
     REQUIRE(0b000'10'0100110011'1010101'0101010 ==
@@ -59,24 +59,24 @@ TEST_CASE("txMakeCANID")
     };
 
     // MESSAGE TRANSFERS
-    REQUIRE(0b000'00'0011001100110011'0'1010101 ==  // Regular message.
+    REQUIRE(0b000'00'0'11'1001100110011'0'1010101 ==  // Regular message.
             txMakeCANID(mk_transfer(CanardPriorityExceptional,
                                     CanardTransferKindMessage,
-                                    0b0011001100110011,
+                                    0b1001100110011,
                                     CANARD_NODE_ID_UNSET),
                         0b1010101,
                         7U));
-    REQUIRE(0b111'00'0011001100110011'0'1010101 ==  // Regular message.
+    REQUIRE(0b111'00'0'11'1001100110011'0'1010101 ==  // Regular message.
             txMakeCANID(mk_transfer(CanardPriorityOptional,
                                     CanardTransferKindMessage,
-                                    0b0011001100110011,
+                                    0b1001100110011,
                                     CANARD_NODE_ID_UNSET),
                         0b1010101,
                         7U));
-    REQUIRE((0b010'01'0011001100110011'0'0000000U | (crc123 & CANARD_NODE_ID_MAX)) ==  // Anonymous message.
+    REQUIRE((0b010'01'0'11'1001100110011'0'0000000U | (crc123 & CANARD_NODE_ID_MAX)) ==  // Anonymous message.
             txMakeCANID(mk_transfer(CanardPriorityFast,
                                     CanardTransferKindMessage,
-                                    0b0011001100110011,
+                                    0b1001100110011,
                                     CANARD_NODE_ID_UNSET,
                                     {1, 2, 3}),
                         128U,  // Invalid local node-ID.
@@ -84,20 +84,20 @@ TEST_CASE("txMakeCANID")
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Multi-frame anonymous messages are not allowed.
             txMakeCANID(mk_transfer(CanardPriorityImmediate,
                                     CanardTransferKindMessage,
-                                    0b0011001100110011,
+                                    0b1001100110011,
                                     CANARD_NODE_ID_UNSET,
                                     {1, 2, 3, 4, 5, 6, 7, 8}),
                         128U,  // Invalid local node-ID is treated as anonymous/unset.
                         7U));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad remote node-ID -- unicast messages not supported.
-            txMakeCANID(mk_transfer(CanardPriorityHigh, CanardTransferKindMessage, 0b0011001100110011, 123U), 0U, 7U));
+            txMakeCANID(mk_transfer(CanardPriorityHigh, CanardTransferKindMessage, 0b1001100110011, 123U), 0U, 7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Bad subject-ID.
         txMakeCANID(mk_transfer(CanardPriorityLow, CanardTransferKindMessage, 0xFFFFU, CANARD_NODE_ID_UNSET), 0U, 7U));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // Bad priority.
             txMakeCANID(mk_transfer(PriorityAlias{123}.prio,
                                     CanardTransferKindMessage,
-                                    0b0011001100110011,
+                                    0b1001100110011,
                                     CANARD_NODE_ID_UNSET),
                         0b1010101,
                         7U));

@@ -183,16 +183,11 @@ public:
 
     [[nodiscard]] auto rxSubscribe(const CanardTransferKind transfer_kind,
                                    const CanardPortID       port_id,
-                                   const std::size_t        payload_size_max,
+                                   const std::size_t        extent,
                                    const CanardMicrosecond  transfer_id_timeout_usec,
                                    CanardRxSubscription&    out_subscription)
     {
-        return canardRxSubscribe(&canard_,
-                                 transfer_kind,
-                                 port_id,
-                                 payload_size_max,
-                                 transfer_id_timeout_usec,
-                                 &out_subscription);
+        return canardRxSubscribe(&canard_, transfer_kind, port_id, extent, transfer_id_timeout_usec, &out_subscription);
     }
 
     [[nodiscard]] auto rxUnsubscribe(const CanardTransferKind transfer_kind, const CanardPortID port_id)

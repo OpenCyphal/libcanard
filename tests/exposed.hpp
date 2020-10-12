@@ -7,6 +7,7 @@
 #include "catch.hpp"
 #include <cstdarg>
 #include <cstdint>
+#include <limits>
 
 /// Definitions that are not exposed by the library but that are needed for testing.
 /// Please keep them in sync with the library by manually updating as necessary.
@@ -99,7 +100,7 @@ auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_res
 
 auto rxSessionWritePayload(CanardInstance* const ins,
                            RxSession* const      rxs,
-                           const std::size_t     payload_size_max,
+                           const std::size_t     extent,
                            const std::size_t     payload_size,
                            const void* const     payload) -> std::int8_t;
 
@@ -110,7 +111,7 @@ auto rxSessionUpdate(CanardInstance* const     ins,
                      const RxFrameModel* const frame,
                      const std::uint8_t        redundant_transport_index,
                      const CanardMicrosecond   transfer_id_timeout_usec,
-                     const std::size_t         payload_size_max,
+                     const std::size_t         extent,
                      CanardTransfer* const     out_transfer) -> std::int8_t;
 
 auto float16Pack(const float value) -> std::uint16_t;

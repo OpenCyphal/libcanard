@@ -5,7 +5,8 @@
 #include "exposed.hpp"
 #include <array>
 #include <cmath>
-#include <iostream>
+#include <cstring>
+#include <limits>
 
 TEST_CASE("float16Pack")
 {
@@ -13,9 +14,17 @@ TEST_CASE("float16Pack")
     REQUIRE(0b0000000000000000 == float16Pack(0.0F));
     REQUIRE(0b0011110000000000 == float16Pack(1.0F));
     REQUIRE(0b1100000000000000 == float16Pack(-2.0F));
-    REQUIRE(0b0111110000000000 == float16Pack(999999.0F));      // +inf
-    REQUIRE(0b1111101111111111 == float16Pack(-65519.0F));      // -max
-    REQUIRE(0b0111111111111111 == float16Pack(std::nanf("")));  // nan
+    REQUIRE(0b0111110000000000 == float16Pack(999999.0F));  // +inf
+    REQUIRE(0b1111101111111111 == float16Pack(-65519.0F));  // -max
+
+    // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
+    // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
+    // represent it. We do not differentiate between sNaN and qNaN because there is no platform-agnostic way to do
+    // that; see https://github.com/UAVCAN/nunavut/pull/115#issuecomment-704185463
+    REQUIRE(0b0111111000000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
+    REQUIRE(0b1111111000000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::quiet_NaN()));
+    REQUIRE(0b0111111000000000 == float16Pack(+std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
+    REQUIRE(0b1111111000000000 == float16Pack(-std::numeric_limits<CanardDSDLFloat32>::signaling_NaN()));
 }
 
 TEST_CASE("float16Unpack")
@@ -27,7 +36,53 @@ TEST_CASE("float16Unpack")
     REQUIRE(Approx(-65504.0F) == float16Unpack(0b1111101111111111));
     REQUIRE(std::isinf(float16Unpack(0b0111110000000000)));
 
-    REQUIRE(bool(std::isnan(float16Unpack(0b0111111111111111))));
+    const auto explode_sign_exp_mantissa = [](const float f) -> std::tuple<bool, std::uint8_t, std::uint32_t> {
+        std::uint32_t n = 0;
+        std::memcpy(&n, &f, 4);
+        return std::make_tuple((n & (1UL << 31U)) != 0,
+                               static_cast<std::uint8_t>((n >> 23U) & 0xFFU),
+                               n & ((1UL << 23U) - 1U));
+    };
+
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b0111111111111111));  // +qNaN
+        REQUIRE(!sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b0111111000000000));  // +qNaN
+        REQUIRE(!sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b1111111111111111));  // -qNaN
+        REQUIRE(sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b0111110111111111));  // +sNaN
+        REQUIRE(!sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+    {
+        const auto [sign, exp, man] = explode_sign_exp_mantissa(float16Unpack(0b1111110000000001));  // -sNaN
+        REQUIRE(sign);
+        REQUIRE(exp == 0xFFU);
+        REQUIRE(man != 0);
+    }
+
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111111111111111))));  // +quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111111000000000))));  // +quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111111111111111))));  // -quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111111000000000))));  // -quiet
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111110111111111))));  // +signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b0111110000000001))));  // +signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111110111111111))));  // -signaling
+    REQUIRE(bool(std::isnan(float16Unpack(0b1111110000000001))));  // -signaling
 }
 
 TEST_CASE("canardDSDLFloat16")
@@ -43,7 +98,15 @@ TEST_CASE("canardDSDLFloat16")
 
     REQUIRE(0b0111110000000000 == float16Pack(float16Unpack(0b0111110000000000)));  // +inf
     REQUIRE(0b1111110000000000 == float16Pack(float16Unpack(0b1111110000000000)));  // -inf
-    REQUIRE(0b0111111111111111 == float16Pack(float16Unpack(0b0111111111111111)));  // nan
+
+    // These are intrusive tests, they make assumptions about the specific implementation of the conversion logic.
+    // Normally, one wouldn't be able to compare a NaN against a particular number because there are many ways to
+    // represent it. We do not differentiate between sNaN and qNaN because there is no platform-agnostic way to do
+    // that; see https://github.com/UAVCAN/nunavut/pull/115#issuecomment-704185463
+    REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111111111111111)));  // +qNaN, extra bits stripped
+    REQUIRE(0b0111111000000000 == float16Pack(float16Unpack(0b0111110111111111)));  // +sNaN, extra bits stripped
+    REQUIRE(0b1111111000000000 == float16Pack(float16Unpack(0b1111111111111111)));  // -qNaN, extra bits stripped
+    REQUIRE(0b1111111000000000 == float16Pack(float16Unpack(0b1111110111111111)));  // -sNaN, extra bits stripped
 }
 
 TEST_CASE("canardDSDLCopyBits")
@@ -272,8 +335,7 @@ TEST_CASE("canardDSDLSerialize_unaligned")
 
 TEST_CASE("canardDSDLSerialize_heartbeat")
 {
-    // The reference values were taken from the PyUAVCAN test.
-    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 234, 255, 255, 0});
+    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 3, 2, 127, 0});
 
     std::vector<std::uint8_t> dest(std::size(Reference));
 
@@ -281,10 +343,10 @@ TEST_CASE("canardDSDLSerialize_heartbeat")
         canardDSDLSetUxx(dest.data(), offset_bit, value, length_bit);
     };
 
-    set_u(34, 2, 3);           // mode
+    set_u(40, 2, 8);           // mode
     set_u(0, 0xDEADBEEF, 32);  // uptime
-    set_u(37, 0x7FFFF, 19);    // vssc
-    set_u(32, 2, 2);           // health
+    set_u(48, 0x7F, 8);        // vssc
+    set_u(32, 3, 8);           // health
 
     REQUIRE(std::size(dest) == std::size(Reference));
     REQUIRE_THAT(dest, Catch::Matchers::Equals(Reference));
@@ -506,11 +568,10 @@ TEST_CASE("canardDSDLDeserialize_unaligned")
 
 TEST_CASE("canardDSDLDeserialize_heartbeat")
 {
-    // The reference values were taken from the PyUAVCAN test.
-    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 234, 255, 255});
+    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 3, 2, 127, 0});
     const std::uint8_t* const       buf = Reference.data();
-    REQUIRE(2 == canardDSDLGetU8(buf, 7, 34, 3));            // mode
+    REQUIRE(2 == canardDSDLGetU8(buf, 7, 40, 8));            // mode
     REQUIRE(0xDEADBEEF == canardDSDLGetU32(buf, 7, 0, 32));  // uptime
-    REQUIRE(0x7FFFF == canardDSDLGetU32(buf, 7, 37, 19));    // vssc
-    REQUIRE(2 == canardDSDLGetU8(buf, 7, 32, 2));            // health
+    REQUIRE(0x7F == canardDSDLGetU32(buf, 7, 48, 8));        // vssc
+    REQUIRE(3 == canardDSDLGetU8(buf, 7, 32, 8));            // health
 }

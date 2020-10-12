@@ -1,4 +1,4 @@
-dist: xenial
+dist: focal
 env:
   - CTEST_OUTPUT_ON_FAILURE=1
 
@@ -15,13 +15,13 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
-            - g++-9
-            - g++-9-multilib
-            - gcc-9-multilib
+            - g++-10
+            - g++-10-multilib
+            - gcc-10-multilib
             - linux-libc-dev:i386
       env:
-        - CC=gcc-9
-        - CXX=g++-9
+        - CC=gcc-10
+        - CXX=g++-10
       script:
         # ANALYSIS
         # Using the build wrapper from Sonar and collecting the code coverage.
@@ -29,15 +29,16 @@ matrix:
         - cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         - build-wrapper-linux-x86-64 --out-dir sonar-dump make all
         - make test
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
-        - gcov-9 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        - gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        - gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
+        - gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
         - 'sonar-scanner -Dsonar.projectKey=libcanard
                          -Dsonar.organization=uavcan
                          -Dsonar.sources=libcanard
                          -Dsonar.cfamily.gcov.reportsPath=.
                          -Dsonar.cfamily.build-wrapper-output=sonar-dump
-                         -Dsonar.cfamily.cache.enabled=false'
+                         -Dsonar.cfamily.cache.enabled=false
+                         -Dsonar.cfamily.threads=1'
         - make clean
 
         # DEBUG
@@ -50,45 +51,41 @@ matrix:
         - make all VERBOSE=1 && make test
         - make clean
 
-    # -------------------- Clang 9 (Part 1) --------------------
+    # -------------------- Clang --------------------
     - language: cpp
       addons:
         apt:
           sources:
             - ubuntu-toolchain-r-test
           packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
-            - g++-9
-            - g++-9-multilib
-            - gcc-9-multilib
+            - g++-10
+            - g++-10-multilib
+            - gcc-10-multilib
             - linux-libc-dev:i386
-            - libc6-dev-i386
-            - libstdc++-7-dev:i386
       script:
         # Set up the toolchain.
-        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 9
-        - sudo apt install clang-tidy-9 clang-format-9
-        - clang++-9 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
+        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 10
+        - sudo apt install clang-tidy-10 clang-format-10
+        - clang++-10 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
-        # DEBUG
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Debug
+        # DEBUG + format check
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Debug
         - make VERBOSE=1 && make test
-        - make clean
-
-        # RELEASE
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=Release
-        - make VERBOSE=1 && make test
-        - make clean
-
-        # MINSIZEREL
-        - cmake -DCMAKE_C_COMPILER=clang-9 -DCMAKE_CXX_COMPILER=clang++-9 tests -DCMAKE_BUILD_TYPE=MinSizeRel
-        - make VERBOSE=1 && make test
-        - make clean
-
-        # Format check
         - make format VERBOSE=1
         - 'modified="$(git status --porcelain --untracked-files=no)"'
         - echo "${modified}"
         - 'if [ -n "$modified" ]; then echo "Run make format to reformat the code properly."; exit 1; fi'
+        - make clean
+
+        # RELEASE (skip static analysis because it is done in the DEBUG configuration)
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - make VERBOSE=1 && make test
+        - make clean
+
+        # MINSIZEREL (skip static analysis because it is done in the DEBUG configuration)
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=MinSizeRel -DNO_STATIC_ANALYSIS=1
+        - make VERBOSE=1 && make test
+        - make clean
 
     # -------------------- AVR GCC --------------------
     - language: c

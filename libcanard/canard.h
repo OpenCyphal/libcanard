@@ -108,8 +108,8 @@ extern "C" {
 
 /// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 0
-#define CANARD_VERSION_MINOR 100
+#define CANARD_VERSION_MAJOR 1
+#define CANARD_VERSION_MINOR 0
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
@@ -130,7 +130,7 @@ extern "C" {
 #define CANARD_MTU_CAN_FD 64U
 
 /// Parameter ranges are inclusive; the lower bound is zero for all. See UAVCAN/CAN Specification for background.
-#define CANARD_SUBJECT_ID_MAX 32767U
+#define CANARD_SUBJECT_ID_MAX 8191U
 #define CANARD_SERVICE_ID_MAX 511U
 #define CANARD_NODE_ID_MAX 127U
 #define CANARD_PRIORITY_MAX 7U
@@ -289,7 +289,7 @@ typedef struct CanardRxSubscription
     struct CanardInternalRxSession* _sessions[CANARD_NODE_ID_MAX + 1U];
 
     CanardMicrosecond _transfer_id_timeout_usec;  ///< Internal use only.
-    size_t            _payload_size_max;          ///< Internal use only.
+    size_t            _extent;                    ///< Internal use only.
     CanardPortID      _port_id;                   ///< Internal use only.
 } CanardRxSubscription;
 
@@ -480,10 +480,11 @@ void canardTxPop(CanardInstance* const ins);
 ///        was already allocated at the time.
 ///        This event occurs when a transport frame that matches a known subscription is received and it begins a
 ///        new transfer (that is, the start-of-frame flag is set and it is not a duplicate).
-///        The amount of the allocated memory is payload_size_max as configured via canardRxSubscribe().
+///        The amount of the allocated memory equals the extent as configured via canardRxSubscribe(); please read
+///        its documentation for further information about the extent and related edge cases.
 ///        The worst case occurs when every node on the bus initiates a multi-frame transfer for which there is a
-///        matching subscription: in this case, the library will allocate number_of_nodes allocations of size
-///        payload_size_max.
+///        matching subscription: in this case, the library will allocate number_of_nodes allocations, where each
+///        allocation is the same size as the configured extent.
 ///
 ///     3. Memory allocated for the transfer payload buffer may be deallocated at the discretion of the library.
 ///        This operation does not increase the worst case execution time and does not improve the worst case memory
@@ -492,9 +493,9 @@ void canardTxPop(CanardInstance* const ins);
 ///
 /// The worst case dynamic memory consumption per subscription is:
 ///
-///     (sizeof(session instance) + payload_size_max) * number_of_nodes
+///     (sizeof(session instance) + extent) * number_of_nodes
 ///
-/// Where sizeof(session instance) and payload_size_max are defined above, and number_of_nodes is the number of remote
+/// Where sizeof(session instance) and extent are defined above, and number_of_nodes is the number of remote
 /// nodes emitting transfers that match the subscription (which cannot exceed (CANARD_NODE_ID_MAX-1) by design).
 /// If the dynamic memory pool is sized correctly, the application is guaranteed to never encounter an
 /// out-of-memory (OOM) error at runtime. The actual size of the dynamic memory pool is typically larger;
@@ -514,7 +515,7 @@ void canardTxPop(CanardInstance* const ins);
 /// are stored into out_transfer, and the transfer payload buffer ownership is passed to that object. The lifetime
 /// of the resulting transfer object is not related to the lifetime of the input transport frame (that is, even if
 /// it is a single-frame transfer, its payload is copied out into a new dynamically allocated buffer storage).
-/// If the payload_size_max is zero, the payload pointer may be NULL, since there is no data to store and so a
+/// If the extent is zero, the payload pointer may be NULL, since there is no data to store and so a
 /// buffer is not needed. The application is responsible for deallocating the payload buffer when the processing
 /// is done by invoking memory_free on the transfer payload pointer.
 ///
@@ -554,10 +555,12 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 /// If such subscription already exists, it will be removed first as if canardRxUnsubscribe() was
 /// invoked by the application, and then re-created anew with the new parameters.
 ///
-/// The payload_size_max defines the size of the transfer payload memory buffer. Transfers that carry larger payloads
-/// will be accepted but the excess payload will be truncated, as mandated by the Specification. This behavior is
-/// called the Implicit Truncation Rule (ITR) and it is intended to facilitate extensibility of data types while
-/// preserving backward compatibility. The transfer CRC is validated regardless of whether its payload is truncated.
+/// The extent defines the size of the transfer payload memory buffer; or, in other words, the maximum possible size
+/// of received objects, considering also possible future versions with new fields. It is safe to pick larger values.
+/// Note well that the extent is not the same thing as the maximum size of the object, it is usually larger!
+/// Transfers that carry payloads that exceed the specified extent will be accepted anyway but the excess payload
+/// will be truncated away, as mandated by the Specification. The transfer CRC is always validated regardless of
+/// whether its payload is truncated.
 ///
 /// The default transfer-ID timeout value is defined as CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC; use it if not sure.
 /// The redundant transport fail-over timeout (if redundant transports are used) is the same as the transfer-ID timeout.
@@ -582,7 +585,7 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 int8_t canardRxSubscribe(CanardInstance* const       ins,
                          const CanardTransferKind    transfer_kind,
                          const CanardPortID          port_id,
-                         const size_t                payload_size_max,
+                         const size_t                extent,
                          const CanardMicrosecond     transfer_id_timeout_usec,
                          CanardRxSubscription* const out_subscription);
 
