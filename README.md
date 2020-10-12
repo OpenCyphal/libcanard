@@ -12,7 +12,7 @@ embedded systems.
 
 [UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
 communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
-The acronym UAVCAN stands for *Uncomplicated Application-level Vehicular Communication And Networking*.
+The acronym UAVCAN stands for *Uncomplicated Application-level Vehicular Computing And Networking*.
 
 **Read the docs in [`libcanard/canard.h`](/libcanard/canard.h).**
 
@@ -200,10 +200,10 @@ The DSDL serialization helper library can be used to (de-)serialize DSDL objects
 Here's a simple deserialization example for a `uavcan.node.Heartbeat.1.0` message:
 
 ```c
-uint8_t  mode   = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 34,  3);
+uint8_t  mode   = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 40,  8);
 uint32_t uptime = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size,  0, 32);
-uint32_t vssc   = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size, 37, 19);
-uint8_t  health = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 32,  2);
+uint8_t  vssc   = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size, 48,  8);
+uint8_t  health = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 32,  8);
 ```
 
 And the opposite:
@@ -211,10 +211,10 @@ And the opposite:
 ```c
 uint8_t buffer[7];
 //              destination offset   value bit-length
-canardDSDLSetUxx(&buffer[0], 34,          2,  3);   // mode
+canardDSDLSetUxx(&buffer[0], 40,          2,  8);   // mode
 canardDSDLSetUxx(&buffer[0],  0, 0xDEADBEEF, 32);   // uptime
-canardDSDLSetUxx(&buffer[0], 37,    0x7FFFF, 19);   // vssc
-canardDSDLSetUxx(&buffer[0], 32,          2,  2);   // health
+canardDSDLSetUxx(&buffer[0], 48,       0x7F,  8);   // vssc
+canardDSDLSetUxx(&buffer[0], 32,          2,  8);   // health
 // Now it can be transmitted:
 my_transfer->payload      = &buffer[0];
 my_transfer->payload_size = sizeof(buffer);

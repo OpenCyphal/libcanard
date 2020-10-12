@@ -335,8 +335,7 @@ TEST_CASE("canardDSDLSerialize_unaligned")
 
 TEST_CASE("canardDSDLSerialize_heartbeat")
 {
-    // The reference values were taken from the PyUAVCAN test.
-    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 234, 255, 255, 0});
+    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 3, 2, 127, 0});
 
     std::vector<std::uint8_t> dest(std::size(Reference));
 
@@ -344,10 +343,10 @@ TEST_CASE("canardDSDLSerialize_heartbeat")
         canardDSDLSetUxx(dest.data(), offset_bit, value, length_bit);
     };
 
-    set_u(34, 2, 3);           // mode
+    set_u(40, 2, 8);           // mode
     set_u(0, 0xDEADBEEF, 32);  // uptime
-    set_u(37, 0x7FFFF, 19);    // vssc
-    set_u(32, 2, 2);           // health
+    set_u(48, 0x7F, 8);        // vssc
+    set_u(32, 3, 8);           // health
 
     REQUIRE(std::size(dest) == std::size(Reference));
     REQUIRE_THAT(dest, Catch::Matchers::Equals(Reference));
@@ -569,11 +568,10 @@ TEST_CASE("canardDSDLDeserialize_unaligned")
 
 TEST_CASE("canardDSDLDeserialize_heartbeat")
 {
-    // The reference values were taken from the PyUAVCAN test.
-    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 234, 255, 255});
+    const std::vector<std::uint8_t> Reference({239, 190, 173, 222, 3, 2, 127, 0});
     const std::uint8_t* const       buf = Reference.data();
-    REQUIRE(2 == canardDSDLGetU8(buf, 7, 34, 3));            // mode
+    REQUIRE(2 == canardDSDLGetU8(buf, 7, 40, 8));            // mode
     REQUIRE(0xDEADBEEF == canardDSDLGetU32(buf, 7, 0, 32));  // uptime
-    REQUIRE(0x7FFFF == canardDSDLGetU32(buf, 7, 37, 19));    // vssc
-    REQUIRE(2 == canardDSDLGetU8(buf, 7, 32, 2));            // health
+    REQUIRE(0x7F == canardDSDLGetU32(buf, 7, 48, 8));        // vssc
+    REQUIRE(3 == canardDSDLGetU8(buf, 7, 32, 8));            // health
 }
