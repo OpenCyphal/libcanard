@@ -73,13 +73,13 @@ matrix:
         - make VERBOSE=1 && make test
         - make clean
 
-        # RELEASE
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Release
+        # RELEASE (skip static analysis because it is done in the DEBUG configuration)
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
         - make VERBOSE=1 && make test
         - make clean
 
-        # MINSIZEREL
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=MinSizeRel
+        # MINSIZEREL (skip static analysis because it is done in the DEBUG configuration)
+        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=MinSizeRel -DNO_STATIC_ANALYSIS=1
         - make VERBOSE=1 && make test
         - make clean
 
