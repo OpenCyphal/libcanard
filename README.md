@@ -154,7 +154,7 @@ CanardRxSubscription my_service_subscription;
 ```
 
 The "extent" refers to the minimum amount of memory required to hold any serialized representation of any compatible
-version of the data type; or, on other words, it is the the maximum possible size of received objects.
+version of the data type; or, in other words, it is the maximum possible size of received objects.
 This parameter is determined by the data type author at the data type definition time.
 It is typically larger than the maximum object size in order to allow the data type author to introduce more
 fields in the future versions of the type;
