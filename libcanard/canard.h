@@ -551,6 +551,8 @@ int8_t canardRxAccept(CanardInstance* const    ins,
 
 /// This function creates a new subscription, allowing the application to register its interest in a particular
 /// category of transfers. The library will reject all transport frames for which there is no active subscription.
+/// The reference out_subscription shall retain validity until the subscription is terminated (the referred object
+/// cannot be moved or destroyed).
 ///
 /// If such subscription already exists, it will be removed first as if canardRxUnsubscribe() was
 /// invoked by the application, and then re-created anew with the new parameters.
