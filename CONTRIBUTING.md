@@ -101,3 +101,7 @@ At the moment, the library is not being tested against other platforms.
 We would welcome contributions implementing CI/CD testing against popular embedded architectures, particularly
 the ARM Cortex M series and AVR in an emulator.
 As a high-integrity library, the Libcanard test suite should provide full test coverage for all commonly used platforms.
+
+## Releasing
+
+Simply create a new release on GitHub: <https://github.com/UAVCAN/libcanard/releases/new>
