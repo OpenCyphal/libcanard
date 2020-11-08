@@ -1,0 +1,46 @@
+///                         __   __   _______   __   __   _______   _______   __   __
+///                        |  | |  | /   _   ` |  | |  | /   ____| /   _   ` |  ` |  |
+///                        |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   `|  |
+///                        |  |_|  | |   _   | `  `_/  / |  |____  |   _   | |  |`   |
+///                        `_______/ |__| |__|  `_____/  `_______| |__| |__| |__| `__|
+///                            |      |            |         |      |         |
+///                        ----o------o------------o---------o------o---------o-------
+///
+///
+/// This software is distributed under the terms of the MIT License.
+/// Copyright (c) 2020 UAVCAN Development Team.
+/// Author: Göran Mannberg <mannberg@gmail.com>
+
+cc_defaults {
+    name: "libcanard_defaults",
+    shared_libs: [
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+}
+
+cc_defaults {
+    name: "libcanard_v1_0_target_defaults",
+    defaults: ["libcanard_defaults"],
+}
+
+cc_library_headers {
+    name: "libcanard_v1_0_common_headers",
+    vendor: true,
+    export_include_dirs: ["libcanard"],
+}
+
+// canard uavcan reference implementation lib
+cc_library {
+    name: "canard@1.0-lib",
+    vendor: true,
+    defaults: ["libcanard_v1_0_target_defaults"],
+    srcs: [
+        "libcanard/canard.c",
+        "libcanard/canard_dsdl.c",
+    ],
+    export_include_dirs: ["libcanard"],
+}
