@@ -7,12 +7,9 @@
 ///                        ----o------o------------o---------o------o---------o-------
 ///
 /// This is a DSDL serialization helper for libcanard -- a trivial optional extension library that contains basic
-/// DSDL field serialization routines. It is intended for use in simple applications where auto-generated DSDL
-/// serialization logic is not available. The functions are fully stateless and straightforward to use;
-/// read their documentation comments for usage info.
-///
-/// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
-/// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
+/// DSDL field serialization routines. It is intended for use in unconventional applications where auto-generated
+/// DSDL serialization routines are not available. Most applications are not expected to need this; instead, they are
+/// recommended to automatically transpile DSDL into C using Nunavut: https://github.com/UAVCAN/nunavut.
 ///
 /// This library is designed to be compatible with any instruction set architecture (including big endian platforms)
 /// but the floating point functionality will be automatically disabled at compile time if the target platform does not
@@ -22,6 +19,8 @@
 /// To use the library, copy the files canard_dsdl.c and canard_dsdl.h into the source tree of the application.
 /// No special compilation options are required. There are optional build configuration options defined near the top
 /// of canard_dsdl.c; they may be used to fine-tune the library for the target platform (but it is not necessary).
+///
+/// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
 ///
 /// This software is distributed under the terms of the MIT License.
 /// Copyright (c) 2016-2020 UAVCAN Development Team.

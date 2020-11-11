@@ -196,7 +196,10 @@ else
 }
 ```
 
-The DSDL serialization helper library can be used to (de-)serialize DSDL objects without auto-generated code.
+To automatically generate (de-)serialization code from DSDL definitions,
+use [Nunavut](https://github.com/UAVCAN/nunavut).
+If for some reason this is found undesirable, you may write (de-)serialization logic manually using
+the optional tiny add-on for libcanard: `canard_dsdl.c`/`canard_dsdl.h`.
 Here's a simple deserialization example for a `uavcan.node.Heartbeat.1.0` message:
 
 ```c
