@@ -84,34 +84,44 @@ CANARD_PRIVATE size_t getBitCopySize(const size_t  buf_size_bytes,
 
 // --------------------------------------------- PUBLIC API - BIT ARRAY ---------------------------------------------
 
-void canardDSDLCopyBits(const size_t         length_bit,
-                        const size_t         src_offset_bit,
-                        const size_t         dst_offset_bit,
-                        const uint8_t* const src,
-                        uint8_t* const       dst)
+void canardDSDLCopyBits(const size_t      length_bit,
+                        const size_t      src_offset_bit,
+                        const size_t      dst_offset_bit,
+                        const void* const src,
+                        void* const       dst)
 {
-    // The algorithm was originally designed by Ben Dyer for Libuavcan v0:
-    // https://github.com/UAVCAN/libuavcan/blob/ba6929f9625d7ea3eb00/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12-L58
-    // This version is modified for v1 where the bit order is the opposite.
     CANARD_ASSERT((src != NULL) && (dst != NULL) && (src != dst));
-    CANARD_ASSERT((src < dst) ? ((src + ((src_offset_bit + length_bit + BYTE_WIDTH) / BYTE_WIDTH)) <= dst)
-                              : ((dst + ((dst_offset_bit + length_bit + BYTE_WIDTH) / BYTE_WIDTH)) <= src));
-    if ((0U == (length_bit % BYTE_WIDTH)) &&      //
-        (0U == (src_offset_bit % BYTE_WIDTH)) &&  //
-        (0U == (dst_offset_bit % BYTE_WIDTH)))
+    if ((0U == (src_offset_bit % BYTE_WIDTH)) && (0U == (dst_offset_bit % BYTE_WIDTH)))
     {
-        // Intentional violation of MISRA: Pointer arithmetics.
-        // This is done to remove the API constraint that offsets be under 8 bits.
-        // Fewer constraints reduce the chance of API misuse.
-        (void) memcpy(dst + (dst_offset_bit / BYTE_WIDTH),  // NOSONAR NOLINT
-                      src + (src_offset_bit / BYTE_WIDTH),  // NOSONAR
-                      length_bit / BYTE_WIDTH);
+        const size_t length_bytes = (size_t)(length_bit / BYTE_WIDTH);
+        // Intentional violation of MISRA: Pointer arithmetics. This is done to remove the API constraint that
+        // offsets be under 8 bits. Fewer constraints reduce the chance of API misuse.
+        const uint8_t* const psrc = (src_offset_bit / BYTE_WIDTH) + (const uint8_t*) src;  // NOSONAR NOLINT
+        uint8_t* const       pdst = (dst_offset_bit / BYTE_WIDTH) + (uint8_t*) dst;        // NOSONAR NOLINT
+        // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
+        // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+        (void) memcpy(pdst, psrc, length_bytes);  // NOLINT
+        const uint8_t length_mod = (uint8_t)(length_bit % BYTE_WIDTH);
+        if (0U != length_mod)  // If the length is unaligned, the last byte requires special treatment.
+        {
+            // Intentional violation of MISRA: Pointer arithmetics. It is unavoidable in this context.
+            const uint8_t* const last_src = psrc + length_bytes;  // NOLINT NOSONAR
+            uint8_t* const       last_dst = pdst + length_bytes;  // NOLINT NOSONAR
+            CANARD_ASSERT(length_mod < BYTE_WIDTH);
+            const uint8_t mask = (uint8_t)((1U << length_mod) - 1U);
+            *last_dst          = (uint8_t)(*last_dst & (uint8_t) ~mask) | (uint8_t)(*last_src & mask);
+        }
     }
     else
     {
-        size_t       src_off  = src_offset_bit;
-        size_t       dst_off  = dst_offset_bit;
-        const size_t last_bit = src_off + length_bit;
+        // The algorithm was originally designed by Ben Dyer for Libuavcan v0:
+        // https://github.com/UAVCAN/libuavcan/blob/legacy-v0/libuavcan/src/marshal/uc_bit_array_copy.cpp#L12-L58
+        // This version is modified for v1 where the bit order is the opposite.
+        const uint8_t* const psrc     = (const uint8_t*) src;
+        uint8_t* const       pdst     = (uint8_t*) dst;
+        size_t               src_off  = src_offset_bit;
+        size_t               dst_off  = dst_offset_bit;
+        const size_t         last_bit = src_off + length_bit;
         while (last_bit > src_off)
         {
             const uint8_t src_mod = (uint8_t)(src_off % BYTE_WIDTH);
@@ -128,16 +138,16 @@ void canardDSDLCopyBits(const size_t         length_bit,
             // Intentional violation of MISRA: indexing on a pointer.
             // This simplifies the implementation greatly and avoids pointer arithmetics.
             const uint8_t in =
-                (uint8_t)((uint8_t)(src[src_off / BYTE_WIDTH] >> src_mod) << dst_mod) & BYTE_MAX;  // NOSONAR
+                (uint8_t)((uint8_t)(psrc[src_off / BYTE_WIDTH] >> src_mod) << dst_mod) & BYTE_MAX;  // NOSONAR
 
             // Intentional violation of MISRA: indexing on a pointer.
             // This simplifies the implementation greatly and avoids pointer arithmetics.
-            const uint8_t a = dst[dst_off / BYTE_WIDTH] & ((uint8_t) ~mask);  // NOSONAR
+            const uint8_t a = pdst[dst_off / BYTE_WIDTH] & ((uint8_t) ~mask);  // NOSONAR
             const uint8_t b = in & mask;
 
             // Intentional violation of MISRA: indexing on a pointer.
             // This simplifies the implementation greatly and avoids pointer arithmetics.
-            dst[dst_off / BYTE_WIDTH] = a | b;  // NOSONAR
+            pdst[dst_off / BYTE_WIDTH] = a | b;  // NOSONAR
 
             src_off += size;
             dst_off += size;

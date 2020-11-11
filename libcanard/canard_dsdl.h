@@ -7,12 +7,9 @@
 ///                        ----o------o------------o---------o------o---------o-------
 ///
 /// This is a DSDL serialization helper for libcanard -- a trivial optional extension library that contains basic
-/// DSDL field serialization routines. It is intended for use in simple applications where auto-generated DSDL
-/// serialization logic is not available. The functions are fully stateless and straightforward to use;
-/// read their documentation comments for usage info.
-///
-/// This is an optional part of libcanard that can be omitted if this functionality is not required by the application.
-/// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
+/// DSDL field serialization routines. It is intended for use in unconventional applications where auto-generated
+/// DSDL serialization routines are not available. Most applications are not expected to need this; instead, they are
+/// recommended to automatically transpile DSDL into C using Nunavut: https://github.com/UAVCAN/nunavut.
 ///
 /// This library is designed to be compatible with any instruction set architecture (including big endian platforms)
 /// but the floating point functionality will be automatically disabled at compile time if the target platform does not
@@ -22,6 +19,8 @@
 /// To use the library, copy the files canard_dsdl.c and canard_dsdl.h into the source tree of the application.
 /// No special compilation options are required. There are optional build configuration options defined near the top
 /// of canard_dsdl.c; they may be used to fine-tune the library for the target platform (but it is not necessary).
+///
+/// Some high-integrity systems may prefer to avoid this extension because it relies on unsafe memory operations.
 ///
 /// This software is distributed under the terms of the MIT License.
 /// Copyright (c) 2016-2020 UAVCAN Development Team.
@@ -43,7 +42,7 @@ typedef double CanardDSDLFloat64;
 
 /// Copy the specified number of bits from the source buffer into the destination buffer in accordance with the
 /// DSDL bit-level serialization specification. The offsets may be arbitrary (may exceed 8 bits).
-/// If both offsets and the length are byte-aligned, the algorithm degenerates to memcpy().
+/// If both offsets are byte-aligned, the algorithm degenerates to memcpy() (the last byte may be copied separately).
 /// If the source and the destination overlap, the behavior is undefined.
 /// If either source or destination pointers are NULL, the behavior is undefined.
 /// Arguments:
@@ -52,11 +51,11 @@ typedef double CanardDSDLFloat64;
 ///     dst_offset_bit  Offset in bits from the destination pointer. May exceed 8.
 ///     src             Source buffer. Shall be at least ceil(length_bit/8) bytes large.
 ///     dst             Destination buffer. Shall be at least ceil(length_bit/8) bytes large.
-void canardDSDLCopyBits(const size_t         length_bit,
-                        const size_t         src_offset_bit,
-                        const size_t         dst_offset_bit,
-                        const uint8_t* const src,
-                        uint8_t* const       dst);
+void canardDSDLCopyBits(const size_t      length_bit,
+                        const size_t      src_offset_bit,
+                        const size_t      dst_offset_bit,
+                        const void* const src,
+                        void* const       dst);
 
 /// Serialize a DSDL field value at the specified bit offset from the beginning of the destination buffer.
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
