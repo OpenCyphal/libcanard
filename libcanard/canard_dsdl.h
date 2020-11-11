@@ -42,7 +42,7 @@ typedef double CanardDSDLFloat64;
 
 /// Copy the specified number of bits from the source buffer into the destination buffer in accordance with the
 /// DSDL bit-level serialization specification. The offsets may be arbitrary (may exceed 8 bits).
-/// If both offsets and the length are byte-aligned, the algorithm degenerates to memcpy().
+/// If both offsets are byte-aligned, the algorithm degenerates to memcpy() (the last byte may be copied separately).
 /// If the source and the destination overlap, the behavior is undefined.
 /// If either source or destination pointers are NULL, the behavior is undefined.
 /// Arguments:
@@ -51,11 +51,11 @@ typedef double CanardDSDLFloat64;
 ///     dst_offset_bit  Offset in bits from the destination pointer. May exceed 8.
 ///     src             Source buffer. Shall be at least ceil(length_bit/8) bytes large.
 ///     dst             Destination buffer. Shall be at least ceil(length_bit/8) bytes large.
-void canardDSDLCopyBits(const size_t         length_bit,
-                        const size_t         src_offset_bit,
-                        const size_t         dst_offset_bit,
-                        const uint8_t* const src,
-                        uint8_t* const       dst);
+void canardDSDLCopyBits(const size_t      length_bit,
+                        const size_t      src_offset_bit,
+                        const size_t      dst_offset_bit,
+                        const void* const src,
+                        void* const       dst);
 
 /// Serialize a DSDL field value at the specified bit offset from the beginning of the destination buffer.
 /// The behavior is undefined if the input pointer is NULL. The time complexity is linear of the bit length.
