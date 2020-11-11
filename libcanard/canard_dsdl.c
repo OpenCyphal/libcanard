@@ -93,21 +93,21 @@ void canardDSDLCopyBits(const size_t      length_bit,
     CANARD_ASSERT((src != NULL) && (dst != NULL) && (src != dst));
     if ((0U == (src_offset_bit % BYTE_WIDTH)) && (0U == (dst_offset_bit % BYTE_WIDTH)))
     {
-        const size_t length_bytes = (size_t)(length_bit / 8U);
+        const size_t length_bytes = (size_t)(length_bit / BYTE_WIDTH);
         // Intentional violation of MISRA: Pointer arithmetics. This is done to remove the API constraint that
         // offsets be under 8 bits. Fewer constraints reduce the chance of API misuse.
-        const uint8_t* const psrc = (src_offset_bit / 8U) + (const uint8_t*) src;  // NOSONAR NOLINT
-        uint8_t* const       pdst = (dst_offset_bit / 8U) + (uint8_t*) dst;        // NOSONAR NOLINT
+        const uint8_t* const psrc = (src_offset_bit / BYTE_WIDTH) + (const uint8_t*) src;  // NOSONAR NOLINT
+        uint8_t* const       pdst = (dst_offset_bit / BYTE_WIDTH) + (uint8_t*) dst;        // NOSONAR NOLINT
         // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
         (void) memcpy(pdst, psrc, length_bytes);  // NOLINT
-        const uint8_t length_mod = (uint8_t)(length_bit % 8U);
+        const uint8_t length_mod = (uint8_t)(length_bit % BYTE_WIDTH);
         if (0U != length_mod)  // If the length is unaligned, the last byte requires special treatment.
         {
             // Intentional violation of MISRA: Pointer arithmetics. It is unavoidable in this context.
             const uint8_t* const last_src = psrc + length_bytes;  // NOLINT NOSONAR
             uint8_t* const       last_dst = pdst + length_bytes;  // NOLINT NOSONAR
-            CANARD_ASSERT(length_mod < 8U);
+            CANARD_ASSERT(length_mod < BYTE_WIDTH);
             const uint8_t mask = (uint8_t)((1U << length_mod) - 1U);
             *last_dst          = (uint8_t)(*last_dst & (uint8_t) ~mask) | (uint8_t)(*last_src & mask);
         }
