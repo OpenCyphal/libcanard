@@ -59,7 +59,7 @@ public:
     TestAllocator(const TestAllocator&)  = delete;
     TestAllocator(const TestAllocator&&) = delete;
     auto operator=(const TestAllocator&) -> TestAllocator& = delete;
-    auto operator=(const TestAllocator &&) -> TestAllocator& = delete;
+    auto operator=(const TestAllocator&&) -> TestAllocator& = delete;
 
     virtual ~TestAllocator()
     {
@@ -166,7 +166,7 @@ public:
     Instance(const Instance&)  = delete;
     Instance(const Instance&&) = delete;
     auto operator=(const Instance&) -> Instance& = delete;
-    auto operator=(const Instance &&) -> Instance& = delete;
+    auto operator=(const Instance&&) -> Instance& = delete;
 
     [[nodiscard]] auto txPush(const CanardTransfer& transfer) { return canardTxPush(&canard_, &transfer); }
 

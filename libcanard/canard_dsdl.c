@@ -86,7 +86,7 @@ void canardDSDLCopyBits(const size_t      length_bit,
     CANARD_ASSERT((src != NULL) && (dst != NULL) && (src != dst));
     if ((0U == (src_offset_bit % BYTE_WIDTH)) && (0U == (dst_offset_bit % BYTE_WIDTH)))
     {
-        const size_t length_bytes = (size_t) (length_bit / BYTE_WIDTH);
+        const size_t length_bytes = (size_t)(length_bit / BYTE_WIDTH);
         // Intentional violation of MISRA: Pointer arithmetics. This is done to remove the API constraint that
         // offsets be under 8 bits. Fewer constraints reduce the chance of API misuse.
         const uint8_t* const psrc = (src_offset_bit / BYTE_WIDTH) + (const uint8_t*) src;  // NOSONAR NOLINT
@@ -94,15 +94,15 @@ void canardDSDLCopyBits(const size_t      length_bit,
         // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
         (void) memcpy(pdst, psrc, length_bytes);  // NOLINT
-        const uint8_t length_mod = (uint8_t) (length_bit % BYTE_WIDTH);
+        const uint8_t length_mod = (uint8_t)(length_bit % BYTE_WIDTH);
         if (0U != length_mod)  // If the length is unaligned, the last byte requires special treatment.
         {
             // Intentional violation of MISRA: Pointer arithmetics. It is unavoidable in this context.
             const uint8_t* const last_src = psrc + length_bytes;  // NOLINT NOSONAR
             uint8_t* const       last_dst = pdst + length_bytes;  // NOLINT NOSONAR
             CANARD_ASSERT(length_mod < BYTE_WIDTH);
-            const uint8_t mask = (uint8_t) ((1U << length_mod) - 1U);
-            *last_dst          = (uint8_t) (*last_dst & (uint8_t) ~mask) | (uint8_t) (*last_src & mask);
+            const uint8_t mask = (uint8_t)((1U << length_mod) - 1U);
+            *last_dst          = (uint8_t)(*last_dst & (uint8_t) ~mask) | (uint8_t)(*last_src & mask);
         }
     }
     else
@@ -117,21 +117,21 @@ void canardDSDLCopyBits(const size_t      length_bit,
         const size_t         last_bit = src_off + length_bit;
         while (last_bit > src_off)
         {
-            const uint8_t src_mod = (uint8_t) (src_off % BYTE_WIDTH);
-            const uint8_t dst_mod = (uint8_t) (dst_off % BYTE_WIDTH);
+            const uint8_t src_mod = (uint8_t)(src_off % BYTE_WIDTH);
+            const uint8_t dst_mod = (uint8_t)(dst_off % BYTE_WIDTH);
             const uint8_t max_mod = (src_mod > dst_mod) ? src_mod : dst_mod;
 
             const uint8_t size = (uint8_t) chooseMin(BYTE_WIDTH - max_mod, last_bit - src_off);
             CANARD_ASSERT((size > 0U) && (size <= BYTE_WIDTH));
 
             // Suppress a false warning from Clang-Tidy & Sonar that size is being over-shifted. It's not.
-            const uint8_t mask = (uint8_t) ((((1U << size) - 1U) << dst_mod) & BYTE_MAX);  // NOLINT NOSONAR
+            const uint8_t mask = (uint8_t)((((1U << size) - 1U) << dst_mod) & BYTE_MAX);  // NOLINT NOSONAR
             CANARD_ASSERT(mask > 0U);
 
             // Intentional violation of MISRA: indexing on a pointer.
             // This simplifies the implementation greatly and avoids pointer arithmetics.
             const uint8_t in =
-                (uint8_t) ((uint8_t) (psrc[src_off / BYTE_WIDTH] >> src_mod) << dst_mod) & BYTE_MAX;  // NOSONAR
+                (uint8_t)((uint8_t)(psrc[src_off / BYTE_WIDTH] >> src_mod) << dst_mod) & BYTE_MAX;  // NOSONAR
 
             // Intentional violation of MISRA: indexing on a pointer.
             // This simplifies the implementation greatly and avoids pointer arithmetics.
@@ -168,14 +168,14 @@ void canardDSDLSetUxx(uint8_t* const buf, const size_t off_bit, const uint64_t v
     canardDSDLCopyBits(saturated_len_bit, 0U, off_bit, (const uint8_t*) &value, buf);
 #else
     const uint8_t tmp[sizeof(uint64_t)] = {
-        (uint8_t) ((value >> 0U) & BYTE_MAX),   // Suppress warnings about the magic numbers. Their purpose is clear.
-        (uint8_t) ((value >> 8U) & BYTE_MAX),   // NOLINT NOSONAR
-        (uint8_t) ((value >> 16U) & BYTE_MAX),  // NOLINT NOSONAR
-        (uint8_t) ((value >> 24U) & BYTE_MAX),  // NOLINT NOSONAR
-        (uint8_t) ((value >> 32U) & BYTE_MAX),  // NOLINT NOSONAR
-        (uint8_t) ((value >> 40U) & BYTE_MAX),  // NOLINT NOSONAR
-        (uint8_t) ((value >> 48U) & BYTE_MAX),  // NOLINT NOSONAR
-        (uint8_t) ((value >> 56U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 0U) & BYTE_MAX),   // Suppress warnings about the magic numbers. Their purpose is clear.
+        (uint8_t)((value >> 8U) & BYTE_MAX),   // NOLINT NOSONAR
+        (uint8_t)((value >> 16U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 24U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 32U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 40U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 48U) & BYTE_MAX),  // NOLINT NOSONAR
+        (uint8_t)((value >> 56U) & BYTE_MAX),  // NOLINT NOSONAR
     };
     canardDSDLCopyBits(saturated_len_bit, 0U, off_bit, &tmp[0], buf);
 #endif
@@ -216,7 +216,7 @@ uint16_t canardDSDLGetU16(const uint8_t* const buf, const size_t buf_size, const
 #else
     uint8_t tmp[sizeof(uint16_t)] = {0};
     canardDSDLCopyBits(copy_size, off_bit, 0U, buf, &tmp[0]);
-    return (uint16_t) (tmp[0] | (uint16_t) (((uint16_t) tmp[1]) << BYTE_WIDTH));
+    return (uint16_t)(tmp[0] | (uint16_t)(((uint16_t) tmp[1]) << BYTE_WIDTH));
 #endif
 }
 
@@ -232,10 +232,10 @@ uint32_t canardDSDLGetU32(const uint8_t* const buf, const size_t buf_size, const
 #else
     uint8_t tmp[sizeof(uint32_t)] = {0};
     canardDSDLCopyBits(copy_size, off_bit, 0U, buf, &tmp[0]);
-    return (uint32_t) (tmp[0] |                      // Suppress warnings about the magic numbers.
-                       ((uint32_t) tmp[1] << 8U) |   // NOLINT NOSONAR
-                       ((uint32_t) tmp[2] << 16U) |  // NOLINT NOSONAR
-                       ((uint32_t) tmp[3] << 24U));  // NOLINT NOSONAR
+    return (uint32_t)(tmp[0] |                      // Suppress warnings about the magic numbers.
+                      ((uint32_t) tmp[1] << 8U) |   // NOLINT NOSONAR
+                      ((uint32_t) tmp[2] << 16U) |  // NOLINT NOSONAR
+                      ((uint32_t) tmp[3] << 24U));  // NOLINT NOSONAR
 #endif
 }
 
@@ -251,14 +251,14 @@ uint64_t canardDSDLGetU64(const uint8_t* const buf, const size_t buf_size, const
 #else
     uint8_t tmp[sizeof(uint64_t)] = {0};
     canardDSDLCopyBits(copy_size, off_bit, 0U, buf, &tmp[0]);
-    return (uint64_t) (tmp[0] |                      // Suppress warnings about the magic numbers.
-                       ((uint64_t) tmp[1] << 8U) |   // NOLINT NOSONAR
-                       ((uint64_t) tmp[2] << 16U) |  // NOLINT NOSONAR
-                       ((uint64_t) tmp[3] << 24U) |  // NOLINT NOSONAR
-                       ((uint64_t) tmp[4] << 32U) |  // NOLINT NOSONAR
-                       ((uint64_t) tmp[5] << 40U) |  // NOLINT NOSONAR
-                       ((uint64_t) tmp[6] << 48U) |  // NOLINT NOSONAR
-                       ((uint64_t) tmp[7] << 56U));  // NOLINT NOSONAR
+    return (uint64_t)(tmp[0] |                      // Suppress warnings about the magic numbers.
+                      ((uint64_t) tmp[1] << 8U) |   // NOLINT NOSONAR
+                      ((uint64_t) tmp[2] << 16U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[3] << 24U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[4] << 32U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[5] << 40U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[6] << 48U) |  // NOLINT NOSONAR
+                      ((uint64_t) tmp[7] << 56U));  // NOLINT NOSONAR
 #endif
 }
 
@@ -267,8 +267,8 @@ int8_t canardDSDLGetI8(const uint8_t* const buf, const size_t buf_size, const si
     const uint8_t sat = (uint8_t) chooseMin(len_bit, BYTE_WIDTH);
     uint8_t       val = canardDSDLGetU8(buf, buf_size, off_bit, sat);
     const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
-    val               = ((sat < BYTE_WIDTH) && neg) ? (uint8_t) (val | ~((1U << sat) - 1U)) : val;  // Sign extension
-    return neg ? (int8_t) ((-(int8_t) (uint8_t) ~val) - 1) : (int8_t) val;
+    val               = ((sat < BYTE_WIDTH) && neg) ? (uint8_t)(val | ~((1U << sat) - 1U)) : val;  // Sign extension
+    return neg ? (int8_t)((-(int8_t)(uint8_t) ~val) - 1) : (int8_t) val;
 }
 
 int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
@@ -276,8 +276,8 @@ int16_t canardDSDLGetI16(const uint8_t* const buf, const size_t buf_size, const 
     const uint8_t sat = (uint8_t) chooseMin(len_bit, WIDTH16);
     uint16_t      val = canardDSDLGetU16(buf, buf_size, off_bit, sat);
     const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
-    val               = ((sat < WIDTH16) && neg) ? (uint16_t) (val | ~((1U << sat) - 1U)) : val;  // Sign extension
-    return neg ? (int16_t) ((-(int16_t) (uint16_t) ~val) - 1) : (int16_t) val;
+    val               = ((sat < WIDTH16) && neg) ? (uint16_t)(val | ~((1U << sat) - 1U)) : val;  // Sign extension
+    return neg ? (int16_t)((-(int16_t)(uint16_t) ~val) - 1) : (int16_t) val;
 }
 
 int32_t canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
@@ -285,8 +285,8 @@ int32_t canardDSDLGetI32(const uint8_t* const buf, const size_t buf_size, const 
     const uint8_t sat = (uint8_t) chooseMin(len_bit, WIDTH32);
     uint32_t      val = canardDSDLGetU32(buf, buf_size, off_bit, sat);
     const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
-    val               = ((sat < WIDTH32) && neg) ? (uint32_t) (val | ~((1UL << sat) - 1U)) : val;  // Sign extension
-    return neg ? (int32_t) ((-(int32_t) ~val) - 1) : (int32_t) val;
+    val               = ((sat < WIDTH32) && neg) ? (uint32_t)(val | ~((1UL << sat) - 1U)) : val;  // Sign extension
+    return neg ? (int32_t)((-(int32_t) ~val) - 1) : (int32_t) val;
 }
 
 int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const size_t off_bit, const uint8_t len_bit)
@@ -294,8 +294,8 @@ int64_t canardDSDLGetI64(const uint8_t* const buf, const size_t buf_size, const 
     const uint8_t sat = (uint8_t) chooseMin(len_bit, WIDTH64);
     uint64_t      val = canardDSDLGetU64(buf, buf_size, off_bit, sat);
     const bool    neg = (sat > 0U) && ((val & (1ULL << (sat - 1U))) != 0U);
-    val               = ((sat < WIDTH64) && neg) ? (uint64_t) (val | ~((1ULL << sat) - 1U)) : val;  // Sign extension
-    return neg ? (int64_t) ((-(int64_t) ~val) - 1) : (int64_t) val;
+    val               = ((sat < WIDTH64) && neg) ? (uint64_t)(val | ~((1ULL << sat) - 1U)) : val;  // Sign extension
+    return neg ? (int64_t)((-(int64_t) ~val) - 1) : (int64_t) val;
 }
 
 // --------------------------------------------- PUBLIC API - FLOAT16 ---------------------------------------------
@@ -345,9 +345,9 @@ CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
         {
             in.bits = f16inf.bits;
         }
-        out = (uint16_t) (in.bits >> 13U);  // NOLINT NOSONAR
+        out = (uint16_t)(in.bits >> 13U);  // NOLINT NOSONAR
     }
-    out |= (uint16_t) (sign >> 16U);  // NOLINT NOSONAR
+    out |= (uint16_t)(sign >> 16U);  // NOLINT NOSONAR
     return out;
 }
 
@@ -355,15 +355,15 @@ CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value)
 {
     // The no-lint statements suppress the warnings about magic numbers.
     // The no-lint statements suppress the warning about the use of union. This is required for low-level bit access.
-    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};              // NOLINT NOSONAR
-    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};              // NOLINT NOSONAR
-    Float32Bits       out     = {.bits = ((uint32_t) (value & 0x7FFFU)) << 13U};  // NOLINT NOSONAR
+    const Float32Bits magic   = {.bits = ((uint32_t) 0xEFU) << 23U};             // NOLINT NOSONAR
+    const Float32Bits inf_nan = {.bits = ((uint32_t) 0x8FU) << 23U};             // NOLINT NOSONAR
+    Float32Bits       out     = {.bits = ((uint32_t)(value & 0x7FFFU)) << 13U};  // NOLINT NOSONAR
     out.real *= magic.real;
     if (out.real >= inf_nan.real)
     {
         out.bits |= ((uint32_t) 0xFFU) << 23U;  // NOLINT NOSONAR
     }
-    out.bits |= ((uint32_t) (value & 0x8000U)) << 16U;  // NOLINT NOSONAR
+    out.bits |= ((uint32_t)(value & 0x8000U)) << 16U;  // NOLINT NOSONAR
     return out.real;
 }
 
