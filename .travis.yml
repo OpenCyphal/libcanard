@@ -15,14 +15,12 @@ matrix:
         - CC=gcc-10
         - CXX=g++-10
       script:
-        - sudo apt-get update
-        - sudo apt-get -y autoremove
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
         - sudo apt-get -yf install  # fix missing
-        - sudo apt-get -y upgrade
-        - sudo apt-get -y autoremove
-        - sudo apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
-        - sudo apt-get update
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf --allow-downgrades install libc6=2.31-0ubuntu9.2  # https://bugs.launchpad.net/ubuntu/+source/glibc/+bug/1926918
         - sudo apt-get -yfq install g++-10 g++-10-multilib gcc-10-multilib linux-libc-dev:i386
+
         # ANALYSIS
         # Using the build wrapper from Sonar and collecting the code coverage.
         # Define NDEBUG=1 to avoid assertion checks being reported as uncovered statements.
@@ -53,16 +51,13 @@ matrix:
 
     # -------------------- Clang --------------------
     - language: cpp
-      addons:
-        apt:
-          sources:
-            - sourceline: "ppa:ubuntu-toolchain-r/test"
-          packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
-            - g++-10
-            - g++-10-multilib
-            - gcc-10-multilib
-            - linux-libc-dev:i386
       script:
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf install  # fix missing
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf --allow-downgrades install libc6=2.31-0ubuntu9.2  # https://bugs.launchpad.net/ubuntu/+source/glibc/+bug/1926918
+        - sudo apt-get -yfq install g++-10 g++-10-multilib gcc-10-multilib linux-libc-dev:i386
+
         # Set up the toolchain.
         - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 11
         - sudo apt install clang-tidy-11 clang-format-11

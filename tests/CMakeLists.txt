@@ -25,7 +25,7 @@ if (NOT NO_STATIC_ANALYSIS)
     set(CMAKE_CXX_CLANG_TIDY ${clang_tidy})
 
     # clang-format
-    find_program(clang_format NAMES clang-format-12 clang-format-11 clang-format-10 clang-format)
+    find_program(clang_format NAMES clang-format-12 clang-format-11 clang-format)
     if (NOT clang_format)
         message(FATAL_ERROR "Could not locate clang-format")
     endif ()
