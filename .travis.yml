@@ -64,12 +64,12 @@ matrix:
             - linux-libc-dev:i386
       script:
         # Set up the toolchain.
-        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 10
-        - sudo apt install clang-tidy-10 clang-format-10
-        - clang++-10 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
+        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 11
+        - sudo apt install clang-tidy-11 clang-format-11
+        - clang++-11 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
         # DEBUG + format check
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Debug
+        - cmake -DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 tests -DCMAKE_BUILD_TYPE=Debug
         - make VERBOSE=1 && make test
         - make format VERBOSE=1
         - 'modified="$(git status --porcelain --untracked-files=no)"'
@@ -78,12 +78,12 @@ matrix:
         - make clean
 
         # RELEASE (skip static analysis because it is done in the DEBUG configuration)
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - cmake -DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
         - make VERBOSE=1 && make test
         - make clean
 
         # MINSIZEREL (skip static analysis because it is done in the DEBUG configuration)
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=MinSizeRel -DNO_STATIC_ANALYSIS=1
+        - cmake -DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 tests -DCMAKE_BUILD_TYPE=MinSizeRel -DNO_STATIC_ANALYSIS=1
         - make VERBOSE=1 && make test
         - make clean
 

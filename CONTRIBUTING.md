@@ -55,8 +55,8 @@ to prevent non-compliant code from being accepted into upstream.
 
 The following tools are required to conduct library development locally:
 
-- GCC v9 or newer.
-- Clang and Clang-Tools v9 or newer.
+- GCC v10 or newer.
+- Clang and Clang-Tools v11 or newer.
 - CMake v3.12 or newer.
 - An AMD64 machine.
 
