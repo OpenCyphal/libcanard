@@ -52,6 +52,7 @@ matrix:
     # -------------------- Clang --------------------
     - language: cpp
       script:
+        - echo 'APT::Get::AllowUnauthenticated "true";' | sudo tee /etc/apt/apt.conf.d/99insecure
         - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
         - sudo apt-get -yf install  # fix missing
         - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
