@@ -11,18 +11,18 @@ matrix:
           organization: uavcan
           token:
             secure: "LbaAOcguJspiraxAb9RNkwtGvWDh1aMTEPdz2MCbeICxIIiJ6LRoabD58rLvPsrNSWsR3AAep9Q551dDzT8c04UX+C67N3CZ/oof4DwBT+XQCSfB8FMj2QpbglJqwFPclYUorROjH31VwGcgIq3kfQq3Cw8G+nsL8vRaaJXsJb/KPp6MU698NGzHJIgRyn29VW76dW0NSxOv4ub3e6aKOnwfI+h1Ctx4p3hCdzd402PaZspv1VgEmirf5sVUJvE67PVIzlwov+CF+2PlrIpGUWI98Gl6HqYHv3hkvSP+4iLvCMD99Zmee4yLnCFY3xcJuZ8zKCRBBoquuUxdzK0f/4l9TZXePDXDMhaj3cXLlaAPWDw+emqTcm+hzP1mt/DaIqopAf54bQojVWELbL6QcjBNkphSvWBeIoyKWuUWU2LWJcJNPXFNUug//D99uXNurkzAIWR+lcsx6zO+cr4EN00N92W6hPt7mhKCF0prs7SvMleEi9mAbxvd4lOHFT56RvcB5ny6IapX9/q1+xm5iSoAzLhbvU1aUCnX74S/yFFejvClxxhW+P0bXYNtZ9RRfl8BdSgENTgA9RSnqdtIJGA4cU3OxIHDyJIC2cgmsE38u7QaMO49r1liJFH+xmDPa6bkGGHiPoHaPu9+g+wYFttK9FNt5ozyHY+VpjwTrY4="
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-10
-            - g++-10-multilib
-            - gcc-10-multilib
-            - linux-libc-dev:i386
       env:
         - CC=gcc-10
         - CXX=g++-10
       script:
+        - sudo apt-get update
+        - sudo apt-get -y autoremove
+        - sudo apt-get -yf install  # fix missing
+        - sudo apt-get -y upgrade
+        - sudo apt-get -y autoremove
+        - sudo apt-add-repository -y "ppa:ubuntu-toolchain-r/test"
+        - sudo apt-get update
+        - sudo apt-get -yfq install g++-10 g++-10-multilib gcc-10-multilib linux-libc-dev:i386
         # ANALYSIS
         # Using the build wrapper from Sonar and collecting the code coverage.
         # Define NDEBUG=1 to avoid assertion checks being reported as uncovered statements.
@@ -56,7 +56,7 @@ matrix:
       addons:
         apt:
           sources:
-            - ubuntu-toolchain-r-test
+            - sourceline: "ppa:ubuntu-toolchain-r/test"
           packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
             - g++-10
             - g++-10-multilib
