@@ -958,10 +958,11 @@ void canardTxPop(CanardInstance* const ins)
     }
 }
 
-int8_t canardRxAccept(CanardInstance* const    ins,
-                      const CanardFrame* const frame,
-                      const uint8_t            redundant_transport_index,
-                      CanardTransfer* const    out_transfer)
+int8_t canardRxAccept2(CanardInstance* const        ins,
+                       const CanardFrame* const     frame,
+                       const uint8_t                redundant_transport_index,
+                       CanardTransfer* const        out_transfer,
+                       CanardRxSubscription** const out_subscription)
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (out_transfer != NULL) && (frame != NULL) && (frame->extended_can_id <= CAN_EXT_ID_MASK) &&
@@ -980,6 +981,11 @@ int8_t canardRxAccept(CanardInstance* const    ins,
                 while ((sub != NULL) && (sub->_port_id != model.port_id))
                 {
                     sub = sub->_next;
+                }
+
+                if (out_subscription != NULL)
+                {
+                    *out_subscription = sub;  // Expose selected instance to the caller.
                 }
 
                 if (sub != NULL)
@@ -1004,6 +1010,14 @@ int8_t canardRxAccept(CanardInstance* const    ins,
     }
     CANARD_ASSERT(out <= 1);
     return out;
+}
+
+int8_t canardRxAccept(CanardInstance* const    ins,
+                      const CanardFrame* const frame,
+                      const uint8_t            redundant_transport_index,
+                      CanardTransfer* const    out_transfer)
+{
+    return canardRxAccept2(ins, frame, redundant_transport_index, out_transfer, NULL);
 }
 
 int8_t canardRxSubscribe(CanardInstance* const       ins,
