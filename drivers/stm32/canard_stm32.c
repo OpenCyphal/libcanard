@@ -210,7 +210,7 @@ int16_t canardSTM32Init(const CanardSTM32CANTimings* const timings,
     // CAN1 will be left in the initialization mode forever, in this mode it does not affect the bus at all.
 #endif
 
-    BXCAN->IER = 0;                                             //We need no interrupts
+    BXCAN->IER = 0;                                             // We need no interrupts
     BXCAN->MCR &= ~CANARD_STM32_CAN_MCR_SLEEP;                  // Exit sleep mode
     BXCAN->MCR |= CANARD_STM32_CAN_MCR_INRQ;                    // Request init
 
