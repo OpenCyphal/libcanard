@@ -65,6 +65,7 @@ typedef struct
  */
 #define CANARD_STM32_CAN1       ((volatile CanardSTM32CANType*)0x40006400U)
 #define CANARD_STM32_CAN2       ((volatile CanardSTM32CANType*)0x40006800U)
+#define CANARD_STM32_CAN3       ((volatile CanardSTM32CANType*)0x40003400U) //Memory location of CAN3 config register
 
 // CAN master control register
 
