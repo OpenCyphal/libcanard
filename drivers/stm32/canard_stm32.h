@@ -19,8 +19,12 @@ extern "C"
 #endif
 
 /**
- * Default condition is using CAN1. Set one of the following build config macros to use a differenet CAN peripheral
+ * Set this build config macro to 1 to use CAN1
+ * Setting this parameter when CAN1 is not available may not be detected at compile time!
  */
+#if !defined(CANARD_STM32_USE_CAN1)
+# define CANARD_STM32_USE_CAN1                                  0
+#endif
 
 /**
  * Set this build config macro to 1 to use CAN2 instead of CAN1
