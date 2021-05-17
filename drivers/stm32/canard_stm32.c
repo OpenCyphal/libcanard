@@ -15,7 +15,7 @@
 #define  BXCAN                                                  CANARD_STM32_CAN3
 #elif CANARD_STM32_USE_CAN2
 # define BXCAN                                                  CANARD_STM32_CAN2
-#else
+#elif CANARD_STM32_USE_CAN1
 # define BXCAN                                                  CANARD_STM32_CAN1
 #endif
 
