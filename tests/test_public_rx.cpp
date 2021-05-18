@@ -17,9 +17,9 @@ TEST_CASE("RxBasic0")
     using helpers::Instance;
     using exposed::RxSession;
 
-    Instance       ins;
-    CanardTransfer transfer{};
-    CanardRxSubscription *subscription = nullptr;
+    Instance              ins;
+    CanardTransfer        transfer{};
+    CanardRxSubscription* subscription = nullptr;
 
     const auto accept = [&](const std::uint8_t               redundant_transport_index,
                             const CanardMicrosecond          timestamp_usec,
@@ -155,7 +155,7 @@ TEST_CASE("RxBasic0")
     subscription = nullptr;
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             accept(0, 100'000'003, 0b100'10'0000111100'0011010'0011011, {5, 0b111'00001}));
-    REQUIRE(subscription != nullptr); // Subscription get assigned before error code
+    REQUIRE(subscription != nullptr);  // Subscription get assigned before error code
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
 
@@ -164,7 +164,7 @@ TEST_CASE("RxBasic0")
     subscription = nullptr;
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             accept(0, 100'000'003, 0b100'10'0000111100'0011010'0011011, {5, 0b111'00010}));
-    REQUIRE(subscription != nullptr); // Subscription get assigned before error code
+    REQUIRE(subscription != nullptr);  // Subscription get assigned before error code
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 5);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (3 * sizeof(RxSession) + 16 + 20));
 
@@ -216,9 +216,9 @@ TEST_CASE("RxAnonymous")
     using helpers::Instance;
     using exposed::RxSession;
 
-    Instance       ins;
-    CanardTransfer transfer{};
-    CanardRxSubscription *subscription = nullptr;
+    Instance              ins;
+    CanardTransfer        transfer{};
+    CanardRxSubscription* subscription = nullptr;
 
     const auto accept = [&](const std::uint8_t               redundant_transport_index,
                             const CanardMicrosecond          timestamp_usec,

@@ -174,11 +174,10 @@ public:
 
     void txPop() { canardTxPop(&canard_); }
 
-    [[nodiscard]] auto rxAccept(const CanardFrame& frame,
-                                const uint8_t      redundant_transport_index,
-                                CanardTransfer&    out_transfer,
-                                CanardRxSubscription** const out_subscription
-                               )
+    [[nodiscard]] auto rxAccept(const CanardFrame&           frame,
+                                const uint8_t                redundant_transport_index,
+                                CanardTransfer&              out_transfer,
+                                CanardRxSubscription** const out_subscription)
     {
         return canardRxAccept2(&canard_, &frame, redundant_transport_index, &out_transfer, out_subscription);
     }

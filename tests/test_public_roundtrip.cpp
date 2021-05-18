@@ -152,10 +152,13 @@ TEST_CASE("RoundtripSimple")
                          << " " << std::uint16_t(tail & 31U)                                                      //
                          << '\n';
 
-                CanardTransfer transfer{};
-                CanardRxSubscription *subscription = nullptr;
-                std::int8_t    result = ins_rx.rxAccept(*frame, 0, transfer, &subscription);
-                REQUIRE(0 == ins_rx.rxAccept(*frame, 1, transfer, &subscription));  // Redundant interface will never be used here.
+                CanardTransfer        transfer{};
+                CanardRxSubscription* subscription = nullptr;
+                std::int8_t           result       = ins_rx.rxAccept(*frame, 0, transfer, &subscription);
+                REQUIRE(0 == ins_rx.rxAccept(*frame,
+                                             1,
+                                             transfer,
+                                             &subscription));  // Redundant interface will never be used here.
                 if (result == 1)
                 {
                     CanardTransfer reference{};  // Fetch the reference transfer from the list of pending.
