@@ -11,18 +11,16 @@ matrix:
           organization: uavcan
           token:
             secure: "LbaAOcguJspiraxAb9RNkwtGvWDh1aMTEPdz2MCbeICxIIiJ6LRoabD58rLvPsrNSWsR3AAep9Q551dDzT8c04UX+C67N3CZ/oof4DwBT+XQCSfB8FMj2QpbglJqwFPclYUorROjH31VwGcgIq3kfQq3Cw8G+nsL8vRaaJXsJb/KPp6MU698NGzHJIgRyn29VW76dW0NSxOv4ub3e6aKOnwfI+h1Ctx4p3hCdzd402PaZspv1VgEmirf5sVUJvE67PVIzlwov+CF+2PlrIpGUWI98Gl6HqYHv3hkvSP+4iLvCMD99Zmee4yLnCFY3xcJuZ8zKCRBBoquuUxdzK0f/4l9TZXePDXDMhaj3cXLlaAPWDw+emqTcm+hzP1mt/DaIqopAf54bQojVWELbL6QcjBNkphSvWBeIoyKWuUWU2LWJcJNPXFNUug//D99uXNurkzAIWR+lcsx6zO+cr4EN00N92W6hPt7mhKCF0prs7SvMleEi9mAbxvd4lOHFT56RvcB5ny6IapX9/q1+xm5iSoAzLhbvU1aUCnX74S/yFFejvClxxhW+P0bXYNtZ9RRfl8BdSgENTgA9RSnqdtIJGA4cU3OxIHDyJIC2cgmsE38u7QaMO49r1liJFH+xmDPa6bkGGHiPoHaPu9+g+wYFttK9FNt5ozyHY+VpjwTrY4="
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-10
-            - g++-10-multilib
-            - gcc-10-multilib
-            - linux-libc-dev:i386
       env:
         - CC=gcc-10
         - CXX=g++-10
       script:
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf install  # fix missing
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf --allow-downgrades install libc6=2.31-0ubuntu9.2  # https://bugs.launchpad.net/ubuntu/+source/glibc/+bug/1926918
+        - sudo apt-get -yfq install g++-10 g++-10-multilib gcc-10-multilib linux-libc-dev:i386
+
         # ANALYSIS
         # Using the build wrapper from Sonar and collecting the code coverage.
         # Define NDEBUG=1 to avoid assertion checks being reported as uncovered statements.
@@ -53,23 +51,21 @@ matrix:
 
     # -------------------- Clang --------------------
     - language: cpp
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:  # Install a newer GCC because https://stackoverflow.com/a/51512150/1007777.
-            - g++-10
-            - g++-10-multilib
-            - gcc-10-multilib
-            - linux-libc-dev:i386
       script:
+        - echo 'APT::Get::AllowUnauthenticated "true";' | sudo tee /etc/apt/apt.conf.d/99insecure
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf install  # fix missing
+        - sudo apt-get update ; sudo apt-get -y upgrade ; sudo apt-get -y autoremove
+        - sudo apt-get -yf --allow-downgrades install libc6=2.31-0ubuntu9.2  # https://bugs.launchpad.net/ubuntu/+source/glibc/+bug/1926918
+        - sudo apt-get -yfq install g++-10 g++-10-multilib gcc-10-multilib linux-libc-dev:i386
+
         # Set up the toolchain.
-        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 10
-        - sudo apt install clang-tidy-10 clang-format-10
-        - clang++-10 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
+        - wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo ./llvm.sh 11
+        - sudo apt install clang-tidy-11 clang-format-11
+        - clang++-11 -E -x c++ - -v < /dev/null    # Print the Clang configuration for troubleshooting purposes.
 
         # DEBUG + format check
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Debug
+        - cmake -DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 tests -DCMAKE_BUILD_TYPE=Debug
         - make VERBOSE=1 && make test
         - make format VERBOSE=1
         - 'modified="$(git status --porcelain --untracked-files=no)"'
@@ -78,12 +74,12 @@ matrix:
         - make clean
 
         # RELEASE (skip static analysis because it is done in the DEBUG configuration)
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
+        - cmake -DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 tests -DCMAKE_BUILD_TYPE=Release -DNO_STATIC_ANALYSIS=1
         - make VERBOSE=1 && make test
         - make clean
 
         # MINSIZEREL (skip static analysis because it is done in the DEBUG configuration)
-        - cmake -DCMAKE_C_COMPILER=clang-10 -DCMAKE_CXX_COMPILER=clang++-10 tests -DCMAKE_BUILD_TYPE=MinSizeRel -DNO_STATIC_ANALYSIS=1
+        - cmake -DCMAKE_C_COMPILER=clang-11 -DCMAKE_CXX_COMPILER=clang++-11 tests -DCMAKE_BUILD_TYPE=MinSizeRel -DNO_STATIC_ANALYSIS=1
         - make VERBOSE=1 && make test
         - make clean
 

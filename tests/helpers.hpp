@@ -59,7 +59,7 @@ public:
     TestAllocator(const TestAllocator&)  = delete;
     TestAllocator(const TestAllocator&&) = delete;
     auto operator=(const TestAllocator&) -> TestAllocator& = delete;
-    auto operator=(const TestAllocator &&) -> TestAllocator& = delete;
+    auto operator=(const TestAllocator&&) -> TestAllocator& = delete;
 
     virtual ~TestAllocator()
     {
@@ -166,7 +166,7 @@ public:
     Instance(const Instance&)  = delete;
     Instance(const Instance&&) = delete;
     auto operator=(const Instance&) -> Instance& = delete;
-    auto operator=(const Instance &&) -> Instance& = delete;
+    auto operator=(const Instance&&) -> Instance& = delete;
 
     [[nodiscard]] auto txPush(const CanardTransfer& transfer) { return canardTxPush(&canard_, &transfer); }
 
@@ -174,11 +174,12 @@ public:
 
     void txPop() { canardTxPop(&canard_); }
 
-    [[nodiscard]] auto rxAccept(const CanardFrame& frame,
-                                const uint8_t      redundant_transport_index,
-                                CanardTransfer&    out_transfer)
+    [[nodiscard]] auto rxAccept(const CanardFrame&           frame,
+                                const uint8_t                redundant_transport_index,
+                                CanardTransfer&              out_transfer,
+                                CanardRxSubscription** const out_subscription)
     {
-        return canardRxAccept(&canard_, &frame, redundant_transport_index, &out_transfer);
+        return canardRxAccept2(&canard_, &frame, redundant_transport_index, &out_transfer, out_subscription);
     }
 
     [[nodiscard]] auto rxSubscribe(const CanardTransferKind transfer_kind,

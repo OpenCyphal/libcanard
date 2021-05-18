@@ -25,9 +25,7 @@
 #endif
 
 /// This macro is needed only for testing and for library development. Do not redefine this in production.
-#if defined(CANARD_CONFIG_EXPOSE_PRIVATE) && CANARD_CONFIG_EXPOSE_PRIVATE
-#    define CANARD_PRIVATE
-#else  // Consider defining an extra compilation option that turns this into "static inline"?
+#ifndef CANARD_PRIVATE
 #    define CANARD_PRIVATE static
 #endif
 
@@ -62,16 +60,11 @@
 
 // --------------------------------------------- PRIMITIVE SERIALIZATION ---------------------------------------------
 
-CANARD_PRIVATE size_t chooseMin(size_t a, size_t b);
 CANARD_PRIVATE size_t chooseMin(size_t a, size_t b)
 {
     return (a < b) ? a : b;
 }
 
-CANARD_PRIVATE size_t getBitCopySize(const size_t  buf_size_bytes,
-                                     const size_t  offset_bit,
-                                     const size_t  requested_length_bit,
-                                     const uint8_t value_length_bit);
 CANARD_PRIVATE size_t getBitCopySize(const size_t  buf_size_bytes,
                                      const size_t  offset_bit,
                                      const size_t  requested_length_bit,
@@ -319,7 +312,6 @@ typedef union  // NOSONAR
     CanardDSDLFloat32 real;
 } Float32Bits;
 
-CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value);
 CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
 {
     // The no-lint statements suppress the warnings about magic numbers.
@@ -359,7 +351,6 @@ CANARD_PRIVATE uint16_t float16Pack(const CanardDSDLFloat32 value)
     return out;
 }
 
-CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value);
 CANARD_PRIVATE CanardDSDLFloat32 float16Unpack(const uint16_t value)
 {
     // The no-lint statements suppress the warnings about magic numbers.

@@ -109,7 +109,7 @@ extern "C" {
 /// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 1
-#define CANARD_VERSION_MINOR 0
+#define CANARD_VERSION_MINOR 1
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
@@ -262,10 +262,7 @@ typedef struct
 /// over the bus by creating such subscription objects. Frames that carry data for which there is no active
 /// subscription will be silently dropped by the library.
 ///
-/// WARNING: SUBSCRIPTION INSTANCES SHALL NOT BE COPIED OR MUTATED BY THE APPLICATION.
-///
-/// Every field is named starting with an underscore to emphasize that the application shall not modify it.
-/// Unfortunately, C, being such a limited language, does not allow us to construct a better API.
+/// WARNING: SUBSCRIPTION INSTANCES SHALL NOT BE COPIED OR MUTATED BY THE APPLICATION (except user_reference).
 ///
 /// The memory footprint of a subscription is large. On a 32-bit platform it slightly exceeds half a KiB.
 /// This is an intentional time-memory trade-off: use a large look-up table to ensure predictable temporal properties.
@@ -291,6 +288,10 @@ typedef struct CanardRxSubscription
     CanardMicrosecond _transfer_id_timeout_usec;  ///< Internal use only.
     size_t            _extent;                    ///< Internal use only.
     CanardPortID      _port_id;                   ///< Internal use only.
+
+    /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
+    /// Its purpose is to simplify integration with OOP interfaces.
+    void* user_reference;
 } CanardRxSubscription;
 
 /// A pointer to the memory allocation function. The semantics are similar to malloc():
@@ -464,6 +465,12 @@ void canardTxPop(CanardInstance* const ins);
 /// The index of the transport from which the transfer is accepted is always the same as redundant_transport_index
 /// of the current invocation, so the application can always determine which transport has delivered the transfer.
 ///
+/// Upon return, the out_subscription pointer will point to the instance of CanardRxSubscription that accepted this
+/// frame; if no matching subscription exists (i.e., frame discarded), the pointer will be NULL.
+/// If this information is not relevant, set out_subscription to NULL.
+/// The purpose of this argument is to allow integration with OOP adapters built on top of libcanard; see also the
+/// user_reference provided in CanardRxSubscription.
+///
 /// The function invokes the dynamic memory manager in the following cases only:
 ///
 ///     1. New memory for a session state object is allocated when a new session is initiated.
@@ -544,6 +551,14 @@ void canardTxPop(CanardInstance* const ins);
 /// frame buffer is allocated once from the heap (which may be done from the interrupt handler if the heap is
 /// sufficiently deterministic), and in the case of single-frame transfer it is then carried over to the application
 /// without copying. This design somewhat complicates the media layer though.
+int8_t canardRxAccept2(CanardInstance* const        ins,
+                       const CanardFrame* const     frame,
+                       const uint8_t                redundant_transport_index,
+                       CanardTransfer* const        out_transfer,
+                       CanardRxSubscription** const out_subscription);
+
+/// This is a deprecated wrapper over canardRxAccept2() without the out_subscription.
+/// It is kept for backward compatibility and may be eventually removed in a future release.
 int8_t canardRxAccept(CanardInstance* const    ins,
                       const CanardFrame* const frame,
                       const uint8_t            redundant_transport_index,

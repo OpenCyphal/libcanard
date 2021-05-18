@@ -39,7 +39,7 @@ struct TxQueueItem final
     TxQueueItem(const TxQueueItem&)  = delete;
     TxQueueItem(const TxQueueItem&&) = delete;
     auto operator=(const TxQueueItem&) -> TxQueueItem& = delete;
-    auto operator=(const TxQueueItem &&) -> TxQueueItem& = delete;
+    auto operator=(const TxQueueItem&&) -> TxQueueItem& = delete;
 };
 
 struct RxSession
