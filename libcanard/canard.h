@@ -268,7 +268,7 @@ typedef struct
 /// This is an intentional time-memory trade-off: use a large look-up table to ensure predictable temporal properties.
 typedef struct CanardRxSubscription
 {
-    struct CanardRxSubscription* _next;  ///< Internal use only.
+    struct CanardRxSubscription* next;  ///< Read-only DO NOT MODIFY THIS
 
     /// The current architecture is an acceptable middle ground between worst-case execution time and memory
     /// consumption. Instead of statically pre-allocating a dedicated RX session for each remote node-ID here in
@@ -285,9 +285,9 @@ typedef struct CanardRxSubscription
     /// but more memory-efficient approach.
     struct CanardInternalRxSession* _sessions[CANARD_NODE_ID_MAX + 1U];
 
-    CanardMicrosecond _transfer_id_timeout_usec;  ///< Internal use only.
-    size_t            _extent;                    ///< Internal use only.
-    CanardPortID      _port_id;                   ///< Internal use only.
+    CanardMicrosecond transfer_id_timeout_usec;  ///< Read-only DO NOT MODIFY THIS
+    size_t            extent;                    ///< Read-only DO NOT MODIFY THIS
+    CanardPortID      port_id;                   ///< Read-only DO NOT MODIFY THIS
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
@@ -347,8 +347,10 @@ struct CanardInstance
     CanardMemoryAllocate memory_allocate;
     CanardMemoryFree     memory_free;
 
-    /// These fields are for internal use only. Do not access from the application.
-    CanardRxSubscription*             _rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
+    /// Read-only DO NOT MODIFY THIS
+    CanardRxSubscription* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
+
+    /// This field is for internal use only. Do not access from the application.
     struct CanardInternalTxQueueItem* _tx_queue;
 };
 

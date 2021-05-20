@@ -38,9 +38,9 @@ TEST_CASE("RxBasic0")
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) + 16);  // A session and a 16-byte payload buffer.
 
     // No subscriptions by default.
-    REQUIRE(ins.getInstance()._rx_subscriptions[0] == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1] == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2] == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[0] == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[1] == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[2] == nullptr);
 
     // A valid single-frame transfer for which there is no subscription.
     subscription = nullptr;
@@ -51,56 +51,56 @@ TEST_CASE("RxBasic0")
     CanardRxSubscription sub_msg{};
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 32, 2'000'000, sub_msg));  // New.
     REQUIRE(0 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 1'000'000, sub_msg));  // Replaced.
-    REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_next == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_port_id == 0b0110011001100);
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_extent == 16);
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_transfer_id_timeout_usec == 1'000'000);
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));
-    REQUIRE(ins.getInstance()._rx_subscriptions[1] == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2] == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
+    REQUIRE(ins.getInstance().rx_subscriptions[0]->next == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[0]->port_id == 0b0110011001100);
+    REQUIRE(ins.getInstance().rx_subscriptions[0]->extent == 16);
+    REQUIRE(ins.getInstance().rx_subscriptions[0]->transfer_id_timeout_usec == 1'000'000);
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[0]->_sessions));
+    REQUIRE(ins.getInstance().rx_subscriptions[1] == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[2] == nullptr);
 
     // Create a request subscription.
     CanardRxSubscription sub_req{};
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindRequest, 0b0000110011, 20, 3'000'000, sub_req));
-    REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1] == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_next == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_port_id == 0b0000110011);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_extent == 20);
-    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_transfer_id_timeout_usec == 3'000'000);
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[2]->_sessions));
+    REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
+    REQUIRE(ins.getInstance().rx_subscriptions[1] == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[2] == &sub_req);
+    REQUIRE(ins.getInstance().rx_subscriptions[2]->next == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[2]->port_id == 0b0000110011);
+    REQUIRE(ins.getInstance().rx_subscriptions[2]->extent == 20);
+    REQUIRE(ins.getInstance().rx_subscriptions[2]->transfer_id_timeout_usec == 3'000'000);
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[2]->_sessions));
 
     // Create a response subscription.
     CanardRxSubscription sub_res{};
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000111100, 10, 100'000, sub_res));
-    REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1] == &sub_res);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next == nullptr);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000111100);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_extent == 10);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 100'000);
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[1]->_sessions));
-    REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
+    REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
+    REQUIRE(ins.getInstance().rx_subscriptions[1] == &sub_res);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->next == nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->port_id == 0b0000111100);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->extent == 10);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->transfer_id_timeout_usec == 100'000);
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[1]->_sessions));
+    REQUIRE(ins.getInstance().rx_subscriptions[2] == &sub_req);
 
     // Create a second response subscription.
     CanardRxSubscription sub_res2{};
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000000000, 10, 1'000, sub_res2));
-    REQUIRE(ins.getInstance()._rx_subscriptions[0] == &sub_msg);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1] == &sub_res2);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next == &sub_res);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_port_id == 0b0000000000);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_extent == 10);
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_transfer_id_timeout_usec == 1'000);
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[1]->_sessions));
-    REQUIRE(ins.getInstance()._rx_subscriptions[2] == &sub_req);
+    REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
+    REQUIRE(ins.getInstance().rx_subscriptions[1] == &sub_res2);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->next == &sub_res);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->port_id == 0b0000000000);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->extent == 10);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->transfer_id_timeout_usec == 1'000);
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[1]->_sessions));
+    REQUIRE(ins.getInstance().rx_subscriptions[2] == &sub_req);
 
     // Accepted message.
     subscription = nullptr;
     REQUIRE(1 == accept(0, 100'000'001, 0b001'00'0'11'0110011001100'0'0100111, {0b111'00000}));
     REQUIRE(subscription != nullptr);
-    REQUIRE(subscription->_port_id == 0b0110011001100);
+    REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
@@ -111,7 +111,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == std::memcmp(transfer.payload, "", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 16));
-    REQUIRE(ins.getInstance()._rx_subscriptions[0]->_sessions[0b0100111] != nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[0]->_sessions[0b0100111] != nullptr);
     const auto* msg_payload = transfer.payload;  // Will need it later.
 
     // Provide the space for an extra session and its payload.
@@ -132,7 +132,7 @@ TEST_CASE("RxBasic0")
     subscription = nullptr;
     REQUIRE(1 == accept(0, 100'000'002, 0b011'11'0000110011'0011010'0100101, {1, 2, 3, 0b111'00100}));
     REQUIRE(subscription != nullptr);
-    REQUIRE(subscription->_port_id == 0b0000110011);
+    REQUIRE(subscription->port_id == 0b0000110011);
     REQUIRE(transfer.timestamp_usec == 100'000'002);
     REQUIRE(transfer.priority == CanardPriorityHigh);
     REQUIRE(transfer.transfer_kind == CanardTransferKindRequest);
@@ -143,7 +143,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);  // Two SESSIONS and two PAYLOAD BUFFERS.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
-    REQUIRE(ins.getInstance()._rx_subscriptions[2]->_sessions[0b0100101] != nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[2]->_sessions[0b0100101] != nullptr);
 
     // Response transfer not accepted because the local node has a different node-ID.
     // There is no dynamic memory available, but it doesn't matter because a rejection does not require allocation.
@@ -181,7 +181,7 @@ TEST_CASE("RxBasic0")
     subscription = nullptr;
     REQUIRE(1 == accept(0, 100'000'003, 0b100'10'0000111100'0011010'0011011, {5, 0b111'00011}));
     REQUIRE(subscription != nullptr);
-    REQUIRE(subscription->_port_id == 0b0000111100);
+    REQUIRE(subscription->port_id == 0b0000111100);
     REQUIRE(transfer.timestamp_usec == 100'000'003);
     REQUIRE(transfer.priority == CanardPriorityNominal);
     REQUIRE(transfer.transfer_kind == CanardTransferKindResponse);
@@ -192,7 +192,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 10 + 20));
-    REQUIRE(ins.getInstance()._rx_subscriptions[1]->_next->_sessions[0b0011011] != nullptr);
+    REQUIRE(ins.getInstance().rx_subscriptions[1]->next->_sessions[0b0011011] != nullptr);
 
     // Bad frames shall be rejected silently.
     subscription = nullptr;
@@ -252,7 +252,7 @@ TEST_CASE("RxAnonymous")
                         0b001'01'0'11'0110011001100'0'0100111,  //
                         {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 0b111'00000}));
     REQUIRE(subscription != nullptr);
-    REQUIRE(subscription->_port_id == 0b0110011001100);
+    REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
@@ -263,13 +263,13 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));  // No RX states!
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[0]->_sessions));  // No RX states!
 
     // Anonymous message not accepted because OOM. The transfer shall remain unmodified by the call, so we re-check it.
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             accept(0, 100'000'001, 0b001'01'0'11'0110011001100'0'0100111, {3, 2, 1, 0b111'00000}));
     REQUIRE(subscription != nullptr);
-    REQUIRE(subscription->_port_id == 0b0110011001100);
+    REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
@@ -280,7 +280,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));  // No RX states!
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[0]->_sessions));  // No RX states!
 
     // Release the memory.
     ins.getAllocator().deallocate(transfer.payload);
@@ -291,7 +291,7 @@ TEST_CASE("RxAnonymous")
     subscription = nullptr;
     REQUIRE(1 == accept(0, 100'000'001, 0b001'01'0'11'0110011001100'0'0100111, {1, 2, 3, 4, 5, 6, 0b111'00000}));
     REQUIRE(subscription != nullptr);
-    REQUIRE(subscription->_port_id == 0b0110011001100);
+    REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
     REQUIRE(transfer.priority == CanardPriorityImmediate);
     REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
@@ -302,7 +302,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 6);   // Smaller allocation.
-    REQUIRE(ensureAllNullptr(ins.getInstance()._rx_subscriptions[0]->_sessions));  // No RX states!
+    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[0]->_sessions));  // No RX states!
 }
 
 TEST_CASE("RxSubscriptionErrors")
