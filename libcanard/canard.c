@@ -792,7 +792,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(subscription != NULL);
-    CANARD_ASSERT(subscription->_port_id == frame->port_id);
+    CANARD_ASSERT(subscription->port_id == frame->port_id);
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(frame->payload != NULL);
     CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
@@ -833,8 +833,8 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
                                   subscription->_sessions[frame->source_node_id],
                                   frame,
                                   redundant_transport_index,
-                                  subscription->_transfer_id_timeout_usec,
-                                  subscription->_extent,
+                                  subscription->transfer_id_timeout_usec,
+                                  subscription->extent,
                                   out_transfer);
         }
     }
@@ -845,7 +845,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
         // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
         // independent of the input data and the memory shall be free-able.
         const size_t payload_size =
-            (subscription->_extent < frame->payload_size) ? subscription->_extent : frame->payload_size;
+            (subscription->extent < frame->payload_size) ? subscription->extent : frame->payload_size;
         void* const payload = ins->memory_allocate(ins, payload_size);
         if (payload != NULL)
         {
@@ -884,13 +884,13 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
     CANARD_ASSERT(memory_allocate != NULL);
     CANARD_ASSERT(memory_free != NULL);
     const CanardInstance out = {
-        .user_reference    = NULL,
-        .mtu_bytes         = CANARD_MTU_CAN_FD,
-        .node_id           = CANARD_NODE_ID_UNSET,
-        .memory_allocate   = memory_allocate,
-        .memory_free       = memory_free,
-        ._rx_subscriptions = {NULL, NULL, NULL},
-        ._tx_queue         = NULL,
+        .user_reference   = NULL,
+        .mtu_bytes        = CANARD_MTU_CAN_FD,
+        .node_id          = CANARD_NODE_ID_UNSET,
+        .memory_allocate  = memory_allocate,
+        .memory_free      = memory_free,
+        .rx_subscriptions = {NULL, NULL, NULL},
+        ._tx_queue        = NULL,
     };
     return out;
 }
@@ -977,10 +977,10 @@ int8_t canardRxAccept2(CanardInstance* const        ins,
                 // subscriptions. Note also that this one of the two variable-complexity operations in the RX pipeline;
                 // the other one is memcpy(). Excepting these two cases, the entire RX pipeline logic contains neither
                 // loops nor recursion.
-                CanardRxSubscription* sub = ins->_rx_subscriptions[(size_t) model.transfer_kind];
-                while ((sub != NULL) && (sub->_port_id != model.port_id))
+                CanardRxSubscription* sub = ins->rx_subscriptions[(size_t) model.transfer_kind];
+                while ((sub != NULL) && (sub->port_id != model.port_id))
                 {
-                    sub = sub->_next;
+                    sub = sub->next;
                 }
 
                 if (out_subscription != NULL)
@@ -990,7 +990,7 @@ int8_t canardRxAccept2(CanardInstance* const        ins,
 
                 if (sub != NULL)
                 {
-                    CANARD_ASSERT(sub->_port_id == model.port_id);
+                    CANARD_ASSERT(sub->port_id == model.port_id);
                     out = rxAcceptFrame(ins, sub, &model, redundant_transport_index, out_transfer);
                 }
                 else
@@ -1044,12 +1044,12 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
                 // We could accept an extra argument that would instruct us to pre-allocate sessions here?
                 out_subscription->_sessions[i] = NULL;
             }
-            out_subscription->_transfer_id_timeout_usec = transfer_id_timeout_usec;
-            out_subscription->_extent                   = extent;
-            out_subscription->_port_id                  = port_id;
-            out_subscription->_next                     = ins->_rx_subscriptions[tk];
-            ins->_rx_subscriptions[tk]                  = out_subscription;
-            out                                         = (out > 0) ? 0 : 1;
+            out_subscription->transfer_id_timeout_usec = transfer_id_timeout_usec;
+            out_subscription->extent                   = extent;
+            out_subscription->port_id                  = port_id;
+            out_subscription->next                     = ins->rx_subscriptions[tk];
+            ins->rx_subscriptions[tk]                  = out_subscription;
+            out                                        = (out > 0) ? 0 : 1;
         }
     }
     return out;
@@ -1064,25 +1064,25 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
         CanardRxSubscription* prv = NULL;
-        CanardRxSubscription* sub = ins->_rx_subscriptions[tk];
-        while ((sub != NULL) && (sub->_port_id != port_id))
+        CanardRxSubscription* sub = ins->rx_subscriptions[tk];
+        while ((sub != NULL) && (sub->port_id != port_id))
         {
             prv = sub;
-            sub = sub->_next;
+            sub = sub->next;
         }
 
         if (sub != NULL)
         {
-            CANARD_ASSERT(sub->_port_id == port_id);
+            CANARD_ASSERT(sub->port_id == port_id);
             out = 1;
 
             if (prv != NULL)
             {
-                prv->_next = sub->_next;
+                prv->next = sub->next;
             }
             else
             {
-                ins->_rx_subscriptions[tk] = sub->_next;
+                ins->rx_subscriptions[tk] = sub->next;
             }
 
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
