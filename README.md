@@ -229,6 +229,12 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
 
+### v1.1
+
+- Add new API function `canardRxAccept2()`, deprecate `canardRxAccept()`.
+- Provide user references in `CanardRxSubscription`.
+- Promote certain internal fields to the public API to allow introspection.
+
 ### v1.0
 
 The initial release.
