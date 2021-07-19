@@ -383,6 +383,20 @@ struct CanardInstance
     CanardTreeNode* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
 };
 
+/// CAN acceptance filter configuration with an extended 29-bit ID utilizing an ID + mask filter scheme.
+/// Filter configuration can be programmed into a CAN controller to filter out irrelevant messages in hardware.
+/// This allows the software application to reduce CPU load spent on processing irrelevant messages.
+typedef struct CanardFilter
+{
+    /// 29-bit extended ID. Defines the extended CAN ID to filter incoming frames against.
+    /// The bits above 29-th shall be zero.
+    uint32_t extended_can_id;
+    /// 29-bit extended mask. Defines the bitmask used to enable/disable bits used to filter messages.
+    /// Only bits that are enabled are compared to the extended_can_id for filtering.
+    /// The bits above 29-th shall be zero.
+    uint32_t extended_mask;
+} CanardFilter;
+
 /// Construct a new library instance.
 /// The default values will be assigned as specified in the structure field documentation.
 /// If any of the pointers are NULL, the behavior is undefined.
@@ -634,6 +648,50 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
 int8_t canardRxUnsubscribe(CanardInstance* const    ins,
                            const CanardTransferKind transfer_kind,
                            const CanardPortID       port_id);
+
+/// Utilities for generating CAN controller hardware acceptance filter configurations
+/// to accept specific subjects, services, or nodes.
+///
+/// Complex applications will likely subscribe to more subject IDs than there are
+/// acceptance filters available in the CAN hardware. In this case, the application
+/// should implement filter consolidation. See canardConsolidateFilters()
+/// as well as the UAVCAN specification for details.
+
+/// Generate an acceptance filter configuration to accept a specific subject ID.
+CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id);
+
+/// Generate an acceptance filter configuration to accept both requests and responses for a specific service.
+///
+/// Users may prefer to instead use a catch-all acceptance filter configuration for accepting
+/// all service requests and responses targeted at the specified local node ID.
+/// See canardMakeFilterForServices() for this.
+CanardFilter canardMakeFilterForService(const CanardPortID service_id, const CanardNodeID local_node_id);
+
+/// Generate an acceptance filter configuration to accept all service
+/// requests and responses targeted to the specified local node ID.
+///
+/// Due to the relatively low frequency of service transfers expected on a network,
+/// and the fact that a service directed at a specific node is not likely to be rejected by that node,
+/// a user may prefer to use this over canardMakeFilterForService()
+/// in order to simplify the API usage and reduce the number of required hardware CAN acceptance filters.
+CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id);
+
+/// Consolidate two acceptance filter configurations into a single configuration.
+///
+/// Complex applications will likely subscribe to more subject IDs than there are
+/// acceptance filters available in the CAN hardware. In this case, the application
+/// should implement filter consolidation. While this may make it impossible to create
+/// a 'perfect' filter that only accepts desired subject IDs, the application should apply
+/// consolidation in a manner that minimizes the number of undesired messages that pass
+/// through the hardware acceptance filters and require software filtering (implemented by canardRxSubscribe).
+///
+/// While optimal choice of filter consolidation is a function of the number of available hardware filters,
+/// the set of transfers needed by the application, and the expected frequency of occurence
+/// of all possible distinct transfers on the bus, it is possible to generate a quasi-optimal configuration
+/// if information about the frequency of occurence of different transfers is not known.
+/// For details, see the "Automatic hardware acceptance filter configuration" note under the UAVCAN/CAN section
+/// in the Transport Layer chapter of the UAVCAN specification.
+CanardFilter canardConsolidateFilters(const CanardFilter* const a, const CanardFilter* const b);
 
 #ifdef __cplusplus
 }
