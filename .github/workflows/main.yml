@@ -1,0 +1,33 @@
+name: Main Workflow
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  release:
+    env:
+      BUILD_TYPE: Release
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DNO_STATIC_ANALYSIS=1 tests
+
+    - name: Build
+      working-directory: ${{github.workspace}}/build
+      run: make VERBOSE=1
+
+    - name: Test
+      working-directory: ${{github.workspace}}/build
+      run: make test
+      
