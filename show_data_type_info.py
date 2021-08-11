@@ -6,19 +6,13 @@
 # Execute with --help to get usage info.
 #
 
-''''which python3 >/dev/null 2>&1 && exec python3 "$0" "$@" # '''
-''''which python  >/dev/null 2>&1 && exec python  "$0" "$@" # '''
-''''which python2 >/dev/null 2>&1 && exec python2 "$0" "$@" # '''
-''''exec echo "Python not found" >&2 # '''
-
-# We can't import from __future__ here because of the wickedness above.
 import sys  # noqa: E402
 import getopt  # noqa: E402
 
 try:
-    import uavcan
+    import pyuavcan_v0 as uavcan
 except ImportError:
-    sys.stderr.write('PyUAVCAN is not installed. Please install from PIP: sudo pip3 install uavcan\n')
+    sys.stderr.write('PyUAVCAN v0 is not installed. Please install from PIP: pip install pyuavcan_v0\n')
     exit(1)
 
 
