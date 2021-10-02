@@ -492,7 +492,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
             }
             que->size += sq.size;
             CANARD_ASSERT(que->size <= que->capacity);
-            CANARD_ASSERT(sq.size <= INT32_MAX);
+            CANARD_ASSERT((sq.size + 0ULL) <= INT32_MAX);  // +0 is to suppress warning.
             out = (int32_t) sq.size;
         }
         else  // Failed to allocate at least one frame in the queue! Remove all frames and abort.
