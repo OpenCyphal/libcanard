@@ -1,10 +1,6 @@
 name: Main Workflow
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master, actions ]
+on: [push, pull_request]
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
@@ -173,7 +169,7 @@ jobs:
         SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
       run: |
         mkdir -p $HOME/.sonar
-        curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }} 
+        curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }}
         unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
         echo "$HOME/.sonar/sonar-scanner-${{ env.SONAR_SCANNER_VERSION }}-linux/bin" >> $GITHUB_PATH
 
