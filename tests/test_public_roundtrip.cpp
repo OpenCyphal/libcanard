@@ -56,8 +56,9 @@ TEST_CASE("RoundtripSimple")
     ins_rx.getAllocator().setAllocationCeiling(rx_worst_case_memory_consumption);  // This is guaranteed to be enough.
 
     helpers::Instance ins_tx;
+    helpers::TxQueue  que_tx(1024UL * 1024U * 1024U);
     ins_tx.setNodeID(99);
-    ins_tx.getAllocator().setAllocationCeiling(1024 * 1024 * 1024);
+    ins_tx.getAllocator().setAllocationCeiling(1024UL * 1024U * 1024U);
 
     std::unordered_map<CanardMicrosecond, CanardTransfer> pending_transfers;
 
@@ -97,7 +98,7 @@ TEST_CASE("RoundtripSimple")
             bool sleep = false;
             {
                 std::lock_guard locker(lock);
-                const auto      result = ins_tx.txPush(tran);
+                const auto      result = que_tx.push(&ins_tx.getInstance(), tran);
                 if (result > 0)
                 {
                     pending_transfers.emplace(tran.timestamp_usec, tran);
@@ -131,8 +132,8 @@ TEST_CASE("RoundtripSimple")
             const CanardFrame* frame = nullptr;
             {
                 std::lock_guard locker(lock);
-                frame = ins_tx.txPeek();  // Peek-pop form an atomic transaction.
-                ins_tx.txPop();           // No effect if the queue is empty.
+                frame = que_tx.peek();  // Peek-pop form an atomic transaction.
+                que_tx.pop();           // No effect if the queue is empty.
                 if (frame != nullptr)
                 {
                     REQUIRE(frames_in_flight > 0);
@@ -231,13 +232,13 @@ TEST_CASE("RoundtripSimple")
     for (const auto [k, v] : pending_transfers)
     {
         REQUIRE(k == v.timestamp_usec);
-        std::cout << "#" << i << "/" << std::size(pending_transfers) << ":"   //
-                  << " ts=" << v.timestamp_usec                               //
-                  << " prio=" << static_cast<std::uint16_t>(v.priority)       //
-                  << " kind=" << static_cast<std::uint16_t>(v.transfer_kind)  //
-                  << " port=" << v.port_id                                    //
-                  << " nid=" << static_cast<std::uint16_t>(v.remote_node_id)  //
-                  << " tid=" << static_cast<std::uint16_t>(v.transfer_id)     //
+        std::cout << "#" << i++ << "/" << std::size(pending_transfers) << ":"  //
+                  << " ts=" << v.timestamp_usec                                //
+                  << " prio=" << static_cast<std::uint16_t>(v.priority)        //
+                  << " kind=" << static_cast<std::uint16_t>(v.transfer_kind)   //
+                  << " port=" << v.port_id                                     //
+                  << " nid=" << static_cast<std::uint16_t>(v.remote_node_id)   //
+                  << " tid=" << static_cast<std::uint16_t>(v.transfer_id)      //
                   << std::endl;
     }
 

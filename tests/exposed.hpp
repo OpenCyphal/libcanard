@@ -94,7 +94,7 @@ auto txMakeTailByte(const bool         start_of_transfer,
 
 auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
 
-auto txFindQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
+auto txFindQueueSupremum(const CanardTxQueue* const que, const std::uint32_t can_id) -> TxQueueItem*;
 
 auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result) -> bool;
 

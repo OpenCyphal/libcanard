@@ -243,6 +243,28 @@ typedef struct
     const void* payload;
 } CanardTransfer;
 
+/// Prioritized transmission queue that keeps CAN frames destined for for transmission via one CAN interface.
+/// Applications with redundant interfaces are expected to have one instance of this type per interface.
+/// Applications that are not interested in transmission may have zero queues.
+/// Push is O(n), peek/pop O(1), exactly one heap allocation per element.
+/// API functions that work with this type are named "canardTx*()", find them below.
+typedef struct CanardTxQueue
+{
+    /// The maximum number of frames this queue is allowed to contain. An attempt to push more will fail with an
+    /// out-of-memory error even if the heap is not exhausted. This value can be changed by the user at any moment.
+    size_t capacity;
+
+    /// The number of frames that are currently contained in the queue, initially zero. Do not modify this field!
+    size_t size;
+
+    /// Internal use only; do not modify this field.
+    struct CanardInternalTxQueueItem* head;
+
+    /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
+    /// Its purpose is to simplify integration with OOP interfaces.
+    void* user_reference;
+} CanardTxQueue;
+
 /// Transfer subscription state. The application can register its interest in a particular kind of data exchanged
 /// over the bus by creating such subscription objects. Frames that carry data for which there is no active
 /// subscription will be silently dropped by the library.
@@ -268,7 +290,7 @@ typedef struct CanardRxSubscription
     /// just pointers, but it would push the size of this instance from about 0.5 KiB to ~3 KiB for a typical 32-bit
     /// system. Since this is a general-purpose library, we have to pick a middle ground so we use the more complex
     /// but more memory-efficient approach.
-    struct CanardInternalRxSession* _sessions[CANARD_NODE_ID_MAX + 1U];
+    struct CanardInternalRxSession* sessions[CANARD_NODE_ID_MAX + 1U];
 
     CanardMicrosecond transfer_id_timeout_usec;  ///< Read-only DO NOT MODIFY THIS
     size_t            extent;                    ///< Read-only DO NOT MODIFY THIS
@@ -334,9 +356,6 @@ struct CanardInstance
 
     /// Read-only DO NOT MODIFY THIS
     CanardRxSubscription* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
-
-    /// This field is for internal use only. Do not access from the application.
-    struct CanardInternalTxQueueItem* _tx_queue;
 };
 
 /// Construct a new library instance.
@@ -344,12 +363,19 @@ struct CanardInstance
 /// If any of the pointers are NULL, the behavior is undefined.
 ///
 /// The instance does not hold any resources itself except for the allocated memory.
-/// If the instance should be de-initialized, the application shall clear the TX queue by calling the pop function
-/// repeatedly, and remove all RX subscriptions. Once that is done, the instance will be holding no memory resources,
-/// so it can be discarded freely.
+/// To safely discard it, simply remove all existing subscriptions, and don't forget about the TX queues.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
 CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const CanardMemoryFree memory_free);
+
+/// Construct a new transmission queue instance with the specified capacity.
+/// No memory allocation is going to take place until the queue is actually pushed to.
+///
+/// The instance does not hold any resources itself except for the allocated memory.
+/// To safely discard it, simply pop all items from the queue.
+///
+/// The time complexity is constant. This function does not invoke the dynamic memory manager.
+CanardTxQueue canardTxInit(const size_t capacity);
 
 /// This function serializes a transfer into a sequence of transport frames and inserts them into the prioritized
 /// transmission queue at the appropriate position. Afterwards, the application is supposed to take the enqueued frames
@@ -386,9 +412,10 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
 ///     - If the transfer-ID is above the maximum, the excessive bits are silently masked away
 ///       (i.e., the modulo is computed automatically, so the caller doesn't have to bother).
 ///
-/// An out-of-memory error is returned if a TX frame could not be allocated due to the memory being exhausted.
-/// In that case, all previously allocated frames will be deallocated automatically. In other words, either all frames
-/// of the transfer are enqueued successfully, or none are.
+/// An out-of-memory error is returned if a TX frame could not be allocated due to the memory being exhausted,
+/// or if the capacity of the queue would be exhausted by this operation. In such cases, all previously allocated
+/// frames, if any, will be deallocated automatically. In other words, either all frames of the transfer are
+/// enqueued successfully, or none are.
 ///
 /// The time complexity is O(p+e), where p is the amount of payload in the transfer, and e is the number of frames
 /// already enqueued in the transmission queue.
@@ -396,7 +423,7 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
 /// The memory allocation requirement is one allocation per transport frame. A single-frame transfer takes one
 /// allocation; a multi-frame transfer of N frames takes N allocations. The maximum size of each allocation is
 /// (sizeof(CanardFrame) + sizeof(void*) + MTU).
-int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const transfer);
+int32_t canardTxPush(CanardTxQueue* const que, CanardInstance* const ins, const CanardTransfer* const transfer);
 
 /// This function accesses the top element of the prioritized transmission queue. The queue itself is not modified
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport
@@ -423,7 +450,7 @@ int32_t canardTxPush(CanardInstance* const ins, const CanardTransfer* const tran
 /// not attempt to free it.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-const CanardFrame* canardTxPeek(const CanardInstance* const ins);
+const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 
 /// This function transfers the ownership of the top element of the prioritized transmission queue to the application.
 /// The application should invoke this function to remove the top element from the prioritized transmission queue.
@@ -438,7 +465,7 @@ const CanardFrame* canardTxPeek(const CanardInstance* const ins);
 /// If the input argument is NULL or if the transmission queue is empty, the function has no effect.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-void canardTxPop(CanardInstance* const ins);
+void canardTxPop(CanardTxQueue* const que);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame, locates the appropriate
 /// subscription state, and, if found, updates it. If the frame completed a transfer, the return value is 1 (one)

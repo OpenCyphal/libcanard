@@ -168,12 +168,6 @@ public:
     auto operator=(const Instance&) -> Instance& = delete;
     auto operator=(const Instance&&) -> Instance& = delete;
 
-    [[nodiscard]] auto txPush(const CanardTransfer& transfer) { return canardTxPush(&canard_, &transfer); }
-
-    [[nodiscard]] auto txPeek() const { return canardTxPeek(&canard_); }
-
-    void txPop() { canardTxPop(&canard_); }
-
     [[nodiscard]] auto rxAccept(const CanardFrame&           frame,
                                 const uint8_t                redundant_transport_index,
                                 CanardTransfer&              out_transfer,
@@ -202,27 +196,51 @@ public:
     [[nodiscard]] auto getMTU() const { return canard_.mtu_bytes; }
     void               setMTU(const std::size_t x) { canard_.mtu_bytes = x; }
 
-    [[nodiscard]] auto getTxQueueRoot() const
+    [[nodiscard]] auto getAllocator() -> TestAllocator& { return allocator_; }
+
+    [[nodiscard]] auto getInstance() -> CanardInstance& { return canard_; }
+    [[nodiscard]] auto getInstance() const -> const CanardInstance& { return canard_; }
+};
+
+class TxQueue
+{
+    CanardTxQueue que_;
+
+public:
+    explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity)) {}
+    virtual ~TxQueue() = default;
+
+    TxQueue(const TxQueue&) = delete;
+    TxQueue(TxQueue&&)      = delete;
+    auto operator=(const TxQueue&) -> TxQueue& = delete;
+    auto operator=(TxQueue&&) -> TxQueue& = delete;
+
+    [[nodiscard]] auto push(CanardInstance* const ins, const CanardTransfer& transfer)
     {
-        return reinterpret_cast<const exposed::TxQueueItem*>(canard_._tx_queue);
+        return canardTxPush(&que_, ins, &transfer);
     }
 
-    [[nodiscard]] auto getTxQueueLength() const
+    [[nodiscard]] auto peek() const { return canardTxPeek(&que_); }
+
+    void pop() { canardTxPop(&que_); }
+
+    [[nodiscard]] auto getRoot() const { return reinterpret_cast<const exposed::TxQueueItem*>(que_.head); }
+
+    [[nodiscard]] auto getSize() const
     {
         std::size_t out = 0U;
-        const auto* p   = getTxQueueRoot();
+        const auto* p   = getRoot();
         while (p != nullptr)
         {
             ++out;
             p = p->next;
         }
+        REQUIRE(que_.size == out);
         return out;
     }
 
-    [[nodiscard]] auto getAllocator() -> TestAllocator& { return allocator_; }
-
-    [[nodiscard]] auto getInstance() -> CanardInstance& { return canard_; }
-    [[nodiscard]] auto getInstance() const -> const CanardInstance& { return canard_; }
+    [[nodiscard]] auto getInstance() -> CanardTxQueue& { return que_; }
+    [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
 };
 
 }  // namespace helpers

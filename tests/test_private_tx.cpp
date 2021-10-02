@@ -175,16 +175,18 @@ TEST_CASE("txFindQueueSupremum")
     using exposed::txFindQueueSupremum;
     using TxQueueItem = exposed::TxQueueItem;
 
-    auto ins = canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free);
+    auto que = canardTxInit(10);
+    REQUIRE(que.capacity == 10);
+    REQUIRE(que.size == 0);
 
-    const auto find = [&](std::uint32_t x) -> TxQueueItem* { return txFindQueueSupremum(&ins, x); };
+    const auto find = [&](std::uint32_t x) -> TxQueueItem* { return txFindQueueSupremum(&que, x); };
 
     REQUIRE(nullptr == find(0));
     REQUIRE(nullptr == find((1UL << 29U) - 1U));
 
     TxQueueItem a{};
     a.frame.extended_can_id = 1000;
-    ins._tx_queue           = reinterpret_cast<CanardInternalTxQueueItem*>(&a);
+    que.head                = reinterpret_cast<CanardInternalTxQueueItem*>(&a);
 
     REQUIRE(nullptr == find(999));
     REQUIRE(&a == find(1000));
@@ -204,11 +206,11 @@ TEST_CASE("txFindQueueSupremum")
     TxQueueItem c{};
     c.frame.extended_can_id = 990;
     c.next                  = &a;
-    ins._tx_queue           = reinterpret_cast<CanardInternalTxQueueItem*>(&c);
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->frame.extended_can_id == 990);
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->frame.extended_can_id == 1000);
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->frame.extended_can_id == 1010);
-    REQUIRE(reinterpret_cast<TxQueueItem*>(ins._tx_queue)->next->next->next == nullptr);
+    que.head                = reinterpret_cast<CanardInternalTxQueueItem*>(&c);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(que.head)->frame.extended_can_id == 990);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(que.head)->next->frame.extended_can_id == 1000);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(que.head)->next->next->frame.extended_can_id == 1010);
+    REQUIRE(reinterpret_cast<TxQueueItem*>(que.head)->next->next->next == nullptr);
 
     REQUIRE(nullptr == find(989));
     REQUIRE(&c == find(990));
