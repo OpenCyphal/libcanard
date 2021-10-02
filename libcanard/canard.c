@@ -1,6 +1,6 @@
 /// This software is distributed under the terms of the MIT License.
-/// Copyright (c) 2016-2020 UAVCAN Development Team.
-/// Author: Pavel Kirienko <pavel.kirienko@zubax.com>
+/// Copyright (c) 2016 UAVCAN Consortium.
+/// Author: Pavel Kirienko <pavel@uavcan.org>
 
 #include "canard.h"
 #include <assert.h>
