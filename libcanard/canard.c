@@ -64,17 +64,17 @@ CANARD_PRIVATE TransferCRC crcAddByte(const TransferCRC crc, const uint8_t byte)
 {
     static const TransferCRC Top  = 0x8000U;
     static const TransferCRC Poly = 0x1021U;
-    TransferCRC              out  = crc ^ (uint16_t)((uint16_t)(byte) << BITS_PER_BYTE);
+    TransferCRC              out  = crc ^ (uint16_t) ((uint16_t) (byte) << BITS_PER_BYTE);
     // Consider adding a compilation option that replaces this with a CRC table. Adds 512 bytes of ROM.
     // Do not fold this into a loop because a size-optimizing compiler won't unroll it degrading the performance.
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
-    out = (uint16_t)((uint16_t)(out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
+    out = (uint16_t) ((uint16_t) (out << 1U) ^ (((out & Top) != 0U) ? Poly : 0U));
     return out;
 }
 
@@ -170,7 +170,7 @@ CANARD_PRIVATE int32_t txMakeCANID(const CanardTransfer* const tr,
         {
             CANARD_ASSERT((tr->payload != NULL) || (tr->payload_size == 0U));
             const CanardNodeID c =
-                (CanardNodeID)(crcAdd(CRC_INITIAL, tr->payload_size, tr->payload) & CANARD_NODE_ID_MAX);
+                (CanardNodeID) (crcAdd(CRC_INITIAL, tr->payload_size, tr->payload) & CANARD_NODE_ID_MAX);
             const uint32_t spec = txMakeMessageSessionSpecifier(tr->port_id, c) | FLAG_ANONYMOUS_MESSAGE;
             CANARD_ASSERT(spec <= CAN_EXT_ID_MASK);
             out = (int32_t) spec;
@@ -223,8 +223,9 @@ CANARD_PRIVATE uint8_t txMakeTailByte(const bool             start_of_transfer,
                                       const CanardTransferID transfer_id)
 {
     CANARD_ASSERT(start_of_transfer ? (toggle == INITIAL_TOGGLE_STATE) : true);
-    return (uint8_t)((start_of_transfer ? TAIL_START_OF_TRANSFER : 0U) | (end_of_transfer ? TAIL_END_OF_TRANSFER : 0U) |
-                     (toggle ? TAIL_TOGGLE : 0U) | (transfer_id & CANARD_TRANSFER_ID_MAX));
+    return (uint8_t) ((start_of_transfer ? TAIL_START_OF_TRANSFER : 0U) |
+                      (end_of_transfer ? TAIL_END_OF_TRANSFER : 0U) | (toggle ? TAIL_TOGGLE : 0U) |
+                      (transfer_id & CANARD_TRANSFER_ID_MAX));
 }
 
 /// Takes a frame payload size, returns a new size that is >=x and is rounded up to the nearest valid DLC.
@@ -415,13 +416,13 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardInstance* const   ins,
             // Insert the CRC.
             if ((frame_offset < frame_payload_size) && (offset == payload_size))
             {
-                tail->payload_buffer[frame_offset] = (uint8_t)(crc >> BITS_PER_BYTE);
+                tail->payload_buffer[frame_offset] = (uint8_t) (crc >> BITS_PER_BYTE);
                 ++frame_offset;
                 ++offset;
             }
             if ((frame_offset < frame_payload_size) && (offset > payload_size))
             {
-                tail->payload_buffer[frame_offset] = (uint8_t)(crc & BYTE_MAX);
+                tail->payload_buffer[frame_offset] = (uint8_t) (crc & BYTE_MAX);
                 ++frame_offset;
                 ++offset;
             }
@@ -518,12 +519,12 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
 
         // CAN ID parsing.
         const uint32_t can_id = frame->extended_can_id;
-        out->priority         = (CanardPriority)((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
-        out->source_node_id   = (CanardNodeID)(can_id & CANARD_NODE_ID_MAX);
+        out->priority         = (CanardPriority) ((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
+        out->source_node_id   = (CanardNodeID) (can_id & CANARD_NODE_ID_MAX);
         if (0 == (can_id & FLAG_SERVICE_NOT_MESSAGE))
         {
             out->transfer_kind = CanardTransferKindMessage;
-            out->port_id       = (CanardPortID)((can_id >> OFFSET_SUBJECT_ID) & CANARD_SUBJECT_ID_MAX);
+            out->port_id       = (CanardPortID) ((can_id >> OFFSET_SUBJECT_ID) & CANARD_SUBJECT_ID_MAX);
             if ((can_id & FLAG_ANONYMOUS_MESSAGE) != 0)
             {
                 out->source_node_id = CANARD_NODE_ID_UNSET;
@@ -536,8 +537,8 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel
         {
             out->transfer_kind =
                 ((can_id & FLAG_REQUEST_NOT_RESPONSE) != 0) ? CanardTransferKindRequest : CanardTransferKindResponse;
-            out->port_id             = (CanardPortID)((can_id >> OFFSET_SERVICE_ID) & CANARD_SERVICE_ID_MAX);
-            out->destination_node_id = (CanardNodeID)((can_id >> OFFSET_DST_NODE_ID) & CANARD_NODE_ID_MAX);
+            out->port_id             = (CanardPortID) ((can_id >> OFFSET_SERVICE_ID) & CANARD_SERVICE_ID_MAX);
+            out->destination_node_id = (CanardNodeID) ((can_id >> OFFSET_DST_NODE_ID) & CANARD_NODE_ID_MAX);
             // The reserved bit may be unreserved in the future. It may be used to extend the service-ID to 10 bits.
             // Per Specification, source cannot be the same as the destination.
             valid = (0 == (can_id & FLAG_RESERVED_23)) && (out->source_node_id != out->destination_node_id);
@@ -588,11 +589,11 @@ CANARD_PRIVATE uint8_t rxComputeTransferIDDifference(const uint8_t a, const uint
 {
     CANARD_ASSERT(a <= CANARD_TRANSFER_ID_MAX);
     CANARD_ASSERT(b <= CANARD_TRANSFER_ID_MAX);
-    int16_t diff = (int16_t)(((int16_t) a) - ((int16_t) b));
+    int16_t diff = (int16_t) (((int16_t) a) - ((int16_t) b));
     if (diff < 0)
     {
         const uint8_t modulo = 1U << CANARD_TRANSFER_ID_BIT_LENGTH;
-        diff                 = (int16_t)(diff + (int16_t) modulo);
+        diff                 = (int16_t) (diff + (int16_t) modulo);
     }
     return (uint8_t) diff;
 }
@@ -658,7 +659,7 @@ CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRx
     rxs->payload_size       = 0U;
     rxs->payload            = NULL;
     rxs->calculated_crc     = CRC_INITIAL;
-    rxs->transfer_id        = (CanardTransferID)((rxs->transfer_id + 1U) & CANARD_TRANSFER_ID_MAX);
+    rxs->transfer_id        = (CanardTransferID) ((rxs->transfer_id + 1U) & CANARD_TRANSFER_ID_MAX);
     // The transport index is retained.
     rxs->toggle = INITIAL_TOGGLE_STATE;
 }
