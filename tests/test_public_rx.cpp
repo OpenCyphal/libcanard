@@ -328,9 +328,9 @@ TEST_CASE("RxSubscriptionErrors")
     CanardFrame frame{};
     frame.payload_size = 1U;
     CanardTransfer transfer{};
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, &frame, 0, &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), nullptr, 0, &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, nullptr));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, nullptr, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, &transfer, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, &frame, 0, &transfer, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), nullptr, 0, &transfer, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, nullptr, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, nullptr, 0, nullptr, nullptr));
 }

@@ -173,7 +173,7 @@ public:
                                 CanardTransfer&              out_transfer,
                                 CanardRxSubscription** const out_subscription)
     {
-        return canardRxAccept2(&canard_, &frame, redundant_transport_index, &out_transfer, out_subscription);
+        return canardRxAccept(&canard_, &frame, redundant_transport_index, &out_transfer, out_subscription);
     }
 
     [[nodiscard]] auto rxSubscribe(const CanardTransferKind transfer_kind,

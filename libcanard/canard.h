@@ -565,18 +565,11 @@ void canardTxPop(CanardTxQueue* const que);
 /// frame buffer is allocated once from the heap (which may be done from the interrupt handler if the heap is
 /// sufficiently deterministic), and in the case of single-frame transfer it is then carried over to the application
 /// without copying. This design somewhat complicates the media layer though.
-int8_t canardRxAccept2(CanardInstance* const        ins,
-                       const CanardFrame* const     frame,
-                       const uint8_t                redundant_transport_index,
-                       CanardTransfer* const        out_transfer,
-                       CanardRxSubscription** const out_subscription);
-
-/// This is a deprecated wrapper over canardRxAccept2() without the out_subscription.
-/// It is kept for backward compatibility and may be eventually removed in a future release.
-int8_t canardRxAccept(CanardInstance* const    ins,
-                      const CanardFrame* const frame,
-                      const uint8_t            redundant_transport_index,
-                      CanardTransfer* const    out_transfer);
+int8_t canardRxAccept(CanardInstance* const        ins,
+                      const CanardFrame* const     frame,
+                      const uint8_t                redundant_transport_index,
+                      CanardTransfer* const        out_transfer,
+                      CanardRxSubscription** const out_subscription);
 
 /// This function creates a new subscription, allowing the application to register its interest in a particular
 /// category of transfers. The library will reject all transport frames for which there is no active subscription.
