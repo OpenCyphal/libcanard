@@ -21,14 +21,14 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-11
-            cxx-compiler: clang++-11
+            c-compiler: clang-12
+            cxx-compiler: clang++-12
 
     steps:
       - uses: actions/checkout@v2
 
       - name: Install Dependencies
-        run: sudo apt install gcc-multilib g++-multilib clang-tidy-11 clang-format-11
+        run: sudo apt install gcc-multilib g++-multilib clang-tidy-12 clang-format-12
 
       - name: Configure CMake
         run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER=${{ matrix.c-compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }} tests
@@ -55,8 +55,8 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-11
-            cxx-compiler: clang++-11
+            c-compiler: clang-12
+            cxx-compiler: clang++-12
 
     steps:
       - uses: actions/checkout@v2
@@ -89,8 +89,8 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-11
-            cxx-compiler: clang++-11
+            c-compiler: clang-12
+            cxx-compiler: clang++-12
 
     steps:
       - uses: actions/checkout@v2
@@ -152,7 +152,7 @@ jobs:
     - name: Install Dependencies
       run: sudo apt install gcc-multilib g++-multilib
 
-    - name: Set up JDK 11
+    - name: Set up JDK
       uses: actions/setup-java@v1
       with:
         java-version: 11
@@ -186,9 +186,8 @@ jobs:
         cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make all
         make test
-        gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
-        gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
-        gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        gcov --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        gcov --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
 
     - name: Run sonar-scanner
       run: |
