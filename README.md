@@ -24,14 +24,14 @@ If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 ## Features
 
 - Full test coverage and static analysis.
-- Partial compliance with automatically enforceable MISRA C rules (compliance report not available).
+- Partial compliance with automatically enforceable MISRA C rules (reach out to <https://forum.uavcan.org> for details).
 - Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
 - Purely reactive API without the need for background servicing.
 - Support for the Classic CAN and CAN FD.
 - Support for redundant transports.
 - Compatibility with 8/16/32/64-bit platforms.
 - Compatibility with extremely resource-constrained baremetal environments starting from ca. 32K ROM, 4..8K RAM.
-- Implemented in less than 1500 logical lines of code.
+- Implemented in less than 1500 lines of code.
 
 ## Platforms
 
@@ -174,7 +174,8 @@ CanardTransfer transfer;
 const int8_t result = canardRxAccept(&ins,
                                      &received_frame,            // The CAN frame received from the bus.
                                      redundant_interface_index,  // If the transport is not redundant, use 0.
-                                     &transfer);
+                                     &transfer,
+                                     NULL);
 if (result < 0)
 {
     // An error has occurred: either an argument is invalid or we've ran out of memory.
@@ -198,36 +199,15 @@ else
 
 To automatically generate (de-)serialization code from DSDL definitions,
 use [Nunavut](https://github.com/UAVCAN/nunavut).
-If for some reason this is found undesirable, you may write (de-)serialization logic manually using
-the optional tiny add-on for libcanard: `canard_dsdl.c`/`canard_dsdl.h`.
-Here's a simple deserialization example for a `uavcan.node.Heartbeat.1.0` message:
-
-```c
-uint8_t  mode   = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 40,  8);
-uint32_t uptime = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size,  0, 32);
-uint8_t  vssc   = canardDSDLGetU32(heartbeat_transfer->payload, heartbeat_transfer->payload_size, 48,  8);
-uint8_t  health = canardDSDLGetU8(heartbeat_transfer->payload,  heartbeat_transfer->payload_size, 32,  8);
-```
-
-And the opposite:
-
-```c
-uint8_t buffer[7];
-//              destination offset   value bit-length
-canardDSDLSetUxx(&buffer[0], 40,          2,  8);   // mode
-canardDSDLSetUxx(&buffer[0],  0, 0xDEADBEEF, 32);   // uptime
-canardDSDLSetUxx(&buffer[0], 48,       0x7F,  8);   // vssc
-canardDSDLSetUxx(&buffer[0], 32,          2,  8);   // health
-// Now it can be transmitted:
-my_transfer->payload      = &buffer[0];
-my_transfer->payload_size = sizeof(buffer);
-result = canardTxPush(&ins, &my_transfer);
-```
-
-Full API specification is available in the documentation.
-If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
+
+### v2.0
+
+- Dedicated transmission queues per redundant CAN interface.
+- Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
+- `canardRxAccept2()` replaced the deprecated `canardRxAccept()`.
+- Improved const-correctness.
 
 ### v1.1
 

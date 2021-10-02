@@ -1,5 +1,5 @@
 # This software is distributed under the terms of the MIT License.
-# Copyright (c) 2016-2020 UAVCAN Development Team.
+# Copyright (c) 2016 UAVCAN Development Team.
 
 cmake_minimum_required(VERSION 3.12)
 project(canard_tests C CXX)
@@ -54,7 +54,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wsign-promo -Wold-
 include_directories(catch ${library_dir})
 add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1)
 
-set(common_sources catch/main.cpp ${library_dir}/canard.c ${library_dir}/canard_dsdl.c)
+set(common_sources catch/main.cpp ${library_dir}/canard.c)
 
 function(gen_test name files compile_definitions compile_flags link_flags c_standard)
     add_executable(${name} ${common_sources} ${files})
@@ -82,15 +82,8 @@ endfunction()
 
 # Disable missing declaration warning to allow exposure of private definitions.
 gen_test_matrix(test_private
-                "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_dsdl.cpp"
+                "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp"
                 "CANARD_PRIVATE="
-                "-Wno-missing-declarations")
-
-# We assume here that the target platform is little-endian. If it's not, the test will fail.
-# Perhaps this needs fixing: these tests need not be run if the target is not little-endian.
-gen_test_matrix(test_private_le
-                "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_dsdl.cpp"
-                "CANARD_PRIVATE=;CANARD_DSDL_CONFIG_LITTLE_ENDIAN=1"
                 "-Wno-missing-declarations")
 
 gen_test_matrix(test_public

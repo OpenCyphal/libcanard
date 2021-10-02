@@ -8,9 +8,6 @@ The code shall follow applicable high-reliability coding guidelines as explained
 The implementation shall be fully compliant with the UAVCAN/CAN specification.
 
 The implementation and the API should be kept simple.
-The core library `canard.c` (that is, excluding the optional DSDL presentation layer extension) shall never become
-larger than 1000 logical lines of code.
-This restriction ensures that the library is kept simple and easy to validate and verify.
 There will be no high-level abstractions -- if that is desired, other implementations of UAVCAN should be used.
 
 The library is intended for deeply embedded systems where the resources may be scarce.
@@ -55,8 +52,8 @@ to prevent non-compliant code from being accepted into upstream.
 
 The following tools are required to conduct library development locally:
 
-- GCC v10 or newer.
-- Clang and Clang-Tools v11 or newer.
+- GCC v11 or newer.
+- Clang and Clang-Tools v12 or newer.
 - CMake v3.12 or newer.
 - An AMD64 machine.
 

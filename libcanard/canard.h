@@ -24,10 +24,6 @@
 /// memory allocator. If your target platform does not provide a deterministic memory manager (most platforms don't),
 /// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
 ///
-/// There is an optional two-file extension library canard_dsdl.c + canard_dsdl.h which can be used alongside
-/// this core library to simplify DSDL object serialization and deserialization. It is intended to be integrated in
-/// the same manner. Please read its usage manual for further information.
-///
 /// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
 /// UAVCAN Development Team may be found at https://github.com/UAVCAN/platform_specific_components.
 ///
@@ -39,21 +35,10 @@
 /// UAVCAN, as a protocol stack, is composed of two layers: TRANSPORT and PRESENTATION. The transport layer is portable
 /// across different transport protocols, one of which is CAN (FD), formally referred to as UAVCAN/CAN. This library
 /// is focused on UAVCAN/CAN only and it will not support other transports. The presentation layer is implemented
-/// through the DSDL language and the associated data type regulation policies. Much like the UAVCAN stack itself,
-/// this library consists of two major components:
+/// through the DSDL language and the associated data type regulation policies; these parts are outside of the scope of
+/// this library as it is focused purely on the transport.
 ///
-///      1. TRANSPORT -- the UAVCAN/CAN transport layer implementation. This is implemented in canard.c/.h,
-///         the documentation for which you are currently reading. This is the core component of the library.
-///
-///      2. PRESENTATION -- the optional DSDL support extension library. This is implemented in canard_dsdl.c/.h,
-///         an optional component which may be used by some applications where automatic DSDL code generation is
-///         not used. Normally, applications may prefer to rely on auto-generated code using DSDL-to-C translators
-///         such as Nunavut (https://github.com/UAVCAN/nunavut).
-///
-/// The DSDL extension is trivial and there is not much to document -- please refer to its header file for details.
-///
-/// This transport layer implementation consists of two components: the transmission (TX) pipeline and the
-/// reception (RX) pipeline.
+/// This library consists of two components: the transmission (TX) pipeline and the reception (RX) pipeline.
 ///
 /// The TX and RX pipelines are completely independent from each other except that they both rely on the same
 /// dynamic memory manager. The TX pipeline uses the dynamic memory to store outgoing CAN frames in the prioritized
@@ -108,8 +93,8 @@ extern "C" {
 
 /// Semantic version of this library (not the UAVCAN specification).
 /// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 1
-#define CANARD_VERSION_MINOR 1
+#define CANARD_VERSION_MAJOR 2
+#define CANARD_VERSION_MINOR 0
 
 /// The version number of the UAVCAN specification implemented by this library.
 #define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
