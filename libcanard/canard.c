@@ -507,6 +507,10 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
             }
         }
     }
+    else  // We predict that we're going to run out of queue, don't bother serializing the transfer.
+    {
+        out = -CANARD_ERROR_OUT_OF_MEMORY;
+    }
     CANARD_ASSERT((out < 0) || (out >= 2));
     return out;
 }
@@ -969,6 +973,7 @@ int32_t canardTxPush(CanardTxQueue* const que, CanardInstance* const ins, const 
                                         transfer->transfer_id,
                                         transfer->payload_size,
                                         transfer->payload);
+                CANARD_ASSERT((out < 0) || (out == 1));
             }
             else
             {
@@ -980,6 +985,7 @@ int32_t canardTxPush(CanardTxQueue* const que, CanardInstance* const ins, const 
                                        transfer->transfer_id,
                                        transfer->payload_size,
                                        transfer->payload);
+                CANARD_ASSERT((out < 0) || (out >= 2));
             }
         }
         else
@@ -987,6 +993,7 @@ int32_t canardTxPush(CanardTxQueue* const que, CanardInstance* const ins, const 
             out = maybe_can_id;
         }
     }
+    CANARD_ASSERT(out != 0);
     return out;
 }
 
