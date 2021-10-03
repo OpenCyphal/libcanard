@@ -207,7 +207,7 @@ use [Nunavut](https://github.com/UAVCAN/nunavut).
 - Dedicated transmission queues per redundant CAN interface.
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
 - `canardRxAccept2()` replaced the deprecated `canardRxAccept()`.
-- Improved const-correctness.
+- Fixed issues with const-correctness.
 
 ### v1.1
 

@@ -18,7 +18,7 @@ TEST_CASE("RxBasic0")
     using exposed::RxSession;
 
     Instance              ins;
-    CanardTransfer        transfer{};
+    CanardRxTransfer      transfer{};
     CanardRxSubscription* subscription = nullptr;
 
     const auto accept = [&](const std::uint8_t               redundant_transport_index,
@@ -102,17 +102,17 @@ TEST_CASE("RxBasic0")
     REQUIRE(subscription != nullptr);
     REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
-    REQUIRE(transfer.priority == CanardPriorityImmediate);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b0110011001100);
-    REQUIRE(transfer.remote_node_id == 0b0100111);
-    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
+    REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 0);
     REQUIRE(0 == std::memcmp(transfer.payload, "", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 16));
     REQUIRE(ins.getInstance().rx_subscriptions[0]->sessions[0b0100111] != nullptr);
-    const auto* msg_payload = transfer.payload;  // Will need it later.
+    auto* msg_payload = transfer.payload;  // Will need it later.
 
     // Provide the space for an extra session and its payload.
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) * 2 + 16 + 20);
@@ -134,11 +134,11 @@ TEST_CASE("RxBasic0")
     REQUIRE(subscription != nullptr);
     REQUIRE(subscription->port_id == 0b0000110011);
     REQUIRE(transfer.timestamp_usec == 100'000'002);
-    REQUIRE(transfer.priority == CanardPriorityHigh);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindRequest);
-    REQUIRE(transfer.port_id == 0b0000110011);
-    REQUIRE(transfer.remote_node_id == 0b0100101);
-    REQUIRE(transfer.transfer_id == 4);
+    REQUIRE(transfer.metadata.priority == CanardPriorityHigh);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindRequest);
+    REQUIRE(transfer.metadata.port_id == 0b0000110011);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0100101);
+    REQUIRE(transfer.metadata.transfer_id == 4);
     REQUIRE(transfer.payload_size == 3);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);  // Two SESSIONS and two PAYLOAD BUFFERS.
@@ -183,11 +183,11 @@ TEST_CASE("RxBasic0")
     REQUIRE(subscription != nullptr);
     REQUIRE(subscription->port_id == 0b0000111100);
     REQUIRE(transfer.timestamp_usec == 100'000'003);
-    REQUIRE(transfer.priority == CanardPriorityNominal);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindResponse);
-    REQUIRE(transfer.port_id == 0b0000111100);
-    REQUIRE(transfer.remote_node_id == 0b0011011);
-    REQUIRE(transfer.transfer_id == 3);
+    REQUIRE(transfer.metadata.priority == CanardPriorityNominal);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindResponse);
+    REQUIRE(transfer.metadata.port_id == 0b0000111100);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0011011);
+    REQUIRE(transfer.metadata.transfer_id == 3);
     REQUIRE(transfer.payload_size == 1);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
@@ -217,7 +217,7 @@ TEST_CASE("RxAnonymous")
     using exposed::RxSession;
 
     Instance              ins;
-    CanardTransfer        transfer{};
+    CanardRxTransfer      transfer{};
     CanardRxSubscription* subscription = nullptr;
 
     const auto accept = [&](const std::uint8_t               redundant_transport_index,
@@ -242,7 +242,9 @@ TEST_CASE("RxAnonymous")
     REQUIRE(subscription == nullptr);
 
     // Create a message subscription.
+    void* const          my_user_reference = &ins;
     CanardRxSubscription sub_msg{};
+    sub_msg.user_reference = my_user_reference;
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 2'000'000, sub_msg));  // New.
 
     // Accepted anonymous message.
@@ -253,12 +255,13 @@ TEST_CASE("RxAnonymous")
                         {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 0b111'00000}));
     REQUIRE(subscription != nullptr);
     REQUIRE(subscription->port_id == 0b0110011001100);
+    REQUIRE(subscription->user_reference == my_user_reference);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
-    REQUIRE(transfer.priority == CanardPriorityImmediate);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b0110011001100);
-    REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
-    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
+    REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 16);  // Truncated.
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
@@ -271,11 +274,11 @@ TEST_CASE("RxAnonymous")
     REQUIRE(subscription != nullptr);
     REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
-    REQUIRE(transfer.priority == CanardPriorityImmediate);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b0110011001100);
-    REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
-    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
+    REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 16);  // Truncated.
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
@@ -293,11 +296,11 @@ TEST_CASE("RxAnonymous")
     REQUIRE(subscription != nullptr);
     REQUIRE(subscription->port_id == 0b0110011001100);
     REQUIRE(transfer.timestamp_usec == 100'000'001);
-    REQUIRE(transfer.priority == CanardPriorityImmediate);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 0b0110011001100);
-    REQUIRE(transfer.remote_node_id == CANARD_NODE_ID_UNSET);
-    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
+    REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 6);  // NOT truncated.
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
@@ -327,7 +330,7 @@ TEST_CASE("RxSubscriptionErrors")
 
     CanardFrame frame{};
     frame.payload_size = 1U;
-    CanardTransfer transfer{};
+    CanardRxTransfer transfer{};
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), &frame, 0, &transfer, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, &frame, 0, &transfer, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), nullptr, 0, &transfer, nullptr));

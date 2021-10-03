@@ -29,6 +29,7 @@ Checks: >-
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-type-union-access,
   -cppcoreguidelines-pro-type-reinterpret-cast,
+  -*-no-malloc,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 AnalyzeTemporaryDtors: false

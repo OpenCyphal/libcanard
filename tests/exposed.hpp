@@ -83,9 +83,11 @@ auto txMakeServiceSessionSpecifier(const std::uint16_t service_id,
 
 auto txGetPresentationLayerMTU(const CanardInstance* const ins) -> std::size_t;
 
-auto txMakeCANID(const CanardTransfer* const transfer,
-                 const std::uint8_t          local_node_id,
-                 const std::size_t           presentation_layer_mtu) -> std::int32_t;
+auto txMakeCANID(const CanardTransferMetadata* const tr,
+                 const size_t                        payload_size,
+                 const void* const                   payload,
+                 const CanardNodeID                  local_node_id,
+                 const size_t                        presentation_layer_mtu) -> std::int32_t;
 
 auto txMakeTailByte(const bool         start_of_transfer,
                     const bool         end_of_transfer,
@@ -112,9 +114,6 @@ auto rxSessionUpdate(CanardInstance* const     ins,
                      const std::uint8_t        redundant_transport_index,
                      const CanardMicrosecond   transfer_id_timeout_usec,
                      const std::size_t         extent,
-                     CanardTransfer* const     out_transfer) -> std::int8_t;
-
-auto float16Pack(const float value) -> std::uint16_t;
-auto float16Unpack(const std::uint16_t value) -> float;
+                     CanardRxTransfer* const   out_transfer) -> std::int8_t;
 }
 }  // namespace exposed

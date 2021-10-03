@@ -93,14 +93,6 @@ public:
         return p;
     }
 
-    /// This overload is needed to avoid unnecessary const_cast<> in tests.
-    /// The casts are needed because allocated memory is pointed to by const-qualified pointers.
-    /// This is due to certain fundamental limitations of C; see the API docs for info.
-    void deallocate(const void* const pointer)
-    {
-        deallocate(const_cast<void*>(pointer));  // NOLINT
-    }
-
     void deallocate(void* const pointer)
     {
         if (pointer != nullptr)
@@ -170,7 +162,7 @@ public:
 
     [[nodiscard]] auto rxAccept(const CanardFrame&           frame,
                                 const uint8_t                redundant_transport_index,
-                                CanardTransfer&              out_transfer,
+                                CanardRxTransfer&            out_transfer,
                                 CanardRxSubscription** const out_subscription)
     {
         return canardRxAccept(&canard_, &frame, redundant_transport_index, &out_transfer, out_subscription);
@@ -207,7 +199,11 @@ class TxQueue
     CanardTxQueue que_;
 
 public:
-    explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity)) {}
+    explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity))
+    {
+        REQUIRE(que_.user_reference == nullptr);  // Ensure that the initialization is correct.
+        que_.user_reference = this;               // This is simply to ensure it is not overwritten unexpectedly.
+    }
     virtual ~TxQueue() = default;
 
     TxQueue(const TxQueue&) = delete;
@@ -215,19 +211,32 @@ public:
     auto operator=(const TxQueue&) -> TxQueue& = delete;
     auto operator=(TxQueue&&) -> TxQueue& = delete;
 
-    [[nodiscard]] auto push(CanardInstance* const ins, const CanardTransfer& transfer)
+    [[nodiscard]] auto push(CanardInstance* const         ins,
+                            const CanardMicrosecond       transmission_deadline_usec,
+                            const CanardTransferMetadata& metadata,
+                            const size_t                  payload_size,
+                            const void* const             payload)
     {
-        return canardTxPush(&que_, ins, &transfer);
+        REQUIRE(this == que_.user_reference);  // Ensure not overwritten.
+        return canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
     }
 
-    [[nodiscard]] auto peek() const { return canardTxPeek(&que_); }
+    [[nodiscard]] auto peek() const -> const CanardFrame* { return canardTxPeek(&que_); }
 
-    void pop() { canardTxPop(&que_); }
+    [[nodiscard]] auto pop() -> CanardFrame*
+    {
+        REQUIRE(this == que_.user_reference);  // Ensure not overwritten.
+        const auto* pk  = peek();
+        auto*       out = canardTxPop(&que_);
+        REQUIRE(pk == out);
+        return out;
+    }
 
     [[nodiscard]] auto getRoot() const { return reinterpret_cast<const exposed::TxQueueItem*>(que_.head); }
 
     [[nodiscard]] auto getSize() const
     {
+        REQUIRE(this == que_.user_reference);  // Ensure not overwritten.
         std::size_t out = 0U;
         const auto* p   = getRoot();
         while (p != nullptr)

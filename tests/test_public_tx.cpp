@@ -28,18 +28,15 @@ TEST_CASE("TxBasic0")
 
     alloc.setAllocationCeiling(200);
 
-    CanardTransfer transfer{};
-    transfer.payload = payload.data();
+    CanardTransferMetadata meta{};
 
     // Single-frame with padding.
-    transfer.timestamp_usec = 1'000'000'000'000ULL;
-    transfer.priority       = CanardPriorityNominal;
-    transfer.transfer_kind  = CanardTransferKindMessage;
-    transfer.port_id        = 321;
-    transfer.remote_node_id = CANARD_NODE_ID_UNSET;
-    transfer.transfer_id    = 21;
-    transfer.payload_size   = 8;
-    REQUIRE(1 == que.push(&ins.getInstance(), transfer));
+    meta.priority       = CanardPriorityNominal;
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.port_id        = 321;
+    meta.remote_node_id = CANARD_NODE_ID_UNSET;
+    meta.transfer_id    = 21;
+    REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'000'000ULL, meta, 8, payload.data()));
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     REQUIRE(10 < alloc.getTotalAllocatedAmount());
@@ -62,13 +59,11 @@ TEST_CASE("TxBasic0")
     REQUIRE(que.getRoot()->isToggleBitSet());
 
     // Multi-frame. Priority low, inserted at the end of the TX queue.
-    transfer.timestamp_usec = 1'000'000'000'100ULL;
-    transfer.priority       = CanardPriorityLow;
-    transfer.transfer_id    = 22;
-    transfer.payload_size   = 8;
+    meta.priority    = CanardPriorityLow;
+    meta.transfer_id = 22;
     ins.setMTU(CANARD_MTU_CAN_CLASSIC);
     ins.setNodeID(42);
-    REQUIRE(2 == que.push(&ins.getInstance(), transfer));  // 8 bytes --> 2 frames
+    REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'000'100ULL, meta, 8, payload.data()));  // 8 bytes --> 2 frames
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
@@ -103,21 +98,18 @@ TEST_CASE("TxBasic0")
 
     // Single-frame, OOM.
     alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount());  // Seal up the heap at this level.
-    transfer.timestamp_usec = 1'000'000'000'200ULL;
-    transfer.priority       = CanardPriorityLow;
-    transfer.transfer_id    = 23;
-    transfer.payload_size   = 1;
-    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityLow;
+    meta.transfer_id = 23;
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, 1, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
 
     // Multi-frame, first frame added successfully, then OOM. The entire transaction rejected.
     alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount() + sizeof(TxQueueItem) + 10U);
-    transfer.timestamp_usec = 1'000'000'000'300ULL;
-    transfer.priority       = CanardPriorityHigh;
-    transfer.transfer_id    = 24;
-    transfer.payload_size   = 100;
-    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityHigh;
+    meta.transfer_id = 24;
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
+            que.push(&ins.getInstance(), 1'000'000'000'300ULL, meta, 100, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
@@ -141,8 +133,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 8));
     REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[11]);
     REQUIRE(frame->timestamp_usec == 1'000'000'000'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -151,8 +142,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 7));
     REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[7]);
     REQUIRE(frame->timestamp_usec == 1'000'000'000'100ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -163,15 +153,13 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[2]);
     REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[3]);
     REQUIRE(frame->timestamp_usec == 1'000'000'000'100ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(nullptr == que.getRoot());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
     frame = que.peek();
     REQUIRE(nullptr == frame);
-    que.pop();  // Invocation when empty has no effect.
-    que.pop();
+    REQUIRE(nullptr == que.pop());  // Invocation when empty has no effect.
     REQUIRE(0 == que.getSize());
     REQUIRE(nullptr == que.getRoot());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
@@ -184,11 +172,10 @@ TEST_CASE("TxBasic0")
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
     constexpr std::uint16_t CRC61 = 0x554EU;
     ins.setMTU(32);
-    transfer.timestamp_usec = 1'000'000'001'000ULL;
-    transfer.priority       = CanardPriorityFast;
-    transfer.transfer_id    = 25;
-    transfer.payload_size   = 31 + 30;  // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
-    REQUIRE(3 == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityFast;
+    meta.transfer_id = 25;
+    // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
+    REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'001'000ULL, meta, 31 + 30, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
@@ -200,8 +187,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 31));
     REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -211,8 +197,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[30]);
     REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -221,8 +206,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
     REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
     REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -230,11 +214,10 @@ TEST_CASE("TxBasic0")
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
     ins.setMTU(32);
-    transfer.timestamp_usec = 1'000'000'002'000ULL;
-    transfer.priority       = CanardPrioritySlow;
-    transfer.transfer_id    = 26;
-    transfer.payload_size   = 31 + 31;  // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
-    REQUIRE(3 == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPrioritySlow;
+    meta.transfer_id = 26;
+    // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
+    REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'002'000ULL, meta, 31 + 31, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
@@ -246,8 +229,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 31));
     REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -256,8 +238,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data() + 31U, 31));
     REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -267,8 +248,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
     REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[2]);
     REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -276,11 +256,10 @@ TEST_CASE("TxBasic0")
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
     constexpr std::uint16_t CRC112Padding12 = 0xE7A5U;
     ins.setMTU(64);
-    transfer.timestamp_usec = 1'000'000'003'000ULL;
-    transfer.priority       = CanardPriorityImmediate;
-    transfer.transfer_id    = 27;
-    transfer.payload_size   = 112;  // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
-    REQUIRE(2 == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityImmediate;
+    meta.transfer_id = 27;
+    // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
+    REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'003'000ULL, meta, 112, payload.data()));
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     // Read the generated frames.
@@ -290,8 +269,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 63));
     REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[63]);
     REQUIRE(frame->timestamp_usec == 1'000'000'003'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -305,17 +283,13 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC112Padding12 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[62]);  // CRC
     REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[63]);        // Tail
     REQUIRE(frame->timestamp_usec == 1'000'000'003'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Single-frame empty.
-    transfer.timestamp_usec = 1'000'000'004'000ULL;
-    transfer.transfer_id    = 28;
-    transfer.payload_size   = 0;
-    transfer.payload        = nullptr;  // Null is OK if size is 0.
-    REQUIRE(1 == que.push(&ins.getInstance(), transfer));
+    meta.transfer_id = 28;
+    REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'004'000ULL, meta, 0, nullptr));
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     REQUIRE(60 > alloc.getTotalAllocatedAmount());
@@ -329,8 +303,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(frame->payload_size == 1);
     REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
     REQUIRE(frame->timestamp_usec == 1'000'000'004'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -339,29 +312,25 @@ TEST_CASE("TxBasic0")
     REQUIRE(nullptr == frame);
 
     // Invalid transfer.
-    transfer.payload        = payload.data();
-    transfer.timestamp_usec = 1'000'000'005'000ULL;
-    transfer.transfer_kind  = CanardTransferKindMessage;
-    transfer.remote_node_id = 42;
-    transfer.transfer_id    = 123;
-    transfer.payload_size   = 8;
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), transfer));
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.remote_node_id = 42;
+    meta.transfer_id    = 123;
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            que.push(&ins.getInstance(), 1'000'000'005'000ULL, meta, 8, payload.data()));
     frame = que.peek();
     REQUIRE(nullptr == frame);
 
     // Error handling.
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, nullptr));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(&que.getInstance(), &ins.getInstance(), nullptr));
-    transfer.payload_size = 1;
-    transfer.payload      = nullptr;
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), transfer));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), 1'000'000'006'000ULL, meta, 1, nullptr));
 
     REQUIRE(nullptr == canardTxPeek(nullptr));
-
-    canardTxPop(nullptr);             // No effect.
-    canardTxPop(&que.getInstance());  // No effect.
+    REQUIRE(nullptr == canardTxPop(nullptr));             // No effect.
+    REQUIRE(nullptr == canardTxPop(&que.getInstance()));  // No effect.
 }
 
 TEST_CASE("TxBasic1")
@@ -385,18 +354,15 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
-    CanardTransfer transfer{};
-    transfer.payload = payload.data();
+    CanardTransferMetadata meta{};
 
     // Single-frame with padding.
-    transfer.timestamp_usec = 1'000'000'000'000ULL;
-    transfer.priority       = CanardPriorityNominal;
-    transfer.transfer_kind  = CanardTransferKindMessage;
-    transfer.port_id        = 321;
-    transfer.remote_node_id = CANARD_NODE_ID_UNSET;
-    transfer.transfer_id    = 21;
-    transfer.payload_size   = 8;
-    REQUIRE(1 == que.push(&ins.getInstance(), transfer));
+    meta.priority       = CanardPriorityNominal;
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.port_id        = 321;
+    meta.remote_node_id = CANARD_NODE_ID_UNSET;
+    meta.transfer_id    = 21;
+    REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'000'000ULL, meta, 8, payload.data()));
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     REQUIRE(10 < alloc.getTotalAllocatedAmount());
@@ -419,13 +385,11 @@ TEST_CASE("TxBasic1")
     REQUIRE(que.getRoot()->isToggleBitSet());
 
     // Multi-frame. Priority low, inserted at the end of the TX queue. Two frames exhaust the capacity of the queue.
-    transfer.timestamp_usec = 1'000'000'000'100ULL;
-    transfer.priority       = CanardPriorityLow;
-    transfer.transfer_id    = 22;
-    transfer.payload_size   = 8;
+    meta.priority    = CanardPriorityLow;
+    meta.transfer_id = 22;
     ins.setMTU(CANARD_MTU_CAN_CLASSIC);
     ins.setNodeID(42);
-    REQUIRE(2 == que.push(&ins.getInstance(), transfer));  // 8 bytes --> 2 frames
+    REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'000'100ULL, meta, 8, payload.data()));  // 8 bytes --> 2 frames
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
@@ -459,20 +423,17 @@ TEST_CASE("TxBasic1")
     }
 
     // Single-frame, OOM reported but the heap is not exhausted (because queue is filled up).
-    transfer.timestamp_usec = 1'000'000'000'200ULL;
-    transfer.priority       = CanardPriorityLow;
-    transfer.transfer_id    = 23;
-    transfer.payload_size   = 1;
-    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityLow;
+    meta.transfer_id = 23;
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, 1, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
 
     // Multi-frame, no frames are added -- bail early always.
-    transfer.timestamp_usec = 1'000'000'000'300ULL;
-    transfer.priority       = CanardPriorityHigh;
-    transfer.transfer_id    = 24;
-    transfer.payload_size   = 100;
-    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityHigh;
+    meta.transfer_id = 24;
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
+            que.push(&ins.getInstance(), 1'000'000'000'300ULL, meta, 100, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
@@ -496,8 +457,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 8));
     REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[11]);
     REQUIRE(frame->timestamp_usec == 1'000'000'000'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -506,8 +466,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 7));
     REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[7]);
     REQUIRE(frame->timestamp_usec == 1'000'000'000'100ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -518,15 +477,13 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[2]);
     REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[3]);
     REQUIRE(frame->timestamp_usec == 1'000'000'000'100ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(nullptr == que.getRoot());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
     frame = que.peek();
     REQUIRE(nullptr == frame);
-    que.pop();  // Invocation when empty has no effect.
-    que.pop();
+    REQUIRE(nullptr == que.pop());  // Invocation when empty has no effect.
     REQUIRE(0 == que.getSize());
     REQUIRE(nullptr == que.getRoot());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
@@ -537,11 +494,10 @@ TEST_CASE("TxBasic1")
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
     constexpr std::uint16_t CRC61 = 0x554EU;
     ins.setMTU(32);
-    transfer.timestamp_usec = 1'000'000'001'000ULL;
-    transfer.priority       = CanardPriorityFast;
-    transfer.transfer_id    = 25;
-    transfer.payload_size   = 31 + 30;  // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
-    REQUIRE(3 == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityFast;
+    meta.transfer_id = 25;
+    // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
+    REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'001'000ULL, meta, 31 + 30, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
@@ -553,8 +509,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 31));
     REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -564,8 +519,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[30]);
     REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -574,8 +528,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
     REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
     REQUIRE(frame->timestamp_usec == 1'000'000'001'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -583,11 +536,10 @@ TEST_CASE("TxBasic1")
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
     ins.setMTU(32);
-    transfer.timestamp_usec = 1'000'000'002'000ULL;
-    transfer.priority       = CanardPrioritySlow;
-    transfer.transfer_id    = 26;
-    transfer.payload_size   = 31 + 31;  // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
-    REQUIRE(3 == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPrioritySlow;
+    meta.transfer_id = 26;
+    // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
+    REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'002'000ULL, meta, 31 + 31, payload.data()));
     REQUIRE(3 == que.getSize());
     REQUIRE(3 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
@@ -599,8 +551,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 31));
     REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -609,8 +560,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data() + 31U, 31));
     REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[31]);
     REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -620,8 +570,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[1]);
     REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[2]);
     REQUIRE(frame->timestamp_usec == 1'000'000'002'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -629,11 +578,10 @@ TEST_CASE("TxBasic1")
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
     constexpr std::uint16_t CRC112Padding12 = 0xE7A5U;
     ins.setMTU(64);
-    transfer.timestamp_usec = 1'000'000'003'000ULL;
-    transfer.priority       = CanardPriorityImmediate;
-    transfer.transfer_id    = 27;
-    transfer.payload_size   = 112;  // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
-    REQUIRE(2 == que.push(&ins.getInstance(), transfer));
+    meta.priority    = CanardPriorityImmediate;
+    meta.transfer_id = 27;
+    // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
+    REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'003'000ULL, meta, 112, payload.data()));
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     // Read the generated frames.
@@ -643,8 +591,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(frame->payload, payload.data(), 63));
     REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[63]);
     REQUIRE(frame->timestamp_usec == 1'000'000'003'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     frame = que.peek();
@@ -658,17 +605,13 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC112Padding12 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(frame->payload)[62]);  // CRC
     REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[63]);        // Tail
     REQUIRE(frame->timestamp_usec == 1'000'000'003'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Single-frame empty.
-    transfer.timestamp_usec = 1'000'000'004'000ULL;
-    transfer.transfer_id    = 28;
-    transfer.payload_size   = 0;
-    transfer.payload        = nullptr;  // Null is OK if size is 0.
-    REQUIRE(1 == que.push(&ins.getInstance(), transfer));
+    meta.transfer_id = 28;
+    REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'004'000ULL, meta, 0, nullptr));
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     REQUIRE(60 > alloc.getTotalAllocatedAmount());
@@ -682,8 +625,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(frame->payload_size == 1);
     REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(frame->payload)[0]);
     REQUIRE(frame->timestamp_usec == 1'000'000'004'000ULL);
-    que.pop();
-    ins.getAllocator().deallocate(frame);
+    ins.getAllocator().deallocate(que.pop());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -692,27 +634,23 @@ TEST_CASE("TxBasic1")
     REQUIRE(nullptr == frame);
 
     // Invalid transfer.
-    transfer.payload        = payload.data();
-    transfer.timestamp_usec = 1'000'000'005'000ULL;
-    transfer.transfer_kind  = CanardTransferKindMessage;
-    transfer.remote_node_id = 42;
-    transfer.transfer_id    = 123;
-    transfer.payload_size   = 8;
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), transfer));
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.remote_node_id = 42;
+    meta.transfer_id    = 123;
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            que.push(&ins.getInstance(), 1'000'000'005'000ULL, meta, 8, payload.data()));
     frame = que.peek();
     REQUIRE(nullptr == frame);
 
     // Error handling.
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, nullptr));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), &transfer));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(&que.getInstance(), &ins.getInstance(), nullptr));
-    transfer.payload_size = 1;
-    transfer.payload      = nullptr;
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), transfer));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), 1'000'000'006'000ULL, meta, 1, nullptr));
 
     REQUIRE(nullptr == canardTxPeek(nullptr));
-
-    canardTxPop(nullptr);             // No effect.
-    canardTxPop(&que.getInstance());  // No effect.
+    REQUIRE(nullptr == canardTxPop(nullptr));             // No effect.
+    REQUIRE(nullptr == canardTxPop(&que.getInstance()));  // No effect.
 }
