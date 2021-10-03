@@ -7,11 +7,7 @@ cmake_minimum_required(VERSION 3.12)
 project(canard_tests C CXX)
 enable_testing()
 
-if (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-    # assert() shall be disabled in release builds to enable testing of bad free() calls.
-    add_definitions(-DNDEBUG=1)
-endif ()
-
+set(CTEST_OUTPUT_ON_FAILURE ON)
 set(library_dir "${CMAKE_SOURCE_DIR}/../libcanard")
 
 # Use -DNO_STATIC_ANALYSIS=1 to suppress static analysis.
@@ -23,17 +19,16 @@ if (NOT NO_STATIC_ANALYSIS)
         message(FATAL_ERROR "Could not locate clang-tidy")
     endif ()
     message(STATUS "Using clang-tidy: ${clang_tidy}")
-    set(CMAKE_C_CLANG_TIDY   ${clang_tidy})
+    set(CMAKE_C_CLANG_TIDY ${clang_tidy})
     set(CMAKE_CXX_CLANG_TIDY ${clang_tidy})
+endif ()
 
-    # clang-format
-    find_program(clang_format NAMES clang-format-12 clang-format)
-    if (NOT clang_format)
-        message(FATAL_ERROR "Could not locate clang-format")
-    endif ()
-    file(GLOB format_files
-         ${library_dir}/*.[ch]
-         ${CMAKE_SOURCE_DIR}/*.[ch]pp)
+# clang-format
+find_program(clang_format NAMES clang-format-12 clang-format)
+if (NOT clang_format)
+    message(STATUS "Could not locate clang-format")
+else ()
+    file(GLOB format_files ${library_dir}/*.[ch] ${CMAKE_SOURCE_DIR}/*.[ch]pp)
     message(STATUS "Using clang-format: ${clang_format}; files: ${format_files}")
     add_custom_target(format COMMAND ${clang_format} -i -fallback-style=none -style=file --verbose ${format_files})
 endif ()
@@ -74,21 +69,21 @@ function(gen_test_matrix name files compile_definitions compile_flags)
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
         gen_test("${name}_cov"
-                 "${files}"
-                 "${compile_definitions}"
-                 "${compile_flags} -g -O0 --coverage"
-                 "--coverage"
-                 "11")
+                "${files}"
+                "${compile_definitions}"
+                "${compile_flags} -g -O0 --coverage"
+                "--coverage"
+                "11")
     endif ()
 endfunction()
 
 # Disable missing declaration warning to allow exposure of private definitions.
 gen_test_matrix(test_private
-                "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp"
-                "CANARD_PRIVATE="
-                "-Wno-missing-declarations")
+        "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp"
+        "CANARD_PRIVATE="
+        "-Wno-missing-declarations")
 
 gen_test_matrix(test_public
-                "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
-                ""
-                "")
+        "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
+        ""
+        "")
