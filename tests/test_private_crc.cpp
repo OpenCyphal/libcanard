@@ -2,6 +2,7 @@
 // Copyright (c) 2016-2020 UAVCAN Development Team.
 
 #include "exposed.hpp"
+#include "catch.hpp"
 
 TEST_CASE("TransferCRC")
 {

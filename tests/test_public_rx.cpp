@@ -3,6 +3,7 @@
 
 #include "exposed.hpp"
 #include "helpers.hpp"
+#include "catch.hpp"
 #include <cstring>
 
 // clang-tidy mistakenly suggests to avoid C arrays here, which is clearly an error

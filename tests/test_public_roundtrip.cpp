@@ -3,6 +3,7 @@
 
 #include "helpers.hpp"
 #include "exposed.hpp"
+#include "catch.hpp"
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -106,7 +107,11 @@ TEST_CASE("RoundtripSimple")
                 }
                 else
                 {
-                    REQUIRE(result == -CANARD_ERROR_OUT_OF_MEMORY);
+                    if (result != -CANARD_ERROR_OUT_OF_MEMORY)
+                    {
+                        // Can't use REQUIRE because it is not thread-safe.
+                        throw std::logic_error("Unexpected result: " + std::to_string(result));
+                    }
                     sleep = true;
                 }
             }

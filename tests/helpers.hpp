@@ -96,17 +96,22 @@ public:
         {
             std::unique_lock locker(lock_);
             const auto       it = allocated_.find(static_cast<std::uint8_t*>(user_pointer));
-            REQUIRE(it != std::end(allocated_));  // Catch an attempt to deallocate memory that is not allocated.
+            if (it == std::end(allocated_))  // Catch an attempt to deallocate memory that is not allocated.
+            {
+                throw std::logic_error("Attempted to deallocate memory that was never allocated; ptr=" +
+                                       std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
+            }
             const auto [p, amount] = *it;
-            // Validate the canaries.
-            REQUIRE(0 == std::memcmp(p - canary_.size(), canary_.begin(), canary_.size()));
-            REQUIRE(0 == std::memcmp(p + amount, canary_.begin(), canary_.size()));
-            // Damage the memory to make sure it's not used after deallocation.
-            std::generate_n(p - canary_.size(),  //
+            if ((0 != std::memcmp(p - canary_.size(), canary_.begin(), canary_.size())) ||
+                (0 != std::memcmp(p + amount, canary_.begin(), canary_.size())))
+            {
+                throw std::logic_error("Dead canary detected at ptr=" +
+                                       std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
+            }
+            std::generate_n(p - canary_.size(),  // Damage the memory to make sure it's not used after deallocation.
                             amount + canary_.size() * 2U,
                             []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
-            // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
-            std::free(p - canary_.size());  // NOLINT
+            std::free(p - canary_.size());  // NOLINT we require manual memory management here.
             allocated_.erase(it);
         }
     }
@@ -214,8 +219,11 @@ class TxQueue
 public:
     explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity))
     {
-        REQUIRE(que_.user_reference == nullptr);  // Ensure that the initialization is correct.
-        que_.user_reference = this;               // This is simply to ensure it is not overwritten unexpectedly.
+        if (que_.user_reference != nullptr)
+        {
+            throw std::logic_error("Incorrect initialization of the user reference in TxQueue");
+        }
+        que_.user_reference = this;  // This is simply to ensure it is not overwritten unexpectedly.
     }
     virtual ~TxQueue() = default;
 
@@ -230,7 +238,7 @@ public:
                             const size_t                  payload_size,
                             const void* const             payload)
     {
-        REQUIRE(this == que_.user_reference);  // Ensure not overwritten.
+        checkUserReference();
         return canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
     }
 
@@ -238,10 +246,13 @@ public:
 
     [[nodiscard]] auto pop() -> CanardFrame*
     {
-        REQUIRE(this == que_.user_reference);  // Ensure not overwritten.
-        const auto* pk  = peek();
-        auto*       out = canardTxPop(&que_);
-        REQUIRE(pk == out);
+        checkUserReference();
+        const auto* volatile pk = peek();
+        auto* out               = canardTxPop(&que_);
+        if (pk != out)
+        {
+            throw std::logic_error("TxQueue peek/pop pointer invariant violation");
+        }
         return out;
     }
 
@@ -249,7 +260,7 @@ public:
 
     [[nodiscard]] auto getSize() const
     {
-        REQUIRE(this == que_.user_reference);  // Ensure not overwritten.
+        checkUserReference();
         std::size_t out = 0U;
         const auto* p   = getRoot();
         while (p != nullptr)
@@ -257,7 +268,10 @@ public:
             ++out;
             p = p->next;
         }
-        REQUIRE(que_.size == out);
+        if (que_.size != out)
+        {
+            throw std::logic_error("TxQueue size mismatch");
+        }
         return out;
     }
 
@@ -265,6 +279,14 @@ public:
     [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
 
 private:
+    void checkUserReference() const
+    {
+        if (que_.user_reference != this)
+        {
+            throw std::logic_error("User reference gone damaged in TxQueue");
+        }
+    }
+
     CanardTxQueue que_;
 };
 

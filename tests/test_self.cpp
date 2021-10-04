@@ -3,6 +3,7 @@
 
 #include "exposed.hpp"
 #include "helpers.hpp"
+#include "catch.hpp"
 
 TEST_CASE("TestAllocator")
 {

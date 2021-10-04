@@ -99,6 +99,10 @@ We would welcome contributions implementing CI/CD testing against popular embedd
 the ARM Cortex M series and AVR in an emulator.
 As a high-integrity library, the Libcanard test suite should provide full test coverage for all commonly used platforms.
 
+**WARNING:**
+[Catch2 is NOT thread-safe!](https://github.com/catchorg/Catch2/blob/1e379de9d7522b294e201700dcbb36d4f8037301/docs/limitations.md#thread-safe-assertions)
+Never use `REQUIRE` etc. anywhere but the main thread.
+
 ## Releasing
 
 Simply create a new release on GitHub: <https://github.com/UAVCAN/libcanard/releases/new>

@@ -24,6 +24,7 @@ Checks: >-
   -readability-function-size,
   -readability-function-cognitive-complexity,
   -llvm-header-guard,
+  -llvm-include-order,
   -misc-non-private-member-variables-in-classes,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
   -cppcoreguidelines-avoid-magic-numbers,

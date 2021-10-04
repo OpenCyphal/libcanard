@@ -4,10 +4,10 @@
 #pragma once
 
 #include "canard.h"
-#include "catch.hpp"
 #include <cstdarg>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 
 /// Definitions that are not exposed by the library but that are needed for testing.
 /// Please keep them in sync with the library by manually updating as necessary.
@@ -27,7 +27,11 @@ struct TxQueueItem final
 
     [[nodiscard]] auto getTailByte() const
     {
-        REQUIRE(frame.payload_size >= 1U);
+        if (frame.payload_size < 1U)
+        {
+            // Can't use REQUIRE because it is not thread-safe.
+            throw std::logic_error("Can't get the tail byte because the frame payload is empty.");
+        }
         return getPayloadByte(frame.payload_size - 1U);
     }
 
