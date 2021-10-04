@@ -203,7 +203,11 @@ TEST_CASE("RoundtripSimple")
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            ins_tx.getAllocator().deallocate(frame);
+
+            {
+                std::lock_guard locker(lock);
+                ins_tx.getAllocator().deallocate(frame);
+            }
 
             if (std::chrono::steady_clock::now() > deadline)
             {
