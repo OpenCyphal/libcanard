@@ -136,6 +136,17 @@ jobs:
       - name: Build GNU11
         run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
+  style_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: DoozyX/clang-format-lint-action@v0.12
+        with:
+          source: './libcanard ./tests'
+          exclude: './tests/catch'
+          extensions: 'c,h,cpp,hpp'
+          clangFormatVersion: 12
+
   sonarcloud:
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
