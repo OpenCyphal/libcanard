@@ -125,7 +125,7 @@ TEST_CASE("RoundtripSimple")
 
     try
     {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
         while (true)
         {
             CanardFrame* frame = nullptr;
@@ -188,7 +188,7 @@ TEST_CASE("RoundtripSimple")
                     }
 
                     ins_rx.getAllocator().deallocate(transfer.payload);
-                    std::free(ref_payload);
+                    std::free(ref_payload);  // NOLINT
                 }
                 else
                 {

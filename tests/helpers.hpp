@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstdarg>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <numeric>
 #include <unordered_map>
@@ -50,10 +51,6 @@ inline auto getRandomNatural(const T upper_open) -> T
 /// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
 class TestAllocator
 {
-    mutable std::recursive_mutex           lock_;
-    std::unordered_map<void*, std::size_t> allocated_;
-    std::atomic<std::size_t>               ceiling_ = std::numeric_limits<std::size_t>::max();
-
 public:
     TestAllocator()                      = default;
     TestAllocator(const TestAllocator&)  = delete;
@@ -67,46 +64,49 @@ public:
         for (auto [ptr, _] : allocated_)
         {
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
-            std::free(ptr);  // NOLINT
+            std::free(ptr - canary_.size());  // NOLINT
         }
     }
 
-    [[nodiscard]] auto allocate(const std::size_t amount)
+    [[nodiscard]] auto allocate(const std::size_t amount) -> void*
     {
         std::unique_lock locker(lock_);
-        void*            p = nullptr;
+        std::uint8_t*    p = nullptr;
         if ((amount > 0U) && ((getTotalAllocatedAmount() + amount) <= ceiling_))
         {
+            const auto amount_with_canaries = amount + canary_.size() * 2U;
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
-            p = std::malloc(amount);  // NOLINT
+            p = static_cast<std::uint8_t*>(std::malloc(amount_with_canaries));  // NOLINT
             if (p == nullptr)
             {
                 throw std::bad_alloc();  // This is a test suite failure, not a failed test. Mind the difference.
             }
-            // Random-fill the memory to make sure no assumptions are made about its contents.
-            std::uniform_int_distribution<std::uint16_t> dist(0, 255U);
-            std::generate_n(reinterpret_cast<std::byte*>(p), amount, [&]() {
-                return static_cast<std::byte>(getRandomNatural(256U));
-            });
+            p += canary_.size();
+            std::generate_n(p, amount, []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+            std::memcpy(p - canary_.size(), canary_.begin(), canary_.size());
+            std::memcpy(p + amount, canary_.begin(), canary_.size());
             allocated_.emplace(p, amount);
         }
         return p;
     }
 
-    void deallocate(void* const pointer)
+    void deallocate(void* const user_pointer)
     {
-        if (pointer != nullptr)
+        if (user_pointer != nullptr)
         {
             std::unique_lock locker(lock_);
-            const auto       it = allocated_.find(pointer);
+            const auto       it = allocated_.find(static_cast<std::uint8_t*>(user_pointer));
             REQUIRE(it != std::end(allocated_));  // Catch an attempt to deallocate memory that is not allocated.
+            const auto [p, amount] = *it;
+            // Validate the canaries.
+            REQUIRE(0 == std::memcmp(p - canary_.size(), canary_.begin(), canary_.size()));
+            REQUIRE(0 == std::memcmp(p + amount, canary_.begin(), canary_.size()));
             // Damage the memory to make sure it's not used after deallocation.
-            std::uniform_int_distribution<std::uint16_t> dist(0, 255U);
-            std::generate_n(reinterpret_cast<std::byte*>(pointer), it->second, [&]() {
-                return static_cast<std::byte>(getRandomNatural(256U));
-            });
+            std::generate_n(p - canary_.size(),  //
+                            amount + canary_.size() * 2U,
+                            []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
-            std::free(it->first);  // NOLINT
+            std::free(p - canary_.size());  // NOLINT
             allocated_.erase(it);
         }
     }
@@ -130,26 +130,25 @@ public:
 
     [[nodiscard]] auto getAllocationCeiling() const { return static_cast<std::size_t>(ceiling_); }
     void               setAllocationCeiling(const std::size_t amount) { ceiling_ = amount; }
+
+private:
+    static auto makeCanary() -> std::array<std::uint8_t, 256>
+    {
+        std::array<std::uint8_t, 256> out{};
+        std::generate_n(out.begin(), out.size(), []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+        return out;
+    }
+
+    const std::array<std::uint8_t, 256> canary_ = makeCanary();
+
+    mutable std::recursive_mutex                   lock_;
+    std::unordered_map<std::uint8_t*, std::size_t> allocated_;
+    std::atomic<std::size_t>                       ceiling_ = std::numeric_limits<std::size_t>::max();
 };
 
 /// An enhancing wrapper over the library to remove boilerplate from the tests.
 class Instance
 {
-    CanardInstance canard_ = canardInit(&Instance::trampolineAllocate, &Instance::trampolineDeallocate);
-    TestAllocator  allocator_;
-
-    static auto trampolineAllocate(CanardInstance* const ins, const std::size_t amount) -> void*
-    {
-        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        return p->allocator_.allocate(amount);
-    }
-
-    static void trampolineDeallocate(CanardInstance* const ins, void* const pointer)
-    {
-        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        p->allocator_.deallocate(pointer);
-    }
-
 public:
     Instance() { canard_.user_reference = this; }
 
@@ -192,12 +191,26 @@ public:
 
     [[nodiscard]] auto getInstance() -> CanardInstance& { return canard_; }
     [[nodiscard]] auto getInstance() const -> const CanardInstance& { return canard_; }
+
+private:
+    static auto trampolineAllocate(CanardInstance* const ins, const std::size_t amount) -> void*
+    {
+        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
+        return p->allocator_.allocate(amount);
+    }
+
+    static void trampolineDeallocate(CanardInstance* const ins, void* const pointer)
+    {
+        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
+        p->allocator_.deallocate(pointer);
+    }
+
+    CanardInstance canard_ = canardInit(&Instance::trampolineAllocate, &Instance::trampolineDeallocate);
+    TestAllocator  allocator_;
 };
 
 class TxQueue
 {
-    CanardTxQueue que_;
-
 public:
     explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity))
     {
@@ -250,6 +263,9 @@ public:
 
     [[nodiscard]] auto getInstance() -> CanardTxQueue& { return que_; }
     [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
+
+private:
+    CanardTxQueue que_;
 };
 
 }  // namespace helpers
