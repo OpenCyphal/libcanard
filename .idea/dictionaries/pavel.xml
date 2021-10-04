@@ -12,6 +12,7 @@
       <w>coverity</w>
       <w>crtp</w>
       <w>dataflow</w>
+      <w>dcanard</w>
       <w>ddtid</w>
       <w>deallocated</w>
       <w>deallocating</w>

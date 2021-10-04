@@ -8,6 +8,12 @@
 
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
 
+/// Define this macro to include build configuration header.
+/// Usage example with CMake: "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/my_canard_config.h\""
+#ifdef CANARD_CONFIG_HEADER
+#    include CANARD_CONFIG_HEADER
+#endif
+
 /// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
 /// To disable assertion checks completely, make it expand into `(void)(0)`.
 #ifndef CANARD_ASSERT

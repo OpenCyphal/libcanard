@@ -208,6 +208,7 @@ use [Nunavut](https://github.com/UAVCAN/nunavut).
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
 - `canardRxAccept2()` replaced the deprecated `canardRxAccept()`.
 - Fixed issues with const-correctness.
+- Support build configuration headers via `CANARD_CONFIG_HEADER`.
 
 ### v1.1
 
