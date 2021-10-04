@@ -1007,12 +1007,8 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que)
     const CanardFrame* out = NULL;
     if ((que != NULL) && (que->head != NULL))
     {
-        // Return pointer to the TX queue item typed as CanardFrame. Later, the application will be able to free
-        // the memory allocated for the TX queue item using this pointer typed as CanardFrame. Although it may look
-        // sketchy, this is actually safe and standard-compliant. The paragraph 6.7.2.1.15 of the C standard says:
-        //     A pointer to a structure object, suitably converted, points to its initial member (or if that member is a
-        //     bit-field, then to the unit in which it resides), and vice versa. There may be unnamed padding within a
-        //     structure object, but not at its beginning.
+        // Paragraph 6.7.2.1.15 of the C standard says:
+        //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         out = &que->head->frame;
         CANARD_ASSERT(((void*) out) == ((void*) que->head));
     }
@@ -1024,7 +1020,14 @@ CanardFrame* canardTxPop(CanardTxQueue* const que)
     CanardFrame* out = NULL;
     if ((que != NULL) && (que->head != NULL))
     {
+        // Return pointer to the TX queue item typed as CanardFrame. Later, the application will be able to free
+        // the memory allocated for the TX queue item using this pointer typed as CanardFrame. Although it may look
+        // sketchy, this is actually safe and standard-compliant. Paragraph 6.7.2.1.15 of the C standard says:
+        //     A pointer to a structure object, suitably converted, points to its initial member (or if that member is a
+        //     bit-field, then to the unit in which it resides), and vice versa. There may be unnamed padding within a
+        //     structure object, but not at its beginning.
         out = &que->head->frame;
+        CANARD_ASSERT(((void*) out) == ((void*) que->head));
         // The memory is NOT deallocated. The application is responsible for that.
         que->head = que->head->next;
         que->size--;
