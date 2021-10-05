@@ -219,11 +219,9 @@ class TxQueue
 public:
     explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity))
     {
-        if (que_.user_reference != nullptr)
-        {
-            throw std::logic_error("Incorrect initialization of the user reference in TxQueue");
-        }
+        enforce(que_.user_reference == nullptr, "Incorrect initialization of the user reference in TxQueue");
         que_.user_reference = this;  // This is simply to ensure it is not overwritten unexpectedly.
+        checkInvariants();
     }
     virtual ~TxQueue() = default;
 
@@ -238,21 +236,41 @@ public:
                             const size_t                  payload_size,
                             const void* const             payload)
     {
-        checkUserReference();
-        return canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
+        checkInvariants();
+        const auto size_before = que_.size;
+        const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
+        enforce((ret < 0) || ((size_before + static_cast<std::size_t>(ret)) == que_.size),
+                "Unexpected size change after push");
+        checkInvariants();
+        return ret;
     }
 
-    [[nodiscard]] auto peek() const -> const CanardFrame* { return canardTxPeek(&que_); }
+    [[nodiscard]] auto peek() const -> const CanardFrame*
+    {
+        checkInvariants();
+        const auto        before = que_.size;
+        const auto* const ret    = canardTxPeek(&que_);
+        enforce(((ret == nullptr) ? (before == 0) : (before > 0)) && (que_.size == before), "Bad peek");
+        checkInvariants();
+        return ret;
+    }
 
     [[nodiscard]] auto pop() -> CanardFrame*
     {
-        checkUserReference();
+        checkInvariants();
+        const auto size_before  = que_.size;
         const auto* volatile pk = peek();
         auto* out               = canardTxPop(&que_);
-        if (pk != out)
+        enforce(pk == out, "Peek/pop pointer mismatch");
+        if (out == nullptr)
         {
-            throw std::logic_error("TxQueue peek/pop pointer invariant violation");
+            enforce((size_before == 0) && (que_.size == 0), "Bad empty pop");
         }
+        else
+        {
+            enforce((size_before > 0) && (que_.size == (size_before - 1U)), "Bad non-empty pop");
+        }
+        checkInvariants();
         return out;
     }
 
@@ -260,7 +278,6 @@ public:
 
     [[nodiscard]] auto getSize() const
     {
-        checkUserReference();
         std::size_t out = 0U;
         const auto* p   = getRoot();
         while (p != nullptr)
@@ -268,10 +285,7 @@ public:
             ++out;
             p = p->next;
         }
-        if (que_.size != out)
-        {
-            throw std::logic_error("TxQueue size mismatch");
-        }
+        enforce(que_.size == out, "Size miscalculation");
         return out;
     }
 
@@ -279,12 +293,18 @@ public:
     [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
 
 private:
-    void checkUserReference() const
+    static void enforce(const bool expect_true, const std::string& message)
     {
-        if (que_.user_reference != this)
+        if (!expect_true)
         {
-            throw std::logic_error("User reference gone damaged in TxQueue");
+            throw std::logic_error("TxQueue invariant violation: " + message);
         }
+    }
+
+    void checkInvariants() const
+    {
+        enforce(que_.user_reference == this, "User reference damaged");
+        enforce(que_.size == getSize(), "Size miscalculation");
     }
 
     CanardTxQueue que_;

@@ -253,7 +253,7 @@ typedef struct CanardTxQueue
 /// over the bus by creating such subscription objects. Frames that carry data for which there is no active
 /// subscription will be silently dropped by the library.
 ///
-/// WARNING: SUBSCRIPTION INSTANCES SHALL NOT BE COPIED OR MUTATED BY THE APPLICATION (except user_reference).
+/// SUBSCRIPTION INSTANCES SHALL NOT BE MOVED WHILE IN USE.
 ///
 /// The memory footprint of a subscription is large. On a 32-bit platform it slightly exceeds half a KiB.
 /// This is an intentional time-memory trade-off: use a large look-up table to ensure predictable temporal properties.
@@ -274,11 +274,11 @@ typedef struct CanardRxSubscription
     /// just pointers, but it would push the size of this instance from about 0.5 KiB to ~3 KiB for a typical 32-bit
     /// system. Since this is a general-purpose library, we have to pick a middle ground so we use the more complex
     /// but more memory-efficient approach.
-    struct CanardInternalRxSession* sessions[CANARD_NODE_ID_MAX + 1U];
+    struct CanardInternalRxSession* sessions[CANARD_NODE_ID_MAX + 1U];  ///< Read-only DO NOT MODIFY THIS
 
-    CanardMicrosecond transfer_id_timeout_usec;  ///< Read-only DO NOT MODIFY THIS
-    size_t            extent;                    ///< Read-only DO NOT MODIFY THIS
-    CanardPortID      port_id;                   ///< Read-only DO NOT MODIFY THIS
+    CanardMicrosecond transfer_id_timeout_usec;
+    size_t            extent;   ///< Read-only DO NOT MODIFY THIS
+    CanardPortID      port_id;  ///< Read-only DO NOT MODIFY THIS
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
@@ -460,7 +460,7 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 /// This function transfers the ownership of the top element of the prioritized transmission queue from the queue
 /// to the application. The element is dequeued but not invalidated; it is the responsibility of the application to
 /// deallocate the memory used by the object later. The object SHALL NOT be deallocated UNTIL this function is invoked.
-/// The return value is the same as that of canardTxPeek() except that it is non-const.
+/// The return value is the same as that of canardTxPeek() except that it is mutable.
 ///
 /// WARNING:
 ///     Invocation of canardTxPush() may add new elements at the top of the prioritized transmission queue.
