@@ -189,9 +189,6 @@ public:
     [[nodiscard]] auto getNodeID() const { return canard_.node_id; }
     void               setNodeID(const std::uint8_t x) { canard_.node_id = x; }
 
-    [[nodiscard]] auto getMTU() const { return canard_.mtu_bytes; }
-    void               setMTU(const std::size_t x) { canard_.mtu_bytes = x; }
-
     [[nodiscard]] auto getAllocator() -> TestAllocator& { return allocator_; }
 
     [[nodiscard]] auto getInstance() -> CanardInstance& { return canard_; }
@@ -217,9 +214,10 @@ private:
 class TxQueue
 {
 public:
-    explicit TxQueue(const std::size_t capacity) : que_(canardTxInit(capacity))
+    explicit TxQueue(const std::size_t capacity, const std::size_t mtu_bytes) : que_(canardTxInit(capacity, mtu_bytes))
     {
         enforce(que_.user_reference == nullptr, "Incorrect initialization of the user reference in TxQueue");
+        enforce(que_.mtu_bytes == mtu_bytes, "Incorrect MTU");
         que_.user_reference = this;  // This is simply to ensure it is not overwritten unexpectedly.
         checkInvariants();
     }
@@ -229,6 +227,9 @@ public:
     TxQueue(TxQueue&&)      = delete;
     auto operator=(const TxQueue&) -> TxQueue& = delete;
     auto operator=(TxQueue&&) -> TxQueue& = delete;
+
+    [[nodiscard]] auto getMTU() const { return que_.mtu_bytes; }
+    void               setMTU(const std::size_t x) { que_.mtu_bytes = x; }
 
     [[nodiscard]] auto push(CanardInstance* const         ins,
                             const CanardMicrosecond       transmission_deadline_usec,

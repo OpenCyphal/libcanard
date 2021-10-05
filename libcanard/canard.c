@@ -146,17 +146,17 @@ CANARD_PRIVATE uint32_t txMakeServiceSessionSpecifier(const CanardPortID service
 }
 
 /// This is the transport MTU rounded up to next full DLC minus the tail byte.
-CANARD_PRIVATE size_t txGetPresentationLayerMTU(const CanardInstance* const ins)
+CANARD_PRIVATE size_t adjustPresentationLayerMTU(const size_t mtu_bytes)
 {
     const size_t max_index = (sizeof(CanardCANLengthToDLC) / sizeof(CanardCANLengthToDLC[0])) - 1U;
     size_t       mtu       = 0U;
-    if (ins->mtu_bytes < CANARD_MTU_CAN_CLASSIC)
+    if (mtu_bytes < CANARD_MTU_CAN_CLASSIC)
     {
         mtu = CANARD_MTU_CAN_CLASSIC;
     }
-    else if (ins->mtu_bytes <= max_index)
+    else if (mtu_bytes <= max_index)
     {
-        mtu = CanardCANDLCToLength[CanardCANLengthToDLC[ins->mtu_bytes]];  // Round up to nearest valid length.
+        mtu = CanardCANDLCToLength[CanardCANLengthToDLC[mtu_bytes]];  // Round up to nearest valid length.
     }
     else
     {
@@ -941,7 +941,6 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
     CANARD_ASSERT(memory_free != NULL);
     const CanardInstance out = {
         .user_reference   = NULL,
-        .mtu_bytes        = CANARD_MTU_CAN_FD,
         .node_id          = CANARD_NODE_ID_UNSET,
         .memory_allocate  = memory_allocate,
         .memory_free      = memory_free,
@@ -950,10 +949,11 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
     return out;
 }
 
-CanardTxQueue canardTxInit(const size_t capacity)
+CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes)
 {
     CanardTxQueue out = {
         .capacity       = capacity,
+        .mtu_bytes      = mtu_bytes,
         .size           = 0,
         .head           = NULL,
         .user_reference = NULL,
@@ -971,7 +971,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (que != NULL) && (metadata != NULL) && ((payload != NULL) || (0U == payload_size)))
     {
-        const size_t  pl_mtu       = txGetPresentationLayerMTU(ins);
+        const size_t  pl_mtu       = adjustPresentationLayerMTU(que->mtu_bytes);
         const int32_t maybe_can_id = txMakeCANID(metadata, payload_size, payload, ins->node_id, pl_mtu);
         if (maybe_can_id >= 0)
         {

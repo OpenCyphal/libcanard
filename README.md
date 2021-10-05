@@ -23,8 +23,8 @@ If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 
 ## Features
 
-- Full test coverage and static analysis.
-- Partial compliance with automatically enforceable MISRA C rules (reach out to <https://forum.uavcan.org> for details).
+- Full test coverage and extensive static analysis.
+- Compliance with automatically enforceable MISRA C rules (reach out to <https://forum.uavcan.org> for details).
 - Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
 - Purely reactive API without the need for background servicing.
 - Support for the Classic CAN and CAN FD.
@@ -66,15 +66,15 @@ so let's suppose that we're using [O1Heap](https://github.com/pavel-kirienko/o1h
 We are going to need basic wrappers:
 
 ```c
-static void* memAllocate(CanardInstance* const ins, const size_t amount)
+static void* memAllocate(CanardInstance* const canard, const size_t amount)
 {
-    (void) ins;
+    (void) canard;
     return o1heapAllocate(my_allocator, amount);
 }
 
-static void memFree(CanardInstance* const ins, void* const pointer)
+static void memFree(CanardInstance* const canard, void* const pointer)
 {
-    (void) ins;
+    (void) canard;
     o1heapFree(my_allocator, pointer);
 }
 ```
@@ -82,73 +82,84 @@ static void memFree(CanardInstance* const ins, void* const pointer)
 Init a library instance:
 
 ```c
-CanardInstance ins = canardInit(&memAllocate, &memFree);
-ins.mtu_bytes = CANARD_MTU_CAN_CLASSIC;  // Defaults to 64 (CAN FD); here we select Classic CAN.
-ins.node_id   = 42;                      // Defaults to anonymous; can be set up later at any point.
+CanardInstance canard = canardInit(&memAllocate, &memFree);
+canard.node_id = 42;                        // Defaults to anonymous; can be set up later at any point.
+```
+
+In order to be able to send transfers over the network, we will need one transmission queue per redundant CAN interface:
+
+```c
+CanardTxQueue queue = canardTxInit(100,                 // Limit the size of the queue at 100 frames max.
+                                   CANARD_MTU_CAN_FD);  // Set MTU = 64 bytes (CAN FD).
 ```
 
 Publish a message:
 
 ```c
 static uint8_t my_message_transfer_id;  // Must be static or heap-allocated to retain state between calls.
-const CanardTransfer transfer = {
-    .timestamp_usec = transmission_deadline,      // Zero if transmission deadline is not limited.
+const CanardTransferMetadata transfer_metadata = {
     .priority       = CanardPriorityNominal,
     .transfer_kind  = CanardTransferKindMessage,
     .port_id        = 1234,                       // This is the subject-ID.
     .remote_node_id = CANARD_NODE_ID_UNSET,       // Messages cannot be unicast, so use UNSET.
     .transfer_id    = my_message_transfer_id,
-    .payload_size   = 47,
-    .payload        = "\x2D\x00" "Sancho, it strikes me thou art in great fear.",
 };
 ++my_message_transfer_id;  // The transfer-ID shall be incremented after every transmission on this subject.
-int32_t result = canardTxPush(&ins, &transfer);
+int32_t result = canardTxPush(&queue,               // Call this once per redundant CAN interface (queue).
+                              &canard,
+                              tx_deadline_usec,     // Zero if transmission deadline is not limited.
+                              &transfer_metadata,
+                              47,                   // Size of the message payload (see Nunavut transpiler).
+                              "\x2D\x00" "Sancho, it strikes me thou art in great fear.");
 if (result < 0)
 {
-    // An error has occurred: either an argument is invalid or we've ran out of memory.
+    // An error has occurred: either an argument is invalid, the TX queue is full, or we've ran out of memory.
     // It is possible to statically prove that an out-of-memory will never occur for a given application if the
     // heap is sized correctly; for background, refer to the Robson's Proof and the documentation for O1Heap.
     abort();
 }
 ```
 
-The CAN frames generated from the message transfer are now stored in the transmission queue.
+Use [Nunavut](https://github.com/UAVCAN/nunavut) to automatically generate (de)serialization code from DSDL definitions.
+
+The CAN frames generated from the message transfer are now stored in the `queue`.
 We need to pick them out one by one and have them transmitted.
 Normally, the following fragment should be invoked periodically to unload the CAN frames from the
 prioritized transmission queue into the CAN driver (or several, if redundant interfaces are used):
 
 ```c
-for (const CanardFrame* txf = NULL; (txf = canardTxPeek(&ins)) != NULL;)  // Look at the top of the TX queue.
+for (const CanardFrame* txf = NULL; (txf = canardTxPeek(&queue)) != NULL;)  // Look at the top of this TX queue.
 {
     if ((0U == txf->timestamp_usec) || (txf->timestamp_usec > getCurrentMicroseconds()))  // Check the deadline.
     {
-        if (!pleaseTransmit(txf))              // Send the frame. Redundant interfaces may be used here.
+        if (!pleaseTransmit(txf))              // Send the frame over this redundant CAN iface.
         {
             break;                             // If the driver is busy, break and retry later.
         }
     }
-    canardTxPop(&ins);                         // Remove the frame from the queue after it's transmitted.
-    ins.memory_free(&ins, (CanardFrame*)txf);  // Deallocate the dynamic memory afterwards.
+    // After the frame is transmitted or if it has timed out while waiting, pop it from the queue and deallocate:
+    canard.memory_free(&canard, canardTxPop(&queue));
 }
 ```
 
-Transfer reception is done by feeding frames into the transfer reassembly state machine.
+Transfer reception is done by feeding frames into the transfer reassembly state machine
+from any of the redundant interfaces.
 But first, we need to subscribe:
 
 ```c
 CanardRxSubscription heartbeat_subscription;
-(void) canardRxSubscribe(&ins,   // Subscribe to messages uavcan.node.Heartbeat.
+(void) canardRxSubscribe(&canard,   // Subscribe to messages uavcan.node.Heartbeat.
                          CanardTransferKindMessage,
-                         7509,   // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
-                         16,     // The extent (the maximum possible payload size); pick a huge value if not sure.
+                         7509,      // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
+                         16,        // The extent (the maximum possible payload size); pick a huge value if not sure.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
 
 CanardRxSubscription my_service_subscription;
-(void) canardRxSubscribe(&ins,   // Subscribe to an arbitrary service response.
+(void) canardRxSubscribe(&canard,   // Subscribe to an arbitrary service response.
                          CanardTransferKindResponse,  // Specify that we want service responses, not requests.
-                         123,    // The Service-ID whose responses we will receive.
-                         1024,   // The extent (the maximum payload size); pick a huge value if not sure.
+                         123,       // The Service-ID whose responses we will receive.
+                         1024,      // The extent (the maximum payload size); pick a huge value if not sure.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &my_service_subscription);
 ```
@@ -171,7 +182,7 @@ Okay, this is how we receive transfers:
 
 ```c
 CanardTransfer transfer;
-const int8_t result = canardRxAccept(&ins,
+const int8_t result = canardRxAccept(&canard,
                                      &received_frame,            // The CAN frame received from the bus.
                                      redundant_interface_index,  // If the transport is not redundant, use 0.
                                      &transfer,
@@ -187,7 +198,7 @@ if (result < 0)
 else if (result == 1)
 {
     processReceivedTransfer(redundant_interface_index, &transfer);  // A transfer has been received, process it.
-    ins.memory_free(&ins, (void*)transfer.payload);  // Deallocate the dynamic memory afterwards.
+    canard.memory_free(&canard, transfer.payload);                  // Deallocate the dynamic memory afterwards.
 }
 else
 {
@@ -197,17 +208,14 @@ else
 }
 ```
 
-To automatically generate (de-)serialization code from DSDL definitions,
-use [Nunavut](https://github.com/UAVCAN/nunavut).
-
 ## Revisions
 
 ### v2.0
 
-- Dedicated transmission queues per redundant CAN interface.
+- Dedicated transmission queues per redundant CAN interface with depth limits.
+- Fixed issues with const-correctness.
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
 - `canardRxAccept2()` replaced the deprecated `canardRxAccept()`.
-- Fixed issues with const-correctness.
 - Support build configuration headers via `CANARD_CONFIG_HEADER`.
 
 ### v1.1

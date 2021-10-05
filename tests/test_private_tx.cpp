@@ -15,18 +15,13 @@ TEST_CASE("SessionSpecifier")
             exposed::txMakeServiceSessionSpecifier(0b0100110011, false, 0b0101010, 0b1010101));
 }
 
-TEST_CASE("txGetPresentationLayerMTU")
+TEST_CASE("adjustPresentationLayerMTU")
 {
-    auto ins = canardInit(&helpers::dummy_allocator::allocate, &helpers::dummy_allocator::free);
-    REQUIRE(63 == exposed::txGetPresentationLayerMTU(&ins));  // This is the default.
-    ins.mtu_bytes = 0;
-    REQUIRE(7 == exposed::txGetPresentationLayerMTU(&ins));
-    ins.mtu_bytes = 255;
-    REQUIRE(63 == exposed::txGetPresentationLayerMTU(&ins));
-    ins.mtu_bytes = 32;
-    REQUIRE(31 == exposed::txGetPresentationLayerMTU(&ins));
-    ins.mtu_bytes = 30;  // Round up.
-    REQUIRE(31 == exposed::txGetPresentationLayerMTU(&ins));
+    REQUIRE(63 == exposed::adjustPresentationLayerMTU(64));
+    REQUIRE(7 == exposed::adjustPresentationLayerMTU(0));
+    REQUIRE(63 == exposed::adjustPresentationLayerMTU(255));
+    REQUIRE(31 == exposed::adjustPresentationLayerMTU(32));
+    REQUIRE(31 == exposed::adjustPresentationLayerMTU(30));
 }
 
 TEST_CASE("txMakeCANID")
@@ -185,8 +180,9 @@ TEST_CASE("txFindQueueSupremum")
     using exposed::txFindQueueSupremum;
     using TxQueueItem = exposed::TxQueueItem;
 
-    auto que = canardTxInit(10);
+    auto que = canardTxInit(10, 64);
     REQUIRE(que.capacity == 10);
+    REQUIRE(que.mtu_bytes == 64);
     REQUIRE(que.size == 0);
 
     const auto find = [&](std::uint32_t x) -> TxQueueItem* { return txFindQueueSupremum(&que, x); };

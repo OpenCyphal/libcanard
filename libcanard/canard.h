@@ -18,14 +18,14 @@
 /// source tree of the project; it does not require any special compilation options and should work out of the box.
 /// There are optional build configuration macros defined near the top of canard.c; they may be used to fine-tune
 /// the library for the target platform (but it is not necessary). This header file should be located in the same
-/// directory with canard.c, or its location should be in the include look-up paths of the compiler.
+/// directory with canard.c.
 ///
 /// As explained in this documentation, the library requires a deterministic constant-time bounded-fragmentation dynamic
 /// memory allocator. If your target platform does not provide a deterministic memory manager (most platforms don't),
 /// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
 ///
 /// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
-/// UAVCAN Development Team may be found at https://github.com/UAVCAN/platform_specific_components.
+/// UAVCAN Consortium may be found at https://github.com/UAVCAN/platform_specific_components.
 ///
 /// If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
 /// at https://forum.uavcan.org.
@@ -35,35 +35,38 @@
 /// UAVCAN, as a protocol stack, is composed of two layers: TRANSPORT and PRESENTATION. The transport layer is portable
 /// across different transport protocols, one of which is CAN (FD), formally referred to as UAVCAN/CAN. This library
 /// is focused on UAVCAN/CAN only and it will not support other transports. The presentation layer is implemented
-/// through the DSDL language and the associated data type regulation policies; these parts are outside of the scope of
+/// through the DSDL language and the associated data type regulation policies; these parts are out of the scope of
 /// this library as it is focused purely on the transport.
 ///
 /// This library consists of two components: the transmission (TX) pipeline and the reception (RX) pipeline.
-///
-/// The TX and RX pipelines are completely independent from each other except that they both rely on the same
-/// dynamic memory manager. The TX pipeline uses the dynamic memory to store outgoing CAN frames in the prioritized
-/// transmission queue. The RX pipeline uses the dynamic memory to store contiguous payload buffers for received
-/// transfers and for keeping the transfer reassembly state machine data. The exact memory consumption model is defined
-/// for both pipelines, so it is possible to statically determine the minimum size of the dynamic memory pool required
-/// to guarantee that a given application will never encounter an out-of-memory error at runtime.
+/// The pipelines are completely independent from each other except that they both rely on the same dynamic memory
+/// manager. The TX pipeline uses the dynamic memory to store outgoing CAN frames in the prioritized transmission
+/// queue. The RX pipeline uses the dynamic memory to store contiguous payload buffers for received transfers and
+/// for keeping the transfer reassembly state machine data. The exact memory consumption model is defined for both
+/// pipelines, so it is possible to statically determine the minimum size of the dynamic memory pool required to
+/// guarantee that a given application will never encounter an out-of-memory error at runtime.
 ///
 /// Much like with dynamic memory, the time complexity of every API function is well-characterized, allowing the
 /// application to guarantee predictable real-time performance.
 ///
-/// The TX pipeline is managed with the help of three API functions. When the application needs to emit a transfer,
-/// it invokes canardTxPush(). The function splits the transfer into CAN frames and stores them into the prioritized
-/// transmission queue. The application then picks the CAN frames from the queue one-by-one by calling canardTxPeek()
-/// followed by canardTxPop() -- the former allows the application to look at the frame and the latter tells the library
-/// that the frame shall be removed from the queue. The returned frames need to be deallocated by the application.
+/// The TX pipeline is managed with the help of four API functions. The first one -- canardTxInit() -- is used for
+/// constructing a new TX queue, of which there should be as many as there are redundant CAN interfaces;
+/// each queue is managed independently. When the application needs to emit a transfer, it invokes canardTxPush()
+/// on each queue separately. The function splits the transfer into CAN frames and stores them into the queue.
+/// The application then picks the produced CAN frames from the queue one-by-one by calling canardTxPeek() followed
+/// by canardTxPop() -- the former allows the application to look at the next frame scheduled for transmission,
+/// and the latter tells the library that the frame shall be removed from the queue.
+/// The returned frames need to be manually deallocated by the application upon transmission.
 ///
-/// The RX pipeline is managed with the help of three API functions. The main function canardRxAccept() takes a
-/// received CAN frame and updates the appropriate transfer reassembly state machine. The functions canardRxSubscribe()
-/// and its counterpart canardRxUnsubscribe() instruct the library which transfers should be received (by default, all
-/// transfers are ignored); also the subscription function specifies vital transfer reassembly parameters such as the
-/// maximum payload size (i.e., the maximum size of a serialized representation of a DSDL object) and the transfer-ID
-/// timeout. Transfers that carry more payload than the configured maximum per subscription are truncated following the
-/// Implicit Truncation Rule (ITR) defined by the UAVCAN Specification -- the rule is implemented to facilitate
-/// backward-compatible DSDL data type extensibility.
+/// The RX pipeline is managed with the help of three API functions; unlike the TX pipeline, there is one shared
+/// state for all redundant interfaces that manages deduplication transparently. The main function canardRxAccept()
+/// takes a received CAN frame and updates the appropriate transfer reassembly state machine. The functions
+/// canardRxSubscribe() and its counterpart canardRxUnsubscribe() instruct the library which transfers should be
+/// received (by default, all transfers are ignored); also, the subscription function specifies vital transfer
+/// reassembly parameters such as the maximum payload size (i.e., the maximum size of a serialized representation
+/// of a DSDL object) and the transfer-ID timeout. Transfers that carry more payload than the configured maximum per
+/// subscription are truncated following the Implicit Truncation Rule (ITR) defined by the UAVCAN Specification --
+/// the rule is implemented to facilitate backward-compatible DSDL data type extensibility.
 ///
 /// The library supports a practically unlimited number of redundant transports.
 ///
@@ -191,7 +194,7 @@ extern const uint8_t CanardCANLengthToDLC[65];
 /// A UAVCAN transfer metadata (everything except the payload).
 /// Per Specification, a transfer is represented on the wire as a non-empty set of transport frames (i.e., CAN frames).
 /// The library is responsible for serializing transfers into transport frames when transmitting, and reassembling
-/// transfers from an incoming stream of frames during reception.
+/// transfers from an incoming stream of frames (possibly duplicated if redundant interfaces are used) during reception.
 typedef struct
 {
     /// Per the Specification, all frames belonging to a given transfer shall share the same priority level.
@@ -235,13 +238,24 @@ typedef struct
 typedef struct CanardTxQueue
 {
     /// The maximum number of frames this queue is allowed to contain. An attempt to push more will fail with an
-    /// out-of-memory error even if the heap is not exhausted. This value can be changed by the user at any moment.
+    /// out-of-memory error even if the memory is not exhausted. This value can be changed by the user at any moment.
     size_t capacity;
 
-    /// The number of frames that are currently contained in the queue, initially zero. Do not modify this field!
+    /// The transport-layer maximum transmission unit (MTU). The value can be changed arbitrarily at any time between
+    /// pushes. It defines the maximum number of data bytes per CAN data frame in outgoing transfers via this queue.
+    ///
+    /// Only the standard values should be used as recommended by the specification;
+    /// otherwise, networking interoperability issues may arise. See recommended values CANARD_MTU_*.
+    ///
+    /// Valid values are any valid CAN frame data length value not smaller than 8.
+    /// Invalid values are treated as the nearest valid value. The default is the maximum valid value.
+    size_t mtu_bytes;
+
+    /// The number of frames that are currently contained in the queue, initially zero.
+    /// Do not modify this field!
     size_t size;
 
-    /// Internal use only; do not modify this field.
+    /// Internal use only; do not access this field.
     struct CanardInternalTxQueueItem* head;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
@@ -251,7 +265,8 @@ typedef struct CanardTxQueue
 
 /// Transfer subscription state. The application can register its interest in a particular kind of data exchanged
 /// over the bus by creating such subscription objects. Frames that carry data for which there is no active
-/// subscription will be silently dropped by the library.
+/// subscription will be silently dropped by the library. The entire RX pipeline is invariant to the number of
+/// redundant CAN interfaces used.
 ///
 /// SUBSCRIPTION INSTANCES SHALL NOT BE MOVED WHILE IN USE.
 ///
@@ -264,13 +279,12 @@ typedef struct CanardRxSubscription
     /// The current architecture is an acceptable middle ground between worst-case execution time and memory
     /// consumption. Instead of statically pre-allocating a dedicated RX session for each remote node-ID here in
     /// this table, we only keep pointers, which are NULL by default, populating a new RX session dynamically
-    /// on an ad-hoc basis when we first receive a transfer from that node. This is deterministic because our memory
-    /// allocation routines are assumed to be deterministic and we make at most one allocation per remote node,
-    /// but the disadvantage is that these additional operations lift the upper bound on the execution time.
+    /// on an ad-hoc basis when we first receive a transfer from that node. This is O(1) because our memory
+    /// allocation routines are assumed to be O(1) and we make at most one allocation per remote node.
     /// Further, the pointers here add an extra indirection, which is bad for systems that leverage cached memory,
     /// plus a pointer itself takes about 2-8 bytes of memory, too.
     ///
-    /// A far more predictable and a much simpler approach is to pre-allocate states here statically instead of keeping
+    /// A more predictable and simpler approach is to pre-allocate states here statically instead of keeping
     /// just pointers, but it would push the size of this instance from about 0.5 KiB to ~3 KiB for a typical 32-bit
     /// system. Since this is a general-purpose library, we have to pick a middle ground so we use the more complex
     /// but more memory-efficient approach.
@@ -295,7 +309,7 @@ typedef struct CanardRxTransfer
     CanardMicrosecond timestamp_usec;
 
     /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
-    /// The application is required to free the payload buffer after the transfer is processed.
+    /// The application is required to deallocate the payload buffer after the transfer is processed.
     size_t payload_size;
     void*  payload;
 } CanardRxTransfer;
@@ -318,24 +332,12 @@ typedef void* (*CanardMemoryAllocate)(CanardInstance* ins, size_t amount);
 typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer);
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
-/// The application may directly alter the fields whose names do not begin with an underscore.
 struct CanardInstance
 {
     /// User pointer that can link this instance with other objects.
     /// This field can be changed arbitrarily, the library does not access it after initialization.
     /// The default value is NULL.
     void* user_reference;
-
-    /// The transport-layer maximum transmission unit (MTU). The value can be changed arbitrarily at any time.
-    /// This setting defines the maximum number of bytes per CAN data frame in all outgoing transfers.
-    /// Regardless of this setting, CAN frames with any MTU can always be accepted.
-    ///
-    /// Only the standard values should be used as recommended by the specification;
-    /// otherwise, networking interoperability issues may arise. See recommended values CANARD_MTU_*.
-    ///
-    /// Valid values are any valid CAN frame data length value not smaller than 8.
-    /// Invalid values are treated as the nearest valid value. The default is the maximum valid value.
-    size_t mtu_bytes;
 
     /// The node-ID of the local node.
     /// Per the UAVCAN Specification, the node-ID should not be assigned more than once.
@@ -367,15 +369,15 @@ struct CanardInstance
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
 CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const CanardMemoryFree memory_free);
 
-/// Construct a new transmission queue instance with the specified capacity.
+/// Construct a new transmission queue instance with the specified values for capacity and mtu_bytes.
 /// No memory allocation is going to take place until the queue is actually pushed to.
-/// Applications with are expected to have one instance of this type per redundant interface.
+/// Applications are expected to have one instance of this type per redundant interface.
 ///
 /// The instance does not hold any resources itself except for the allocated memory.
 /// To safely discard it, simply pop all items from the queue.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-CanardTxQueue canardTxInit(const size_t capacity);
+CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 
 /// This function serializes a transfer into a sequence of transport frames and inserts them into the prioritized
 /// transmission queue at the appropriate position. Afterwards, the application is supposed to take the enqueued frames
@@ -383,13 +385,12 @@ CanardTxQueue canardTxInit(const size_t capacity);
 /// discarded, e.g., due to timeout) frame should be removed from the queue using canardTxPop(). The queue is
 /// prioritized following the normal CAN frame arbitration rules to avoid the inner priority inversion. The transfer
 /// payload will be copied into the transmission queue so that the lifetime of the frames is not related to the
-/// lifetime of the input transfer instance or its payload buffer.
+/// lifetime of the input payload buffer.
 ///
 /// The MTU of the generated frames is dependent on the value of the MTU setting at the time when this function
-/// is invoked. The MTU setting can be changed arbitrarily between invocations. No other functions rely on that
-/// parameter.
+/// is invoked. The MTU setting can be changed arbitrarily between invocations.
 ///
-/// The timestamp value of the transfer will be used to populate the timestamp values of the resulting transport
+/// The transmission_deadline_usec will be used to populate the timestamp values of the resulting transport
 /// frames (so all frames will have the same timestamp value). This feature is intended to facilitate transmission
 /// deadline tracking, i.e., aborting frames that could not be transmitted before the specified deadline.
 /// Therefore, normally, the timestamp value should be in the future.
@@ -434,13 +435,10 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport
 /// frames of serialized transfers pushed into the prioritized transmission queue by canardTxPush().
 ///
-/// Nodes with redundant transports should replicate every frame into each of the transport interfaces.
-/// Such replication may require additional buffering in the media I/O layer, depending on the implementation.
-///
-/// The timestamp values of returned frames are initialized with the timestamp value of the transfer instance they
-/// originate from. Timestamps are used to specify the transmission deadline. It is up to the application and/or
-/// the media layer to implement the discardment of timed-out transport frames. The library does not check it,
-/// so a frame that is already timed out may be returned here.
+/// The timestamp values of returned frames are initialized with transmission_deadline_usec from canardTxPush().
+/// Timestamps are used to specify the transmission deadline. It is up to the application and/or the media layer
+/// to implement the discardment of timed-out transport frames. The library does not check it, so a frame that is
+/// already timed out may be returned here.
 ///
 /// If the queue is empty or if the argument is NULL, the returned value is NULL.
 ///
@@ -472,13 +470,12 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
 CanardFrame* canardTxPop(CanardTxQueue* const que);
 
-/// This function implements the transfer reassembly logic. It accepts a transport frame, locates the appropriate
-/// subscription state, and, if found, updates it. If the frame completed a transfer, the return value is 1 (one)
-/// and the out_transfer pointer is populated with the parameters of the newly reassembled transfer. The transfer
-/// reassembly logic is defined in the UAVCAN specification.
+/// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
+/// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a
+/// transfer, the return value is 1 (one) and the out_transfer pointer is populated with the parameters of the
+/// newly reassembled transfer. The transfer reassembly logic is defined in the UAVCAN specification.
 ///
-/// The MTU of the accepted frame is not limited and is not dependent on the MTU setting of the local node;
-/// that is, any MTU is accepted. The DLC compliance is also not checked.
+/// The MTU of the accepted frame can be arbitrary; that is, any MTU is accepted. The DLC validity is irrelevant.
 ///
 /// Any value of redundant_transport_index is accepted; that is, up to 256 redundant transports are supported.
 /// The index of the transport from which the transfer is accepted is always the same as redundant_transport_index
@@ -558,18 +555,6 @@ CanardFrame* canardTxPop(CanardTxQueue* const que);
 ///     - The received frame is a valid UAVCAN/CAN transport frame, but there is no matching subscription,
 ///       the frame did not complete a transfer, the frame forms an invalid frame sequence, the frame is a duplicate,
 ///       the frame is unicast to a different node (address mismatch).
-///
-/// The function is designed to facilitate almost zero-copy data exchange across the protocol stack: once a buffer is
-/// allocated, its data is never copied around but only passed by reference. This design allows us to reduce the
-/// worst-case execution time and reduce the jitter caused by the linear time complexity of memcpy().
-/// One data copy still has to take place, though: from the frame payload into the contiguous transfer payload buffer.
-/// In CAN, the MTU is small (at most 64 bytes for CAN FD), so the extra copy does not cost us much here,
-/// but it allows us to completely decouple the lifetime of the input frame buffer from the lifetime of the final
-/// transfer object, regardless of whether it's a single-frame or a multi-frame transfer.
-/// If we were building, say, an UAVCAN/UDP library, then we would likely resort to a different design, where the
-/// frame buffer is allocated once from the heap (which may be done from the interrupt handler if the heap is
-/// sufficiently deterministic), and in the case of single-frame transfer it is then carried over to the application
-/// without copying. This design somewhat complicates the media layer though.
 int8_t canardRxAccept(CanardInstance* const        ins,
                       const CanardFrame* const     frame,
                       const uint8_t                redundant_transport_index,
@@ -606,11 +591,7 @@ int8_t canardRxAccept(CanardInstance* const        ins,
 ///
 /// Subscription instances have large look-up tables to ensure that the temporal properties of the algorithms are
 /// invariant to the network configuration (i.e., a node that is validated on a network containing one other node
-/// will provably perform identically on a network that contains X nodes).
-/// This is a conscious time-memory trade-off. It may have adverse effects on RAM-constrained applications,
-/// but this is considered tolerable because it is expected that the types of applications leveraging Libcanard
-/// will be either real-time function nodes where time determinism is critical, or bootloaders where time determinism
-/// is usually not required but the amount of available memory is not an issue (the main constraint is ROM, not RAM).
+/// will provably perform identically on a network that contains X nodes). This is a conscious time-memory trade-off.
 int8_t canardRxSubscribe(CanardInstance* const       ins,
                          const CanardTransferKind    transfer_kind,
                          const CanardPortID          port_id,

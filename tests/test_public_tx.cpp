@@ -11,7 +11,7 @@ TEST_CASE("TxBasic0")
     using exposed::TxQueueItem;
 
     helpers::Instance ins;
-    helpers::TxQueue  que(200);
+    helpers::TxQueue  que(200, CANARD_MTU_CAN_FD);
 
     auto& alloc = ins.getAllocator();
 
@@ -22,7 +22,7 @@ TEST_CASE("TxBasic0")
     }
 
     REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
-    REQUIRE(CANARD_MTU_CAN_FD == ins.getMTU());
+    REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
     REQUIRE(nullptr == que.getRoot());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
@@ -62,7 +62,7 @@ TEST_CASE("TxBasic0")
     // Multi-frame. Priority low, inserted at the end of the TX queue.
     meta.priority    = CanardPriorityLow;
     meta.transfer_id = 22;
-    ins.setMTU(CANARD_MTU_CAN_CLASSIC);
+    que.setMTU(CANARD_MTU_CAN_CLASSIC);
     ins.setNodeID(42);
     REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'000'100ULL, meta, 8, payload.data()));  // 8 bytes --> 2 frames
     REQUIRE(3 == que.getSize());
@@ -172,7 +172,7 @@ TEST_CASE("TxBasic0")
     // Multi-frame, success. CRC split over the frame boundary.
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
     constexpr std::uint16_t CRC61 = 0x554EU;
-    ins.setMTU(32);
+    que.setMTU(32);
     meta.priority    = CanardPriorityFast;
     meta.transfer_id = 25;
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
@@ -214,7 +214,7 @@ TEST_CASE("TxBasic0")
     // Multi-frame, success. CRC is in the last frame->
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
-    ins.setMTU(32);
+    que.setMTU(32);
     meta.priority    = CanardPrioritySlow;
     meta.transfer_id = 26;
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
@@ -256,7 +256,7 @@ TEST_CASE("TxBasic0")
     // Multi-frame with padding.
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
     constexpr std::uint16_t CRC112Padding12 = 0xE7A5U;
-    ins.setMTU(64);
+    que.setMTU(64);
     meta.priority    = CanardPriorityImmediate;
     meta.transfer_id = 27;
     // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
@@ -339,7 +339,7 @@ TEST_CASE("TxBasic1")
     using exposed::TxQueueItem;
 
     helpers::Instance ins;
-    helpers::TxQueue  que(3);  // Limit capacity at 3 frames.
+    helpers::TxQueue  que(3, CANARD_MTU_CAN_FD);  // Limit capacity at 3 frames.
 
     auto& alloc = ins.getAllocator();
 
@@ -350,7 +350,7 @@ TEST_CASE("TxBasic1")
     }
 
     REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
-    REQUIRE(CANARD_MTU_CAN_FD == ins.getMTU());
+    REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
     REQUIRE(nullptr == que.getRoot());
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
@@ -388,7 +388,7 @@ TEST_CASE("TxBasic1")
     // Multi-frame. Priority low, inserted at the end of the TX queue. Two frames exhaust the capacity of the queue.
     meta.priority    = CanardPriorityLow;
     meta.transfer_id = 22;
-    ins.setMTU(CANARD_MTU_CAN_CLASSIC);
+    que.setMTU(CANARD_MTU_CAN_CLASSIC);
     ins.setNodeID(42);
     REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'000'100ULL, meta, 8, payload.data()));  // 8 bytes --> 2 frames
     REQUIRE(3 == que.getSize());
@@ -494,7 +494,7 @@ TEST_CASE("TxBasic1")
     // Multi-frame, success. CRC split over the frame boundary.
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
     constexpr std::uint16_t CRC61 = 0x554EU;
-    ins.setMTU(32);
+    que.setMTU(32);
     meta.priority    = CanardPriorityFast;
     meta.transfer_id = 25;
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
@@ -536,7 +536,7 @@ TEST_CASE("TxBasic1")
     // Multi-frame, success. CRC is in the last frame->
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
-    ins.setMTU(32);
+    que.setMTU(32);
     meta.priority    = CanardPrioritySlow;
     meta.transfer_id = 26;
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
@@ -578,7 +578,7 @@ TEST_CASE("TxBasic1")
     // Multi-frame with padding.
     // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
     constexpr std::uint16_t CRC112Padding12 = 0xE7A5U;
-    ins.setMTU(64);
+    que.setMTU(64);
     meta.priority    = CanardPriorityImmediate;
     meta.transfer_id = 27;
     // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.

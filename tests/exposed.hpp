@@ -85,7 +85,7 @@ auto txMakeServiceSessionSpecifier(const std::uint16_t service_id,
                                    const std::uint8_t  src_node_id,
                                    const std::uint8_t  dst_node_id) -> std::uint32_t;
 
-auto txGetPresentationLayerMTU(const CanardInstance* const ins) -> std::size_t;
+auto adjustPresentationLayerMTU(const std::size_t mtu_bytes) -> std::size_t;
 
 auto txMakeCANID(const CanardTransferMetadata* const tr,
                  const size_t                        payload_size,
