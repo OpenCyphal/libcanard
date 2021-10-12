@@ -211,9 +211,16 @@ else
 ### v2.0
 
 - Dedicated transmission queues per redundant CAN interface with depth limits.
-- Fixed issues with const-correctness.
+
+- Replace O(n) linked list in the transmission queue with a fast O(log n) AVL tree
+  ([Cavl](https://github.com/pavel-kirienko/cavl) library is distributed with libcanard).
+
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
+
+- Fixed issues with const-correctness.
+
 - `canardRxAccept2()` replaced the deprecated `canardRxAccept()`.
+
 - Support build configuration headers via `CANARD_CONFIG_HEADER`.
 
 ### v1.1

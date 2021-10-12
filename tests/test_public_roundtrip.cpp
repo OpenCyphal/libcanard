@@ -136,7 +136,7 @@ TEST_CASE("RoundtripSimple")
             CanardFrame* frame = nullptr;
             {
                 std::lock_guard locker(lock);
-                frame = que_tx.pop();
+                frame = que_tx.pop(que_tx.peek());
                 if (frame != nullptr)
                 {
                     REQUIRE(frames_in_flight > 0);

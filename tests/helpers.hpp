@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
+// Copyright (c) 2016 UAVCAN Development Team.
 
 #pragma once
 
@@ -13,6 +13,7 @@
 #include <mutex>
 #include <numeric>
 #include <unordered_map>
+#include <vector>
 
 #if !(defined(CANARD_VERSION_MAJOR) && defined(CANARD_VERSION_MINOR))
 #    error "Library version not defined"
@@ -256,12 +257,22 @@ public:
         return ret;
     }
 
-    [[nodiscard]] auto pop() -> CanardFrame*
+    [[nodiscard]] auto peekTxItem() const -> const exposed::TxItem*
+    {
+        checkInvariants();
+        const auto        before = que_.size;
+        const auto* const ret    = canardTxPeek(&que_);
+        enforce(((ret == nullptr) ? (before == 0) : (before > 0)) && (que_.size == before), "Bad peek");
+        checkInvariants();
+        return reinterpret_cast<const exposed::TxItem*>(ret);
+    }
+
+    [[nodiscard]] auto pop(const CanardFrame* const which) -> CanardFrame*
     {
         checkInvariants();
         const auto size_before  = que_.size;
         const auto* volatile pk = peek();
-        auto* out               = canardTxPop(&que_);
+        auto* out               = canardTxPop(&que_, which);
         enforce(pk == out, "Peek/pop pointer mismatch");
         if (out == nullptr)
         {
@@ -275,18 +286,23 @@ public:
         return out;
     }
 
-    [[nodiscard]] auto getRoot() const { return reinterpret_cast<const exposed::TxQueueItem*>(que_.head); }
-
     [[nodiscard]] auto getSize() const
     {
-        std::size_t out = 0U;
-        const auto* p   = getRoot();
-        while (p != nullptr)
-        {
-            ++out;
-            p = p->next;
-        }
+        std::size_t out = 0;
+        traverse(reinterpret_cast<const exposed::TxAVL*>(que_.avl_root), [&](auto* _) {
+            (void) _;
+            out++;
+        });
         enforce(que_.size == out, "Size miscalculation");
+        return out;
+    }
+
+    [[nodiscard]] auto linearize() const -> std::vector<const exposed::TxItem*>
+    {
+        std::vector<const exposed::TxItem*> out;
+        traverse(reinterpret_cast<const exposed::TxAVL*>(que_.avl_root),
+                 [&](const exposed::TxAVL* const item) { out.push_back(item->self); });
+        enforce(out.size() == getSize(), "Internal error");
         return out;
     }
 
@@ -294,6 +310,17 @@ public:
     [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
 
 private:
+    template <typename F>
+    static void traverse(const exposed::TxAVL* const root, const F& fun)  // NOLINT recursion
+    {
+        if (root != nullptr)
+        {
+            traverse<F>(root->left, fun);
+            fun(root);
+            traverse<F>(root->right, fun);
+        }
+    }
+
     static void enforce(const bool expect_true, const std::string& message)
     {
         if (!expect_true)

@@ -256,7 +256,7 @@ typedef struct CanardTxQueue
     size_t size;
 
     /// Internal use only; do not access this field.
-    struct CanardInternalTxQueueItem* head;
+    struct CanardInternalTxAVL* avl_root;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
@@ -460,15 +460,10 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 /// deallocate the memory used by the object later. The object SHALL NOT be deallocated UNTIL this function is invoked.
 /// The return value is the same as that of canardTxPeek() except that it is mutable.
 ///
-/// WARNING:
-///     Invocation of canardTxPush() may add new elements at the top of the prioritized transmission queue.
-///     The calling code shall take that into account to avoid the possibility of the frame at the top of the
-///     queue being unexpectedly replaced between calls of canardTxPeek() and this function.
-///
 /// If the input argument is NULL or if the transmission queue is empty, the function has no effect and returns NULL.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-CanardFrame* canardTxPop(CanardTxQueue* const que);
+CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const frame);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a

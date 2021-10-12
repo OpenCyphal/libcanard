@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
+// Copyright (c) 2016 UAVCAN Development Team.
 
 #pragma once
 
@@ -15,10 +15,22 @@ namespace exposed
 {
 using TransferCRC = std::uint16_t;
 
-struct TxQueueItem final
+struct TxItem;
+
+struct TxAVL
 {
-    CanardFrame  frame{};
-    TxQueueItem* next = nullptr;
+    TxAVL*      up{};
+    TxAVL*      left{};
+    TxAVL*      right{};
+    std::int8_t bf{};
+    TxItem*     self{};
+};
+
+struct TxItem final
+{
+    CanardFrame frame{};
+    TxAVL       avl_node;
+    TxItem*     next_in_transfer = nullptr;
 
     [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
     {
@@ -39,11 +51,11 @@ struct TxQueueItem final
     [[nodiscard]] auto isEndOfTransfer() const { return (getTailByte() & 64U) != 0; }
     [[nodiscard]] auto isToggleBitSet() const { return (getTailByte() & 32U) != 0; }
 
-    ~TxQueueItem()                   = default;
-    TxQueueItem(const TxQueueItem&)  = delete;
-    TxQueueItem(const TxQueueItem&&) = delete;
-    auto operator=(const TxQueueItem&) -> TxQueueItem& = delete;
-    auto operator=(const TxQueueItem&&) -> TxQueueItem& = delete;
+    ~TxItem()              = default;
+    TxItem(const TxItem&)  = delete;
+    TxItem(const TxItem&&) = delete;
+    auto operator=(const TxItem&) -> TxItem& = delete;
+    auto operator=(const TxItem&&) -> TxItem& = delete;
 };
 
 struct RxSession
@@ -99,8 +111,6 @@ auto txMakeTailByte(const bool         start_of_transfer,
                     const std::uint8_t transfer_id) -> std::uint8_t;
 
 auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
-
-auto txFindQueueSupremum(const CanardTxQueue* const que, const std::uint32_t can_id) -> TxQueueItem*;
 
 auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result) -> bool;
 
