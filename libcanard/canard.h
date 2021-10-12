@@ -274,7 +274,7 @@ typedef struct CanardTxQueue
 /// This is an intentional time-memory trade-off: use a large look-up table to ensure predictable temporal properties.
 typedef struct CanardRxSubscription
 {
-    struct CanardRxSubscription* next;  ///< Read-only DO NOT MODIFY THIS
+    struct CanardRxSubscription* avl_tree_up_left_right_bf[4];  ///< Read-only DO NOT MODIFY THIS
 
     /// The current architecture is an acceptable middle ground between worst-case execution time and memory
     /// consumption. Instead of statically pre-allocating a dedicated RX session for each remote node-ID here in
@@ -418,8 +418,8 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 /// frames, if any, will be deallocated automatically. In other words, either all frames of the transfer are
 /// enqueued successfully, or none are.
 ///
-/// The time complexity is O(p+e), where p is the amount of payload in the transfer, and e is the number of frames
-/// already enqueued in the transmission queue.
+/// The time complexity is O(p + log e), where p is the amount of payload in the transfer, and e is the number of
+/// frames already enqueued in the transmission queue.
 ///
 /// The memory allocation requirement is one allocation per transport frame. A single-frame transfer takes one
 /// allocation; a multi-frame transfer of N frames takes N allocations. The maximum size of each allocation is
@@ -452,7 +452,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// The payload buffer is located shortly after the object itself, in the same memory fragment. The application shall
 /// not attempt to free it.
 ///
-/// The time complexity is constant. This function does not invoke the dynamic memory manager.
+/// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
 const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 
 /// This function transfers the ownership of the top element of the prioritized transmission queue from the queue
@@ -462,7 +462,7 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 ///
 /// If the input argument is NULL or if the transmission queue is empty, the function has no effect and returns NULL.
 ///
-/// The time complexity is constant. This function does not invoke the dynamic memory manager.
+/// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
 CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const frame);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
@@ -580,7 +580,7 @@ int8_t canardRxAccept(CanardInstance* const        ins,
 /// the existing subscription is terminated and then a new one is created in its place. Pending transfers may be lost.
 /// The return value is a negated invalid argument error if any of the input arguments are invalid.
 ///
-/// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
+/// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
 /// This function does not allocate new memory. The function may deallocate memory if such subscription already
 /// existed; the deallocation behavior is specified in the documentation for canardRxUnsubscribe().
 ///
@@ -602,7 +602,7 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
 /// The return value is 0 if such subscription does not exist. In this case, the function has no effect.
 /// The return value is a negated invalid argument error if any of the input arguments are invalid.
 ///
-/// The time complexity is linear from the number of current subscriptions under the specified transfer kind.
+/// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
 /// This function does not allocate new memory.
 int8_t canardRxUnsubscribe(CanardInstance* const    ins,
                            const CanardTransferKind transfer_kind,

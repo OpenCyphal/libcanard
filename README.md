@@ -212,7 +212,7 @@ else
 
 - Dedicated transmission queues per redundant CAN interface with depth limits.
 
-- Replace O(n) linked list in the transmission queue with a fast O(log n) AVL tree
+- Replace O(n) linked lists with fast O(log n) AVL trees
   ([Cavl](https://github.com/pavel-kirienko/cavl) library is distributed with libcanard).
 
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.

@@ -31,7 +31,7 @@
 #    error "Unsupported language: ISO C99 or a newer version is required."
 #endif
 
-// --------------------------------------------- COMMON CONSTANTS ---------------------------------------------
+// --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
 
 #define BITS_PER_BYTE 8U
 #define BYTE_MAX 0xFFU
@@ -58,6 +58,12 @@
 #define TAIL_TOGGLE 32U
 
 #define INITIAL_TOGGLE_STATE true
+
+/// Used for inserting new items into AVL trees.
+CANARD_PRIVATE Cavl* avlTrivialFactory(void* const user_reference)
+{
+    return (Cavl*) user_reference;
+}
 
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
 
@@ -299,11 +305,6 @@ CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference, const Cavl* con
     return (target->self->frame.extended_can_id >= other->self->frame.extended_can_id) ? +1 : -1;
 }
 
-CANARD_PRIVATE Cavl* txAVLFactory(void* const user_reference)
-{
-    return (Cavl*) user_reference;
-}
-
 /// Returns the number of frames enqueued or error (i.e., =1 or <0).
 CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const    que,
                                          CanardInstance* const   ins,
@@ -337,7 +338,7 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const    que,
         (void) memset(&tqi->payload_buffer[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
         tqi->payload_buffer[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
         // Insert the newly created TX item into the queue.
-        Cavl* const res = cavlSearch((Cavl**) &que->avl_root, &tqi->avl_node, &txAVLPredicate, &txAVLFactory);
+        Cavl* const res = cavlSearch((Cavl**) &que->avl_root, &tqi->avl_node, &txAVLPredicate, &avlTrivialFactory);
         (void) res;
         CANARD_ASSERT(((void*) res) == (void*) &tqi->avl_node);
         que->size++;
@@ -481,7 +482,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
                 Cavl* const res = cavlSearch((Cavl**) &que->avl_root,  //
                                              &sq.head->avl_node,
                                              &txAVLPredicate,
-                                             &txAVLFactory);
+                                             &avlTrivialFactory);
                 (void) res;
                 CANARD_ASSERT(((void*) res) == (void*) &sq.head->avl_node);
                 CANARD_ASSERT(que->avl_root != NULL);
@@ -549,10 +550,6 @@ typedef struct
     size_t             payload_size;
     const void*        payload;
 } RxFrameModel;
-
-#if defined(static_assert)
-static_assert(sizeof(Cavl) <= sizeof(CanardRxSubscription* [4]), "Cavl metadata would spill over the allocated space");
-#endif
 
 /// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid UAVCAN/CAN frame.
 CANARD_PRIVATE bool rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out)
@@ -915,6 +912,35 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
     return out;
 }
 
+CANARD_PRIVATE int8_t rxSubscriptionAVLPredicateOnPortID(void* const user_reference, const Cavl* const node)
+{
+    const CanardPortID other = ((CanardRxSubscription*) node)->port_id;
+    if (*((CanardPortID*) user_reference) > other)
+    {
+        return +1;
+    }
+    if (*((CanardPortID*) user_reference) < other)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+CANARD_PRIVATE int8_t rxSubscriptionAVLPredicateOnStruct(void* const user_reference, const Cavl* const node)
+{
+    const CanardPortID sought = ((CanardRxSubscription*) user_reference)->port_id;
+    const CanardPortID other  = ((CanardRxSubscription*) node)->port_id;
+    if (sought > other)
+    {
+        return +1;
+    }
+    if (sought < other)
+    {
+        return -1;
+    }
+    return 0;
+}
+
 // --------------------------------------------- PUBLIC API ---------------------------------------------
 
 const uint8_t CanardCANDLCToLength[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
@@ -1048,21 +1074,18 @@ int8_t canardRxAccept(CanardInstance* const        ins,
         {
             if ((CANARD_NODE_ID_UNSET == model.destination_node_id) || (ins->node_id == model.destination_node_id))
             {
-                // Find subscription. This is the reason the function has a linear time complexity from the number of
-                // subscriptions. Note also that this one of the two variable-complexity operations in the RX pipeline;
-                // the other one is memcpy(). Excepting these two cases, the entire RX pipeline logic contains neither
-                // loops nor recursion.
-                CanardRxSubscription* sub = ins->rx_subscriptions[(size_t) model.transfer_kind];
-                while ((sub != NULL) && (sub->port_id != model.port_id))
-                {
-                    sub = sub->next;
-                }
-
+                // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
+                // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
+                // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
+                CanardRxSubscription* const sub =
+                    (CanardRxSubscription*) cavlSearch((Cavl**) &ins->rx_subscriptions[(size_t) model.transfer_kind],
+                                                       &model.port_id,
+                                                       &rxSubscriptionAVLPredicateOnPortID,
+                                                       NULL);
                 if (out_subscription != NULL)
                 {
                     *out_subscription = sub;  // Expose selected instance to the caller.
                 }
-
                 if (sub != NULL)
                 {
                     CANARD_ASSERT(sub->port_id == model.port_id);
@@ -1104,6 +1127,12 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
         out = canardRxUnsubscribe(ins, transfer_kind, port_id);
         if (out >= 0)
         {
+            // Clang-Tidy raises an error recommending the use of memset_s() instead.
+            // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
+            (void) memset(out_subscription->avl_tree_up_left_right_bf,  // NOLINT
+                          0,
+                          sizeof(out_subscription->avl_tree_up_left_right_bf));
+            CANARD_ASSERT(sizeof(Cavl) <= sizeof(out_subscription->avl_tree_up_left_right_bf));
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
             {
                 // The sessions will be created ad-hoc. Normally, for a low-jitter deterministic system,
@@ -1114,9 +1143,13 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
             out_subscription->transfer_id_timeout_usec = transfer_id_timeout_usec;
             out_subscription->extent                   = extent;
             out_subscription->port_id                  = port_id;
-            out_subscription->next                     = ins->rx_subscriptions[tk];
-            ins->rx_subscriptions[tk]                  = out_subscription;
-            out                                        = (out > 0) ? 0 : 1;
+            const Cavl* const res                      = cavlSearch((Cavl**) &ins->rx_subscriptions[tk],
+                                                                    out_subscription,
+                                                                    &rxSubscriptionAVLPredicateOnStruct,
+                                                                    &avlTrivialFactory);
+            (void) res;
+            CANARD_ASSERT(((void*) res) == ((void*) out_subscription));
+            out = (out > 0) ? 0 : 1;
         }
     }
     return out;
@@ -1130,28 +1163,16 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     const size_t tk  = (size_t) transfer_kind;
     if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
-        CanardRxSubscription* prv = NULL;
-        CanardRxSubscription* sub = ins->rx_subscriptions[tk];
-        while ((sub != NULL) && (sub->port_id != port_id))
-        {
-            prv = sub;
-            sub = sub->next;
-        }
-
+        CanardPortID                port_id_mutable = port_id;
+        CanardRxSubscription* const sub = (CanardRxSubscription*) cavlSearch((Cavl**) &ins->rx_subscriptions[tk],
+                                                                             &port_id_mutable,
+                                                                             &rxSubscriptionAVLPredicateOnPortID,
+                                                                             NULL);
+        cavlRemove((Cavl**) &ins->rx_subscriptions[tk], (Cavl*) sub);
         if (sub != NULL)
         {
             CANARD_ASSERT(sub->port_id == port_id);
             out = 1;
-
-            if (prv != NULL)
-            {
-                prv->next = sub->next;
-            }
-            else
-            {
-                ins->rx_subscriptions[tk] = sub->next;
-            }
-
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
             {
                 ins->memory_free(ins, (sub->sessions[i] != NULL) ? sub->sessions[i]->payload : NULL);

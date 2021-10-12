@@ -53,7 +53,6 @@ TEST_CASE("RxBasic0")
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 32, 2'000'000, sub_msg));  // New.
     REQUIRE(0 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 1'000'000, sub_msg));  // Replaced.
     REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
-    REQUIRE(ins.getInstance().rx_subscriptions[0]->next == nullptr);
     REQUIRE(ins.getInstance().rx_subscriptions[0]->port_id == 0b0110011001100);
     REQUIRE(ins.getInstance().rx_subscriptions[0]->extent == 16);
     REQUIRE(ins.getInstance().rx_subscriptions[0]->transfer_id_timeout_usec == 1'000'000);
@@ -67,7 +66,6 @@ TEST_CASE("RxBasic0")
     REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
     REQUIRE(ins.getInstance().rx_subscriptions[1] == nullptr);
     REQUIRE(ins.getInstance().rx_subscriptions[2] == &sub_req);
-    REQUIRE(ins.getInstance().rx_subscriptions[2]->next == nullptr);
     REQUIRE(ins.getInstance().rx_subscriptions[2]->port_id == 0b0000110011);
     REQUIRE(ins.getInstance().rx_subscriptions[2]->extent == 20);
     REQUIRE(ins.getInstance().rx_subscriptions[2]->transfer_id_timeout_usec == 3'000'000);
@@ -78,7 +76,6 @@ TEST_CASE("RxBasic0")
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000111100, 10, 100'000, sub_res));
     REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
     REQUIRE(ins.getInstance().rx_subscriptions[1] == &sub_res);
-    REQUIRE(ins.getInstance().rx_subscriptions[1]->next == nullptr);
     REQUIRE(ins.getInstance().rx_subscriptions[1]->port_id == 0b0000111100);
     REQUIRE(ins.getInstance().rx_subscriptions[1]->extent == 10);
     REQUIRE(ins.getInstance().rx_subscriptions[1]->transfer_id_timeout_usec == 100'000);
@@ -89,12 +86,7 @@ TEST_CASE("RxBasic0")
     CanardRxSubscription sub_res2{};
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000000000, 10, 1'000, sub_res2));
     REQUIRE(ins.getInstance().rx_subscriptions[0] == &sub_msg);
-    REQUIRE(ins.getInstance().rx_subscriptions[1] == &sub_res2);
-    REQUIRE(ins.getInstance().rx_subscriptions[1]->next == &sub_res);
-    REQUIRE(ins.getInstance().rx_subscriptions[1]->port_id == 0b0000000000);
-    REQUIRE(ins.getInstance().rx_subscriptions[1]->extent == 10);
-    REQUIRE(ins.getInstance().rx_subscriptions[1]->transfer_id_timeout_usec == 1'000);
-    REQUIRE(ensureAllNullptr(ins.getInstance().rx_subscriptions[1]->sessions));
+    // Can't check [1] because we have two items there now.
     REQUIRE(ins.getInstance().rx_subscriptions[2] == &sub_req);
 
     // Accepted message.
@@ -193,7 +185,6 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 10 + 20));
-    REQUIRE(ins.getInstance().rx_subscriptions[1]->next->sessions[0b0011011] != nullptr);
 
     // Bad frames shall be rejected silently.
     subscription = nullptr;

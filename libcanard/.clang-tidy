@@ -16,6 +16,9 @@ Checks: >-
   -google-readability-todo,
   -readability-avoid-const-params-in-decls,
   -llvm-header-guard,
+  -cert-dcl03-c,
+  -hicpp-static-assert,
+  -misc-static-assert,
 CheckOptions:
   - key:   readability-function-cognitive-complexity.Threshold
     value: '99'
