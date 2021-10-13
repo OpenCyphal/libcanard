@@ -309,7 +309,7 @@ public:
     [[nodiscard]] auto getSize() const
     {
         std::size_t out = 0;
-        traverse(que_.avl_root, [&](auto* _) {
+        traverse(que_.root, [&](auto* _) {
             (void) _;
             out++;
         });
@@ -320,7 +320,7 @@ public:
     [[nodiscard]] auto linearize() const -> std::vector<const exposed::TxItem*>
     {
         std::vector<const exposed::TxItem*> out;
-        traverse(que_.avl_root, [&](const CanardTreeNode* const item) {
+        traverse(que_.root, [&](const CanardTreeNode* const item) {
             out.push_back(reinterpret_cast<const exposed::TxItem*>(item));
         });
         enforce(out.size() == getSize(), "Internal error");
