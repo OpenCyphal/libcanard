@@ -261,7 +261,7 @@ typedef struct CanardTxQueue
     size_t size;
 
     /// Internal use only; do not access this field.
-    CanardTreeNode* avl_root;
+    CanardTreeNode* root;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.

@@ -328,7 +328,7 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const    que,
         (void) memset(&tqi->payload_buffer[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
         tqi->payload_buffer[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
         // Insert the newly created TX item into the queue.
-        CanardTreeNode* const res = cavlSearch(&que->avl_root, &tqi->base.base, &txAVLPredicate, &avlTrivialFactory);
+        CanardTreeNode* const res = cavlSearch(&que->root, &tqi->base.base, &txAVLPredicate, &avlTrivialFactory);
         (void) res;
         CANARD_ASSERT(res == &tqi->base.base);
         que->size++;
@@ -470,13 +470,10 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
             CanardTxQueueItem* next = &sq.head->base;
             do
             {
-                CanardTreeNode* const res = cavlSearch(&que->avl_root,  //
-                                                       &next->base,
-                                                       &txAVLPredicate,
-                                                       &avlTrivialFactory);
+                CanardTreeNode* const res = cavlSearch(&que->root, &next->base, &txAVLPredicate, &avlTrivialFactory);
                 (void) res;
                 CANARD_ASSERT(res == &next->base);
-                CANARD_ASSERT(que->avl_root != NULL);
+                CANARD_ASSERT(que->root != NULL);
                 next = next->next_in_transfer;
             } while (next != NULL);
             CANARD_ASSERT(num_frames == sq.size);
@@ -969,7 +966,7 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes)
         .capacity       = capacity,
         .mtu_bytes      = mtu_bytes,
         .size           = 0,
-        .avl_root       = NULL,
+        .root           = NULL,
         .user_reference = NULL,
     };
     return out;
@@ -1029,7 +1026,7 @@ const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que)
     {
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
-        out = (const CanardTxQueueItem*) cavlFindExtremum(que->avl_root, false);
+        out = (const CanardTxQueueItem*) cavlFindExtremum(que->root, false);
     }
     return out;
 }
@@ -1044,7 +1041,7 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         // Note that the highest-priority frame is always a leaf node in the AVL tree, which means that it is very
         // cheap to remove.
-        cavlRemove(&que->avl_root, &item->base);
+        cavlRemove(&que->root, &item->base);
         que->size--;
     }
     return out;
@@ -1134,7 +1131,7 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
                                                          &rxSubscriptionAVLPredicateOnStruct,
                                                          &avlTrivialFactory);
             (void) res;
-            CANARD_ASSERT(((void*) res) == ((void*) out_subscription));
+            CANARD_ASSERT(res == &out_subscription->base);
             out = (out > 0) ? 0 : 1;
         }
     }
