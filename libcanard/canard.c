@@ -22,9 +22,9 @@
 #    define CANARD_ASSERT(x) assert(x)  // NOSONAR
 #endif
 
-/// This macro is needed only for testing and for library development. Do not redefine this in production.
+/// This macro is needed for testing and for library development.
 #ifndef CANARD_PRIVATE
-#    define CANARD_PRIVATE static
+#    define CANARD_PRIVATE static inline
 #endif
 
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
@@ -288,7 +288,8 @@ CANARD_PRIVATE TxItem* txAllocateQueueItem(CanardInstance* const   ins,
 /// Frames with identical CAN ID that are added later always compare greater than their counterparts with same CAN ID.
 /// This ensures that CAN frames with the same CAN ID are transmitted in the FIFO order.
 /// Frames that should be transmitted earlier compare smaller (i.e., put on the left side of the tree).
-CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference, const CanardTreeNode* const node)
+CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+                                     const CanardTreeNode* const node)
 {
     const CanardTxQueueItem* const target = (const CanardTxQueueItem*) user_reference;
     const CanardTxQueueItem* const other  = (const CanardTxQueueItem*) node;
@@ -328,7 +329,7 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const    que,
         (void) memset(&tqi->payload_buffer[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
         tqi->payload_buffer[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
         // Insert the newly created TX item into the queue.
-        CanardTreeNode* const res = cavlSearch(&que->root, &tqi->base.base, &txAVLPredicate, &avlTrivialFactory);
+        const CanardTreeNode* const res = cavlSearch(&que->root, &tqi->base.base, &txAVLPredicate, &avlTrivialFactory);
         (void) res;
         CANARD_ASSERT(res == &tqi->base.base);
         que->size++;
@@ -457,7 +458,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
 
     int32_t      out                   = 0;  // The number of frames enqueued or negated error.
     const size_t payload_size_with_crc = payload_size + CRC_SIZE_BYTES;
-    const size_t num_frames            = (payload_size_with_crc + presentation_layer_mtu - 1U) / presentation_layer_mtu;
+    const size_t num_frames = ((payload_size_with_crc + presentation_layer_mtu) - 1U) / presentation_layer_mtu;
     CANARD_ASSERT(num_frames >= 2);
     if ((que->size + num_frames) <= que->capacity)  // Bail early if we can see that we won't fit anyway.
     {
@@ -473,7 +474,8 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
             CanardTxQueueItem* next = &sq.head->base;
             do
             {
-                CanardTreeNode* const res = cavlSearch(&que->root, &next->base, &txAVLPredicate, &avlTrivialFactory);
+                const CanardTreeNode* const res =
+                    cavlSearch(&que->root, &next->base, &txAVLPredicate, &avlTrivialFactory);
                 (void) res;
                 CANARD_ASSERT(res == &next->base);
                 CANARD_ASSERT(que->root != NULL);
@@ -906,33 +908,22 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
     return out;
 }
 
-CANARD_PRIVATE int8_t rxSubscriptionAVLPredicateOnPortID(void* const user_reference, const CanardTreeNode* const node)
+CANARD_PRIVATE int8_t
+rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+                                const CanardTreeNode* const node)
 {
-    const CanardPortID other = ((const CanardRxSubscription*) node)->port_id;
-    if (*((CanardPortID*) user_reference) > other)
-    {
-        return +1;
-    }
-    if (*((CanardPortID*) user_reference) < other)
-    {
-        return -1;
-    }
-    return 0;
+    const CanardPortID  sought    = *((const CanardPortID*) user_reference);
+    const CanardPortID  other     = ((const CanardRxSubscription*) node)->port_id;
+    static const int8_t NegPos[2] = {-1, +1};
+    // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
+    return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
 }
 
-CANARD_PRIVATE int8_t rxSubscriptionAVLPredicateOnStruct(void* const user_reference, const CanardTreeNode* const node)
+CANARD_PRIVATE int8_t
+rxSubscriptionPredicateOnStruct(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+                                const CanardTreeNode* const node)
 {
-    const CanardPortID sought = ((const CanardRxSubscription*) user_reference)->port_id;
-    const CanardPortID other  = ((const CanardRxSubscription*) node)->port_id;
-    if (sought > other)
-    {
-        return +1;
-    }
-    if (sought < other)
-    {
-        return -1;
-    }
-    return 0;
+    return rxSubscriptionPredicateOnPortID(&((CanardRxSubscription*) user_reference)->port_id, node);
 }
 
 // --------------------------------------------- PUBLIC API ---------------------------------------------
@@ -1039,7 +1030,10 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
     CanardTxQueueItem* out = NULL;
     if ((que != NULL) && (item != NULL))
     {
-        out = (CanardTxQueueItem*) item;
+        // Intentional violation of MISRA: casting away const qualifier. This is considered safe because the API
+        // contract dictates that the pointer shall point to a mutable entity in RAM previously allocated by the
+        // memory manager. It is difficult to avoid this cast in this context.
+        out = (CanardTxQueueItem*) item;  // NOSONAR casting away const qualifier.
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         // Note that the highest-priority frame is always a leaf node in the AVL tree, which means that it is very
@@ -1072,7 +1066,7 @@ int8_t canardRxAccept(CanardInstance* const        ins,
                 CanardRxSubscription* const sub =
                     (CanardRxSubscription*) cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
                                                        &model.port_id,
-                                                       &rxSubscriptionAVLPredicateOnPortID,
+                                                       &rxSubscriptionPredicateOnPortID,
                                                        NULL);
                 if (out_subscription != NULL)
                 {
@@ -1131,7 +1125,7 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
             }
             const CanardTreeNode* const res = cavlSearch(&ins->rx_subscriptions[tk],
                                                          out_subscription,
-                                                         &rxSubscriptionAVLPredicateOnStruct,
+                                                         &rxSubscriptionPredicateOnStruct,
                                                          &avlTrivialFactory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
@@ -1151,7 +1145,7 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     {
         CanardPortID                port_id_mutable = port_id;
         CanardRxSubscription* const sub             = (CanardRxSubscription*)
-            cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionAVLPredicateOnPortID, NULL);
+            cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL);
         if (sub != NULL)
         {
             cavlRemove(&ins->rx_subscriptions[tk], &sub->base);
