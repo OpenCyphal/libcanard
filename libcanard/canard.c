@@ -1137,6 +1137,9 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
                           0,
                           sizeof(out_subscription->avl_tree_up_left_right_bf));
             CANARD_ASSERT(sizeof(Cavl) <= sizeof(out_subscription->avl_tree_up_left_right_bf));
+            out_subscription->transfer_id_timeout_usec = transfer_id_timeout_usec;
+            out_subscription->extent                   = extent;
+            out_subscription->port_id                  = port_id;
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
             {
                 // The sessions will be created ad-hoc. Normally, for a low-jitter deterministic system,
@@ -1144,13 +1147,10 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
                 // We could accept an extra argument that would instruct us to pre-allocate sessions here?
                 out_subscription->sessions[i] = NULL;
             }
-            out_subscription->transfer_id_timeout_usec = transfer_id_timeout_usec;
-            out_subscription->extent                   = extent;
-            out_subscription->port_id                  = port_id;
-            const Cavl* const res                      = cavlSearch((Cavl**) &ins->rx_subscriptions[tk],
-                                                                    out_subscription,
-                                                                    &rxSubscriptionAVLPredicateOnStruct,
-                                                                    &avlTrivialFactory);
+            const Cavl* const res = cavlSearch((Cavl**) &ins->rx_subscriptions[tk],
+                                               out_subscription,
+                                               &rxSubscriptionAVLPredicateOnStruct,
+                                               &avlTrivialFactory);
             (void) res;
             CANARD_ASSERT(((void*) res) == ((void*) out_subscription));
             out = (out > 0) ? 0 : 1;

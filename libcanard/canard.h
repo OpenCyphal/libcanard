@@ -275,6 +275,14 @@ typedef struct CanardRxSubscription
 {
     struct CanardRxSubscription* avl_tree_up_left_right_bf[4];  ///< Read-only DO NOT MODIFY THIS
 
+    CanardMicrosecond transfer_id_timeout_usec;
+    size_t            extent;   ///< Read-only DO NOT MODIFY THIS
+    CanardPortID      port_id;  ///< Read-only DO NOT MODIFY THIS
+
+    /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
+    /// Its purpose is to simplify integration with OOP interfaces.
+    void* user_reference;
+
     /// The current architecture is an acceptable middle ground between worst-case execution time and memory
     /// consumption. Instead of statically pre-allocating a dedicated RX session for each remote node-ID here in
     /// this table, we only keep pointers, which are NULL by default, populating a new RX session dynamically
@@ -286,14 +294,6 @@ typedef struct CanardRxSubscription
     /// system. Since this is a general-purpose library, we have to pick a middle ground so we use the more complex
     /// but more memory-efficient approach.
     struct CanardInternalRxSession* sessions[CANARD_NODE_ID_MAX + 1U];  ///< Read-only DO NOT MODIFY THIS
-
-    CanardMicrosecond transfer_id_timeout_usec;
-    size_t            extent;   ///< Read-only DO NOT MODIFY THIS
-    CanardPortID      port_id;  ///< Read-only DO NOT MODIFY THIS
-
-    /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
-    /// Its purpose is to simplify integration with OOP interfaces.
-    void* user_reference;
 } CanardRxSubscription;
 
 /// Reassembled incoming transfer returned by canardRxAccept().
