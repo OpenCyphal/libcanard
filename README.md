@@ -30,12 +30,12 @@ If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 - Support for the Classic CAN and CAN FD.
 - Support for redundant transports.
 - Compatibility with 8/16/32/64-bit platforms.
-- Compatibility with extremely resource-constrained baremetal environments starting from ca. 32K ROM, 4..8K RAM.
-- Implemented in less than 1500 lines of code.
+- Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 8K RAM.
+- Implemented in ≈1000 lines of code.
 
 ## Platforms
 
-The library is designed to be usable without modification with any conventional 8/16/32/64-bit platform,
+The library is designed to be usable out of the box with any conventional 8/16/32/64-bit platform,
 including deeply embedded baremetal platforms, as long as there is a standard-compliant compiler available.
 The platform-specific media IO layer (driver) is supposed to be provided by the application:
 
@@ -93,7 +93,7 @@ CanardTxQueue queue = canardTxInit(100,                 // Limit the size of the
                                    CANARD_MTU_CAN_FD);  // Set MTU = 64 bytes (CAN FD).
 ```
 
-Publish a message:
+Publish a message (message serialization not shown):
 
 ```c
 static uint8_t my_message_transfer_id;  // Must be static or heap-allocated to retain state between calls.
@@ -127,17 +127,17 @@ Normally, the following fragment should be invoked periodically to unload the CA
 prioritized transmission queue into the CAN driver (or several, if redundant interfaces are used):
 
 ```c
-for (const CanardFrame* txf = NULL; (txf = canardTxPeek(&queue)) != NULL;)  // Look at the top of this TX queue.
+for (const CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  // Peek at the top of the queue.
 {
-    if ((0U == txf->timestamp_usec) || (txf->timestamp_usec > getCurrentMicroseconds()))  // Check the deadline.
+    if ((0U == ti->tx_deadline_usec) || (ti->tx_deadline_usec > getCurrentMicroseconds()))  // Check the deadline.
     {
-        if (!pleaseTransmit(txf))              // Send the frame over this redundant CAN iface.
+        if (!pleaseTransmit(ti))               // Send the frame over this redundant CAN iface.
         {
             break;                             // If the driver is busy, break and retry later.
         }
     }
     // After the frame is transmitted or if it has timed out while waiting, pop it from the queue and deallocate:
-    canard.memory_free(&canard, canardTxPop(&queue));
+    canard.memory_free(&canard, canardTxPop(&queue, ti));
 }
 ```
 
@@ -180,8 +180,9 @@ Normally, however, an embedded application would subscribe once and roll with it
 Okay, this is how we receive transfers:
 
 ```c
-CanardTransfer transfer;
+CanardRxTransfer transfer;
 const int8_t result = canardRxAccept(&canard,
+                                     rx_timestamp_usec,          // When the frame was received, in microseconds.
                                      &received_frame,            // The CAN frame received from the bus.
                                      redundant_interface_index,  // If the transport is not redundant, use 0.
                                      &transfer,
@@ -211,15 +212,17 @@ else
 ### v2.0
 
 - Dedicated transmission queues per redundant CAN interface with depth limits.
+  The application is now expected to instantiate `CanardTxQueue` (or several in case of redundant transport) manually.
 
 - Replace O(n) linked lists with fast O(log n) AVL trees
   ([Cavl](https://github.com/pavel-kirienko/cavl) library is distributed with libcanard).
+  Traversing the list of RX subscriptions now requires recursive traversal of the tree.
 
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
 
 - Fixed issues with const-correctness.
 
-- `canardRxAccept2()` replaced the deprecated `canardRxAccept()`.
+- `canardRxAccept2()` renamed to `canardRxAccept()`.
 
 - Support build configuration headers via `CANARD_CONFIG_HEADER`.
 

@@ -260,7 +260,7 @@ typedef struct CanardTxQueue
     /// Do not modify this field!
     size_t size;
 
-    /// Internal use only; do not access this field.
+    /// The root of the priority queue is NULL if the queue is empty. Do not modify this field!
     CanardTreeNode* root;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
@@ -480,10 +480,10 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que);
 
 /// This function transfers the ownership of the specified element of the prioritized transmission queue from the queue
-/// to the application. The element is dequeued but not invalidated; it is the responsibility of the application to
-/// deallocate the memory used by the object later. The object SHALL NOT be deallocated UNTIL this function is invoked.
-/// The function returns the same pointer that it is given except that it becomes mutable, which enables the
-/// application to deallocate its memory.
+/// to the application. The element does not necessarily need to be the top one -- it is safe to dequeue any element.
+/// The element is dequeued but not invalidated; it is the responsibility of the application to deallocate the
+/// memory used by the object later. The memory SHALL NOT be deallocated UNTIL this function is invoked.
+/// The function returns the same pointer that it is given except that it becomes mutable.
 ///
 /// If any of the arguments are NULL, the function has no effect and returns NULL.
 ///
