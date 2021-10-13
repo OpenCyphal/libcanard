@@ -397,7 +397,8 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardInstance* const   ins,
             }
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
             // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-            (void) memcpy(&out.tail->payload_buffer[0], payload_ptr, move_size);  // NOLINT
+            // SonarQube incorrectly detects a buffer overflow here.
+            (void) memcpy(&out.tail->payload_buffer[0], payload_ptr, move_size);  // NOLINT NOSONAR
             frame_offset = frame_offset + move_size;
             offset += move_size;
             payload_ptr += move_size;
@@ -417,7 +418,8 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardInstance* const   ins,
             // Insert the CRC.
             if ((frame_offset < frame_payload_size) && (offset == payload_size))
             {
-                out.tail->payload_buffer[frame_offset] = (uint8_t) (crc >> BITS_PER_BYTE);
+                // SonarQube incorrectly detects a buffer overflow here.
+                out.tail->payload_buffer[frame_offset] = (uint8_t) (crc >> BITS_PER_BYTE);  // NOSONAR
                 ++frame_offset;
                 ++offset;
             }
@@ -431,7 +433,8 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardInstance* const   ins,
 
         // Finalize the frame.
         CANARD_ASSERT((frame_offset + 1U) == out.tail->base.frame.payload_size);
-        out.tail->payload_buffer[frame_offset] =
+        // SonarQube incorrectly detects a buffer overflow here.
+        out.tail->payload_buffer[frame_offset] =  // NOSONAR
             txMakeTailByte(out.head == out.tail, offset >= payload_size_with_crc, toggle, transfer_id);
         toggle = !toggle;
     }
