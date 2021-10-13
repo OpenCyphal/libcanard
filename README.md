@@ -89,8 +89,8 @@ canard.node_id = 42;                        // Defaults to anonymous; can be set
 In order to be able to send transfers over the network, we will need one transmission queue per redundant CAN interface:
 
 ```c
-CanardTxQueue queue = canardTxInit(100,                 // Limit the size of the queue at 100 frames max.
-                                   CANARD_MTU_CAN_FD);  // Set MTU = 64 bytes (CAN FD).
+CanardTxQueue queue = canardTxInit(100,                 // Limit the size of the queue at 100 frames.
+                                   CANARD_MTU_CAN_FD);  // Set MTU = 64 bytes. There is also CANARD_MTU_CAN_CLASSIC.
 ```
 
 Publish a message (message serialization not shown):
@@ -113,7 +113,7 @@ int32_t result = canardTxPush(&queue,               // Call this once per redund
                               "\x2D\x00" "Sancho, it strikes me thou art in great fear.");
 if (result < 0)
 {
-    // An error has occurred: either an argument is invalid, the TX queue is full, or we've ran out of memory.
+    // An error has occurred: either an argument is invalid, the TX queue is full, or we've run out of memory.
     // It is possible to statically prove that an out-of-memory will never occur for a given application if the
     // heap is sized correctly; for background, refer to the Robson's Proof and the documentation for O1Heap.
 }
@@ -150,7 +150,7 @@ CanardRxSubscription heartbeat_subscription;
 (void) canardRxSubscribe(&canard,   // Subscribe to messages uavcan.node.Heartbeat.
                          CanardTransferKindMessage,
                          7509,      // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
-                         16,        // The extent (the maximum possible payload size); pick a huge value if not sure.
+                         16,        // The extent (the maximum possible payload size) provided by Nunavut.
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
 
@@ -158,7 +158,7 @@ CanardRxSubscription my_service_subscription;
 (void) canardRxSubscribe(&canard,   // Subscribe to an arbitrary service response.
                          CanardTransferKindResponse,  // Specify that we want service responses, not requests.
                          123,       // The Service-ID whose responses we will receive.
-                         1024,      // The extent (the maximum payload size); pick a huge value if not sure.
+                         1024,      // The extent (see above).
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &my_service_subscription);
 ```
@@ -170,8 +170,7 @@ It is typically larger than the maximum object size in order to allow the data t
 fields in the future versions of the type;
 for example, `MyMessage.1.0` may have the maximum size of 100 bytes and the extent 200 bytes;
 a revised version `MyMessage.1.1` may have the maximum size anywhere between 0 and 200 bytes.
-It is always safe to pick a larger value if not sure.
-You will find a more rigorous description in the UAVCAN Specification.
+Extent values are provided per data type by DSDL transcompilers such as Nunavut.
 
 In Libcanard we use the term "subscription" not only for subjects (messages), but also for services, for simplicity.
 
