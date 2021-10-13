@@ -112,6 +112,7 @@ jobs:
           clangFormatVersion: 12
 
   sonarcloud:
+    if: github.base_ref
     runs-on: ubuntu-latest
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
