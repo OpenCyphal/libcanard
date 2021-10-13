@@ -23,10 +23,8 @@
 
 #pragma once
 
+#include "canard.h"
 #include <assert.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 
 #ifdef __cplusplus
 // This is, strictly speaking, useless because we do not define any functions with external linkage here,
@@ -36,19 +34,8 @@ extern "C" {
 
 // ----------------------------------------         PUBLIC API SECTION         ----------------------------------------
 
-/// The tree node/root. The user data is to be added through composition/inheritance.
-/// The memory layout of this type is compatible with void*[4], which is useful if this type cannot be exposed in API.
-/// Per standard convention, nodes that compare smaller are put on the left.
-typedef struct Cavl Cavl;
-struct Cavl
-{
-    Cavl*  up;     ///< Parent node, NULL in the root.
-    Cavl*  lr[2];  ///< Left child (lesser), right child (greater).
-    int8_t bf;     ///< Balance factor is positive when right-heavy. Allowed values are {-1, 0, +1}.
-};
-#if defined(static_assert) || defined(__cplusplus)
-static_assert(sizeof(Cavl) <= sizeof(void* [4]), "Bad size");
-#endif
+/// Modified for use with Libcanard: expose the Cavl structure via public API as CanardTreeNode.
+typedef CanardTreeNode Cavl;
 
 /// Returns POSITIVE if the search target is GREATER than the provided node, negative if smaller, zero on match (found).
 /// Values other than {-1, 0, +1} are not recommended to avoid overflow during the narrowing conversion of the result.

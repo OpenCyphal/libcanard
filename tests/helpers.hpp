@@ -48,6 +48,17 @@ inline auto getRandomNatural(const T upper_open) -> T
     return static_cast<T>(static_cast<std::size_t>(std::rand()) % upper_open);  // NOLINT
 }
 
+template <typename F>
+static inline void traverse(const CanardTreeNode* const root, const F& fun)  // NOLINT recursion
+{
+    if (root != nullptr)
+    {
+        traverse<F>(root->lr[0], fun);
+        fun(root);
+        traverse<F>(root->lr[1], fun);
+    }
+}
+
 /// An allocator that sits on top of the standard malloc() providing additional testing capabilities.
 /// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
 class TestAllocator
@@ -165,12 +176,18 @@ public:
     auto operator=(const Instance&) -> Instance& = delete;
     auto operator=(const Instance&&) -> Instance& = delete;
 
-    [[nodiscard]] auto rxAccept(const CanardFrame&           frame,
+    [[nodiscard]] auto rxAccept(const CanardMicrosecond      timestamp_usec,
+                                const CanardFrame&           frame,
                                 const uint8_t                redundant_transport_index,
                                 CanardRxTransfer&            out_transfer,
                                 CanardRxSubscription** const out_subscription)
     {
-        return canardRxAccept(&canard_, &frame, redundant_transport_index, &out_transfer, out_subscription);
+        return canardRxAccept(&canard_,
+                              timestamp_usec,
+                              &frame,
+                              redundant_transport_index,
+                              &out_transfer,
+                              out_subscription);
     }
 
     [[nodiscard]] auto rxSubscribe(const CanardTransferKind transfer_kind,
@@ -186,6 +203,19 @@ public:
     {
         return canardRxUnsubscribe(&canard_, transfer_kind, port_id);
     }
+
+    /// The items are sorted by port-ID.
+    [[nodiscard]] auto getSubs(const CanardTransferKind tk) const -> std::vector<const CanardRxSubscription*>
+    {
+        std::vector<const CanardRxSubscription*> out;
+        traverse(canard_.rx_subscriptions[tk], [&](const CanardTreeNode* const item) {
+            out.push_back(reinterpret_cast<const CanardRxSubscription*>(item));
+        });
+        return out;
+    }
+    [[nodiscard]] auto getMessageSubs() const { return getSubs(CanardTransferKindMessage); }
+    [[nodiscard]] auto getResponseSubs() const { return getSubs(CanardTransferKindResponse); }
+    [[nodiscard]] auto getRequestSubs() const { return getSubs(CanardTransferKindRequest); }
 
     [[nodiscard]] auto getNodeID() const { return canard_.node_id; }
     void               setNodeID(const std::uint8_t x) { canard_.node_id = x; }
@@ -247,27 +277,17 @@ public:
         return ret;
     }
 
-    [[nodiscard]] auto peek() const -> const CanardFrame*
+    [[nodiscard]] auto peek() const -> const exposed::TxItem*
     {
         checkInvariants();
         const auto        before = que_.size;
         const auto* const ret    = canardTxPeek(&que_);
         enforce(((ret == nullptr) ? (before == 0) : (before > 0)) && (que_.size == before), "Bad peek");
         checkInvariants();
-        return ret;
+        return static_cast<const exposed::TxItem*>(ret);  // NOLINT static downcast
     }
 
-    [[nodiscard]] auto peekTxItem() const -> const exposed::TxItem*
-    {
-        checkInvariants();
-        const auto        before = que_.size;
-        const auto* const ret    = canardTxPeek(&que_);
-        enforce(((ret == nullptr) ? (before == 0) : (before > 0)) && (que_.size == before), "Bad peek");
-        checkInvariants();
-        return reinterpret_cast<const exposed::TxItem*>(ret);
-    }
-
-    [[nodiscard]] auto pop(const CanardFrame* const which) -> CanardFrame*
+    [[nodiscard]] auto pop(const CanardTxQueueItem* const which) -> exposed::TxItem*
     {
         checkInvariants();
         const auto size_before  = que_.size;
@@ -283,13 +303,13 @@ public:
             enforce((size_before > 0) && (que_.size == (size_before - 1U)), "Bad non-empty pop");
         }
         checkInvariants();
-        return out;
+        return static_cast<exposed::TxItem*>(out);  // NOLINT static downcast
     }
 
     [[nodiscard]] auto getSize() const
     {
         std::size_t out = 0;
-        traverse(reinterpret_cast<const exposed::TxAVL*>(que_.avl_root), [&](auto* _) {
+        traverse(que_.avl_root, [&](auto* _) {
             (void) _;
             out++;
         });
@@ -300,8 +320,9 @@ public:
     [[nodiscard]] auto linearize() const -> std::vector<const exposed::TxItem*>
     {
         std::vector<const exposed::TxItem*> out;
-        traverse(reinterpret_cast<const exposed::TxAVL*>(que_.avl_root),
-                 [&](const exposed::TxAVL* const item) { out.push_back(item->self); });
+        traverse(que_.avl_root, [&](const CanardTreeNode* const item) {
+            out.push_back(reinterpret_cast<const exposed::TxItem*>(item));
+        });
         enforce(out.size() == getSize(), "Internal error");
         return out;
     }
@@ -310,17 +331,6 @@ public:
     [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
 
 private:
-    template <typename F>
-    static void traverse(const exposed::TxAVL* const root, const F& fun)  // NOLINT recursion
-    {
-        if (root != nullptr)
-        {
-            traverse<F>(root->left, fun);
-            fun(root);
-            traverse<F>(root->right, fun);
-        }
-    }
-
     static void enforce(const bool expect_true, const std::string& message)
     {
         if (!expect_true)

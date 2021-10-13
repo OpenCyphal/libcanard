@@ -132,11 +132,13 @@ extern "C" {
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
 
 // Forward declarations.
-typedef struct CanardInstance CanardInstance;
-typedef uint64_t              CanardMicrosecond;
-typedef uint16_t              CanardPortID;
-typedef uint8_t               CanardNodeID;
-typedef uint8_t               CanardTransferID;
+typedef struct CanardInstance    CanardInstance;
+typedef struct CanardTreeNode    CanardTreeNode;
+typedef struct CanardTxQueueItem CanardTxQueueItem;
+typedef uint64_t                 CanardMicrosecond;
+typedef uint16_t                 CanardPortID;
+typedef uint8_t                  CanardNodeID;
+typedef uint8_t                  CanardTransferID;
 
 /// Transfer priority level mnemonics per the recommendations given in the UAVCAN Specification.
 typedef enum
@@ -160,15 +162,19 @@ typedef enum
 } CanardTransferKind;
 #define CANARD_NUM_TRANSFER_KINDS 3
 
+/// The AVL tree node structure is exposed here to avoid pointer casting/arithmetics inside the library.
+/// The user code is not expected to interact with this type except if advanced introspection is required.
+struct CanardTreeNode
+{
+    CanardTreeNode* up;     ///< Do not access this field.
+    CanardTreeNode* lr[2];  ///< Left and right children of this node may be accessed for tree traversal.
+    int8_t          bf;     ///< Do not access this field.
+};
+
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
 /// CAN frames with 11-bit ID are not used by UAVCAN/CAN and so they are not supported by the library.
 typedef struct
 {
-    /// For RX frames: reception timestamp.
-    /// For TX frames: transmission deadline.
-    /// The time system may be arbitrary as long as the clock is monotonic (steady).
-    CanardMicrosecond timestamp_usec;
-
     /// 29-bit extended ID. The bits above 29-th shall be zero.
     uint32_t extended_can_id;
 
@@ -255,12 +261,33 @@ typedef struct CanardTxQueue
     size_t size;
 
     /// Internal use only; do not access this field.
-    struct CanardInternalTxAVL* avl_root;
+    CanardTreeNode* avl_root;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
     void* user_reference;
 } CanardTxQueue;
+
+/// One frame stored in the transmission queue along with its metadata.
+struct CanardTxQueueItem
+{
+    /// Internal use only; do not access this field.
+    CanardTreeNode base;
+
+    /// Points to the next frame in this transfer or NULL. This field is mostly intended for own needs of the library.
+    /// Normally, the application would not use it because transfer frame ordering is orthogonal to global TX ordering.
+    /// It can be useful though for pulling pending frames from the TX queue if at least one frame of their transfer
+    /// failed to transmit; the idea is that if at least one frame is missing, the transfer will not be received by
+    /// remote nodes anyway, so all its remaining frames can be dropped from the queue at once using canardTxPop().
+    CanardTxQueueItem* next_in_transfer;
+
+    /// This is the same value that is passed to canardTxPush().
+    /// Frames whose transmission deadline is in the past shall be dropped.
+    CanardMicrosecond tx_deadline_usec;
+
+    /// The actual CAN frame data.
+    CanardFrame frame;
+};
 
 /// Transfer subscription state. The application can register its interest in a particular kind of data exchanged
 /// over the bus by creating such subscription objects. Frames that carry data for which there is no active
@@ -273,7 +300,7 @@ typedef struct CanardTxQueue
 /// This is an intentional time-memory trade-off: use a large look-up table to ensure predictable temporal properties.
 typedef struct CanardRxSubscription
 {
-    struct CanardRxSubscription* avl_tree_up_left_right_bf[4];  ///< Read-only DO NOT MODIFY THIS
+    CanardTreeNode base;  ///< Read-only DO NOT MODIFY THIS
 
     CanardMicrosecond transfer_id_timeout_usec;
     size_t            extent;   ///< Read-only DO NOT MODIFY THIS
@@ -353,7 +380,7 @@ struct CanardInstance
     CanardMemoryFree     memory_free;
 
     /// Read-only DO NOT MODIFY THIS
-    CanardRxSubscription* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
+    CanardTreeNode* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
 };
 
 /// Construct a new library instance.
@@ -387,7 +414,7 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 /// The MTU of the generated frames is dependent on the value of the MTU setting at the time when this function
 /// is invoked. The MTU setting can be changed arbitrarily between invocations.
 ///
-/// The transmission_deadline_usec will be used to populate the timestamp values of the resulting transport
+/// The tx_deadline_usec will be used to populate the timestamp values of the resulting transport
 /// frames (so all frames will have the same timestamp value). This feature is intended to facilitate transmission
 /// deadline tracking, i.e., aborting frames that could not be transmitted before the specified deadline.
 /// Therefore, normally, the timestamp value should be in the future.
@@ -419,11 +446,11 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 /// frames already enqueued in the transmission queue.
 ///
 /// The memory allocation requirement is one allocation per transport frame. A single-frame transfer takes one
-/// allocation; a multi-frame transfer of N frames takes N allocations. The maximum size of each allocation is
-/// not greater than (sizeof(CanardFrame) + sizeof(void*[8]) + MTU).
+/// allocation; a multi-frame transfer of N frames takes N allocations. The size of each allocation is
+/// (sizeof(CanardTxQueueItem) + MTU).
 int32_t canardTxPush(CanardTxQueue* const                que,
                      CanardInstance* const               ins,
-                     const CanardMicrosecond             transmission_deadline_usec,
+                     const CanardMicrosecond             tx_deadline_usec,
                      const CanardTransferMetadata* const metadata,
                      const size_t                        payload_size,
                      const void* const                   payload);
@@ -432,7 +459,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport
 /// frames of serialized transfers pushed into the prioritized transmission queue by canardTxPush().
 ///
-/// The timestamp values of returned frames are initialized with transmission_deadline_usec from canardTxPush().
+/// The timestamp values of returned frames are initialized with tx_deadline_usec from canardTxPush().
 /// Timestamps are used to specify the transmission deadline. It is up to the application and/or the media layer
 /// to implement the discardment of timed-out transport frames. The library does not check it, so a frame that is
 /// already timed out may be returned here.
@@ -450,7 +477,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// not attempt to free it.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
-const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
+const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que);
 
 /// This function transfers the ownership of the specified element of the prioritized transmission queue from the queue
 /// to the application. The element is dequeued but not invalidated; it is the responsibility of the application to
@@ -461,7 +488,7 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 /// If any of the arguments are NULL, the function has no effect and returns NULL.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
-CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const frame);
+CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem* const item);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a
@@ -490,7 +517,7 @@ CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const fram
 ///        in the network minus one), also the size of a session instance is very small, so the removal is unnecessary.
 ///        Real-time networks typically do not change their configuration at runtime, so it is possible to reduce
 ///        the time complexity by never deallocating sessions.
-///        The size of a session instance is at most 64 bytes on any conventional platform (typically much smaller).
+///        The size of a session instance is at most 48 bytes on any conventional platform (typically much smaller).
 ///
 ///     2. New memory for the transfer payload buffer is allocated when a new transfer is initiated, unless the buffer
 ///        was already allocated at the time.
@@ -550,6 +577,7 @@ CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const fram
 ///       the frame did not complete a transfer, the frame forms an invalid frame sequence, the frame is a duplicate,
 ///       the frame is unicast to a different node (address mismatch).
 int8_t canardRxAccept(CanardInstance* const        ins,
+                      const CanardMicrosecond      timestamp_usec,
                       const CanardFrame* const     frame,
                       const uint8_t                redundant_transport_index,
                       CanardRxTransfer* const      out_transfer,

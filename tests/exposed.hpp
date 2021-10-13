@@ -15,23 +15,8 @@ namespace exposed
 {
 using TransferCRC = std::uint16_t;
 
-struct TxItem;
-
-struct TxAVL
+struct TxItem final : CanardTxQueueItem
 {
-    TxAVL*      up{};
-    TxAVL*      left{};
-    TxAVL*      right{};
-    std::int8_t bf{};
-    TxItem*     self{};
-};
-
-struct TxItem final
-{
-    CanardFrame frame{};
-    TxAVL       avl_node;
-    TxItem*     next_in_transfer = nullptr;
-
     [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
     {
         return reinterpret_cast<const std::uint8_t*>(frame.payload)[offset];
@@ -112,7 +97,9 @@ auto txMakeTailByte(const bool         start_of_transfer,
 
 auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
 
-auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result) -> bool;
+auto rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
+                     const CanardFrame* const frame,
+                     RxFrameModel* const      out_result) -> bool;
 
 auto rxSessionWritePayload(CanardInstance* const ins,
                            RxSession* const      rxs,

@@ -19,12 +19,11 @@ TEST_CASE("rxTryParseFrame")
         static std::vector<std::uint8_t> payload_storage;
         payload_storage = payload;
         CanardFrame frame{};
-        frame.timestamp_usec  = timestamp_usec;
         frame.extended_can_id = extended_can_id;
         frame.payload_size    = std::size(payload);
         frame.payload         = payload_storage.data();
         model                 = RxFrameModel{};
-        return rxTryParseFrame(&frame, &model);
+        return rxTryParseFrame(timestamp_usec, &frame, &model);
     };
 
     // MESSAGE
