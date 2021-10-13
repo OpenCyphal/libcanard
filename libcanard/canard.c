@@ -107,7 +107,7 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, cons
 // --------------------------------------------- TRANSMISSION ---------------------------------------------
 
 /// This extension over the Cavl node is needed to avoid pointer arithmetics.
-/// It stores an explicit pointer to the structure that owns it, i.e., that points a fixed offset back from itself.
+/// It stores an explicit pointer to the structure that owns it, i.e., it points a fixed offset back from itself.
 typedef struct CanardInternalTxAVL
 {
     Cavl           cavl;
@@ -1048,12 +1048,16 @@ const CanardFrame* canardTxPeek(const CanardTxQueue* const que)
 
 CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const frame)
 {
-    CanardFrame* out = (CanardFrame*) frame;
+    CanardFrame* out = NULL;
     if ((que != NULL) && (frame != NULL))
     {
+        const TxItem* const txi = (const TxItem*) frame;
+        out                     = (CanardFrame*) txi;
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
-        cavlRemove((Cavl**) &que->avl_root, &((const TxItem*) frame)->avl_node.cavl);
+        // Note that the highest-priority frame is always a leaf node in the AVL tree, which means that it is very
+        // cheap to remove.
+        cavlRemove((Cavl**) &que->avl_root, &txi->avl_node.cavl);
         que->size--;
     }
     return out;

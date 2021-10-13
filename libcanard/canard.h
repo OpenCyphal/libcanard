@@ -7,18 +7,16 @@
 ///                        ----o------o------------o---------o------o---------o-------
 ///
 /// Libcanard is a compact implementation of the UAVCAN/CAN protocol for high-integrity real-time embedded systems.
-/// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 4..8K RAM.
+/// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 8K RAM.
 /// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
 /// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
 /// bit, little- and big-endian, RTOS-based or baremetal, etc., as long as there is a standards-compliant compiler.
 ///
 ///          INTEGRATION
 ///
-/// The library is intended to be integrated into the end application by simply copying the file canard.c into the
+/// The library is intended to be integrated into the end application by simply copying its source files into the
 /// source tree of the project; it does not require any special compilation options and should work out of the box.
-/// There are optional build configuration macros defined near the top of canard.c; they may be used to fine-tune
-/// the library for the target platform (but it is not necessary). This header file should be located in the same
-/// directory with canard.c.
+/// There are build-time configuration parameters defined near the top of canard.c, but they are safe to ignore.
 ///
 /// As explained in this documentation, the library requires a deterministic constant-time bounded-fragmentation dynamic
 /// memory allocator. If your target platform does not provide a deterministic memory manager (most platforms don't),
@@ -56,7 +54,7 @@
 /// The application then picks the produced CAN frames from the queue one-by-one by calling canardTxPeek() followed
 /// by canardTxPop() -- the former allows the application to look at the next frame scheduled for transmission,
 /// and the latter tells the library that the frame shall be removed from the queue.
-/// The returned frames need to be manually deallocated by the application upon transmission.
+/// Popped frames need to be manually deallocated by the application upon transmission.
 ///
 /// The RX pipeline is managed with the help of three API functions; unlike the TX pipeline, there is one shared
 /// state for all redundant interfaces that manages deduplication transparently. The main function canardRxAccept()
@@ -74,7 +72,7 @@
 /// to provide adequate synchronization.
 ///
 /// The library is purely reactive: it does not perform any background processing and does not require periodic
-/// servicing. Its internal state is only updated as a response to well-specified explicit API calls.
+/// servicing. Its internal state is only updated as a response to well-specified external events.
 ///
 /// --------------------------------------------------------------------------------------------------------------------
 ///
@@ -230,15 +228,16 @@ typedef struct
     CanardTransferID transfer_id;
 } CanardTransferMetadata;
 
-/// Prioritized transmission queue that keeps CAN frames destined for for transmission via one CAN interface.
+/// Prioritized transmission queue that keeps CAN frames destined for transmission via one CAN interface.
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
 /// Applications that are not interested in transmission may have zero queues.
-/// Push is O(n), peek/pop O(1), exactly one heap allocation per element.
+/// All operations (push, peek, pop) are O(log n); there is exactly one heap allocation per element.
 /// API functions that work with this type are named "canardTx*()", find them below.
 typedef struct CanardTxQueue
 {
     /// The maximum number of frames this queue is allowed to contain. An attempt to push more will fail with an
     /// out-of-memory error even if the memory is not exhausted. This value can be changed by the user at any moment.
+    /// The purpose of this limitation is to ensure that a blocked queue does not exhaust the heap memory.
     size_t capacity;
 
     /// The transport-layer maximum transmission unit (MTU). The value can be changed arbitrarily at any time between
@@ -281,8 +280,6 @@ typedef struct CanardRxSubscription
     /// this table, we only keep pointers, which are NULL by default, populating a new RX session dynamically
     /// on an ad-hoc basis when we first receive a transfer from that node. This is O(1) because our memory
     /// allocation routines are assumed to be O(1) and we make at most one allocation per remote node.
-    /// Further, the pointers here add an extra indirection, which is bad for systems that leverage cached memory,
-    /// plus a pointer itself takes about 2-8 bytes of memory, too.
     ///
     /// A more predictable and simpler approach is to pre-allocate states here statically instead of keeping
     /// just pointers, but it would push the size of this instance from about 0.5 KiB to ~3 KiB for a typical 32-bit
@@ -414,8 +411,8 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 ///       (i.e., the modulo is computed automatically, so the caller doesn't have to bother).
 ///
 /// An out-of-memory error is returned if a TX frame could not be allocated due to the memory being exhausted,
-/// or if the capacity of the queue would be exhausted by this operation. In such cases, all previously allocated
-/// frames, if any, will be deallocated automatically. In other words, either all frames of the transfer are
+/// or if the capacity of the queue would be exhausted by this operation. In such cases, all frames allocated for
+/// this transfer (if any) will be deallocated automatically. In other words, either all frames of the transfer are
 /// enqueued successfully, or none are.
 ///
 /// The time complexity is O(p + log e), where p is the amount of payload in the transfer, and e is the number of
@@ -423,7 +420,7 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 ///
 /// The memory allocation requirement is one allocation per transport frame. A single-frame transfer takes one
 /// allocation; a multi-frame transfer of N frames takes N allocations. The maximum size of each allocation is
-/// (sizeof(CanardFrame) + sizeof(void*) + MTU).
+/// not greater than (sizeof(CanardFrame) + sizeof(void*[8]) + MTU).
 int32_t canardTxPush(CanardTxQueue* const                que,
                      CanardInstance* const               ins,
                      const CanardMicrosecond             transmission_deadline_usec,
@@ -455,12 +452,13 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
 const CanardFrame* canardTxPeek(const CanardTxQueue* const que);
 
-/// This function transfers the ownership of the top element of the prioritized transmission queue from the queue
+/// This function transfers the ownership of the specified element of the prioritized transmission queue from the queue
 /// to the application. The element is dequeued but not invalidated; it is the responsibility of the application to
 /// deallocate the memory used by the object later. The object SHALL NOT be deallocated UNTIL this function is invoked.
-/// The return value is the same as that of canardTxPeek() except that it is mutable.
+/// The function returns the same pointer that it is given except that it becomes mutable, which enables the
+/// application to deallocate its memory.
 ///
-/// If the input argument is NULL or if the transmission queue is empty, the function has no effect and returns NULL.
+/// If any of the arguments are NULL, the function has no effect and returns NULL.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
 CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const frame);
@@ -492,7 +490,7 @@ CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const fram
 ///        in the network minus one), also the size of a session instance is very small, so the removal is unnecessary.
 ///        Real-time networks typically do not change their configuration at runtime, so it is possible to reduce
 ///        the time complexity by never deallocating sessions.
-///        The size of a session instance is at most 48 bytes on any conventional platform (typically much smaller).
+///        The size of a session instance is at most 64 bytes on any conventional platform (typically much smaller).
 ///
 ///     2. New memory for the transfer payload buffer is allocated when a new transfer is initiated, unless the buffer
 ///        was already allocated at the time.
@@ -520,13 +518,14 @@ CanardFrame* canardTxPop(CanardTxQueue* const que, const CanardFrame* const fram
 /// for a detailed treatment of the problem and the related theory please refer to the documentation of O1Heap --
 /// a deterministic memory allocator for hard real-time embedded systems.
 ///
-/// The time complexity is O(n+p) where n is the number of subject-IDs or service-IDs subscribed to by the application,
-/// depending on the transfer kind of the supplied frame, and p is the amount of payload in the received frame
-/// (because it will be copied into an internal contiguous buffer). Observe that the time complexity is invariant to
-/// the network configuration (such as the number of online nodes) -- this is a very important design guarantee for
-/// real-time applications because the execution time is dependent only on the number of active subscriptions for
-/// a given transfer kind, and the MTU, both of which are easy to predict and account for. Excepting the
-/// subscription search and the payload data copying, the entire RX pipeline contains neither loops nor recursion.
+/// The time complexity is O(p + log n) where n is the number of subject-IDs or service-IDs subscribed to by the
+/// application, depending on the transfer kind of the supplied frame, and p is the amount of payload in the received
+/// frame (because it will be copied into an internal contiguous buffer). Observe that the time complexity is
+/// invariant to the network configuration (such as the number of online nodes) -- this is a very important
+/// design guarantee for real-time applications because the execution time is dependent only on the number of
+/// active subscriptions for a given transfer kind, and the MTU, both of which are easy to predict and account for.
+/// Excepting the subscription search and the payload data copying, the entire RX pipeline contains neither loops
+/// nor recursion.
 /// Misaddressed and malformed frames are discarded in constant time.
 ///
 /// The function returns 1 (one) if the new frame completed a transfer. In this case, the details of the transfer
