@@ -17,26 +17,23 @@ jobs:
             cxx-compiler: clang++-12
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: sudo apt install gcc-multilib g++-multilib clang-tidy-12
-
-      - name: Configure CMake
-        run: >
+      - run: sudo apt install gcc-multilib g++-multilib clang-tidy-12
+      - run: >
           cmake
           -B ${{ github.workspace }}/build
           -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_C_COMPILER=${{ matrix.c-compiler }}
           -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }}
           tests
-
-      - name: Build
-        working-directory: ${{github.workspace}}/build
-        run: make VERBOSE=1
-
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        run: make test
+      - working-directory: ${{github.workspace}}/build
+        run: |
+          make VERBOSE=1
+          make test
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: ${{github.job}}
+          path: ${{github.workspace}}/**/*
 
   optimizations:
     runs-on: ubuntu-latest
@@ -53,12 +50,8 @@ jobs:
             cxx-compiler: clang++-12
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: sudo apt install gcc-multilib g++-multilib
-
-      - name: Configure CMake
-        run: >
+      - run: sudo apt install gcc-multilib g++-multilib
+      - run: >
           cmake
           -B ${{ github.workspace }}/build
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
@@ -66,14 +59,15 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }}
           -DNO_STATIC_ANALYSIS=1
           tests
-
-      - name: Build
-        working-directory: ${{github.workspace}}/build
-        run: make VERBOSE=1
-
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        run: make test
+      - working-directory: ${{github.workspace}}/build
+        run: |
+          make VERBOSE=1
+          make test
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: ${{github.job}}
+          path: ${{github.workspace}}/**/*
 
   avr:
     runs-on: ubuntu-latest
@@ -82,23 +76,13 @@ jobs:
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: |
+      - run: |
           sudo apt install gcc-avr avr-libc
           avr-gcc --version
-
-      - name: Build C99
-        run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
-      - name: Build C11
-        run: avr-gcc libcanard/*.c -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
-      - name: Build GNU99
-        run: avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
-      - name: Build GNU11
-        run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
   style_check:
     runs-on: ubuntu-latest
@@ -112,7 +96,6 @@ jobs:
           clangFormatVersion: 12
 
   sonarcloud:
-    if: github.base_ref
     runs-on: ubuntu-latest
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
@@ -175,7 +158,12 @@ jobs:
         --define sonar.exclusions=libcanard/cavl.h
         --define sonar.cfamily.gcov.reportsPath=.
         --define sonar.cfamily.cache.enabled=false
-        --define sonar.cfamily.threads=1
+        --define sonar.cfamily.threads=2
         --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
-        --define sonar.login=${{ secrets.SONAR_TOKEN }}
+
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: ${{github.job}}
+        path: ${{github.workspace}}/**/*
