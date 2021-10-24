@@ -32,6 +32,8 @@ Checks: >-
   -cppcoreguidelines-pro-type-union-access,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -*-no-malloc,
+  -cert-msc30-c,
+  -cert-msc50-cpp,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 AnalyzeTemporaryDtors: false

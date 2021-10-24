@@ -79,7 +79,7 @@ endfunction()
 
 # Disable missing declaration warning to allow exposure of private definitions.
 gen_test_matrix(test_private
-        "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp"
+        "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_private_cavl.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
         "-Wno-missing-declarations")
 

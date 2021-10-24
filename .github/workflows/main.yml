@@ -34,6 +34,7 @@ jobs:
         with:
           name: ${{github.job}}
           path: ${{github.workspace}}/**/*
+          retention-days: 2
 
   optimizations:
     runs-on: ubuntu-latest
@@ -68,6 +69,7 @@ jobs:
         with:
           name: ${{github.job}}
           path: ${{github.workspace}}/**/*
+          retention-days: 2
 
   avr:
     runs-on: ubuntu-latest
@@ -167,3 +169,4 @@ jobs:
       with:
         name: ${{github.job}}
         path: ${{github.workspace}}/**/*
+        retention-days: 2
