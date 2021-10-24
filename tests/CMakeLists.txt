@@ -33,23 +33,16 @@ else ()
     add_custom_target(format COMMAND ${clang_format} -i -fallback-style=none -style=file --verbose ${format_files})
 endif ()
 
-# C options
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Werror -pedantic -fstrict-aliasing")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion -Wtype-limits")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wsign-conversion -Wcast-align -Wmissing-declarations")
-
-# C++ options
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Werror -pedantic -fstrict-aliasing")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wconversion -Wsign-promo")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wsign-conversion -Wcast-align -Wmissing-declarations")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wtype-limits -Wnon-virtual-dtor")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wsign-promo")
+set(CXX_EXTENSIONS OFF)
+add_compile_options(
+        -Wall -Wextra -Werror -pedantic -fstrict-aliasing -Wdouble-promotion -Wswitch-enum -Wfloat-equal -Wundef
+        -Wconversion -Wtype-limits -Wsign-conversion -Wcast-align
+)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wnon-virtual-dtor -Wsign-promo")
 
 include_directories(catch ${library_dir})
-add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1)
+add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1 -DCATCH_CONFIG_ENABLE_ALL_STRINGMAKERS=1)
 
 set(common_sources catch/main.cpp ${library_dir}/canard.c)
 
@@ -57,7 +50,13 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
     add_executable(${name} ${common_sources} ${files})
     target_compile_definitions(${name} PUBLIC ${compile_definitions})
     target_link_libraries(${name} pthread)
-    set_target_properties(${name} PROPERTIES COMPILE_FLAGS "${compile_flags}" LINK_FLAGS "${link_flags}" C_STANDARD "${c_standard}")
+    set_target_properties(
+            ${name}
+            PROPERTIES
+            COMPILE_FLAGS "${compile_flags}"
+            LINK_FLAGS "${link_flags}"
+            C_STANDARD "${c_standard}"
+    )
     add_test("run_${name}" "${name}" --rng-seed time)
 endfunction()
 
@@ -86,4 +85,4 @@ gen_test_matrix(test_private
 gen_test_matrix(test_public
         "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
         ""
-        "")
+        "-Wmissing-declarations")
