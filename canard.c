@@ -319,11 +319,12 @@ int16_t canardHandleRxFrame(CanardInstance* ins, const CanardCANFrame* frame, ui
     const bool first_frame = IS_START_OF_TRANSFER(tail_byte);
     const bool not_previous_tid =
         computeTransferIDForwardDistance((uint8_t) rx_state->transfer_id, TRANSFER_ID_FROM_TAIL_BYTE(tail_byte)) > 1;
+    const bool incomplete_frame = rx_state->buffer_blocks != NULL;
 
     const bool need_restart =
             (not_initialized) ||
             (tid_timed_out) ||
-            (first_frame && not_previous_tid);
+            (first_frame && (not_previous_tid || incomplete_frame));
 
     if (need_restart)
     {
