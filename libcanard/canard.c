@@ -4,7 +4,6 @@
 
 #include "canard.h"
 #include "cavl.h"
-#include <assert.h>
 #include <string.h>
 
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
@@ -18,6 +17,8 @@
 /// By default, this macro resolves to the standard assert(). The user can redefine this if necessary.
 /// To disable assertion checks completely, make it expand into `(void)(0)`.
 #ifndef CANARD_ASSERT
+// Intentional violation of MISRA: inclusion not at the top of the file to eliminate unnecessary dependency on assert.h.
+#    include <assert.h>  // NOSONAR
 // Intentional violation of MISRA: assertion macro cannot be replaced with a function definition.
 #    define CANARD_ASSERT(x) assert(x)  // NOSONAR
 #endif
