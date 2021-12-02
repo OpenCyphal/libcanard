@@ -219,6 +219,9 @@ else
 
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
 
+- Replace runtime CRC computation with much faster static table by default.
+  This can be disabled by setting CANARD_CRC_TABLE=0.
+
 - Fixed issues with const-correctness.
 
 - `canardRxAccept2()` renamed to `canardRxAccept()`.
