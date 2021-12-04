@@ -1202,3 +1202,45 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     }
     return out;
 }
+
+CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id)
+{
+    CanardFilter out = {0};
+
+    out.extended_can_id = ((uint32_t) subject_id) << OFFSET_SUBJECT_ID;
+    out.extended_mask   = FLAG_SERVICE_NOT_MESSAGE | FLAG_RESERVED_07 | (CANARD_SUBJECT_ID_MAX << OFFSET_SUBJECT_ID);
+
+    return out;
+}
+
+CanardFilter canardMakeFilterForService(const CanardPortID service_id, const CanardNodeID local_node_id)
+{
+    CanardFilter out = {0};
+
+    out.extended_can_id = FLAG_SERVICE_NOT_MESSAGE | (((uint32_t) service_id) << OFFSET_SERVICE_ID) |
+                          (((uint32_t) local_node_id) << OFFSET_DST_NODE_ID);
+    out.extended_mask = FLAG_SERVICE_NOT_MESSAGE | FLAG_RESERVED_23 | (CANARD_SERVICE_ID_MAX << OFFSET_SERVICE_ID) |
+                        (CANARD_NODE_ID_MAX << OFFSET_DST_NODE_ID);
+
+    return out;
+}
+
+CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id)
+{
+    CanardFilter out = {0};
+
+    out.extended_can_id = FLAG_SERVICE_NOT_MESSAGE | (((uint32_t) local_node_id) << OFFSET_DST_NODE_ID);
+    out.extended_mask   = FLAG_SERVICE_NOT_MESSAGE | FLAG_RESERVED_23 | (CANARD_NODE_ID_MAX << OFFSET_DST_NODE_ID);
+
+    return out;
+}
+
+CanardFilter canardConsolidateFilters(const CanardFilter* a, const CanardFilter* b)
+{
+    CanardFilter out = {0};
+
+    out.extended_mask   = a->extended_mask & b->extended_mask & ~(a->extended_can_id ^ b->extended_can_id);
+    out.extended_can_id = a->extended_can_id & out.extended_mask;
+
+    return out;
+}

@@ -89,6 +89,6 @@ gen_test_matrix(test_private_crc_table
         "-Wno-missing-declarations")
 
 gen_test_matrix(test_public
-        "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
+        "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp;test_public_filters.cpp"
         ""
         "-Wmissing-declarations")
