@@ -105,9 +105,6 @@ jobs:
 
   sonarcloud:
     runs-on: ubuntu-latest
-    # don't run sonarcloud on builds originating from forks
-    # due to secrets not being available
-    if: github.actor == 'repo-owner'
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
       SONAR_SERVER_URL: "https://sonarcloud.io"
@@ -160,8 +157,9 @@ jobs:
         gcov --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
 
     - name: Run sonar-scanner
+      # Don't run sonar-scanner on builds originating from forks due to secrets not being available
       run: >
-        sonar-scanner
+        [ -z "$SONAR_TOKEN" ] || sonar-scanner
         --define sonar.organization=uavcan
         --define sonar.projectName=libcanard
         --define sonar.projectKey=libcanard
