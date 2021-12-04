@@ -3,6 +3,7 @@
 
 #include "helpers.hpp"
 #include "exposed.hpp"
+#include "catch.hpp"
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -56,10 +57,12 @@ TEST_CASE("RoundtripSimple")
     ins_rx.getAllocator().setAllocationCeiling(rx_worst_case_memory_consumption);  // This is guaranteed to be enough.
 
     helpers::Instance ins_tx;
+    helpers::TxQueue  que_tx(1024UL * 1024U * 1024U, CANARD_MTU_CAN_FD);
     ins_tx.setNodeID(99);
-    ins_tx.getAllocator().setAllocationCeiling(1024 * 1024 * 1024);
+    ins_tx.getAllocator().setAllocationCeiling(1024UL * 1024U * 1024U);
 
-    std::unordered_map<CanardMicrosecond, CanardTransfer> pending_transfers;
+    using Pending = std::tuple<CanardTransferMetadata, std::size_t, void*>;
+    std::unordered_map<CanardMicrosecond, Pending> pending_transfers;
 
     std::atomic<CanardMicrosecond> transfer_counter      = 0;
     std::atomic<std::uint64_t>     frames_in_flight      = 0;
@@ -79,34 +82,36 @@ TEST_CASE("RoundtripSimple")
             std::generate_n(payload, payload_size, [&]() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
 
             // Generate the transfer.
-            CanardTransfer tran{};
-            tran.timestamp_usec = transfer_counter++;
-            tran.priority       = st.priority;
-            tran.transfer_kind  = st.transfer_kind;
-            tran.port_id        = st.port_id;
+            const CanardMicrosecond timestamp_usec = transfer_counter++;
+            CanardTransferMetadata  tran{};
+            tran.priority      = st.priority;
+            tran.transfer_kind = st.transfer_kind;
+            tran.port_id       = st.port_id;
             tran.remote_node_id =
                 (tran.transfer_kind == CanardTransferKindMessage) ? CANARD_NODE_ID_UNSET : ins_rx.getNodeID();
-            tran.transfer_id  = (st.transfer_id++) & CANARD_TRANSFER_ID_MAX;
-            tran.payload_size = payload_size;
-            tran.payload      = payload;
+            tran.transfer_id = (st.transfer_id++) & CANARD_TRANSFER_ID_MAX;
 
             // Use a random MTU.
-            ins_tx.setMTU(static_cast<std::uint8_t>(getRandomNatural(256U)));
+            que_tx.setMTU(static_cast<std::uint8_t>(getRandomNatural(256U)));
 
             // Push the transfer.
             bool sleep = false;
             {
                 std::lock_guard locker(lock);
-                const auto      result = ins_tx.txPush(tran);
+                const auto result = que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, payload_size, payload);
                 if (result > 0)
                 {
-                    pending_transfers.emplace(tran.timestamp_usec, tran);
+                    pending_transfers.emplace(timestamp_usec, Pending{tran, payload_size, payload});
                     frames_in_flight += static_cast<std::uint64_t>(result);
                     peak_frames_in_flight = std::max<std::uint64_t>(peak_frames_in_flight, frames_in_flight);
                 }
                 else
                 {
-                    REQUIRE(result == -CANARD_ERROR_OUT_OF_MEMORY);
+                    if (result != -CANARD_ERROR_OUT_OF_MEMORY)
+                    {
+                        // Can't use REQUIRE because it is not thread-safe.
+                        throw std::logic_error("Unexpected result: " + std::to_string(result));
+                    }
                     sleep = true;
                 }
             }
@@ -125,43 +130,43 @@ TEST_CASE("RoundtripSimple")
 
     try
     {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
         while (true)
         {
-            const CanardFrame* frame = nullptr;
+            CanardTxQueueItem* ti = nullptr;
             {
                 std::lock_guard locker(lock);
-                frame = ins_tx.txPeek();  // Peek-pop form an atomic transaction.
-                ins_tx.txPop();           // No effect if the queue is empty.
-                if (frame != nullptr)
+                ti = que_tx.pop(que_tx.peek());
+                if (ti != nullptr)
                 {
                     REQUIRE(frames_in_flight > 0);
                     --frames_in_flight;
                 }
             }
 
-            if (frame != nullptr)
+            if (ti != nullptr)
             {
-                const auto tail = reinterpret_cast<const std::uint8_t*>(frame->payload)[frame->payload_size - 1U];
-                log_file << frame->timestamp_usec << " "                                                          //
-                         << std::hex << std::setfill('0') << std::setw(8) << frame->extended_can_id               //
-                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << frame->payload_size << "] "  //
-                         << (bool(tail & 128U) ? 'S' : ' ')                                                       //
-                         << (bool(tail & 64U) ? 'E' : ' ')                                                        //
-                         << (bool(tail & 32U) ? 'T' : ' ')                                                        //
-                         << " " << std::uint16_t(tail & 31U)                                                      //
+                const auto tail = static_cast<const std::uint8_t*>(ti->frame.payload)[ti->frame.payload_size - 1U];
+                log_file << ti->tx_deadline_usec << " "                                                              //
+                         << std::hex << std::setfill('0') << std::setw(8) << ti->frame.extended_can_id               //
+                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << ti->frame.payload_size << "] "  //
+                         << (bool(tail & 128U) ? 'S' : ' ')                                                          //
+                         << (bool(tail & 64U) ? 'E' : ' ')                                                           //
+                         << (bool(tail & 32U) ? 'T' : ' ')                                                           //
+                         << " " << std::uint16_t(tail & 31U)                                                         //
                          << '\n';
 
-                CanardTransfer        transfer{};
+                CanardRxTransfer      transfer{};
                 CanardRxSubscription* subscription = nullptr;
-                std::int8_t           result       = ins_rx.rxAccept(*frame, 0, transfer, &subscription);
-                REQUIRE(0 == ins_rx.rxAccept(*frame,
+                std::int8_t result = ins_rx.rxAccept(ti->tx_deadline_usec, ti->frame, 0, transfer, &subscription);
+                REQUIRE(0 == ins_rx.rxAccept(ti->tx_deadline_usec,
+                                             ti->frame,
                                              1,
                                              transfer,
                                              &subscription));  // Redundant interface will never be used here.
                 if (result == 1)
                 {
-                    CanardTransfer reference{};  // Fetch the reference transfer from the list of pending.
+                    Pending reference{};  // Fetch the reference transfer from the list of pending.
                     {
                         std::lock_guard locker(lock);
                         const auto      pt_it = pending_transfers.find(transfer.timestamp_usec);
@@ -169,19 +174,19 @@ TEST_CASE("RoundtripSimple")
                         reference = pt_it->second;
                         pending_transfers.erase(pt_it);
                     }
+                    const auto [ref_meta, ref_payload_size, ref_payload] = reference;
 
-                    REQUIRE(transfer.timestamp_usec == reference.timestamp_usec);
-                    REQUIRE(transfer.priority == reference.priority);
-                    REQUIRE(transfer.transfer_kind == reference.transfer_kind);
-                    REQUIRE(transfer.port_id == reference.port_id);
-                    REQUIRE(transfer.remote_node_id == ins_tx.getNodeID());
-                    REQUIRE(transfer.transfer_id == reference.transfer_id);
+                    REQUIRE(transfer.metadata.priority == ref_meta.priority);
+                    REQUIRE(transfer.metadata.transfer_kind == ref_meta.transfer_kind);
+                    REQUIRE(transfer.metadata.port_id == ref_meta.port_id);
+                    REQUIRE(transfer.metadata.remote_node_id == ins_tx.getNodeID());
+                    REQUIRE(transfer.metadata.transfer_id == ref_meta.transfer_id);
                     // The payload size is not checked because the variance is huge due to padding and truncation.
                     if (transfer.payload != nullptr)
                     {
                         REQUIRE(0 == std::memcmp(transfer.payload,
-                                                 reference.payload,
-                                                 std::min(transfer.payload_size, reference.payload_size)));
+                                                 ref_payload,
+                                                 std::min(transfer.payload_size, ref_payload_size)));
                     }
                     else
                     {
@@ -189,7 +194,7 @@ TEST_CASE("RoundtripSimple")
                     }
 
                     ins_rx.getAllocator().deallocate(transfer.payload);
-                    std::free(const_cast<void*>(reference.payload));  // NOLINT
+                    std::free(ref_payload);  // NOLINT
                 }
                 else
                 {
@@ -204,7 +209,11 @@ TEST_CASE("RoundtripSimple")
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            ins_tx.getAllocator().deallocate(frame);
+
+            {
+                std::lock_guard locker(lock);
+                ins_tx.getAllocator().deallocate(ti);
+            }
 
             if (std::chrono::steady_clock::now() > deadline)
             {
@@ -228,16 +237,16 @@ TEST_CASE("RoundtripSimple")
     std::cout << "PEAK FRAMES IN FLIGHT: " << peak_frames_in_flight << std::endl;
 
     std::size_t i = 0;
-    for (const auto [k, v] : pending_transfers)
+    for (const auto& [k, v] : pending_transfers)
     {
-        REQUIRE(k == v.timestamp_usec);
-        std::cout << "#" << i << "/" << std::size(pending_transfers) << ":"   //
-                  << " ts=" << v.timestamp_usec                               //
-                  << " prio=" << static_cast<std::uint16_t>(v.priority)       //
-                  << " kind=" << static_cast<std::uint16_t>(v.transfer_kind)  //
-                  << " port=" << v.port_id                                    //
-                  << " nid=" << static_cast<std::uint16_t>(v.remote_node_id)  //
-                  << " tid=" << static_cast<std::uint16_t>(v.transfer_id)     //
+        const auto [ref_meta, ref_payload_size, ref_payload] = v;
+        std::cout << "#" << i++ << "/" << std::size(pending_transfers) << ":"        //
+                  << " ts=" << k                                                     //
+                  << " prio=" << static_cast<std::uint16_t>(ref_meta.priority)       //
+                  << " kind=" << static_cast<std::uint16_t>(ref_meta.transfer_kind)  //
+                  << " port=" << ref_meta.port_id                                    //
+                  << " nid=" << static_cast<std::uint16_t>(ref_meta.remote_node_id)  //
+                  << " tid=" << static_cast<std::uint16_t>(ref_meta.transfer_id)     //
                   << std::endl;
     }
 

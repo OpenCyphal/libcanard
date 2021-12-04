@@ -1,13 +1,13 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
+// Copyright (c) 2016 UAVCAN Development Team.
 
 #pragma once
 
 #include "canard.h"
-#include "catch.hpp"
 #include <cstdarg>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 
 /// Definitions that are not exposed by the library but that are needed for testing.
 /// Please keep them in sync with the library by manually updating as necessary.
@@ -15,11 +15,8 @@ namespace exposed
 {
 using TransferCRC = std::uint16_t;
 
-struct TxQueueItem final
+struct TxItem final : CanardTxQueueItem
 {
-    CanardFrame  frame{};
-    TxQueueItem* next = nullptr;
-
     [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
     {
         return reinterpret_cast<const std::uint8_t*>(frame.payload)[offset];
@@ -27,7 +24,11 @@ struct TxQueueItem final
 
     [[nodiscard]] auto getTailByte() const
     {
-        REQUIRE(frame.payload_size >= 1U);
+        if (frame.payload_size < 1U)
+        {
+            // Can't use REQUIRE because it is not thread-safe.
+            throw std::logic_error("Can't get the tail byte because the frame payload is empty.");
+        }
         return getPayloadByte(frame.payload_size - 1U);
     }
 
@@ -35,11 +36,11 @@ struct TxQueueItem final
     [[nodiscard]] auto isEndOfTransfer() const { return (getTailByte() & 64U) != 0; }
     [[nodiscard]] auto isToggleBitSet() const { return (getTailByte() & 32U) != 0; }
 
-    ~TxQueueItem()                   = default;
-    TxQueueItem(const TxQueueItem&)  = delete;
-    TxQueueItem(const TxQueueItem&&) = delete;
-    auto operator=(const TxQueueItem&) -> TxQueueItem& = delete;
-    auto operator=(const TxQueueItem&&) -> TxQueueItem& = delete;
+    ~TxItem()              = default;
+    TxItem(const TxItem&)  = delete;
+    TxItem(const TxItem&&) = delete;
+    auto operator=(const TxItem&) -> TxItem& = delete;
+    auto operator=(const TxItem&&) -> TxItem& = delete;
 };
 
 struct RxSession
@@ -81,11 +82,13 @@ auto txMakeServiceSessionSpecifier(const std::uint16_t service_id,
                                    const std::uint8_t  src_node_id,
                                    const std::uint8_t  dst_node_id) -> std::uint32_t;
 
-auto txGetPresentationLayerMTU(const CanardInstance* const ins) -> std::size_t;
+auto adjustPresentationLayerMTU(const std::size_t mtu_bytes) -> std::size_t;
 
-auto txMakeCANID(const CanardTransfer* const transfer,
-                 const std::uint8_t          local_node_id,
-                 const std::size_t           presentation_layer_mtu) -> std::int32_t;
+auto txMakeCANID(const CanardTransferMetadata* const tr,
+                 const size_t                        payload_size,
+                 const void* const                   payload,
+                 const CanardNodeID                  local_node_id,
+                 const size_t                        presentation_layer_mtu) -> std::int32_t;
 
 auto txMakeTailByte(const bool         start_of_transfer,
                     const bool         end_of_transfer,
@@ -94,9 +97,9 @@ auto txMakeTailByte(const bool         start_of_transfer,
 
 auto txRoundFramePayloadSizeUp(const std::size_t x) -> std::size_t;
 
-auto txFindQueueSupremum(const CanardInstance* const ins, const std::uint32_t can_id) -> TxQueueItem*;
-
-auto rxTryParseFrame(const CanardFrame* const frame, RxFrameModel* const out_result) -> bool;
+auto rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
+                     const CanardFrame* const frame,
+                     RxFrameModel* const      out_result) -> bool;
 
 auto rxSessionWritePayload(CanardInstance* const ins,
                            RxSession* const      rxs,
@@ -112,9 +115,6 @@ auto rxSessionUpdate(CanardInstance* const     ins,
                      const std::uint8_t        redundant_transport_index,
                      const CanardMicrosecond   transfer_id_timeout_usec,
                      const std::size_t         extent,
-                     CanardTransfer* const     out_transfer) -> std::int8_t;
-
-auto float16Pack(const float value) -> std::uint16_t;
-auto float16Unpack(const std::uint16_t value) -> float;
+                     CanardRxTransfer* const   out_transfer) -> std::int8_t;
 }
 }  // namespace exposed

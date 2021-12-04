@@ -12,6 +12,7 @@
       <w>coverity</w>
       <w>crtp</w>
       <w>dataflow</w>
+      <w>dcanard</w>
       <w>ddtid</w>
       <w>deallocated</w>
       <w>deallocating</w>
@@ -46,6 +47,7 @@
       <w>msec</w>
       <w>multiframe</w>
       <w>nbytes</w>
+      <w>noninfringement</w>
       <w>nosonar</w>
       <w>nutt</w>
       <w>pdst</w>
@@ -66,9 +68,11 @@
       <w>snid</w>
       <w>socketcan</w>
       <w>storages</w>
+      <w>stringmakers</w>
       <w>submoduling</w>
       <w>subtreeing</w>
       <w>supremum</w>
+      <w>transcompilers</w>
       <w>uavcan</w>
       <w>uint</w>
       <w>unicast</w>
@@ -79,6 +83,8 @@
       <w>wget</w>
       <w>xenial</w>
       <w>zubax</w>
+      <w>zzzzz</w>
+      <w>zzzzzz</w>
     </words>
   </dictionary>
 </component>

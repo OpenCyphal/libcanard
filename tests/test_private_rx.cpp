@@ -3,6 +3,7 @@
 
 #include "exposed.hpp"
 #include "helpers.hpp"
+#include "catch.hpp"
 #include <cstring>
 
 TEST_CASE("rxTryParseFrame")
@@ -18,12 +19,11 @@ TEST_CASE("rxTryParseFrame")
         static std::vector<std::uint8_t> payload_storage;
         payload_storage = payload;
         CanardFrame frame{};
-        frame.timestamp_usec  = timestamp_usec;
         frame.extended_can_id = extended_can_id;
         frame.payload_size    = std::size(payload);
         frame.payload         = payload_storage.data();
         model                 = RxFrameModel{};
-        return rxTryParseFrame(&frame, &model);
+        return rxTryParseFrame(timestamp_usec, &frame, &model);
     };
 
     // MESSAGE
@@ -309,7 +309,7 @@ TEST_CASE("rxSessionUpdate")
     rxs.transfer_id               = 31;
     rxs.redundant_transport_index = 1;
 
-    CanardTransfer transfer{};
+    CanardRxTransfer transfer{};
 
     const auto update = [&](const std::uint8_t  redundant_transport_index,
                             const std::uint64_t tid_timeout_usec,
@@ -335,11 +335,11 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 1);
     REQUIRE(transfer.timestamp_usec == 10'000'000);
-    REQUIRE(transfer.priority == CanardPrioritySlow);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 2'222);
-    REQUIRE(transfer.remote_node_id == 55);
-    REQUIRE(transfer.transfer_id == 11);
+    REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 2'222);
+    REQUIRE(transfer.metadata.remote_node_id == 55);
+    REQUIRE(transfer.metadata.transfer_id == 11);
     REQUIRE(transfer.payload_size == 3);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x01\x01", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -371,11 +371,11 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 1);
     REQUIRE(transfer.timestamp_usec == 10'000'050);
-    REQUIRE(transfer.priority == CanardPrioritySlow);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 2'222);
-    REQUIRE(transfer.remote_node_id == 55);
-    REQUIRE(transfer.transfer_id == 12);
+    REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 2'222);
+    REQUIRE(transfer.metadata.remote_node_id == 55);
+    REQUIRE(transfer.metadata.transfer_id == 12);
     REQUIRE(transfer.payload_size == 3);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x03\x03\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -408,11 +408,11 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 0);
     REQUIRE(transfer.timestamp_usec == 20'000'000);
-    REQUIRE(transfer.priority == CanardPrioritySlow);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 2'222);
-    REQUIRE(transfer.remote_node_id == 55);
-    REQUIRE(transfer.transfer_id == 12);
+    REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 2'222);
+    REQUIRE(transfer.metadata.remote_node_id == 55);
+    REQUIRE(transfer.metadata.transfer_id == 12);
     REQUIRE(transfer.payload_size == 3);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05\x05\x05", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -486,11 +486,11 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 0);
     REQUIRE(transfer.timestamp_usec == 20'000'100);
-    REQUIRE(transfer.priority == CanardPrioritySlow);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 2'222);
-    REQUIRE(transfer.remote_node_id == 55);
-    REQUIRE(transfer.transfer_id == 13);
+    REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 2'222);
+    REQUIRE(transfer.metadata.remote_node_id == 55);
+    REQUIRE(transfer.metadata.transfer_id == 13);
     REQUIRE(transfer.payload_size == 16);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07\x09\x09", 16));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -571,11 +571,11 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 2);
     REQUIRE(transfer.timestamp_usec == 20'000'200);
-    REQUIRE(transfer.priority == CanardPrioritySlow);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 2'222);
-    REQUIRE(transfer.remote_node_id == 55);
-    REQUIRE(transfer.transfer_id == 11);
+    REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 2'222);
+    REQUIRE(transfer.metadata.remote_node_id == 55);
+    REQUIRE(transfer.metadata.transfer_id == 11);
     REQUIRE(transfer.payload_size == 10);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0D\x0D\x0D", 10));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -618,11 +618,11 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 0);
     REQUIRE(transfer.timestamp_usec == 30'000'000);
-    REQUIRE(transfer.priority == CanardPrioritySlow);
-    REQUIRE(transfer.transfer_kind == CanardTransferKindMessage);
-    REQUIRE(transfer.port_id == 2'222);
-    REQUIRE(transfer.remote_node_id == 55);
-    REQUIRE(transfer.transfer_id == 0);
+    REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 2'222);
+    REQUIRE(transfer.metadata.remote_node_id == 55);
+    REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 7);  // ONE CRC BYTE BACKTRACKED!
     REQUIRE(0 == std::memcmp(transfer.payload, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E", 7));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);

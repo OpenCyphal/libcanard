@@ -8,9 +8,6 @@ The code shall follow applicable high-reliability coding guidelines as explained
 The implementation shall be fully compliant with the UAVCAN/CAN specification.
 
 The implementation and the API should be kept simple.
-The core library `canard.c` (that is, excluding the optional DSDL presentation layer extension) shall never become
-larger than 1000 logical lines of code.
-This restriction ensures that the library is kept simple and easy to validate and verify.
 There will be no high-level abstractions -- if that is desired, other implementations of UAVCAN should be used.
 
 The library is intended for deeply embedded systems where the resources may be scarce.
@@ -53,12 +50,13 @@ to prevent non-compliant code from being accepted into upstream.
 
 ## Tools
 
-The following tools are required to conduct library development locally:
+The following tools are required to conduct library development locally
+(check the CI workflow files for the required versions):
 
-- GCC v10 or newer.
-- Clang and Clang-Tools v11 or newer.
-- CMake v3.12 or newer.
-- An AMD64 machine.
+- GCC
+- Clang and Clang-Tools
+- CMake
+- An AMD64 machine
 
 ### Clang-Tidy
 
@@ -101,6 +99,10 @@ At the moment, the library is not being tested against other platforms.
 We would welcome contributions implementing CI/CD testing against popular embedded architectures, particularly
 the ARM Cortex M series and AVR in an emulator.
 As a high-integrity library, the Libcanard test suite should provide full test coverage for all commonly used platforms.
+
+**WARNING:**
+[Catch2 is NOT thread-safe!](https://github.com/catchorg/Catch2/blob/1e379de9d7522b294e201700dcbb36d4f8037301/docs/limitations.md#thread-safe-assertions)
+Never use `REQUIRE` etc. anywhere but the main thread.
 
 ## Releasing
 

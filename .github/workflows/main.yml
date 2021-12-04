@@ -1,22 +1,10 @@
 name: Main Workflow
-
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master, actions ]
-
+on: [push, pull_request]
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Release
-
+  LLVM_VERSION: 13
 jobs:
   debug:
-    env:
-      BUILD_TYPE: Debug
-
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         toolchain: ['clang', 'gcc']
@@ -25,129 +13,104 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-11
-            cxx-compiler: clang++-11
-
+            c-compiler: clang
+            cxx-compiler: clang++
     steps:
       - uses: actions/checkout@v2
+      - run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh $LLVM_VERSION
+          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
+          clang-tidy --version
+      - run: >
+          cmake
+          -B ${{ github.workspace }}/build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER=${{ matrix.c-compiler }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }}
+          tests
+      - working-directory: ${{github.workspace}}/build
+        run: |
+          make VERBOSE=1
+          make test
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: ${{github.job}}
+          path: ${{github.workspace}}/**/*
+          retention-days: 2
 
-      - name: Install Dependencies
-        run: sudo apt install gcc-multilib g++-multilib clang-tidy-11 clang-format-11
-
-      - name: Configure CMake
-        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER=${{ matrix.c-compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }} tests
-
-      - name: Build
-        working-directory: ${{github.workspace}}/build
-        run: make VERBOSE=1
-
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        run: make test
-
-  release:
-    env:
-      BUILD_TYPE: Release
-
+  optimizations:
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         toolchain: ['clang', 'gcc']
+        build_type: [Release, MinSizeRel]
         include:
           - toolchain: gcc
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-11
-            cxx-compiler: clang++-11
-
+            c-compiler: clang
+            cxx-compiler: clang++
     steps:
       - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: sudo apt install gcc-multilib g++-multilib
-
-      - name: Configure CMake
-        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER=${{ matrix.c-compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }} -DNO_STATIC_ANALYSIS=1 tests
-
-      - name: Build
-        working-directory: ${{github.workspace}}/build
-        run: make VERBOSE=1
-
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        run: make test
-
-  minsizerel:
-    env:
-      BUILD_TYPE: MinSizeRel
-
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        toolchain: ['clang', 'gcc']
-        include:
-          - toolchain: gcc
-            c-compiler: gcc
-            cxx-compiler: g++
-          - toolchain: clang
-            c-compiler: clang-11
-            cxx-compiler: clang++-11
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Install Dependencies
-        run: sudo apt install gcc-multilib g++-multilib
-
-      - name: Configure CMake
-        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER=${{ matrix.c-compiler }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }} -DNO_STATIC_ANALYSIS=1 tests
-
-      - name: Build
-        working-directory: ${{github.workspace}}/build
-        run: make VERBOSE=1
-
-      - name: Test
-        working-directory: ${{github.workspace}}/build
-        run: make test
+      - run: sudo apt install gcc-multilib g++-multilib
+      - run: >
+          cmake
+          -B ${{ github.workspace }}/build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_C_COMPILER=${{ matrix.c-compiler }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }}
+          -DNO_STATIC_ANALYSIS=1
+          tests
+      - working-directory: ${{github.workspace}}/build
+        run: |
+          make VERBOSE=1
+          make test
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: ${{github.job}}
+          path: ${{github.workspace}}/**/*
+          retention-days: 2
 
   avr:
+    runs-on: ubuntu-latest
     env:
       mcu: at90can64
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
-
-    runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
+      - run: |
+          sudo apt install gcc-avr avr-libc
+          avr-gcc --version
+      - run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
-      - name: Install Dependencies
-        run: sudo apt install gcc-avr avr-libc
-
-      - name: Build C99
-        run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
-      - name: Build C11
-        run: avr-gcc libcanard/*.c -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
-      - name: Build GNU99
-        run: avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
-      - name: Build GNU11
-        run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+  style_check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: DoozyX/clang-format-lint-action@v0.13
+        with:
+          source: './libcanard ./tests'
+          exclude: './tests/catch'
+          extensions: 'c,h,cpp,hpp'
+          clangFormatVersion: ${{ env.LLVM_VERSION }}
 
   sonarcloud:
+    runs-on: ubuntu-latest
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
       SONAR_SERVER_URL: "https://sonarcloud.io"
       BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-    runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
       with:
@@ -156,7 +119,7 @@ jobs:
     - name: Install Dependencies
       run: sudo apt install gcc-multilib g++-multilib
 
-    - name: Set up JDK 11
+    - name: Set up JDK
       uses: actions/setup-java@v1
       with:
         java-version: 11
@@ -173,7 +136,7 @@ jobs:
         SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
       run: |
         mkdir -p $HOME/.sonar
-        curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }} 
+        curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }}
         unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
         echo "$HOME/.sonar/sonar-scanner-${{ env.SONAR_SCANNER_VERSION }}-linux/bin" >> $GITHUB_PATH
 
@@ -190,10 +153,27 @@ jobs:
         cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
         build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make all
         make test
-        gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
-        gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_private_le_cov.dir -name '*.gcno')
-        gcov-10 --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
+        gcov --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
+        gcov --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
 
     - name: Run sonar-scanner
-      run: |
-        sonar-scanner --define sonar.host.url="${{ env.SONAR_SERVER_URL }}" --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}" --define sonar.login=${{ secrets.SONAR_TOKEN }}
+      # Don't run sonar-scanner on builds originating from forks due to secrets not being available
+      run: >
+        [ -z "$SONAR_TOKEN" ] || sonar-scanner
+        --define sonar.organization=uavcan
+        --define sonar.projectName=libcanard
+        --define sonar.projectKey=libcanard
+        --define sonar.sources=libcanard
+        --define sonar.exclusions=libcanard/cavl.h
+        --define sonar.cfamily.gcov.reportsPath=.
+        --define sonar.cfamily.cache.enabled=false
+        --define sonar.cfamily.threads=2
+        --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
+        --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
+
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: ${{github.job}}
+        path: ${{github.workspace}}/**/*
+        retention-days: 2

@@ -22,12 +22,20 @@ Checks: >-
   -readability-avoid-const-params-in-decls,
   -readability-magic-numbers,
   -readability-function-size,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -bugprone-easily-swappable-parameters,
   -llvm-header-guard,
+  -llvm-include-order,
   -misc-non-private-member-variables-in-classes,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-type-union-access,
   -cppcoreguidelines-pro-type-reinterpret-cast,
+  -*-no-malloc,
+  -cert-msc30-c,
+  -cert-msc50-cpp,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 AnalyzeTemporaryDtors: false
