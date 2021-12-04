@@ -1,7 +1,7 @@
 name: Main Workflow
 on: [push, pull_request]
 env:
-  CLANG_VERSION: 13
+  LLVM_VERSION: 13
 jobs:
   debug:
     runs-on: ubuntu-latest
@@ -13,11 +13,17 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-${{ env.CLANG_VERSION }}
-            cxx-compiler: clang++-${{ env.CLANG_VERSION }}
+            c-compiler: clang
+            cxx-compiler: clang++
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt install gcc-multilib g++-multilib clang-tidy-${{ env.CLANG_VERSION }}
+      - run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh $LLVM_VERSION
+          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
+          clang-tidy --version
       - run: >
           cmake
           -B ${{ github.workspace }}/build
@@ -47,8 +53,8 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-${{ env.CLANG_VERSION }}
-            cxx-compiler: clang++-${{ env.CLANG_VERSION }}
+            c-compiler: clang
+            cxx-compiler: clang++
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install gcc-multilib g++-multilib
@@ -95,7 +101,7 @@ jobs:
           source: './libcanard ./tests'
           exclude: './tests/catch'
           extensions: 'c,h,cpp,hpp'
-          clangFormatVersion: ${{ env.CLANG_VERSION }}
+          clangFormatVersion: ${{ env.LLVM_VERSION }}
 
   sonarcloud:
     runs-on: ubuntu-latest

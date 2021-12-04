@@ -50,12 +50,13 @@ to prevent non-compliant code from being accepted into upstream.
 
 ## Tools
 
-The following tools are required to conduct library development locally:
+The following tools are required to conduct library development locally
+(check the CI workflow files for the required versions):
 
-- GCC v11 or newer.
-- Clang and Clang-Tools v12 or newer.
-- CMake v3.12 or newer.
-- An AMD64 machine.
+- GCC
+- Clang and Clang-Tools
+- CMake
+- An AMD64 machine
 
 ### Clang-Tidy
 
