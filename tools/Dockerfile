@@ -1,5 +1,4 @@
-# 
-# Development environment for libcanard, based on Ubuntu 20.04 Focal
+# Development environment for libcanard, based on Ubuntu 20.04 Focal.
 #
 # This software is distributed under the terms of the MIT License.
 # Copyright (c) 2021 UAVCAN Consortium.

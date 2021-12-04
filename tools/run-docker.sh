@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# First-time usage: docker build . && docker tag <id> libcanard && ./run-docker.sh
 
 dockerimage=libcanard
 
