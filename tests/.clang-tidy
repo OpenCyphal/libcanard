@@ -23,6 +23,8 @@ Checks: >-
   -readability-magic-numbers,
   -readability-function-size,
   -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -bugprone-easily-swappable-parameters,
   -llvm-header-guard,
   -llvm-include-order,
   -misc-non-private-member-variables-in-classes,

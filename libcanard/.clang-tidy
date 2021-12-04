@@ -15,6 +15,8 @@ Checks: >-
   readability-*,
   -google-readability-todo,
   -readability-avoid-const-params-in-decls,
+  -readability-identifier-length,
+  -bugprone-easily-swappable-parameters,
   -llvm-header-guard,
   -cert-dcl03-c,
   -hicpp-static-assert,

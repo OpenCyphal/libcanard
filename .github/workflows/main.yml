@@ -1,7 +1,7 @@
 name: Main Workflow
-
 on: [push, pull_request]
-
+env:
+  CLANG_VERSION: 13
 jobs:
   debug:
     runs-on: ubuntu-latest
@@ -13,11 +13,11 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-12
-            cxx-compiler: clang++-12
+            c-compiler: clang-${{ env.CLANG_VERSION }}
+            cxx-compiler: clang++-${{ env.CLANG_VERSION }}
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt install gcc-multilib g++-multilib clang-tidy-12
+      - run: sudo apt install gcc-multilib g++-multilib clang-tidy-${{ env.CLANG_VERSION }}
       - run: >
           cmake
           -B ${{ github.workspace }}/build
@@ -47,8 +47,8 @@ jobs:
             c-compiler: gcc
             cxx-compiler: g++
           - toolchain: clang
-            c-compiler: clang-12
-            cxx-compiler: clang++-12
+            c-compiler: clang-${{ env.CLANG_VERSION }}
+            cxx-compiler: clang++-${{ env.CLANG_VERSION }}
     steps:
       - uses: actions/checkout@v2
       - run: sudo apt install gcc-multilib g++-multilib
@@ -90,12 +90,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: DoozyX/clang-format-lint-action@v0.12
+      - uses: DoozyX/clang-format-lint-action@v0.13
         with:
           source: './libcanard ./tests'
           exclude: './tests/catch'
           extensions: 'c,h,cpp,hpp'
-          clangFormatVersion: 12
+          clangFormatVersion: ${{ env.CLANG_VERSION }}
 
   sonarcloud:
     runs-on: ubuntu-latest

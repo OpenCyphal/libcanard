@@ -686,9 +686,9 @@ CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id);
 /// through the hardware acceptance filters and require software filtering (implemented by canardRxSubscribe).
 ///
 /// While optimal choice of filter consolidation is a function of the number of available hardware filters,
-/// the set of transfers needed by the application, and the expected frequency of occurence
+/// the set of transfers needed by the application, and the expected frequency of occurrence
 /// of all possible distinct transfers on the bus, it is possible to generate a quasi-optimal configuration
-/// if information about the frequency of occurence of different transfers is not known.
+/// if information about the frequency of occurrence of different transfers is not known.
 /// For details, see the "Automatic hardware acceptance filter configuration" note under the UAVCAN/CAN section
 /// in the Transport Layer chapter of the UAVCAN specification.
 CanardFilter canardConsolidateFilters(const CanardFilter* const a, const CanardFilter* const b);

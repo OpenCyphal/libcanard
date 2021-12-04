@@ -207,19 +207,21 @@ else
 ```
 
 A simple API for generating CAN hardware acceptance filter configurations is also provided.
-Acceptance filters are generated in an extended 29-bit ID + mask scheme and can be used to minimize the number of irrelevant transfers processed in software.
+Acceptance filters are generated in an extended 29-bit ID + mask scheme and can be used to minimize
+the number of irrelevant transfers processed in software.
 
 ```c
-// Generate an acceptance filter to receive only uavcan.node.Heartbeat.1.0 messages (fixed port ID 7509):
+// Generate an acceptance filter to receive only uavcan.node.Heartbeat.1.0 messages (fixed port-ID 7509):
 CanardAcceptanceFilterConfig heartbeat_config = canardMakeAcceptanceFilterConfigForSubject(7509);
-// And to receive only uavcan.register.Access.1.0 services (fixed port ID 384):
+// And to receive only uavcan.register.Access.1.0 service transfers (fixed port-ID 384):
 CanardAcceptanceFilterConfig register_access_config = canardMakeAcceptanceFilterConfigForService(384, ins.node_id);
 
-// You can also combine the two filter configurations into one (may also accept in other messages).
+// You can also combine the two filter configurations into one (may also accept irrelevant messages).
 // This allows consolidating a large set of configurations to fit the number of hardware filters.
 // For more information on the optimal subset of configurations to consolidate to minimize wasted CPU,
 // see the UAVCAN specification.
-CanardAcceptanceFilterConfig combined_config = canardConsolidateAcceptanceFilterConfigs(&heartbeat_config, &register_access_config);
+CanardAcceptanceFilterConfig combined_config =
+        canardConsolidateAcceptanceFilterConfigs(&heartbeat_config, &register_access_config);
 configureHardwareFilters(combined_config.extended_can_id, combined_config.extended_mask);
 ```
 
@@ -229,6 +231,7 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 ## Revisions
 
 ### v2.0
+
 - Dedicated transmission queues per redundant CAN interface with depth limits.
   The application is now expected to instantiate `CanardTxQueue` (or several in case of redundant transport) manually.
 
@@ -238,16 +241,18 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 - Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
 
-- Replace runtime CRC computation with much faster static table by default.
-  This can be disabled by setting CANARD_CRC_TABLE=0.
+- Replace bitwise CRC computation with much faster static table by default
+  ([#185](https://github.com/UAVCAN/libcanard/issues/185)).
+  This can be disabled by setting `CANARD_CRC_TABLE=0`, which is expected to save ca. 500 bytes of ROM.
 
-- Fixed issues with const-correctness.
+- Fixed issues with const-correctness in the API ([#175](https://github.com/UAVCAN/libcanard/issues/175)).
 
 - `canardRxAccept2()` renamed to `canardRxAccept()`.
 
 - Support build configuration headers via `CANARD_CONFIG_HEADER`.
 
 - Add API for generating CAN hardware acceptance filter configurations
+  ([#169](https://github.com/UAVCAN/libcanard/issues/169)).
 
 ### v1.1
 

@@ -11,7 +11,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get -y upgrade
 RUN apt-get -y --no-install-recommends install \
 		build-essential cmake gcc-multilib g++-multilib \
-		clang-tidy-12 clang-format-12 \
+		clang-tidy-13 clang-format-13 \
 		gcc-avr avr-libc \
 		sudo curl git ca-certificates
 
