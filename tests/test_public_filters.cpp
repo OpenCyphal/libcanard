@@ -2,21 +2,17 @@
 // Copyright (c) 2016-2021 UAVCAN Development Team.
 
 #include "exposed.hpp"
-#include "helpers.hpp"
 #include "catch.hpp"
 
 namespace
 {
-constexpr std::uint32_t OFFSET_PRIORITY    = 26U;
 constexpr std::uint32_t OFFSET_SUBJECT_ID  = 8U;
 constexpr std::uint32_t OFFSET_SERVICE_ID  = 14U;
 constexpr std::uint32_t OFFSET_DST_NODE_ID = 7U;
 
-constexpr std::uint32_t FLAG_SERVICE_NOT_MESSAGE  = std::uint32_t(1) << 25U;
-constexpr std::uint32_t FLAG_ANONYMOUS_MESSAGE    = std::uint32_t(1) << 24U;
-constexpr std::uint32_t FLAG_REQUEST_NOT_RESPONSE = std::uint32_t(1) << 24U;
-constexpr std::uint32_t FLAG_RESERVED_23          = std::uint32_t(1) << 23U;
-constexpr std::uint32_t FLAG_RESERVED_07          = std::uint32_t(1) << 7U;
+constexpr std::uint32_t FLAG_SERVICE_NOT_MESSAGE = std::uint32_t(1) << 25U;
+constexpr std::uint32_t FLAG_RESERVED_23         = std::uint32_t(1) << 23U;
+constexpr std::uint32_t FLAG_RESERVED_07         = std::uint32_t(1) << 7U;
 
 TEST_CASE("FilterSubject")
 {
@@ -60,7 +56,7 @@ TEST_CASE("Consolidate")
     const std::uint16_t heartbeat_subject_id = 7509;
     CanardFilter        heartbeat_config     = canardMakeFilterForSubject(heartbeat_subject_id);
 
-    const std::uint16_t access_service_id = 7509;
+    const std::uint16_t access_service_id = 384;
     const std::uint8_t  node_id           = 42;
     CanardFilter        access_config     = canardMakeFilterForService(access_service_id, node_id);
 
