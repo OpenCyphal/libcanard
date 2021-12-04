@@ -81,6 +81,12 @@ gen_test_matrix(test_private
         "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_private_cavl.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
         "-Wno-missing-declarations")
+# test CRC with static table disabled
+gen_test_matrix(test_private_crc_table
+        "test_private_crc.cpp;"
+        "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
+        "-DCANARD_CRC_TABLE=0"
+        "-Wno-missing-declarations")
 
 gen_test_matrix(test_public
         "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp"
