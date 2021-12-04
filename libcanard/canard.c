@@ -23,6 +23,12 @@
 #    define CANARD_ASSERT(x) assert(x)  // NOSONAR
 #endif
 
+/// Define CANARD_CRC_TABLE=0 to use slow but ROM-efficient transfer-CRC computation algorithm.
+/// Doing so is expected to save ca. 500 bytes of ROM and increase the cost of RX/TX transfer processing by ~half.
+#ifndef CANARD_CRC_TABLE
+#    define CANARD_CRC_TABLE 1
+#endif
+
 /// This macro is needed for testing and for library development.
 #ifndef CANARD_PRIVATE
 #    define CANARD_PRIVATE static inline
@@ -74,11 +80,7 @@ typedef uint16_t TransferCRC;
 #define CRC_RESIDUE 0x0000U
 #define CRC_SIZE_BYTES 2U
 
-#ifndef CANARD_CRC_TABLE
-#    define CANARD_CRC_TABLE 1
-#endif
-
-#if (CANARD_CRC_TABLE == 1)
+#if (CANARD_CRC_TABLE != 0)
 static const uint16_t CRCTable[256] = {
     0x0000U, 0x1021U, 0x2042U, 0x3063U, 0x4084U, 0x50A5U, 0x60C6U, 0x70E7U, 0x8108U, 0x9129U, 0xA14AU, 0xB16BU, 0xC18CU,
     0xD1ADU, 0xE1CEU, 0xF1EFU, 0x1231U, 0x0210U, 0x3273U, 0x2252U, 0x52B5U, 0x4294U, 0x72F7U, 0x62D6U, 0x9339U, 0x8318U,
@@ -105,7 +107,7 @@ static const uint16_t CRCTable[256] = {
 
 CANARD_PRIVATE TransferCRC crcAddByte(const TransferCRC crc, const uint8_t byte)
 {
-#if (CANARD_CRC_TABLE == 1)
+#if (CANARD_CRC_TABLE != 0)
     return (uint16_t) ((uint16_t) (crc << BITS_PER_BYTE) ^
                        CRCTable[(uint16_t) ((uint16_t) (crc >> BITS_PER_BYTE) ^ byte) & BYTE_MAX]);
 #else
