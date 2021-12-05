@@ -212,16 +212,16 @@ the number of irrelevant transfers processed in software.
 
 ```c
 // Generate an acceptance filter to receive only uavcan.node.Heartbeat.1.0 messages (fixed port-ID 7509):
-CanardAcceptanceFilterConfig heartbeat_config = canardMakeAcceptanceFilterConfigForSubject(7509);
+CanardFilter heartbeat_config = canardMakeFilterForSubject(7509);
 // And to receive only uavcan.register.Access.1.0 service transfers (fixed port-ID 384):
-CanardAcceptanceFilterConfig register_access_config = canardMakeAcceptanceFilterConfigForService(384, ins.node_id);
+CanardFilter register_access_config = canardMakeFilterForService(384, ins.node_id);
 
 // You can also combine the two filter configurations into one (may also accept irrelevant messages).
 // This allows consolidating a large set of configurations to fit the number of hardware filters.
 // For more information on the optimal subset of configurations to consolidate to minimize wasted CPU,
 // see the UAVCAN specification.
-CanardAcceptanceFilterConfig combined_config =
-        canardConsolidateAcceptanceFilterConfigs(&heartbeat_config, &register_access_config);
+CanardFilter combined_config =
+        canardConsolidateFilters(&heartbeat_config, &register_access_config);
 configureHardwareFilters(combined_config.extended_can_id, combined_config.extended_mask);
 ```
 
