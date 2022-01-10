@@ -372,3 +372,37 @@ TEST_CASE("canardHandleRxFrame OOM handling, Correctness")
     err = canardHandleRxFrame(&canard, &frame, 1);
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == err);
 }
+
+TEST_CASE("canardHandleRxFrame unusual single frame, Correctness")
+{
+    uint8_t canard_memory_pool[1024];
+    CanardInstance canard;
+    CanardCANFrame frame;
+    int16_t err;
+
+    g_should_accept = true;
+
+    //Open canard to accept all transfers with a node ID of 20
+    canardInit(&canard, canard_memory_pool, sizeof(canard_memory_pool),
+               onTransferReceived, shouldAcceptTransfer, &canard);
+    canardSetLocalNodeID(&canard, 20);
+
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(1, 0, 0, 1);
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 8;                             //Data length MUST be full packet
+    err = canardHandleRxFrame(&canard, &frame, 1);
+    REQUIRE(CANARD_OK == err);
+
+
+    frame.data[7] = CONSTRUCT_TAIL_BYTE(0, 0, 1, 1);
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 8;                             //Data length MUST be full packet
+    err = canardHandleRxFrame(&canard, &frame, 1);
+    REQUIRE(CANARD_OK == err);
+
+    frame.data[1] = CONSTRUCT_TAIL_BYTE(1, 1, 1, 1);
+    frame.id = CONSTRUCT_SVC_ID(0, 0, 1, 20, 0);
+    frame.data_len = 2;                             //Data length MUST be full packet
+    err = canardHandleRxFrame(&canard, &frame, 1);
+    REQUIRE(CANARD_OK == err);
+}
