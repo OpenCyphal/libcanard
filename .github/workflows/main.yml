@@ -21,6 +21,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
+          sudo apt-get -y update
           sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
           clang-tidy --version
