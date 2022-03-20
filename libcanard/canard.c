@@ -153,7 +153,7 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, cons
 typedef struct TxItem
 {
     CanardTxQueueItem base;
-    uint8_t payload_buffer[CANARD_MTU_MAX];  // NOSONAR
+    uint8_t           payload_buffer[CANARD_MTU_MAX];  // NOSONAR
 } TxItem;
 
 /// Chain of TX frames prepared for insertion into a TX queue.
