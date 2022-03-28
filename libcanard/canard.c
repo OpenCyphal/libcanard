@@ -151,12 +151,7 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, cons
 typedef struct TxItem
 {
     CanardTxQueueItem base;
-
-    // Intentional violation of MISRA: this flex array is the lesser of three evils. The other two are:
-    //  - Make the payload pointer point to the remainder of the allocated memory following this structure.
-    //    The pointer is bad because it requires us to use pointer arithmetics.
-    //  - Use a separate memory allocation for data. This is terribly wasteful (both time & memory).
-    uint8_t payload_buffer[];  // NOSONAR
+    uint8_t           payload_buffer[CANARD_MTU_MAX];
 } TxItem;
 
 /// Chain of TX frames prepared for insertion into a TX queue.
@@ -304,7 +299,7 @@ CANARD_PRIVATE TxItem* txAllocateQueueItem(CanardInstance* const   ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(payload_size > 0U);
-    TxItem* const out = (TxItem*) ins->memory_allocate(ins, sizeof(TxItem) + payload_size);
+    TxItem* const out = (TxItem*) ins->memory_allocate(ins, sizeof(TxItem) - CANARD_MTU_MAX + payload_size);
     if (out != NULL)
     {
         out->base.base.up    = NULL;

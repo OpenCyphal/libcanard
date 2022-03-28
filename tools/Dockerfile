@@ -11,9 +11,12 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get -y upgrade
 RUN apt-get -y --no-install-recommends install \
 		build-essential cmake gcc-multilib g++-multilib \
-		clang-tidy-13 clang-format-13 \
+		clang-tidy-12 clang-format-12 \
 		gcc-avr avr-libc \
 		sudo curl git ca-certificates
+
+RUN update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-12 10
+RUN update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-12 10
 
 # borrowed from MAVSDK https://github.com/mavlink/MAVSDK/blob/main/docker/Dockerfile-Ubuntu-20.04
 RUN curl -L https://github.com/ncopa/su-exec/archive/dddd1567b7c76365e1e0aac561287975020a8fad.tar.gz | tar xvz && \

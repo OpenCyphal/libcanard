@@ -21,6 +21,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
+          sudo apt update -y && sudo apt upgrade -y
           sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
           clang-tidy --version
@@ -57,7 +58,9 @@ jobs:
             cxx-compiler: clang++
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt install gcc-multilib g++-multilib
+      - run: |
+          sudo apt update -y && sudo apt upgrade -y
+          sudo apt install gcc-multilib g++-multilib
       - run: >
           cmake
           -B ${{ github.workspace }}/build
@@ -85,6 +88,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: |
+          sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-avr avr-libc
           avr-gcc --version
       - run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
@@ -117,7 +121,9 @@ jobs:
         fetch-depth: 0
 
     - name: Install Dependencies
-      run: sudo apt install gcc-multilib g++-multilib
+      run: |
+        sudo apt update -y && sudo apt upgrade -y
+        sudo apt install -y gcc-multilib g++-multilib
 
     - name: Set up JDK
       uses: actions/setup-java@v1
