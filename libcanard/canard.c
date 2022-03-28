@@ -66,8 +66,6 @@
 
 #define INITIAL_TOGGLE_STATE true
 
-#define CANARD_MTU_MAX CANARD_MTU_CAN_FD
-
 /// Used for inserting new items into AVL trees.
 CANARD_PRIVATE CanardTreeNode* avlTrivialFactory(void* const user_reference)
 {
@@ -153,7 +151,7 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, cons
 typedef struct TxItem
 {
     CanardTxQueueItem base;
-    uint8_t           payload_buffer[CANARD_MTU_MAX];  // NOSONAR
+    uint8_t           payload_buffer[CANARD_MTU_MAX];
 } TxItem;
 
 /// Chain of TX frames prepared for insertion into a TX queue.
