@@ -1,10 +1,9 @@
-///                         __   __   _______   __   __   _______   _______   __   __
-///                        |  | |  | /   _   ` |  | |  | /   ____| /   _   ` |  ` |  |
-///                        |  | |  | |  |_|  | |  | |  | |  |      |  |_|  | |   `|  |
-///                        |  |_|  | |   _   | `  `_/  / |  |____  |   _   | |  |`   |
-///                        `_______/ |__| |__|  `_____/  `_______| |__| |__| |__| `__|
-///                            |      |            |         |      |         |
-///                        ----o------o------------o---------o------o---------o-------
+///                            ____                   ______            __          __
+///                           / __ `____  ___  ____  / ____/_  ______  / /_  ____  / /
+///                          / / / / __ `/ _ `/ __ `/ /   / / / / __ `/ __ `/ __ `/ /
+///                         / /_/ / /_/ /  __/ / / / /___/ /_/ / /_/ / / / / /_/ / /
+///                         `____/ .___/`___/_/ /_/`____/`__, / .___/_/ /_/`__,_/_/
+///                             /_/                     /____/_/
 ///
 /// Libcanard is a compact implementation of the Cyphal/CAN protocol for high-integrity real-time embedded systems.
 /// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 8K RAM.
@@ -23,7 +22,7 @@
 /// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
 ///
 /// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
-/// Cyphal Consortium may be found at https://github.com/OpenCyphal/platform_specific_components.
+/// OpenCyphal team may be found at https://github.com/OpenCyphal-Garage/platform_specific_components.
 ///
 /// If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
 /// at https://forum.opencyphal.org.
@@ -77,7 +76,7 @@
 /// --------------------------------------------------------------------------------------------------------------------
 ///
 /// This software is distributed under the terms of the MIT License.
-/// Copyright (c) 2016 Cyphal Consortium.
+/// Copyright (c) 2016 OpenCyphal.
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
 /// Contributors: https://github.com/OpenCyphal/libcanard/contributors.
 
@@ -94,7 +93,7 @@ extern "C" {
 
 /// Semantic version of this library (not the Cyphal specification).
 /// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 2
+#define CANARD_VERSION_MAJOR 3
 #define CANARD_VERSION_MINOR 0
 
 /// The version number of the Cyphal specification implemented by this library.

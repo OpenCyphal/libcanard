@@ -1,5 +1,5 @@
 /// This software is distributed under the terms of the MIT License.
-/// Copyright (c) 2016 Cyphal Consortium.
+/// Copyright (c) 2016 OpenCyphal.
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
 
 #include "canard.h"
@@ -801,7 +801,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
 }
 
 /// RX session state machine update is the most intricate part of any Cyphal transport implementation.
-/// The state model used here is derived from the reference pseudocode given in the original Cyphal v0 specification.
+/// The state model used here is derived from the reference pseudocode given in the original UAVCAN v0 specification.
 /// The Cyphal/CAN v1 specification, which this library is an implementation of, does not provide any reference
 /// pseudocode. Instead, it takes a higher-level, more abstract approach, where only the high-level requirements
 /// are given and the particular algorithms are left to be implementation-defined. Such abstract approach is much

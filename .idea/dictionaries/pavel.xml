@@ -11,6 +11,7 @@
       <w>cfamily</w>
       <w>coverity</w>
       <w>crtp</w>
+      <w>cyphal</w>
       <w>dataflow</w>
       <w>dcanard</w>
       <w>ddtid</w>
@@ -50,6 +51,7 @@
       <w>noninfringement</w>
       <w>nosonar</w>
       <w>nutt</w>
+      <w>opencyphal</w>
       <w>pdst</w>
       <w>permill</w>
       <w>pkut</w>

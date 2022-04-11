@@ -1,5 +1,5 @@
 # This software is distributed under the terms of the MIT License.
-# Copyright (c) 2016 Cyphal Consortium.
+# Copyright (c) 2016 OpenCyphal.
 # Author: Pavel Kirienko <pavel@opencyphal.org>
 # Contributors: https://github.com/OpenCyphal/libcanard/contributors.
 

@@ -118,7 +118,8 @@ if (result < 0)
 }
 ```
 
-Use [Nunavut](https://github.com/OpenCyphal/nunavut) to automatically generate (de)serialization code from DSDL definitions.
+Use [Nunavut](https://github.com/OpenCyphal/nunavut) to automatically generate
+(de)serialization code from DSDL definitions.
 
 The CAN frames generated from the message transfer are now stored in the `queue`.
 We need to pick them out one by one and have them transmitted.
@@ -228,6 +229,11 @@ Full API specification is available in the documentation.
 If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
+
+### v3.0
+
+- Update branding as [UAVCAN v1 is renamed into Cyphal](https://forum.opencyphal.org/t/uavcan-v1-is-now-cyphal/1622).
+  There are no changes in this release aside from renaming.
 
 ### v2.0
 
