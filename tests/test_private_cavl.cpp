@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2020 UAVCAN Development Team.
+// Copyright (c) 2016-2020 OpenCyphal Development Team.
 // These tests have been adapted from the Cavl test suite that you can find at https://github.com/pavel-kirienko/cavl
 
 #include <cavl.h>

@@ -6,7 +6,7 @@
 ///                            |      |            |         |      |         |
 ///                        ----o------o------------o---------o------o---------o-------
 ///
-/// Libcanard is a compact implementation of the UAVCAN/CAN protocol for high-integrity real-time embedded systems.
+/// Libcanard is a compact implementation of the Cyphal/CAN protocol for high-integrity real-time embedded systems.
 /// It is designed for use in robust deterministic embedded systems equipped with at least 32K ROM and 8K RAM.
 /// The codebase follows the MISRA C rules, has 100% test coverage, and is validated by at least two static analyzers.
 /// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
@@ -23,16 +23,16 @@
 /// it is recommended to use O1Heap (MIT licensed): https://github.com/pavel-kirienko/o1heap.
 ///
 /// There are no specific requirements to the underlying I/O layer. Some low-level drivers maintained by the
-/// UAVCAN Consortium may be found at https://github.com/UAVCAN/platform_specific_components.
+/// Cyphal Consortium may be found at https://github.com/OpenCyphal/platform_specific_components.
 ///
 /// If your application requires a MISRA C compliance report, please get in touch with the maintainers via the forum
-/// at https://forum.uavcan.org.
+/// at https://forum.opencyphal.org.
 ///
 ///          ARCHITECTURE
 ///
-/// UAVCAN, as a protocol stack, is composed of two layers: TRANSPORT and PRESENTATION. The transport layer is portable
-/// across different transport protocols, one of which is CAN (FD), formally referred to as UAVCAN/CAN. This library
-/// is focused on UAVCAN/CAN only and it will not support other transports. The presentation layer is implemented
+/// Cyphal, as a protocol stack, is composed of two layers: TRANSPORT and PRESENTATION. The transport layer is portable
+/// across different transport protocols, one of which is CAN (FD), formally referred to as Cyphal/CAN. This library
+/// is focused on Cyphal/CAN only and it will not support other transports. The presentation layer is implemented
 /// through the DSDL language and the associated data type regulation policies; these parts are out of the scope of
 /// this library as it is focused purely on the transport.
 ///
@@ -63,7 +63,7 @@
 /// received (by default, all transfers are ignored); also, the subscription function specifies vital transfer
 /// reassembly parameters such as the maximum payload size (i.e., the maximum size of a serialized representation
 /// of a DSDL object) and the transfer-ID timeout. Transfers that carry more payload than the configured maximum per
-/// subscription are truncated following the Implicit Truncation Rule (ITR) defined by the UAVCAN Specification --
+/// subscription are truncated following the Implicit Truncation Rule (ITR) defined by the Cyphal Specification --
 /// the rule is implemented to facilitate backward-compatible DSDL data type extensibility.
 ///
 /// The library supports a practically unlimited number of redundant transports.
@@ -77,9 +77,9 @@
 /// --------------------------------------------------------------------------------------------------------------------
 ///
 /// This software is distributed under the terms of the MIT License.
-/// Copyright (c) 2016 UAVCAN Consortium.
-/// Author: Pavel Kirienko <pavel@uavcan.org>
-/// Contributors: https://github.com/UAVCAN/libcanard/contributors.
+/// Copyright (c) 2016 Cyphal Consortium.
+/// Author: Pavel Kirienko <pavel@opencyphal.org>
+/// Contributors: https://github.com/OpenCyphal/libcanard/contributors.
 
 #ifndef CANARD_H_INCLUDED
 #define CANARD_H_INCLUDED
@@ -92,14 +92,14 @@
 extern "C" {
 #endif
 
-/// Semantic version of this library (not the UAVCAN specification).
+/// Semantic version of this library (not the Cyphal specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 2
 #define CANARD_VERSION_MINOR 0
 
-/// The version number of the UAVCAN specification implemented by this library.
-#define CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR 1
-#define CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR 0
+/// The version number of the Cyphal specification implemented by this library.
+#define CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR 1
+#define CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR 0
 
 /// These error codes may be returned from the library API calls whose return type is a signed integer in the negated
 /// form (e.g., error code 2 returned as -2). A non-negative return value represents success.
@@ -111,12 +111,12 @@ extern "C" {
 #define CANARD_ERROR_OUT_OF_MEMORY 3
 
 /// MTU values for the supported protocols.
-/// Per the recommendations given in the UAVCAN/CAN Specification, other MTU values should not be used.
+/// Per the recommendations given in the Cyphal/CAN Specification, other MTU values should not be used.
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD 64U
 #define CANARD_MTU_MAX CANARD_MTU_CAN_FD
 
-/// Parameter ranges are inclusive; the lower bound is zero for all. See UAVCAN/CAN Specification for background.
+/// Parameter ranges are inclusive; the lower bound is zero for all. See Cyphal/CAN Specification for background.
 #define CANARD_SUBJECT_ID_MAX 8191U
 #define CANARD_SERVICE_ID_MAX 511U
 #define CANARD_NODE_ID_MAX 127U
@@ -128,7 +128,7 @@ extern "C" {
 /// Library functions treat all values above CANARD_NODE_ID_MAX as anonymous.
 #define CANARD_NODE_ID_UNSET 255U
 
-/// This is the recommended transfer-ID timeout value given in the UAVCAN Specification. The application may choose
+/// This is the recommended transfer-ID timeout value given in the Cyphal Specification. The application may choose
 /// different values per subscription (i.e., per data specifier) depending on its timing requirements.
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
 
@@ -141,7 +141,7 @@ typedef uint16_t                 CanardPortID;
 typedef uint8_t                  CanardNodeID;
 typedef uint8_t                  CanardTransferID;
 
-/// Transfer priority level mnemonics per the recommendations given in the UAVCAN Specification.
+/// Transfer priority level mnemonics per the recommendations given in the Cyphal Specification.
 typedef enum
 {
     CanardPriorityExceptional = 0,
@@ -154,7 +154,7 @@ typedef enum
     CanardPriorityOptional    = 7,
 } CanardPriority;
 
-/// Transfer kinds as defined by the UAVCAN Specification.
+/// Transfer kinds as defined by the Cyphal Specification.
 typedef enum
 {
     CanardTransferKindMessage  = 0,  ///< Multicast, from publisher to all subscribers.
@@ -173,7 +173,7 @@ struct CanardTreeNode
 };
 
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
-/// CAN frames with 11-bit ID are not used by UAVCAN/CAN and so they are not supported by the library.
+/// CAN frames with 11-bit ID are not used by Cyphal/CAN and so they are not supported by the library.
 typedef struct
 {
     /// 29-bit extended ID. The bits above 29-th shall be zero.
@@ -196,7 +196,7 @@ extern const uint8_t CanardCANDLCToLength[16];
 /// Conversion look-up table from data length to CAN DLC; the length is rounded up.
 extern const uint8_t CanardCANLengthToDLC[65];
 
-/// A UAVCAN transfer metadata (everything except the payload).
+/// A Cyphal transfer metadata (everything except the payload).
 /// Per Specification, a transfer is represented on the wire as a non-empty set of transport frames (i.e., CAN frames).
 /// The library is responsible for serializing transfers into transport frames when transmitting, and reassembling
 /// transfers from an incoming stream of frames (possibly duplicated if redundant interfaces are used) during reception.
@@ -365,7 +365,7 @@ struct CanardInstance
     void* user_reference;
 
     /// The node-ID of the local node.
-    /// Per the UAVCAN Specification, the node-ID should not be assigned more than once.
+    /// Per the Cyphal Specification, the node-ID should not be assigned more than once.
     /// Invalid values are treated as CANARD_NODE_ID_UNSET. The default value is CANARD_NODE_ID_UNSET.
     CanardNodeID node_id;
 
@@ -508,7 +508,7 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a
 /// transfer, the return value is 1 (one) and the out_transfer pointer is populated with the parameters of the
-/// newly reassembled transfer. The transfer reassembly logic is defined in the UAVCAN specification.
+/// newly reassembled transfer. The transfer reassembly logic is defined in the Cyphal specification.
 ///
 /// The MTU of the accepted frame can be arbitrary; that is, any MTU is accepted. The DLC validity is irrelevant.
 ///
@@ -587,8 +587,8 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
 ///
 /// The function returns zero if any of the following conditions are true (the general policy is that protocol
 /// errors are not escalated because they do not construe a node-local error):
-///     - The received frame is not a valid UAVCAN/CAN transport frame.
-///     - The received frame is a valid UAVCAN/CAN transport frame, but there is no matching subscription,
+///     - The received frame is not a valid Cyphal/CAN transport frame.
+///     - The received frame is a valid Cyphal/CAN transport frame, but there is no matching subscription,
 ///       the frame did not complete a transfer, the frame forms an invalid frame sequence, the frame is a duplicate,
 ///       the frame is unicast to a different node (address mismatch).
 int8_t canardRxAccept(CanardInstance* const        ins,
@@ -656,7 +656,7 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
 /// Complex applications will likely subscribe to more subject IDs than there are
 /// acceptance filters available in the CAN hardware. In this case, the application
 /// should implement filter consolidation. See canardConsolidateFilters()
-/// as well as the UAVCAN specification for details.
+/// as well as the Cyphal specification for details.
 
 /// Generate an acceptance filter configuration to accept a specific subject ID.
 CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id);
@@ -690,8 +690,8 @@ CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id);
 /// the set of transfers needed by the application, and the expected frequency of occurrence
 /// of all possible distinct transfers on the bus, it is possible to generate a quasi-optimal configuration
 /// if information about the frequency of occurrence of different transfers is not known.
-/// For details, see the "Automatic hardware acceptance filter configuration" note under the UAVCAN/CAN section
-/// in the Transport Layer chapter of the UAVCAN specification.
+/// For details, see the "Automatic hardware acceptance filter configuration" note under the Cyphal/CAN section
+/// in the Transport Layer chapter of the Cyphal specification.
 CanardFilter canardConsolidateFilters(const CanardFilter* const a, const CanardFilter* const b);
 
 #ifdef __cplusplus

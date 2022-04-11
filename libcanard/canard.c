@@ -1,6 +1,6 @@
 /// This software is distributed under the terms of the MIT License.
-/// Copyright (c) 2016 UAVCAN Consortium.
-/// Author: Pavel Kirienko <pavel@uavcan.org>
+/// Copyright (c) 2016 Cyphal Consortium.
+/// Author: Pavel Kirienko <pavel@opencyphal.org>
 
 #include "canard.h"
 #include "cavl.h"
@@ -577,7 +577,7 @@ typedef struct
     const void*        payload;
 } RxFrameModel;
 
-/// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid UAVCAN/CAN frame.
+/// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid Cyphal/CAN frame.
 CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
                                     const CanardFrame* const frame,
                                     RxFrameModel* const      out)
@@ -800,9 +800,9 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
     return out;
 }
 
-/// RX session state machine update is the most intricate part of any UAVCAN transport implementation.
-/// The state model used here is derived from the reference pseudocode given in the original UAVCAN v0 specification.
-/// The UAVCAN/CAN v1 specification, which this library is an implementation of, does not provide any reference
+/// RX session state machine update is the most intricate part of any Cyphal transport implementation.
+/// The state model used here is derived from the reference pseudocode given in the original Cyphal v0 specification.
+/// The Cyphal/CAN v1 specification, which this library is an implementation of, does not provide any reference
 /// pseudocode. Instead, it takes a higher-level, more abstract approach, where only the high-level requirements
 /// are given and the particular algorithms are left to be implementation-defined. Such abstract approach is much
 /// advantageous because it allows implementers to choose whatever solution works best for the specific application at
@@ -1121,7 +1121,7 @@ int8_t canardRxAccept(CanardInstance* const        ins,
         }
         else
         {
-            out = 0;  // A non-UAVCAN/CAN input frame.
+            out = 0;  // A non-Cyphal/CAN input frame.
         }
     }
     CANARD_ASSERT(out <= 1);

@@ -6,7 +6,7 @@
 /// See also O1Heap <https://github.com/pavel-kirienko/o1heap> -- a deterministic memory manager for hard-real-time
 /// high-integrity embedded systems.
 ///
-/// Copyright (c) 2021 Pavel Kirienko <pavel@uavcan.org>
+/// Copyright (c) 2021 Pavel Kirienko <pavel@opencyphal.org>
 ///
 /// Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
 /// documentation files (the "Software"), to deal in the Software without restriction, including without limitation

@@ -1,7 +1,7 @@
 # This software is distributed under the terms of the MIT License.
-# Copyright (c) 2016 UAVCAN Consortium.
-# Author: Pavel Kirienko <pavel@uavcan.org>
-# Contributors: https://github.com/UAVCAN/libcanard/contributors.
+# Copyright (c) 2016 Cyphal Consortium.
+# Author: Pavel Kirienko <pavel@opencyphal.org>
+# Contributors: https://github.com/OpenCyphal/libcanard/contributors.
 
 cmake_minimum_required(VERSION 3.12)
 project(canard_tests C CXX)
