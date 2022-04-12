@@ -166,7 +166,7 @@ jobs:
       # Don't run sonar-scanner on builds originating from forks due to secrets not being available
       run: >
         [ -z "$SONAR_TOKEN" ] || sonar-scanner
-        --define sonar.organization=uavcan
+        --define sonar.organization=opencyphal
         --define sonar.projectName=libcanard
         --define sonar.projectKey=libcanard
         --define sonar.sources=libcanard

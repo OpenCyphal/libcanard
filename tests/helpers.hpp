@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016 UAVCAN Development Team.
+// Copyright (c) 2016 Cyphal Development Team.
 
 #pragma once
 
@@ -19,8 +19,8 @@
 #    error "Library version not defined"
 #endif
 
-#if !(defined(CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR) && defined(CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR))
-#    error "UAVCAN specification version not defined"
+#if !(defined(CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR) && defined(CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR))
+#    error "Cyphal specification version not defined"
 #endif
 
 namespace helpers

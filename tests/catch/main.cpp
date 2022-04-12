@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 UAVCAN Team
+ * Copyright (c) 2018 OpenCyphal Development Team
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * Contributors: https://github.com/UAVCAN/libcanard/contributors
+ * Contributors: https://github.com/OpenCyphal/libcanard/contributors
  */
 
 // For speedy compilation, the file that contains CATCH_CONFIG_MAIN should not contain any actual tests.

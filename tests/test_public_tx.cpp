@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016 UAVCAN Development Team.
+// Copyright (c) 2016 OpenCyphal Development Team.
 
 #include "exposed.hpp"
 #include "helpers.hpp"
@@ -112,7 +112,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
 
     // Pop the queue.
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
     constexpr std::uint16_t  CRC8 = 0x178DU;
     const CanardTxQueueItem* ti   = que.peek();
     REQUIRE(nullptr != ti);
@@ -163,7 +163,7 @@ TEST_CASE("TxBasic0")
     alloc.setAllocationCeiling(1000);
 
     // Multi-frame, success. CRC split over the frame boundary.
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
     constexpr std::uint16_t CRC61 = 0x554EU;
     que.setMTU(32);
     meta.priority    = CanardPriorityFast;
@@ -205,7 +205,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Multi-frame, success. CRC is in the last frame->
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
     que.setMTU(32);
     meta.priority    = CanardPrioritySlow;
@@ -247,7 +247,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Multi-frame with padding.
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
     constexpr std::uint16_t CRC112Padding12 = 0xE7A5U;
     que.setMTU(64);
     meta.priority    = CanardPriorityImmediate;
@@ -427,7 +427,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
 
     // Pop the queue.
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
     constexpr std::uint16_t  CRC8 = 0x178DU;
     const CanardTxQueueItem* ti   = que.peek();
     REQUIRE(nullptr != ti);
@@ -476,7 +476,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(nullptr == ti);
 
     // Multi-frame, success. CRC split over the frame boundary.
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(61))).value)
     constexpr std::uint16_t CRC61 = 0x554EU;
     que.setMTU(32);
     meta.priority    = CanardPriorityFast;
@@ -518,7 +518,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Multi-frame, success. CRC is in the last frame->
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(62))).value)
     constexpr std::uint16_t CRC62 = 0xA3AEU;
     que.setMTU(32);
     meta.priority    = CanardPrioritySlow;
@@ -560,7 +560,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
     // Multi-frame with padding.
-    // hex(pyuavcan.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
+    // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(112)) + [0] * 12).value)
     constexpr std::uint16_t CRC112Padding12 = 0xE7A5U;
     que.setMTU(64);
     meta.priority    = CanardPriorityImmediate;

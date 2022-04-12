@@ -5,10 +5,10 @@
 The library is intended for use in real-time high-integrity applications.
 It is paramount that its temporal properties and resource utilization are plain to model and predict statically.
 The code shall follow applicable high-reliability coding guidelines as explained later in this document.
-The implementation shall be fully compliant with the UAVCAN/CAN specification.
+The implementation shall be fully compliant with the Cyphal/CAN specification.
 
 The implementation and the API should be kept simple.
-There will be no high-level abstractions -- if that is desired, other implementations of UAVCAN should be used.
+There will be no high-level abstractions -- if that is desired, other implementations of Cyphal should be used.
 
 The library is intended for deeply embedded systems where the resources may be scarce.
 The ROM footprint is of a particular concern because the library should be usable with embedded bootloaders.
@@ -83,7 +83,7 @@ To reformat the sources, generate the project and build the target `format`; e.g
 ### SonarQube
 
 SonarQube is a cloud solution so its use is delegated to the CI/CD pipeline.
-If you need access, please get in touch with the UAVCAN Development Team members.
+If you need access, please get in touch with the OpenCyphal Development Team members.
 
 ### IDE
 
@@ -106,4 +106,4 @@ Never use `REQUIRE` etc. anywhere but the main thread.
 
 ## Releasing
 
-Simply create a new release on GitHub: <https://github.com/UAVCAN/libcanard/releases/new>
+Simply create a new release on GitHub: <https://github.com/OpenCyphal/libcanard/releases/new>

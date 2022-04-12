@@ -1,30 +1,29 @@
-# Compact UAVCAN/CAN v1 in C
+# Compact Cyphal/CAN v1 in C
 
-[![Main Workflow](https://github.com/UAVCAN/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/UAVCAN/libcanard/actions/workflows/main.yml)
+[![Main Workflow](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=alert_status)](https://sonarcloud.io/dashboard?id=libcanard)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=libcanard)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=coverage)](https://sonarcloud.io/dashboard?id=libcanard)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=ncloc)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.uavcan.org&color=1700b3)](https://forum.uavcan.org)
+[![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.opencyphal.org&color=1700b3)](https://forum.opencyphal.org)
 
-Libcanard is a compact implementation of the UAVCAN/CAN protocol stack in C99/C11 for high-integrity real-time
+Libcanard is a compact implementation of the Cyphal/CAN protocol stack in C99/C11 for high-integrity real-time
 embedded systems.
 
-[UAVCAN](https://uavcan.org) is an open lightweight data bus standard designed for reliable intravehicular
+[Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
 communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
-The acronym UAVCAN stands for *Uncomplicated Application-level Vehicular Computing And Networking*.
 
 **Read the docs in [`libcanard/canard.h`](/libcanard/canard.h).**
 
 Find examples, starters, tutorials on the
-[UAVCAN forum](https://forum.uavcan.org/t/libcanard-examples-starters-tutorials/935).
+[Cyphal forum](https://forum.opencyphal.org/t/libcanard-examples-starters-tutorials/935).
 
 If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 
 ## Features
 
 - Full test coverage and extensive static analysis.
-- Compliance with automatically enforceable MISRA C rules (reach out to <https://forum.uavcan.org> for details).
+- Compliance with automatically enforceable MISRA C rules (reach out to <https://forum.opencyphal.org> for details).
 - Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
 - Purely reactive API without the need for background servicing.
 - Support for the Classic CAN and CAN FD.
@@ -51,8 +50,8 @@ The platform-specific media IO layer (driver) is supposed to be provided by the 
                       |    Hardware   |
                       +---------------+
 
-The UAVCAN Development Team maintains a collection of various platform-specific components in a separate repository
-at <https://github.com/UAVCAN/platform_specific_components>.
+The OpenCyphal Development Team maintains a collection of various platform-specific components in a separate repository
+at <https://github.com/OpenCyphal/platform_specific_components>.
 Users are encouraged to search through that repository for drivers, examples, and other pieces that may be
 reused in the target application to speed up the design of the media IO layer (driver) for the application.
 
@@ -119,7 +118,8 @@ if (result < 0)
 }
 ```
 
-Use [Nunavut](https://github.com/UAVCAN/nunavut) to automatically generate (de)serialization code from DSDL definitions.
+Use [Nunavut](https://github.com/OpenCyphal/nunavut) to automatically generate
+(de)serialization code from DSDL definitions.
 
 The CAN frames generated from the message transfer are now stored in the `queue`.
 We need to pick them out one by one and have them transmitted.
@@ -219,7 +219,7 @@ CanardFilter register_access_config = canardMakeFilterForService(384, ins.node_i
 // You can also combine the two filter configurations into one (may also accept irrelevant messages).
 // This allows consolidating a large set of configurations to fit the number of hardware filters.
 // For more information on the optimal subset of configurations to consolidate to minimize wasted CPU,
-// see the UAVCAN specification.
+// see the Cyphal specification.
 CanardFilter combined_config =
         canardConsolidateFilters(&heartbeat_config, &register_access_config);
 configureHardwareFilters(combined_config.extended_can_id, combined_config.extended_mask);
@@ -230,6 +230,11 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
 
+### v3.0
+
+- Update branding as [UAVCAN v1 is renamed into Cyphal](https://forum.opencyphal.org/t/uavcan-v1-is-now-cyphal/1622).
+  There are no changes in this release aside from renaming.
+
 ### v2.0
 
 - Dedicated transmission queues per redundant CAN interface with depth limits.
@@ -239,20 +244,20 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
   ([Cavl](https://github.com/pavel-kirienko/cavl) library is distributed with libcanard).
   Traversing the list of RX subscriptions now requires recursive traversal of the tree.
 
-- Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/UAVCAN/nunavut) instead.
+- Manual DSDL serialization helpers removed; use [Nunavut](https://github.com/OpenCyphal/nunavut) instead.
 
 - Replace bitwise CRC computation with much faster static table by default
-  ([#185](https://github.com/UAVCAN/libcanard/issues/185)).
+  ([#185](https://github.com/OpenCyphal/libcanard/issues/185)).
   This can be disabled by setting `CANARD_CRC_TABLE=0`, which is expected to save ca. 500 bytes of ROM.
 
-- Fixed issues with const-correctness in the API ([#175](https://github.com/UAVCAN/libcanard/issues/175)).
+- Fixed issues with const-correctness in the API ([#175](https://github.com/OpenCyphal/libcanard/issues/175)).
 
 - `canardRxAccept2()` renamed to `canardRxAccept()`.
 
 - Support build configuration headers via `CANARD_CONFIG_HEADER`.
 
 - Add API for generating CAN hardware acceptance filter configurations
-  ([#169](https://github.com/UAVCAN/libcanard/issues/169)).
+  ([#169](https://github.com/OpenCyphal/libcanard/issues/169)).
 
 ### v1.1
 

@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016-2021 UAVCAN Development Team.
+// Copyright (c) 2016-2021 OpenCyphal Development Team.
 
 #include "exposed.hpp"
 #include "catch.hpp"

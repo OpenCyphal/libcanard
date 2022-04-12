@@ -1,7 +1,7 @@
 # Development environment for libcanard, based on Ubuntu 20.04 Focal.
 #
 # This software is distributed under the terms of the MIT License.
-# Copyright (c) 2021 UAVCAN Consortium.
+# Copyright (c) 2021-2022 OpenCyphal Development Team.
 # Author: Kalyan Sriram <kalyan@coderkalyan.com>
 
 FROM ubuntu:focal
