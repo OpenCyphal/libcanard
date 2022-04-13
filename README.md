@@ -232,8 +232,13 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ### v3.0
 
-- Update branding as [UAVCAN v1 is renamed into Cyphal](https://forum.opencyphal.org/t/uavcan-v1-is-now-cyphal/1622).
-  There are no changes in this release aside from renaming.
+- Update branding as [UAVCAN v1 is renamed to Cyphal](https://forum.opencyphal.org/t/uavcan-v1-is-now-cyphal/1622).
+- Improve MISRA compliance by removing use of flex array: ([#192](https://github.com/OpenCyphal/libcanard/pull/192)).
+- Fix dependency issues in docker toolchain.
+
+  There are no API changes in this release aside from the rebranding/renaming:
+  `CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR` -> `CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR`
+  `CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR` -> `CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR`
 
 ### v2.0
 
