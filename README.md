@@ -1,4 +1,4 @@
-# Compact Cyphal/CAN v1 in C
+# Compact Cyphal/CAN in C
 
 [![Main Workflow](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=alert_status)](https://sonarcloud.io/dashboard?id=libcanard)
@@ -124,7 +124,7 @@ Use [Nunavut](https://github.com/OpenCyphal/nunavut) to automatically generate
 The CAN frames generated from the message transfer are now stored in the `queue`.
 We need to pick them out one by one and have them transmitted.
 Normally, the following fragment should be invoked periodically to unload the CAN frames from the
-prioritized transmission queue into the CAN driver (or several, if redundant interfaces are used):
+prioritized transmission queue (or several, if redundant interfaces are used) into the CAN driver:
 
 ```c
 for (const CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  // Peek at the top of the queue.
