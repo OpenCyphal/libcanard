@@ -96,6 +96,18 @@ jobs:
       - run: avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
       - run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
+  arm:
+    runs-on: ubuntu-latest
+    env:
+      flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
+    steps:
+      - uses: actions/checkout@v2
+      - run: |
+          sudo apt update -y && sudo apt upgrade -y
+          sudo apt-get install -y gcc-arm-none-eabi
+      - run: arm-none-eabi-gcc libcanard/*.c -c -std=c99 ${{ env.flags }}
+      - run: arm-none-eabi-gcc libcanard/*.c -c -std=c11 ${{ env.flags }}
+
   style_check:
     runs-on: ubuntu-latest
     steps:
