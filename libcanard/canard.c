@@ -324,7 +324,7 @@ CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference,  // NOSONAR Cav
                                      const CanardTreeNode* const node)
 {
     const CanardTxQueueItem* const target = (const CanardTxQueueItem*) user_reference;
-    const CanardTxQueueItem* const other  = (const CanardTxQueueItem*) node;
+    const CanardTxQueueItem* const other  = (const CanardTxQueueItem*) (void*) node;
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->frame.extended_can_id >= other->frame.extended_can_id) ? +1 : -1;
 }
@@ -945,7 +945,7 @@ rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API
                                 const CanardTreeNode* const node)
 {
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
-    const CanardPortID  other     = ((const CanardRxSubscription*) node)->port_id;
+    const CanardPortID  other     = ((const CanardRxSubscription*) (void*) node)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
@@ -1052,7 +1052,7 @@ const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que)
     {
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
-        out = (const CanardTxQueueItem*) cavlFindExtremum(que->root, false);
+        out = (const CanardTxQueueItem*) (void*) cavlFindExtremum(que->root, false);
     }
     return out;
 }
@@ -1096,10 +1096,10 @@ int8_t canardRxAccept(CanardInstance* const        ins,
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
                 CanardRxSubscription* const sub =
-                    (CanardRxSubscription*) cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
-                                                       &model.port_id,
-                                                       &rxSubscriptionPredicateOnPortID,
-                                                       NULL);
+                    (CanardRxSubscription*) (void*) cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
+                                                               &model.port_id,
+                                                               &rxSubscriptionPredicateOnPortID,
+                                                               NULL);
                 if (out_subscription != NULL)
                 {
                     *out_subscription = sub;  // Expose selected instance to the caller.
@@ -1176,7 +1176,7 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
         CanardPortID                port_id_mutable = port_id;
-        CanardRxSubscription* const sub             = (CanardRxSubscription*)
+        CanardRxSubscription* const sub             = (CanardRxSubscription*) (void*)
             cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL);
         if (sub != NULL)
         {
