@@ -299,7 +299,7 @@ CANARD_PRIVATE TxItem* txAllocateQueueItem(CanardInstance* const   ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(payload_size > 0U);
-    TxItem* const out = (TxItem*) ins->memory_allocate(ins, sizeof(TxItem) - CANARD_MTU_MAX + payload_size);
+    TxItem* const out = (TxItem*) ins->memory_allocate(ins, (sizeof(TxItem) - CANARD_MTU_MAX) + payload_size);
     if (out != NULL)
     {
         out->base.base.up    = NULL;
@@ -324,7 +324,7 @@ CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference,  // NOSONAR Cav
                                      const CanardTreeNode* const node)
 {
     const CanardTxQueueItem* const target = (const CanardTxQueueItem*) user_reference;
-    const CanardTxQueueItem* const other  = (const CanardTxQueueItem*) (void*) node;
+    const CanardTxQueueItem* const other  = (const CanardTxQueueItem*) (const void*) node;
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->frame.extended_can_id >= other->frame.extended_can_id) ? +1 : -1;
 }
@@ -945,7 +945,7 @@ rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API
                                 const CanardTreeNode* const node)
 {
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
-    const CanardPortID  other     = ((const CanardRxSubscription*) (void*) node)->port_id;
+    const CanardPortID  other     = ((const CanardRxSubscription*) (const void*) node)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
