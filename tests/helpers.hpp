@@ -73,10 +73,10 @@ public:
     virtual ~TestAllocator()
     {
         std::unique_lock locker(lock_);
-        for (auto [ptr, _] : allocated_)
+        for (const auto& pair : allocated_)
         {
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
-            std::free(ptr - canary_.size());  // NOLINT
+            std::free(pair.first - canary_.size());  // NOLINT
         }
     }
 
@@ -138,9 +138,9 @@ public:
     {
         std::unique_lock locker(lock_);
         std::size_t      out = 0U;
-        for (auto [_, size] : allocated_)
+        for (const auto& pair : allocated_)
         {
-            out += size;
+            out += pair.second;
         }
         return out;
     }
@@ -271,8 +271,8 @@ public:
         checkInvariants();
         const auto size_before = que_.size;
         const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
-        enforce((ret < 0) || ((size_before + static_cast<std::size_t>(ret)) == que_.size),
-                "Unexpected size change after push");
+        const auto num_added   = static_cast<std::size_t>(ret);
+        enforce((ret < 0) || ((size_before + num_added) == que_.size), "Unexpected size change after push");
         checkInvariants();
         return ret;
     }
