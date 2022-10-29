@@ -412,7 +412,7 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardInstance* const   ins,
         {
             // C std, 6.7.2.1.15: A pointer to a structure object <...> points to its initial member, and vice versa.
             // Can't just read tqi->base because tqi may be NULL; https://github.com/OpenCyphal/libcanard/issues/203.
-            out.tail->base.next_in_transfer = (CanardTxQueueItem*) &tqi;
+            out.tail->base.next_in_transfer = (CanardTxQueueItem*) tqi;
         }
         out.tail = tqi;
         if (NULL == out.tail)
