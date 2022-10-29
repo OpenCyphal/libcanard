@@ -240,6 +240,10 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
   `CANARD_UAVCAN_SPECIFICATION_VERSION_MAJOR` -> `CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR`
   `CANARD_UAVCAN_SPECIFICATION_VERSION_MINOR` -> `CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR`
 
+#### v3.0.1
+
+- Remove UB as described in [203](https://github.com/OpenCyphal/libcanard/issues/203).
+
 ### v2.0
 
 - Dedicated transmission queues per redundant CAN interface with depth limits.
