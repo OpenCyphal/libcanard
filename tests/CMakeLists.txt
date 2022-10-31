@@ -81,9 +81,9 @@ endfunction()
 
 function(gen_test_matrix name files compile_definitions compile_flags )
     gen_test("${name}_x64_c99" "${files}" "${compile_definitions}" "${compile_flags} -m64 ${SANITIZE_FLAG}" "-m64 ${SANITIZE_FLAG}" "99")
-    #    gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "99")
+    gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "99")
     gen_test("${name}_x64_c11" "${files}" "${compile_definitions}" "${compile_flags} -m64 ${SANITIZE_FLAG}" "-m64 ${SANITIZE_FLAG}" "11")
-    #gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "11")
+    gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "11")
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
         gen_test("${name}_cov"
