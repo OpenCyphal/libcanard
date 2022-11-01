@@ -27,16 +27,16 @@ if (NOT NO_STATIC_ANALYSIS)
 endif()
 if(NOT NO_CANARD_SANITIZER)
     include(CheckCXXCompilerFlag)
-    # detect for sanitizer support, and runtime.
-    check_cxx_compiler_flag(-fsanitize=undefined UBSAN_SUPPORTED)
-    find_library(LIBUBSAN NAMES ubsan libubsan.so.1)
-    find_library(LIBASAN NAMES asan libasan.so.5 libasan.so.4 libasan.so.3)
-    set(UBSAN_FLAG "")
+    # detect for sanitizer compiler support.
+    # fail unit test only for no-sanitize-recover options. everything else warns to log only.
+    set(UBSAN_FLAG "-fsanitize=undefined -fno-sanitize-recover=null,bounds,pointer-overflow,alignment,bool,builtin,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,object-size,return,shift,signed-integer-overflow,unreachable,vptr")
+    check_cxx_compiler_flag(${UBSAN_FLAG} UBSAN_SUPPORTED)
+    check_cxx_compiler_flag(-fsanitize=address ASAN_SUPPORTED)
     if(UBSAN_SUPPORTED)
         message(STATUS "enabling undefined behavior sanitizer")
-        list(APPEND SANITIZE_FLAG -fsanitize=undefined)
+        list(APPEND SANITIZE_FLAG ${UBSAN_FLAG})
     endif()
-    if(ASAN_SUPPORTED AND LIBASAN)
+    if(ASAN_SUPPORTED)
         message(STATUS "enabling address sanitizer")
         list(APPEND SANITIZE_FLAG -fsanitize=address)
     endif()
@@ -79,11 +79,11 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
     add_test("run_${name}" "${name}" --rng-seed time)
 endfunction()
 
-function(gen_test_matrix name files compile_definitions compile_flags )
-    gen_test("${name}_x64_c99" "${files}" "${compile_definitions}" "${compile_flags} -m64 ${SANITIZE_FLAG}" "-m64 ${SANITIZE_FLAG}" "99")
-    gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "99")
-    gen_test("${name}_x64_c11" "${files}" "${compile_definitions}" "${compile_flags} -m64 ${SANITIZE_FLAG}" "-m64 ${SANITIZE_FLAG}" "11")
-    gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "11")
+function(gen_test_matrix name files compile_definitions compile_flags link_flags)
+    gen_test("${name}_x64_c99" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64 ${link_flags}" "99")
+    gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32 ${link_flags}" "99")
+    gen_test("${name}_x64_c11" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64 ${link_flags}" "11")
+    gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32 ${link_flags}" "11")
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
         gen_test("${name}_cov"
@@ -99,15 +99,18 @@ endfunction()
 gen_test_matrix(test_private
         "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_private_cavl.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
-        "-Wno-missing-declarations ${SANITIZE_FLAG}")
+        "-Wno-missing-declarations ${SANITIZE_FLAG}"
+        "${SANITIZE_FLAG}")
 # test CRC with static table disabled
 gen_test_matrix(test_private_crc_table
         "test_private_crc.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
         "-DCANARD_CRC_TABLE=0"
-        "-Wno-missing-declarations ${SANITIZE_FLAG}")
+        "-Wno-missing-declarations ${SANITIZE_FLAG}"
+        "${SANITIZE_FLAG}")
 
 gen_test_matrix(test_public
         "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp;test_public_filters.cpp"
         ""
-        "-Wmissing-declarations ${SANITIZE_FLAG}")
+        "-Wmissing-declarations ${SANITIZE_FLAG}"
+        "${SANITIZE_FLAG}")
