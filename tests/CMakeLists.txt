@@ -29,7 +29,7 @@ if(NOT NO_CANARD_SANITIZER)
     include(CheckCXXCompilerFlag)
     # detect for sanitizer compiler support.
     # fail unit test only for no-sanitize-recover options. everything else warns to log only.
-    set(UBSAN_FLAG "-fsanitize=undefined -fno-sanitize-recover=null,bounds,pointer-overflow,alignment,bool,builtin,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,object-size,return,shift,signed-integer-overflow,unreachable,vptr")
+    set(UBSAN_FLAG "-fsanitize=undefined -fno-sanitize-recover=null,bounds,pointer-overflow,alignment,bool,builtin,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,object-size,return,shift,unreachable,vptr")
     check_cxx_compiler_flag(${UBSAN_FLAG} UBSAN_SUPPORTED)
     check_cxx_compiler_flag(-fsanitize=address ASAN_SUPPORTED)
     if(UBSAN_SUPPORTED)
