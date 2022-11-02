@@ -11,7 +11,7 @@ set(CTEST_OUTPUT_ON_FAILURE ON)
 set(library_dir "${CMAKE_SOURCE_DIR}/../libcanard")
 
 set(NO_STATIC_ANALYSIS OFF CACHE BOOL "disable canard static analysis") 
-set(NO_CANARD_SANATIZER OFF CACHE BOOL "disable canard runtime sanitizers") 
+set(NO_CANARD_SANITIZER OFF CACHE BOOL "disable canard runtime sanitizers")
 
 # Use -DNO_STATIC_ANALYSIS=1 to suppress static analysis.
 # If not suppressed, the tools used here shall be available, otherwise the build will fail.
