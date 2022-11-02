@@ -26,6 +26,12 @@ if (NOT NO_STATIC_ANALYSIS)
     set(CMAKE_CXX_CLANG_TIDY ${clang_tidy})
 endif()
 if(NOT NO_CANARD_SANITIZER)
+    # libclang_rt.builtins-i386.a required by some sanitizers on x86-32
+    find_library(LLVM_RT_32 NAMES libclang_rt libclang_rt.builtins-i386)
+    if(NOT LLVM_RT_32 MATCHES "NOTFOUND")
+        message(DEBUG "adding runtime for sanitizer ${LLVM_RT_32}")
+        list(APPEND ADDITIONAL_LIBS_32 ${LLVM_RT_32} 
+    endif()
     include(CheckCXXCompilerFlag)
     # detect for sanitizer compiler support.
     # fail unit test only for no-sanitize-recover options. everything else warns to log only.
@@ -82,8 +88,10 @@ endfunction()
 function(gen_test_matrix name files compile_definitions compile_flags link_flags)
     gen_test("${name}_x64_c99" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64 ${link_flags}" "99")
     gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32 ${link_flags}" "99")
+    target_link_libraries("${name}_x32_c99" ${ADDITIONAL_LIBS_32})
     gen_test("${name}_x64_c11" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64 ${link_flags}" "11")
     gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32 ${link_flags}" "11")
+    target_link_libraries("${name}_x32_c11" ${ADDITIONAL_LIBS_32})
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
         gen_test("${name}_cov"
