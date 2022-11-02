@@ -26,16 +26,18 @@ if (NOT NO_STATIC_ANALYSIS)
     set(CMAKE_CXX_CLANG_TIDY ${clang_tidy})
 endif()
 if(NOT NO_CANARD_SANITIZER)
-    # libclang_rt.builtins-i386.a required by some sanitizers on x86-32
-    find_library(LLVM_RT_32 NAMES libclang_rt libclang_rt.builtins-i386)
+    # libclang_rt.builtins-i386.a required by some sanitizers on x86-32 clang
+    find_library(LLVM_RT_32 NAMES libclang_rt.builtins-i386.a PATHS /usr/lib/clang/12/lib/linux/)
     if(NOT LLVM_RT_32 MATCHES "NOTFOUND")
-        message(DEBUG "adding runtime for sanitizer ${LLVM_RT_32}")
-        list(APPEND ADDITIONAL_LIBS_32 ${LLVM_RT_32} 
+        message(STATUS "adding runtime for sanitizer ${LLVM_RT_32}")
+        list(APPEND ADDITIONAL_LIBS_32 ${LLVM_RT_32})
+    else()
+        message(DEBUG "not adding clang runtime for sanitizer ${LLVM_RT_32}")
     endif()
     include(CheckCXXCompilerFlag)
-    # detect for sanitizer compiler support.
-    # fail unit test only for no-sanitize-recover options. everything else warns to log only.
-    set(UBSAN_FLAG "-fsanitize=undefined -fno-sanitize-recover=null,bounds,pointer-overflow,alignment,bool,builtin,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,object-size,return,shift,unreachable,vptr")
+    # Detect sanitizer compiler support.
+    # Fail unit test only for no-sanitize-recover options. everything else warns to log only.
+    set(UBSAN_FLAG "-fsanitize=undefined -fno-sanitize-recover=null,bounds,pointer-overflow,alignment,bool,builtin,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,object-size,return,shift,unreachable,signed-integer-overflow,unsigned-integer-overflow,vptr")
     check_cxx_compiler_flag(${UBSAN_FLAG} UBSAN_SUPPORTED)
     check_cxx_compiler_flag(-fsanitize=address ASAN_SUPPORTED)
     if(UBSAN_SUPPORTED)
