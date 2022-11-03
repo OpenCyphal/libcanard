@@ -10,6 +10,9 @@ enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE ON)
 set(library_dir "${CMAKE_SOURCE_DIR}/../libcanard")
 
+set(NO_STATIC_ANALYSIS OFF CACHE BOOL "disable canard static analysis") 
+set(NO_CANARD_SANITIZER OFF CACHE BOOL "disable canard runtime sanitizers")
+
 # Use -DNO_STATIC_ANALYSIS=1 to suppress static analysis.
 # If not suppressed, the tools used here shall be available, otherwise the build will fail.
 if (NOT NO_STATIC_ANALYSIS)
@@ -21,6 +24,30 @@ if (NOT NO_STATIC_ANALYSIS)
     message(STATUS "Using clang-tidy: ${clang_tidy}")
     set(CMAKE_C_CLANG_TIDY ${clang_tidy})
     set(CMAKE_CXX_CLANG_TIDY ${clang_tidy})
+endif()
+if(NOT NO_CANARD_SANITIZER)
+    # libclang_rt.builtins-i386.a required by some sanitizers on x86-32 clang
+    find_library(LLVM_RT_32 NAMES libclang_rt.builtins-i386.a PATHS /usr/lib/clang/12/lib/linux/)
+    if(NOT LLVM_RT_32 MATCHES "NOTFOUND")
+        message(STATUS "adding runtime for sanitizer ${LLVM_RT_32}")
+        list(APPEND ADDITIONAL_LIBS_32 ${LLVM_RT_32})
+    else()
+        message(DEBUG "not adding clang runtime for sanitizer ${LLVM_RT_32}")
+    endif()
+    include(CheckCXXCompilerFlag)
+    # Detect sanitizer compiler support.
+    # Fail unit test only for no-sanitize-recover options. everything else warns to log only.
+    set(UBSAN_FLAG "-fsanitize=undefined -fno-sanitize-recover=null,bounds,pointer-overflow,alignment,bool,builtin,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,object-size,return,shift,unreachable,signed-integer-overflow,unsigned-integer-overflow,vptr")
+    check_cxx_compiler_flag(${UBSAN_FLAG} UBSAN_SUPPORTED)
+    check_cxx_compiler_flag(-fsanitize=address ASAN_SUPPORTED)
+    if(UBSAN_SUPPORTED)
+        message(STATUS "enabling undefined behavior sanitizer")
+        list(APPEND SANITIZE_FLAG ${UBSAN_FLAG})
+    endif()
+    if(ASAN_SUPPORTED)
+        message(STATUS "enabling address sanitizer")
+        list(APPEND SANITIZE_FLAG -fsanitize=address)
+    endif()
 endif ()
 
 # clang-format
@@ -60,11 +87,13 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
     add_test("run_${name}" "${name}" --rng-seed time)
 endfunction()
 
-function(gen_test_matrix name files compile_definitions compile_flags)
-    gen_test("${name}_x64_c99" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64" "99")
-    gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "99")
-    gen_test("${name}_x64_c11" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64" "11")
-    gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32" "11")
+function(gen_test_matrix name files compile_definitions compile_flags link_flags)
+    gen_test("${name}_x64_c99" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64 ${link_flags}" "99")
+    gen_test("${name}_x32_c99" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32 ${link_flags}" "99")
+    target_link_libraries("${name}_x32_c99" ${ADDITIONAL_LIBS_32})
+    gen_test("${name}_x64_c11" "${files}" "${compile_definitions}" "${compile_flags} -m64" "-m64 ${link_flags}" "11")
+    gen_test("${name}_x32_c11" "${files}" "${compile_definitions}" "${compile_flags} -m32" "-m32 ${link_flags}" "11")
+    target_link_libraries("${name}_x32_c11" ${ADDITIONAL_LIBS_32})
     # Coverage is only available for GCC builds.
     if ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
         gen_test("${name}_cov"
@@ -80,15 +109,18 @@ endfunction()
 gen_test_matrix(test_private
         "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_private_cavl.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
-        "-Wno-missing-declarations")
+        "-Wno-missing-declarations ${SANITIZE_FLAG}"
+        "${SANITIZE_FLAG}")
 # test CRC with static table disabled
 gen_test_matrix(test_private_crc_table
         "test_private_crc.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
         "-DCANARD_CRC_TABLE=0"
-        "-Wno-missing-declarations")
+        "-Wno-missing-declarations ${SANITIZE_FLAG}"
+        "${SANITIZE_FLAG}")
 
 gen_test_matrix(test_public
         "test_public_tx.cpp;test_public_rx.cpp;test_public_roundtrip.cpp;test_self.cpp;test_public_filters.cpp"
         ""
-        "-Wmissing-declarations")
+        "-Wmissing-declarations ${SANITIZE_FLAG}"
+        "${SANITIZE_FLAG}")
