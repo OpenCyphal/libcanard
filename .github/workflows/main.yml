@@ -184,8 +184,6 @@ jobs:
         --define sonar.sources=libcanard
         --define sonar.exclusions=libcanard/cavl.h
         --define sonar.cfamily.gcov.reportsPath=.
-        --define sonar.cfamily.cache.enabled=false
-        --define sonar.cfamily.threads=2
         --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
 
