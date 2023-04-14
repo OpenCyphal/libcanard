@@ -4,6 +4,7 @@ env:
   LLVM_VERSION: 15
 jobs:
   debug:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -44,6 +45,7 @@ jobs:
           retention-days: 2
 
   optimizations:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -81,6 +83,7 @@ jobs:
           retention-days: 2
 
   avr:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       mcu: at90can64
@@ -97,6 +100,7 @@ jobs:
       - run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
   arm:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
@@ -109,6 +113,7 @@ jobs:
       - run: arm-none-eabi-gcc libcanard/*.c -c -std=c11 ${{ env.flags }}
 
   style_check:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -120,6 +125,11 @@ jobs:
           clangFormatVersion: ${{ env.LLVM_VERSION }}
 
   sonarcloud:
+    if: >
+      github.event_name == 'pull_request'                   ||
+      contains(github.ref, '/master')                       ||
+      contains(github.ref, '/release')                      ||
+      contains(github.event.head_commit.message, '#sonar')
     runs-on: ubuntu-latest
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
@@ -185,8 +195,6 @@ jobs:
         --define sonar.sources=libcanard
         --define sonar.exclusions=libcanard/cavl.h
         --define sonar.cfamily.gcov.reportsPath=.
-        --define sonar.cfamily.cache.enabled=false
-        --define sonar.cfamily.threads=2
         --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
 
