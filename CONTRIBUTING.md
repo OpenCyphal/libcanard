@@ -58,6 +58,9 @@ The following tools are required to conduct library development locally
 - CMake
 - An AMD64 machine
 
+You may want to use the [toolshed](https://github.com/OpenCyphal/docker_toolchains/pkgs/container/toolshed)
+container for this.
+
 ### Clang-Tidy
 
 Clang-Tidy is used to enforce compliance with MISRA and Zubax Coding Conventions.
