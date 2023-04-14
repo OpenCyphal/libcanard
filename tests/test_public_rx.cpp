@@ -331,3 +331,110 @@ TEST_CASE("RxSubscriptionErrors")
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), 0, &frame, 0, nullptr, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, 0, nullptr, 0, nullptr, nullptr));
 }
+
+TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
+{
+    using helpers::Instance;
+    using exposed::RxSession;
+
+    Instance              ins;
+    CanardRxTransfer      transfer{};
+    CanardRxSubscription* subscription              = nullptr;
+    const std::uint8_t    redundant_transport_index = 0;
+
+    const auto accept = [&](const CanardMicrosecond          timestamp_usec,
+                            const std::uint32_t              extended_can_id,
+                            const std::vector<std::uint8_t>& payload) {
+        static std::vector<std::uint8_t> payload_storage;
+        payload_storage = payload;
+        CanardFrame frame{};
+        frame.extended_can_id = extended_can_id;
+        frame.payload_size    = std::size(payload);
+        frame.payload         = payload_storage.data();
+        return ins.rxAccept(timestamp_usec, frame, redundant_transport_index, transfer, &subscription);
+    };
+
+    ins.getAllocator().setAllocationCeiling(sizeof(RxSession) + 50);  // A session and the payload buffer.
+
+    // Create a message subscription.
+    CanardRxSubscription sub_msg{};
+    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 50, 1'000'000, sub_msg));
+    REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
+    REQUIRE(ins.getMessageSubs().at(0)->port_id == 0b0110011001100);
+    REQUIRE(ins.getMessageSubs().at(0)->extent == 50);
+    REQUIRE(ins.getMessageSubs().at(0)->transfer_id_timeout_usec == 1'000'000);
+    REQUIRE(ensureAllNullptr(ins.getMessageSubs().at(0)->sessions));
+    REQUIRE(ins.getResponseSubs().empty());
+    REQUIRE(ins.getRequestSubs().empty());
+
+    // First, ensure that the reassembler is initialized, by feeding it a valid transfer at least once.
+    subscription = nullptr;
+    REQUIRE(1 == accept(100'000'001, 0b001'00'0'11'0110011001100'0'0100111, {0x42, 0b111'00000}));
+    REQUIRE(subscription != nullptr);
+    REQUIRE(subscription->port_id == 0b0110011001100);
+    REQUIRE(transfer.timestamp_usec == 100'000'001);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
+    REQUIRE(transfer.metadata.transfer_id == 0);
+    REQUIRE(transfer.payload_size == 1);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x42", 1));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
+    REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
+    ins.getAllocator().deallocate(transfer.payload);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
+
+    // Next, feed the last frame of another transfer whose TID/TOG match the expected state of the reassembler,
+    // and the CRC matches the payload available in the last frame.
+    // This frame should be rejected because we didn't observe the first frame of this transfer.
+    // This failure mode may occur when the first frame is lost.
+    //
+    // Here's how we compute the reference value of the transfer CRC:
+    //  >>> from pycyphal.transport.commons.crc import CRC16CCITT
+    //  >>> CRC16CCITT.new(b'DUCK').value_as_bytes
+    //  b'4\xa3'
+    subscription = nullptr;
+    REQUIRE(0 == accept(100'001'001,  // The result should be zero because the transfer is rejected.
+                        0b001'00'0'11'0110011001100'0'0100111,           //
+                        {'D', 'U', 'C', 'K', '4', 0xA3, 0b011'00001}));  // SOF=0, EOF=1, TOG=1, TID=1, CRC=0x4A34
+    REQUIRE(subscription != nullptr);                                    // Subscription exists.
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);         // The SESSION only.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
+    REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
+
+    // Now feed a similar transfer that is not malformed. It should be accepted.
+    // Here's how we compute the reference value of the transfer CRC:
+    //  >>> from pycyphal.transport.commons.crc import CRC16CCITT
+    //  >>> CRC16CCITT.new(b'\x01\x02\x03\x04\x05\x06\x07DUCK').value_as_bytes
+    //  b'\xd3\x14'
+    subscription = nullptr;
+    REQUIRE(0 == accept(100'002'001,  //
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {1, 2, 3, 4, 5, 6, 7, 0b101'00010}));
+    REQUIRE(subscription != nullptr);  // Subscription exists.
+    REQUIRE(1 == accept(100'002'002,   // Accepted!
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {'D', 'U', 'C', 'K', 0xD3, 0x14, 0b010'00010}));
+    REQUIRE(subscription != nullptr);  // Subscription exists.
+    REQUIRE(subscription->port_id == 0b0110011001100);
+    REQUIRE(transfer.timestamp_usec == 100'002'001);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
+    REQUIRE(transfer.metadata.transfer_id == 2);
+    REQUIRE(transfer.payload_size == 11);
+    REQUIRE(0 == std::memcmp(transfer.payload,
+                             "\x01\x02\x03\x04\x05\x06\x07"
+                             "DUCK",
+                             11));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
+    REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
+    ins.getAllocator().deallocate(transfer.payload);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
+}

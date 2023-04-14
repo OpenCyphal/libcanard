@@ -849,10 +849,20 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     }
     else
     {
+        // The purpose of the correct_start check is to reduce the possibility of accepting a malformed multi-frame
+        // transfer in the event of a CRC collision. The scenario where this failure mode would manifest is as follows:
+        // 1. A valid transfer (whether single- or multi-frame) is accepted with TID=X.
+        // 2. All frames of the subsequent multi-frame transfer with TID=X+1 are lost except for the last one.
+        // 3. The CRC of said multi-frame transfer happens to yield the correct residue when applied to the fragment
+        //    of the payload contained in the last frame of the transfer (a CRC collision is in effect).
+        // 4. The last frame of the multi-frame transfer is erroneously accepted even though it is malformed.
+        // The correct_start check eliminates this failure mode by ensuring that the first frame is observed.
+        // See https://github.com/OpenCyphal/libcanard/issues/189.
         const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
         const bool correct_toggle    = (frame->toggle == rxs->toggle);
         const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
-        if (correct_transport && correct_toggle && correct_tid)
+        const bool correct_start     = frame->start_of_transfer || (rxs->total_payload_size > 0);
+        if (correct_transport && correct_toggle && correct_tid && correct_start)
         {
             out = rxSessionAcceptFrame(ins, rxs, frame, extent, out_transfer);
         }
