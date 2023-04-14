@@ -6,6 +6,7 @@
 #include "canard.h"
 #include "exposed.hpp"
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdarg>
 #include <cstdlib>
@@ -64,15 +65,15 @@ static inline void traverse(const CanardTreeNode* const root, const F& fun)  // 
 class TestAllocator
 {
 public:
-    TestAllocator()                      = default;
-    TestAllocator(const TestAllocator&)  = delete;
-    TestAllocator(const TestAllocator&&) = delete;
-    auto operator=(const TestAllocator&) -> TestAllocator& = delete;
+    TestAllocator()                                         = default;
+    TestAllocator(const TestAllocator&)                     = delete;
+    TestAllocator(const TestAllocator&&)                    = delete;
+    auto operator=(const TestAllocator&) -> TestAllocator&  = delete;
     auto operator=(const TestAllocator&&) -> TestAllocator& = delete;
 
     virtual ~TestAllocator()
     {
-        std::unique_lock locker(lock_);
+        const std::unique_lock locker(lock_);
         for (const auto& pair : allocated_)
         {
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
@@ -82,8 +83,8 @@ public:
 
     [[nodiscard]] auto allocate(const std::size_t amount) -> void*
     {
-        std::unique_lock locker(lock_);
-        std::uint8_t*    p = nullptr;
+        const std::unique_lock locker(lock_);
+        std::uint8_t*          p = nullptr;
         if ((amount > 0U) && ((getTotalAllocatedAmount() + amount) <= ceiling_))
         {
             const auto amount_with_canaries = amount + canary_.size() * 2U;
@@ -106,8 +107,8 @@ public:
     {
         if (user_pointer != nullptr)
         {
-            std::unique_lock locker(lock_);
-            const auto       it = allocated_.find(static_cast<std::uint8_t*>(user_pointer));
+            const std::unique_lock locker(lock_);
+            const auto             it = allocated_.find(static_cast<std::uint8_t*>(user_pointer));
             if (it == std::end(allocated_))  // Catch an attempt to deallocate memory that is not allocated.
             {
                 throw std::logic_error("Attempted to deallocate memory that was never allocated; ptr=" +
@@ -130,14 +131,14 @@ public:
 
     [[nodiscard]] auto getNumAllocatedFragments() const
     {
-        std::unique_lock locker(lock_);
+        const std::unique_lock locker(lock_);
         return std::size(allocated_);
     }
 
     [[nodiscard]] auto getTotalAllocatedAmount() const -> std::size_t
     {
-        std::unique_lock locker(lock_);
-        std::size_t      out = 0U;
+        const std::unique_lock locker(lock_);
+        std::size_t            out = 0U;
         for (const auto& pair : allocated_)
         {
             out += pair.second;
@@ -171,9 +172,9 @@ public:
 
     virtual ~Instance() = default;
 
-    Instance(const Instance&)  = delete;
-    Instance(const Instance&&) = delete;
-    auto operator=(const Instance&) -> Instance& = delete;
+    Instance(const Instance&)                     = delete;
+    Instance(const Instance&&)                    = delete;
+    auto operator=(const Instance&) -> Instance&  = delete;
     auto operator=(const Instance&&) -> Instance& = delete;
 
     [[nodiscard]] auto rxAccept(const CanardMicrosecond      timestamp_usec,
@@ -254,10 +255,10 @@ public:
     }
     virtual ~TxQueue() = default;
 
-    TxQueue(const TxQueue&) = delete;
-    TxQueue(TxQueue&&)      = delete;
+    TxQueue(const TxQueue&)                    = delete;
+    TxQueue(TxQueue&&)                         = delete;
     auto operator=(const TxQueue&) -> TxQueue& = delete;
-    auto operator=(TxQueue&&) -> TxQueue& = delete;
+    auto operator=(TxQueue&&) -> TxQueue&      = delete;
 
     [[nodiscard]] auto getMTU() const { return que_.mtu_bytes; }
     void               setMTU(const std::size_t x) { que_.mtu_bytes = x; }

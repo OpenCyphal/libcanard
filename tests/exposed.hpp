@@ -36,10 +36,10 @@ struct TxItem final : CanardTxQueueItem
     [[nodiscard]] auto isEndOfTransfer() const { return (getTailByte() & 64U) != 0; }
     [[nodiscard]] auto isToggleBitSet() const { return (getTailByte() & 32U) != 0; }
 
-    ~TxItem()              = default;
-    TxItem(const TxItem&)  = delete;
-    TxItem(const TxItem&&) = delete;
-    auto operator=(const TxItem&) -> TxItem& = delete;
+    ~TxItem()                                 = default;
+    TxItem(const TxItem&)                     = delete;
+    TxItem(const TxItem&&)                    = delete;
+    auto operator=(const TxItem&) -> TxItem&  = delete;
     auto operator=(const TxItem&&) -> TxItem& = delete;
 };
 

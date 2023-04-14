@@ -1,9 +1,10 @@
 name: Main Workflow
 on: [push, pull_request]
 env:
-  LLVM_VERSION: 13
+  LLVM_VERSION: 15
 jobs:
   debug:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -16,7 +17,7 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -36,7 +37,7 @@ jobs:
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         if: always()
         with:
           name: ${{github.job}}
@@ -44,6 +45,7 @@ jobs:
           retention-days: 2
 
   optimizations:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -57,7 +59,7 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-multilib g++-multilib
@@ -73,7 +75,7 @@ jobs:
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         if: always()
         with:
           name: ${{github.job}}
@@ -81,12 +83,13 @@ jobs:
           retention-days: 2
 
   avr:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       mcu: at90can64
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-avr avr-libc
@@ -97,11 +100,12 @@ jobs:
       - run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
   arm:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
@@ -109,10 +113,11 @@ jobs:
       - run: arm-none-eabi-gcc libcanard/*.c -c -std=c11 ${{ env.flags }}
 
   style_check:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: DoozyX/clang-format-lint-action@v0.13
+      - uses: actions/checkout@v3
+      - uses: DoozyX/clang-format-lint-action@v0.15
         with:
           source: './libcanard ./tests'
           exclude: './tests/catch'
@@ -120,6 +125,11 @@ jobs:
           clangFormatVersion: ${{ env.LLVM_VERSION }}
 
   sonarcloud:
+    if: >
+      github.event_name == 'pull_request'                   ||
+      contains(github.ref, '/master')                       ||
+      contains(github.ref, '/release')                      ||
+      contains(github.event.head_commit.message, '#sonar')
     runs-on: ubuntu-latest
     env:
       SONAR_SCANNER_VERSION: 4.6.1.2450
@@ -128,7 +138,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -138,9 +148,10 @@ jobs:
         sudo apt install -y gcc-multilib g++-multilib
 
     - name: Set up JDK
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
         java-version: 11
+        distribution: zulu
 
     - name: Cache SonarCloud packages
       uses: actions/cache@v1
@@ -184,12 +195,10 @@ jobs:
         --define sonar.sources=libcanard
         --define sonar.exclusions=libcanard/cavl.h
         --define sonar.cfamily.gcov.reportsPath=.
-        --define sonar.cfamily.cache.enabled=false
-        --define sonar.cfamily.threads=2
         --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       if: always()
       with:
         name: ${{github.job}}

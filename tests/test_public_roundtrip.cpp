@@ -97,7 +97,7 @@ TEST_CASE("RoundtripSimple")
             // Push the transfer.
             bool sleep = false;
             {
-                std::lock_guard locker(lock);
+                const std::lock_guard locker(lock);
                 const auto result = que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, payload_size, payload);
                 if (result > 0)
                 {
@@ -135,7 +135,7 @@ TEST_CASE("RoundtripSimple")
         {
             CanardTxQueueItem* ti = nullptr;
             {
-                std::lock_guard locker(lock);
+                const std::lock_guard locker(lock);
                 ti = que_tx.pop(que_tx.peek());
                 if (ti != nullptr)
                 {
@@ -150,15 +150,15 @@ TEST_CASE("RoundtripSimple")
                 log_file << ti->tx_deadline_usec << " "                                                              //
                          << std::hex << std::setfill('0') << std::setw(8) << ti->frame.extended_can_id               //
                          << " [" << std::dec << std::setfill(' ') << std::setw(2) << ti->frame.payload_size << "] "  //
-                         << (bool(tail & 128U) ? 'S' : ' ')                                                          //
-                         << (bool(tail & 64U) ? 'E' : ' ')                                                           //
-                         << (bool(tail & 32U) ? 'T' : ' ')                                                           //
-                         << " " << std::uint16_t(tail & 31U)                                                         //
+                         << (static_cast<bool>(tail & 128U) ? 'S' : ' ')                                             //
+                         << (static_cast<bool>(tail & 64U) ? 'E' : ' ')                                              //
+                         << (static_cast<bool>(tail & 32U) ? 'T' : ' ')                                              //
+                         << " " << static_cast<std::uint16_t>(tail & 31U)                                            //
                          << '\n';
 
                 CanardRxTransfer      transfer{};
                 CanardRxSubscription* subscription = nullptr;
-                std::int8_t result = ins_rx.rxAccept(ti->tx_deadline_usec, ti->frame, 0, transfer, &subscription);
+                const std::int8_t result = ins_rx.rxAccept(ti->tx_deadline_usec, ti->frame, 0, transfer, &subscription);
                 REQUIRE(0 == ins_rx.rxAccept(ti->tx_deadline_usec,
                                              ti->frame,
                                              1,
@@ -168,8 +168,8 @@ TEST_CASE("RoundtripSimple")
                 {
                     Pending reference{};  // Fetch the reference transfer from the list of pending.
                     {
-                        std::lock_guard locker(lock);
-                        const auto      pt_it = pending_transfers.find(transfer.timestamp_usec);
+                        const std::lock_guard locker(lock);
+                        const auto            pt_it = pending_transfers.find(transfer.timestamp_usec);
                         REQUIRE(pt_it != pending_transfers.end());
                         reference = pt_it->second;
                         pending_transfers.erase(pt_it);
@@ -211,7 +211,7 @@ TEST_CASE("RoundtripSimple")
             }
 
             {
-                std::lock_guard locker(lock);
+                const std::lock_guard locker(lock);
                 ins_tx.getAllocator().deallocate(ti);
             }
 

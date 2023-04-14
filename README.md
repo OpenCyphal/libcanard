@@ -29,7 +29,7 @@ If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 - Support for the Classic CAN and CAN FD.
 - Support for redundant transports.
 - Compatibility with 8/16/32/64-bit platforms.
-- Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 8K RAM.
+- Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 32K RAM.
 - Implemented in ≈1000 lines of code.
 
 ## Platforms

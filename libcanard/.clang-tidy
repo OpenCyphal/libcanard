@@ -21,6 +21,7 @@ Checks: >-
   -cert-dcl03-c,
   -hicpp-static-assert,
   -misc-static-assert,
+  -modernize-macro-to-enum,
 CheckOptions:
   - key:   readability-function-cognitive-complexity.Threshold
     value: '99'
