@@ -112,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: DoozyX/clang-format-lint-action@v0.13
+      - uses: DoozyX/clang-format-lint-action@v0.15
         with:
           source: './libcanard ./tests'
           exclude: './tests/catch'
@@ -138,9 +138,10 @@ jobs:
         sudo apt install -y gcc-multilib g++-multilib
 
     - name: Set up JDK
-      uses: actions/setup-java@v1
+      uses: actions/setup-java@v3
       with:
         java-version: 11
+        distribution: zulu
 
     - name: Cache SonarCloud packages
       uses: actions/cache@v1
