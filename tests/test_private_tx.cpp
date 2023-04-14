@@ -64,13 +64,13 @@ TEST_CASE("txMakeCANID")
                     "",
                     0b1010101,
                     7U));
-    REQUIRE(
-        (0b010'01'0'11'1001100110011'0'0000000U | (exposed::crcAdd(0xFFFFU, 3, "\x01\x02\x03") & CANARD_NODE_ID_MAX)) ==
-        txMakeCANID(mk_meta(CanardPriorityFast, CanardTransferKindMessage, 0b1001100110011, CANARD_NODE_ID_UNSET),
-                    3,
-                    "\x01\x02\x03",
-                    128U,  // Invalid local node-ID --> anonymous message.
-                    7U));
+    REQUIRE(static_cast<std::int32_t>(0b010'01'0'11'1001100110011'0'0000000U |
+                                      (exposed::crcAdd(0xFFFFU, 3, "\x01\x02\x03") & CANARD_NODE_ID_MAX)) ==
+            txMakeCANID(mk_meta(CanardPriorityFast, CanardTransferKindMessage, 0b1001100110011, CANARD_NODE_ID_UNSET),
+                        3,
+                        "\x01\x02\x03",
+                        128U,  // Invalid local node-ID --> anonymous message.
+                        7U));
     REQUIRE(
         -CANARD_ERROR_INVALID_ARGUMENT ==  // Multi-frame anonymous messages are not allowed.
         txMakeCANID(mk_meta(CanardPriorityImmediate, CanardTransferKindMessage, 0b1001100110011, CANARD_NODE_ID_UNSET),
