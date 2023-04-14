@@ -3,7 +3,7 @@
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
 
 #include "canard.h"
-#include "cavl.h"
+#include "_canard_cavl.h"
 #include <string.h>
 
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
