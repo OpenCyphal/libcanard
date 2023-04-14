@@ -36,6 +36,7 @@ Checks: >-
   -*-no-malloc,
   -cert-msc30-c,
   -cert-msc50-cpp,
+  -modernize-macro-to-enum,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 AnalyzeTemporaryDtors: false

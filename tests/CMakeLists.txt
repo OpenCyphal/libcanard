@@ -10,7 +10,7 @@ enable_testing()
 set(CTEST_OUTPUT_ON_FAILURE ON)
 set(library_dir "${CMAKE_SOURCE_DIR}/../libcanard")
 
-set(NO_STATIC_ANALYSIS OFF CACHE BOOL "disable canard static analysis") 
+set(NO_STATIC_ANALYSIS OFF CACHE BOOL "disable canard static analysis")
 set(NO_CANARD_SANITIZER OFF CACHE BOOL "disable canard runtime sanitizers")
 
 # Use -DNO_STATIC_ANALYSIS=1 to suppress static analysis.
@@ -27,7 +27,7 @@ if (NOT NO_STATIC_ANALYSIS)
 endif()
 if(NOT NO_CANARD_SANITIZER)
     # libclang_rt.builtins-i386.a required by some sanitizers on x86-32 clang
-    find_library(LLVM_RT_32 NAMES libclang_rt.builtins-i386.a PATHS /usr/lib/clang/12/lib/linux/)
+    find_library(LLVM_RT_32 NAMES libclang_rt.builtins-i386.a PATHS /usr/lib/clang/)
     if(NOT LLVM_RT_32 MATCHES "NOTFOUND")
         message(STATUS "adding runtime for sanitizer ${LLVM_RT_32}")
         list(APPEND ADDITIONAL_LIBS_32 ${LLVM_RT_32})
@@ -68,10 +68,11 @@ add_compile_options(
 )
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wnon-virtual-dtor -Wsign-promo")
 
-include_directories(catch ${library_dir})
+include_directories(${library_dir})
+include_directories(SYSTEM catch)
 add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1 -DCATCH_CONFIG_ENABLE_ALL_STRINGMAKERS=1)
 
-set(common_sources catch/main.cpp ${library_dir}/canard.c)
+set(common_sources ${CMAKE_SOURCE_DIR}/main.cpp ${library_dir}/canard.c)
 
 function(gen_test name files compile_definitions compile_flags link_flags c_standard)
     add_executable(${name} ${common_sources} ${files})

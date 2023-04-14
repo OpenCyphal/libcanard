@@ -98,8 +98,8 @@ void remove(Node<T>** const root, const Node<T>* const n)
 template <typename T>
 auto getHeight(const Node<T>* const n) -> std::uint8_t  // NOLINT recursion
 {
-    return (n != nullptr) ? std::uint8_t(1U + std::max(getHeight(reinterpret_cast<Node<T>*>(n->lr[0])),
-                                                       getHeight(reinterpret_cast<Node<T>*>(n->lr[1]))))
+    return (n != nullptr) ? static_cast<std::uint8_t>(1U + std::max(getHeight(reinterpret_cast<Node<T>*>(n->lr[0])),
+                                                                    getHeight(reinterpret_cast<Node<T>*>(n->lr[1]))))
                           : 0;
 }
 
@@ -1365,7 +1365,8 @@ TEST_CASE("MutationRandomized")
               << std::endl;
     if (root != nullptr)
     {
-        std::cout << "\tmin/max:      " << unsigned(root->min()->value) << "/" << unsigned(root->max()->value)  //
+        std::cout << "\tmin/max:      " << static_cast<std::uint32_t>(root->min()->value)  //
+                  << "/" << static_cast<std::uint32_t>(root->max()->value)                 //
                   << std::endl;
     }
     validate();
