@@ -132,7 +132,7 @@ jobs:
       contains(github.event.head_commit.message, '#sonar')
     runs-on: ubuntu-latest
     env:
-      SONAR_SCANNER_VERSION: 4.6.1.2450
+      SONAR_SCANNER_VERSION: 4.8.0.2856
       SONAR_SERVER_URL: "https://sonarcloud.io"
       BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
