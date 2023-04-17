@@ -132,7 +132,7 @@ jobs:
       contains(github.event.head_commit.message, '#sonar')
     runs-on: ubuntu-latest
     env:
-      SONAR_SCANNER_VERSION: 4.6.1.2450
+      SONAR_SCANNER_VERSION: 4.8.0.2856
       SONAR_SERVER_URL: "https://sonarcloud.io"
       BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -154,7 +154,7 @@ jobs:
         distribution: zulu
 
     - name: Cache SonarCloud packages
-      uses: actions/cache@v1
+      uses: actions/cache@v3
       with:
         path: ~/.sonar/cache
         key: ${{ runner.os }}-sonar
@@ -193,7 +193,7 @@ jobs:
         --define sonar.projectName=libcanard
         --define sonar.projectKey=libcanard
         --define sonar.sources=libcanard
-        --define sonar.exclusions=libcanard/cavl.h
+        --define sonar.exclusions=libcanard/_canard_cavl.h
         --define sonar.cfamily.gcov.reportsPath=.
         --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"

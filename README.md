@@ -244,6 +244,13 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 - Remove UB as described in [203](https://github.com/OpenCyphal/libcanard/issues/203).
 
+#### v3.0.2
+
+- Robustify the multi-frame transfer reassembler state machine
+  ([#189](https://github.com/OpenCyphal/libcanard/issues/189)).
+- Eliminate the risk of a header file name collision by renaming the vendored Cavl header to `_canard_cavl.h`
+  ([#196](https://github.com/OpenCyphal/libcanard/issues/196)).
+
 ### v2.0
 
 - Dedicated transmission queues per redundant CAN interface with depth limits.
