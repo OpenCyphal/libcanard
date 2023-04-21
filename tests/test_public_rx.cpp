@@ -518,17 +518,17 @@ TEST_CASE("Issue212")
                         0,
                         0b001'00'0'11'0110011001100'0'0100111,
                         {1, 2, 3, 4, 5, 6, 7, 0b101'00011}));
-    REQUIRE(0 == accept(112'000'001,  // second frame, transport #0
-                        0,
+    REQUIRE(0 == accept(112'000'001,  // second frame, transport #1
+                        1,
                         0b001'00'0'11'0110011001100'0'0100111,
                         {8, 9, 10, 11, 12, 13, 14, 0b000'00011}));
-    REQUIRE(1 == accept(113'000'002,  // third and last frame, transport #0
-                        0,
+    REQUIRE(1 == accept(113'000'002,  // third and last frame, transport #1
+                        1,
                         0b001'00'0'11'0110011001100'0'0100111,
                         {0x32, 0xF8, 0b011'00011}));
     REQUIRE(subscription != nullptr);  // Subscription exists.
     REQUIRE(subscription->port_id == 0b0110011001100);
-    REQUIRE(transfer.timestamp_usec == 111'000'001);
+    REQUIRE(transfer.timestamp_usec == 110'000'001);
     REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
     REQUIRE(transfer.metadata.port_id == 0b0110011001100);

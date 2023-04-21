@@ -825,7 +825,14 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
 
     // The transfer ID timeout is measured relative to the timestamp of the last start-of-transfer frame.
+    // Triggering a TID timeout when the TID is the same is undesirable because it may cause the reassembler to
+    // switch to another interface if the start-of-transfer frame of the current transfer is duplicated
+    // on the other interface more than (transfer-ID timeout) units of time after the start of
+    // the transfer while the reassembly of this transfer is still in progress.
+    // While this behavior is not visible to the application because the transfer will still be reassembled,
+    // it may delay the delivery of the transfer.
     const bool tid_timed_out = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
+                               (frame->transfer_id != rxs->transfer_id) &&
                                ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
     // Examples: rxComputeTransferIDDifference(2, 3)==31
     //           rxComputeTransferIDDifference(2, 2)==0
@@ -836,12 +843,6 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     const bool need_restart =
         frame->start_of_transfer &&
         (tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) && not_previous_tid));
-    // One interesting trait of this implementation is that if the start-of-transfer frame of the current
-    // transfer is duplicated on another interface more than (transfer-ID timeout) units of time after the start of
-    // the transfer while the reassembly of this transfer is still in progress,
-    // the reassembler will switch to the other interface and restart the transfer reassembly from scratch.
-    // This effect is not visible to the application because the outcome is the same as if the transfer was
-    // received on the original interface.
     if (need_restart)
     {
         CANARD_ASSERT(frame->start_of_transfer);
