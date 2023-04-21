@@ -497,7 +497,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
     ins.getAllocator().deallocate(transfer.payload);
 
-    // Restart by TID timeout, not the first frame.
+    // TID timeout does not occur until SOT; see https://github.com/OpenCyphal/libcanard/issues/212.
     frame.timestamp_usec    = 30'000'000;
     frame.transfer_id       = 12;  // Goes back.
     frame.start_of_transfer = false;
@@ -507,18 +507,34 @@ TEST_CASE("rxSessionUpdate")
     frame.payload           = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A\x0A\x0A\x0A\x0A");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);  // No change.
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
-    REQUIRE(rxs.calculated_crc == 0xFFFF);
-    REQUIRE(rxs.transfer_id == 13U);
-    REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(rxs.transfer_id == 14U);                     // No change.
+    REQUIRE(rxs.toggle);                                 // No change.
+    REQUIRE(rxs.redundant_transport_index == 0);         // No change.
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 
+    // Restart by TID timeout. This may only occur when SOT is set.
+    frame.timestamp_usec    = 30'000'000;
+    frame.transfer_id       = 12;  // Goes back.
+    frame.start_of_transfer = true;
+    frame.end_of_transfer   = false;
+    frame.toggle            = true;
+    frame.payload_size      = 7;
+    frame.payload           = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A\x0A\x0A\x0A\x0A");
+    REQUIRE(0 == update(2, 1'000'000, 16));
+    REQUIRE(rxs.transfer_timestamp_usec == 30'000'000);  // Updated from the frame.
+    REQUIRE(rxs.payload_size == 7);                      // From the frame.
+    REQUIRE(rxs.payload != nullptr);
+    REQUIRE(rxs.calculated_crc == 0x23C7);
+    REQUIRE(rxs.transfer_id == 12U);              // Updated from the frame.
+    REQUIRE(!rxs.toggle);                         // In anticipation of the next frame.
+    REQUIRE(rxs.redundant_transport_index == 2);  // Updated from the update.
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
+
     // Restart by TID mismatch.
     frame.timestamp_usec    = 20'000'200;  // Goes back.
-    frame.transfer_id       = 11;          // Goes back.
+    frame.transfer_id       = 10;          // Goes back.
     frame.start_of_transfer = true;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
@@ -529,7 +545,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.payload_size == 7);
     REQUIRE(0 == std::memcmp(rxs.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B", 7));
     REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B\x0B\x0B\x0B\x0B"));
-    REQUIRE(rxs.transfer_id == 11U);
+    REQUIRE(rxs.transfer_id == 10U);
     REQUIRE(!rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 2);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -537,7 +553,7 @@ TEST_CASE("rxSessionUpdate")
 
     // Duplicate start rejected (toggle mismatch).
     frame.timestamp_usec    = 20'000'300;
-    frame.transfer_id       = 11;
+    frame.transfer_id       = 10;
     frame.start_of_transfer = true;
     frame.end_of_transfer   = true;
     frame.toggle            = true;
@@ -548,7 +564,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.payload_size == 7);
     REQUIRE(0 == std::memcmp(rxs.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B", 7));
     REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B\x0B\x0B\x0B\x0B"));
-    REQUIRE(rxs.transfer_id == 11U);
+    REQUIRE(rxs.transfer_id == 10U);
     REQUIRE(!rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 2);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
@@ -556,7 +572,7 @@ TEST_CASE("rxSessionUpdate")
 
     // Continue & finalize.
     frame.timestamp_usec    = 20'000'400;
-    frame.transfer_id       = 11;
+    frame.transfer_id       = 10;
     frame.start_of_transfer = false;
     frame.end_of_transfer   = true;
     frame.toggle            = false;
@@ -567,7 +583,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.payload_size == 0);
     REQUIRE(rxs.payload == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
-    REQUIRE(rxs.transfer_id == 12U);
+    REQUIRE(rxs.transfer_id == 11U);
     REQUIRE(rxs.toggle);
     REQUIRE(rxs.redundant_transport_index == 2);
     REQUIRE(transfer.timestamp_usec == 20'000'200);
@@ -575,7 +591,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
-    REQUIRE(transfer.metadata.transfer_id == 11);
+    REQUIRE(transfer.metadata.transfer_id == 10);
     REQUIRE(transfer.payload_size == 10);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0D\x0D\x0D", 10));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
