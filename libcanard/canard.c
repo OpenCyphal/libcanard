@@ -824,16 +824,28 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     CANARD_ASSERT(rxs->transfer_id <= CANARD_TRANSFER_ID_MAX);
     CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
 
+    // The transfer ID timeout is measured relative to the timestamp of the last start-of-transfer frame.
+    // Triggering a TID timeout when the TID is the same is undesirable because it may cause the reassembler to
+    // switch to another interface if the start-of-transfer frame of the current transfer is duplicated
+    // on the other interface more than (transfer-ID timeout) units of time after the start of
+    // the transfer while the reassembly of this transfer is still in progress.
+    // While this behavior is not visible to the application because the transfer will still be reassembled,
+    // it may delay the delivery of the transfer.
     const bool tid_timed_out = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
+                               (frame->transfer_id != rxs->transfer_id) &&
                                ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
-
+    // Examples: rxComputeTransferIDDifference(2, 3)==31
+    //           rxComputeTransferIDDifference(2, 2)==0
+    //           rxComputeTransferIDDifference(2, 1)==1
     const bool not_previous_tid = rxComputeTransferIDDifference(rxs->transfer_id, frame->transfer_id) > 1;
-
-    const bool need_restart = tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) &&
-                                                frame->start_of_transfer && not_previous_tid);
-
+    // Restarting the transfer reassembly only makes sense if the new frame is a start of transfer.
+    // Otherwise, the new transfer would be impossible to reassemble anyway since the first frame is lost.
+    const bool need_restart =
+        frame->start_of_transfer &&
+        (tid_timed_out || ((rxs->redundant_transport_index == redundant_transport_index) && not_previous_tid));
     if (need_restart)
     {
+        CANARD_ASSERT(frame->start_of_transfer);
         rxs->total_payload_size        = 0U;
         rxs->payload_size              = 0U;
         rxs->calculated_crc            = CRC_INITIAL;
@@ -843,29 +855,24 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     }
 
     int8_t out = 0;
-    if (need_restart && (!frame->start_of_transfer))
+    // The purpose of the correct_start check is to reduce the possibility of accepting a malformed multi-frame
+    // transfer in the event of a CRC collision. The scenario where this failure mode would manifest is as follows:
+    // 1. A valid transfer (whether single- or multi-frame) is accepted with TID=X.
+    // 2. All frames of the subsequent multi-frame transfer with TID=X+1 are lost except for the last one.
+    // 3. The CRC of said multi-frame transfer happens to yield the correct residue when applied to the fragment
+    //    of the payload contained in the last frame of the transfer (a CRC collision is in effect).
+    // 4. The last frame of the multi-frame transfer is erroneously accepted even though it is malformed.
+    // The correct_start check eliminates this failure mode by ensuring that the first frame is observed.
+    // See https://github.com/OpenCyphal/libcanard/issues/189.
+    const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
+    const bool correct_toggle    = (frame->toggle == rxs->toggle);
+    const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
+    const bool correct_start     = frame->start_of_transfer  //
+                                       ? (0 == rxs->total_payload_size)
+                                       : (rxs->total_payload_size > 0);
+    if (correct_transport && correct_toggle && correct_tid && correct_start)
     {
-        rxSessionRestart(ins, rxs);  // SOT-miss, no point going further.
-    }
-    else
-    {
-        // The purpose of the correct_start check is to reduce the possibility of accepting a malformed multi-frame
-        // transfer in the event of a CRC collision. The scenario where this failure mode would manifest is as follows:
-        // 1. A valid transfer (whether single- or multi-frame) is accepted with TID=X.
-        // 2. All frames of the subsequent multi-frame transfer with TID=X+1 are lost except for the last one.
-        // 3. The CRC of said multi-frame transfer happens to yield the correct residue when applied to the fragment
-        //    of the payload contained in the last frame of the transfer (a CRC collision is in effect).
-        // 4. The last frame of the multi-frame transfer is erroneously accepted even though it is malformed.
-        // The correct_start check eliminates this failure mode by ensuring that the first frame is observed.
-        // See https://github.com/OpenCyphal/libcanard/issues/189.
-        const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
-        const bool correct_toggle    = (frame->toggle == rxs->toggle);
-        const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
-        const bool correct_start     = frame->start_of_transfer || (rxs->total_payload_size > 0);
-        if (correct_transport && correct_toggle && correct_tid && correct_start)
-        {
-            out = rxSessionAcceptFrame(ins, rxs, frame, extent, out_transfer);
-        }
+        out = rxSessionAcceptFrame(ins, rxs, frame, extent, out_transfer);
     }
     return out;
 }

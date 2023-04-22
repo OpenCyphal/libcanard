@@ -230,6 +230,13 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
 
+### v3.1
+
+- Remove the Dockerfile; use [toolshed](https://github.com/OpenCyphal/docker_toolchains/pkgs/container/toolshed)
+  instead if necessary.
+- Simplify the transfer reassembly state machine to address [#212](https://github.com/OpenCyphal/libcanard/issues/212).
+  See also <https://forum.opencyphal.org/t/amendment-to-the-transfer-reception-state-machine-implementations/1870>.
+
 ### v3.0
 
 - Update branding as [UAVCAN v1 is renamed to Cyphal](https://forum.opencyphal.org/t/uavcan-v1-is-now-cyphal/1622).

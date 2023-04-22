@@ -438,3 +438,108 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }
+
+TEST_CASE("Issue212")
+{
+    using helpers::Instance;
+    using exposed::RxSession;
+
+    Instance              ins;
+    CanardRxTransfer      transfer{};
+    CanardRxSubscription* subscription = nullptr;
+
+    const auto accept = [&](const CanardMicrosecond          timestamp_usec,
+                            const std::uint8_t               redundant_transport_index,
+                            const std::uint32_t              extended_can_id,
+                            const std::vector<std::uint8_t>& payload) {
+        static std::vector<std::uint8_t> payload_storage;
+        payload_storage = payload;
+        CanardFrame frame{};
+        frame.extended_can_id = extended_can_id;
+        frame.payload_size    = std::size(payload);
+        frame.payload         = payload_storage.data();
+        return ins.rxAccept(timestamp_usec, frame, redundant_transport_index, transfer, &subscription);
+    };
+
+    ins.getAllocator().setAllocationCeiling(sizeof(RxSession) + 50);  // A session and the payload buffer.
+
+    // Create a message subscription with the transfer-ID timeout of just one microsecond.
+    CanardRxSubscription sub_msg{};
+    REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 50, 1, sub_msg));
+    REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
+    REQUIRE(ins.getMessageSubs().at(0)->port_id == 0b0110011001100);
+    REQUIRE(ins.getMessageSubs().at(0)->extent == 50);
+    REQUIRE(ins.getMessageSubs().at(0)->transfer_id_timeout_usec == 1);
+    REQUIRE(ensureAllNullptr(ins.getMessageSubs().at(0)->sessions));
+    REQUIRE(ins.getResponseSubs().empty());
+    REQUIRE(ins.getRequestSubs().empty());
+
+    // Feed a multi-frame transfer with a time delta between its frames larger than the transfer-ID timeout.
+    // Here's how we compute the reference value of the transfer CRC:
+    //  >>> from pycyphal.transport.commons.crc import CRC16CCITT
+    //  >>> CRC16CCITT.new(bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])).value_as_bytes
+    //  b'2\xf8'
+    subscription = nullptr;
+    REQUIRE(0 == accept(100'000'001,  // first frame
+                        1,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {1, 2, 3, 4, 5, 6, 7, 0b101'00010}));
+    REQUIRE(0 == accept(101'000'001,  // second frame
+                        1,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {8, 9, 10, 11, 12, 13, 14, 0b000'00010}));
+    REQUIRE(1 == accept(102'000'002,  // third and last frame
+                        1,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {0x32, 0xF8, 0b011'00010}));
+    REQUIRE(subscription != nullptr);  // Subscription exists.
+    REQUIRE(subscription->port_id == 0b0110011001100);
+    REQUIRE(transfer.timestamp_usec == 100'000'001);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
+    REQUIRE(transfer.metadata.transfer_id == 2);
+    REQUIRE(transfer.payload_size == 14);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E", 14));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
+    REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
+    ins.getAllocator().deallocate(transfer.payload);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
+
+    // Similar but the reassembler should switch to the other transport.
+    REQUIRE(0 == accept(110'000'001,  // first frame, transport #1
+                        1,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {1, 2, 3, 4, 5, 6, 7, 0b101'00011}));
+    REQUIRE(0 == accept(111'000'001,  // first frame, transport #0
+                        0,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {1, 2, 3, 4, 5, 6, 7, 0b101'00011}));
+    REQUIRE(0 == accept(112'000'001,  // second frame, transport #1
+                        1,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {8, 9, 10, 11, 12, 13, 14, 0b000'00011}));
+    REQUIRE(1 == accept(113'000'002,  // third and last frame, transport #1
+                        1,
+                        0b001'00'0'11'0110011001100'0'0100111,
+                        {0x32, 0xF8, 0b011'00011}));
+    REQUIRE(subscription != nullptr);  // Subscription exists.
+    REQUIRE(subscription->port_id == 0b0110011001100);
+    REQUIRE(transfer.timestamp_usec == 110'000'001);
+    REQUIRE(transfer.metadata.priority == CanardPriorityImmediate);
+    REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
+    REQUIRE(transfer.metadata.port_id == 0b0110011001100);
+    REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
+    REQUIRE(transfer.metadata.transfer_id == 3);
+    REQUIRE(transfer.payload_size == 14);
+    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E", 14));
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
+    REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
+    ins.getAllocator().deallocate(transfer.payload);
+    REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
+}
