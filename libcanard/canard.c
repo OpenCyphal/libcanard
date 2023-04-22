@@ -867,7 +867,9 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     const bool correct_transport = (rxs->redundant_transport_index == redundant_transport_index);
     const bool correct_toggle    = (frame->toggle == rxs->toggle);
     const bool correct_tid       = (frame->transfer_id == rxs->transfer_id);
-    const bool correct_start     = frame->start_of_transfer || (rxs->total_payload_size > 0);
+    const bool correct_start     = frame->start_of_transfer  //
+                                       ? (0 == rxs->total_payload_size)
+                                       : (rxs->total_payload_size > 0);
     if (correct_transport && correct_toggle && correct_tid && correct_start)
     {
         out = rxSessionAcceptFrame(ins, rxs, frame, extent, out_transfer);
