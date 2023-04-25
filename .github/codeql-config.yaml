@@ -3,6 +3,8 @@ name: "Libcanard CodeQL config"
 # TODO: add https://github.com/github/codeql-coding-standards
 queries:
 - uses: security-and-quality
+packs:
+- codeql/cpp-queries
 
 paths: [ libcanard ]
 paths-ignore: [ ]
