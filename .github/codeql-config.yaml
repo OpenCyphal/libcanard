@@ -1,6 +1,6 @@
 name: "Libcanard CodeQL config"
 
-# TODO: add https://github.com/github/codeql-coding-standards
+# TODO: add https://github.com/github/codeql-coding-standards; see https://github.com/github/codeql-coding-standards/blob/main/docs/user_manual.md
 queries:
 - uses: security-and-quality
 packs:
