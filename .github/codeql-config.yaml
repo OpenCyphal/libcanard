@@ -5,6 +5,3 @@ queries:
 - uses: security-and-quality
 packs:
 - codeql/cpp-queries
-
-paths: [ libcanard ]
-paths-ignore: [ ]

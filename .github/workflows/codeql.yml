@@ -41,3 +41,25 @@ jobs:
       uses: github/codeql-action/analyze@v2
       with:
         category: "/language:${{matrix.language}}"
+        upload: false   # Upload will be performed after the filtering done below.
+        output: sarif-results
+
+    # https://github.com/advanced-security/filter-sarif
+    - name: Remove irrelevant output
+      uses: advanced-security/filter-sarif@v1
+      with:
+        patterns: |
+          -tests/*
+        input:  sarif-results/${{ matrix.language }}.sarif
+        output: sarif-results/${{ matrix.language }}.sarif
+
+    - uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: sarif-results/${{ matrix.language }}.sarif
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: codeql-${{github.job}}
+        path: '*'
+        retention-days: 7
+        if-no-files-found: error
