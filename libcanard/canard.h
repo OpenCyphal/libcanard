@@ -65,7 +65,7 @@
 /// subscription are truncated following the Implicit Truncation Rule (ITR) defined by the Cyphal Specification --
 /// the rule is implemented to facilitate backward-compatible DSDL data type extensibility.
 ///
-/// The library supports a practically unlimited number of redundant transports.
+/// The library supports a practically unlimited number of redundant interfaces.
 ///
 /// The library is not thread-safe: if used in a concurrent environment, it is the responsibility of the application
 /// to provide adequate synchronization.
@@ -511,9 +511,9 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
 ///
 /// The MTU of the accepted frame can be arbitrary; that is, any MTU is accepted. The DLC validity is irrelevant.
 ///
-/// Any value of redundant_transport_index is accepted; that is, up to 256 redundant transports are supported.
-/// The index of the transport from which the transfer is accepted is always the same as redundant_transport_index
-/// of the current invocation, so the application can always determine which transport has delivered the transfer.
+/// Any value of redundant_iface_index is accepted; that is, up to 256 redundant interfaces are supported.
+/// The index of the interface from which the transfer is accepted is always the same as redundant_iface_index
+/// of the current invocation, so the application can always determine which interface has delivered the transfer.
 ///
 /// Upon return, the out_subscription pointer will point to the instance of CanardRxSubscription that accepted this
 /// frame; if no matching subscription exists (i.e., frame discarded), the pointer will be NULL.
@@ -593,7 +593,7 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
 int8_t canardRxAccept(CanardInstance* const        ins,
                       const CanardMicrosecond      timestamp_usec,
                       const CanardFrame* const     frame,
-                      const uint8_t                redundant_transport_index,
+                      const uint8_t                redundant_iface_index,
                       CanardRxTransfer* const      out_transfer,
                       CanardRxSubscription** const out_subscription);
 
@@ -613,7 +613,7 @@ int8_t canardRxAccept(CanardInstance* const        ins,
 /// whether its payload is truncated.
 ///
 /// The default transfer-ID timeout value is defined as CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC; use it if not sure.
-/// The redundant transport fail-over timeout (if redundant transports are used) is the same as the transfer-ID timeout.
+/// The redundant interface fail-over timeout (if redundant interfaces are used) is the same as the transfer-ID timeout.
 /// It may be reduced in a future release of the library, but it will not affect the backward compatibility.
 ///
 /// The return value is 1 if a new subscription has been created as requested.

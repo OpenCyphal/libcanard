@@ -179,16 +179,11 @@ public:
 
     [[nodiscard]] auto rxAccept(const CanardMicrosecond      timestamp_usec,
                                 const CanardFrame&           frame,
-                                const uint8_t                redundant_transport_index,
+                                const uint8_t                redundant_iface_index,
                                 CanardRxTransfer&            out_transfer,
                                 CanardRxSubscription** const out_subscription)
     {
-        return canardRxAccept(&canard_,
-                              timestamp_usec,
-                              &frame,
-                              redundant_transport_index,
-                              &out_transfer,
-                              out_subscription);
+        return canardRxAccept(&canard_, timestamp_usec, &frame, redundant_iface_index, &out_transfer, out_subscription);
     }
 
     [[nodiscard]] auto rxSubscribe(const CanardTransferKind transfer_kind,

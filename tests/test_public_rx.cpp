@@ -22,7 +22,7 @@ TEST_CASE("RxBasic0")
     CanardRxTransfer      transfer{};
     CanardRxSubscription* subscription = nullptr;
 
-    const auto accept = [&](const std::uint8_t               redundant_transport_index,
+    const auto accept = [&](const std::uint8_t               redundant_iface_index,
                             const CanardMicrosecond          timestamp_usec,
                             const std::uint32_t              extended_can_id,
                             const std::vector<std::uint8_t>& payload) {
@@ -32,7 +32,7 @@ TEST_CASE("RxBasic0")
         frame.extended_can_id = extended_can_id;
         frame.payload_size    = std::size(payload);
         frame.payload         = payload_storage.data();
-        return ins.rxAccept(timestamp_usec, frame, redundant_transport_index, transfer, &subscription);
+        return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) + 16);  // A session and a 16-byte payload buffer.
@@ -215,7 +215,7 @@ TEST_CASE("RxAnonymous")
     CanardRxTransfer      transfer{};
     CanardRxSubscription* subscription = nullptr;
 
-    const auto accept = [&](const std::uint8_t               redundant_transport_index,
+    const auto accept = [&](const std::uint8_t               redundant_iface_index,
                             const CanardMicrosecond          timestamp_usec,
                             const std::uint32_t              extended_can_id,
                             const std::vector<std::uint8_t>& payload) {
@@ -225,7 +225,7 @@ TEST_CASE("RxAnonymous")
         frame.extended_can_id = extended_can_id;
         frame.payload_size    = std::size(payload);
         frame.payload         = payload_storage.data();
-        return ins.rxAccept(timestamp_usec, frame, redundant_transport_index, transfer, &subscription);
+        return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
     ins.getAllocator().setAllocationCeiling(16);
@@ -339,8 +339,8 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
 
     Instance              ins;
     CanardRxTransfer      transfer{};
-    CanardRxSubscription* subscription              = nullptr;
-    const std::uint8_t    redundant_transport_index = 0;
+    CanardRxSubscription* subscription          = nullptr;
+    const std::uint8_t    redundant_iface_index = 0;
 
     const auto accept = [&](const CanardMicrosecond          timestamp_usec,
                             const std::uint32_t              extended_can_id,
@@ -351,7 +351,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
         frame.extended_can_id = extended_can_id;
         frame.payload_size    = std::size(payload);
         frame.payload         = payload_storage.data();
-        return ins.rxAccept(timestamp_usec, frame, redundant_transport_index, transfer, &subscription);
+        return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) + 50);  // A session and the payload buffer.
@@ -449,7 +449,7 @@ TEST_CASE("Issue212")
     CanardRxSubscription* subscription = nullptr;
 
     const auto accept = [&](const CanardMicrosecond          timestamp_usec,
-                            const std::uint8_t               redundant_transport_index,
+                            const std::uint8_t               redundant_iface_index,
                             const std::uint32_t              extended_can_id,
                             const std::vector<std::uint8_t>& payload) {
         static std::vector<std::uint8_t> payload_storage;
@@ -458,7 +458,7 @@ TEST_CASE("Issue212")
         frame.extended_can_id = extended_can_id;
         frame.payload_size    = std::size(payload);
         frame.payload         = payload_storage.data();
-        return ins.rxAccept(timestamp_usec, frame, redundant_transport_index, transfer, &subscription);
+        return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) + 50);  // A session and the payload buffer.

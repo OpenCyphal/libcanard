@@ -306,22 +306,21 @@ TEST_CASE("rxSessionUpdate")
     frame.payload             = reinterpret_cast<const uint8_t*>("\x01\x01\x01");
 
     RxSession rxs;
-    rxs.transfer_id               = 31;
-    rxs.redundant_transport_index = 1;
+    rxs.transfer_id           = 31;
+    rxs.redundant_iface_index = 1;
 
     CanardRxTransfer transfer{};
 
-    const auto update = [&](const std::uint8_t  redundant_transport_index,
-                            const std::uint64_t tid_timeout_usec,
-                            const std::size_t   extent) {
-        return rxSessionUpdate(&ins.getInstance(),
-                               &rxs,
-                               &frame,
-                               redundant_transport_index,
-                               tid_timeout_usec,
-                               extent,
-                               &transfer);
-    };
+    const auto update =
+        [&](const std::uint8_t redundant_iface_index, const std::uint64_t tid_timeout_usec, const std::size_t extent) {
+            return rxSessionUpdate(&ins.getInstance(),
+                                   &rxs,
+                                   &frame,
+                                   redundant_iface_index,
+                                   tid_timeout_usec,
+                                   extent,
+                                   &transfer);
+        };
 
     const auto crc = [](const char* const string) { return crcAdd(0xFFFF, std::strlen(string), string); };
 
@@ -333,7 +332,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);  // Incremented.
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 1);
+    REQUIRE(rxs.redundant_iface_index == 1);
     REQUIRE(transfer.timestamp_usec == 10'000'000);
     REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
@@ -357,7 +356,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);  // Incremented.
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 1);
+    REQUIRE(rxs.redundant_iface_index == 1);
 
     // Correct transport.
     frame.timestamp_usec = 10'000'050;
@@ -369,7 +368,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 1);
+    REQUIRE(rxs.redundant_iface_index == 1);
     REQUIRE(transfer.timestamp_usec == 10'000'050);
     REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
@@ -393,7 +392,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 1);
+    REQUIRE(rxs.redundant_iface_index == 1);
 
     // Restart due to TID timeout, switch iface.
     frame.timestamp_usec = 20'000'000;
@@ -406,7 +405,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(transfer.timestamp_usec == 20'000'000);
     REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
@@ -432,7 +431,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x06\x06\x06"));
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(!rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -449,7 +448,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07"));
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -466,7 +465,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07"));
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -484,7 +483,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 14U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(transfer.timestamp_usec == 20'000'100);
     REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
@@ -509,7 +508,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);  // No change.
     REQUIRE(rxs.transfer_id == 14U);                     // No change.
     REQUIRE(rxs.toggle);                                 // No change.
-    REQUIRE(rxs.redundant_transport_index == 0);         // No change.
+    REQUIRE(rxs.redundant_iface_index == 0);             // No change.
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 
@@ -526,9 +525,9 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.payload_size == 7);                      // From the frame.
     REQUIRE(rxs.payload != nullptr);
     REQUIRE(rxs.calculated_crc == 0x23C7);
-    REQUIRE(rxs.transfer_id == 12U);              // Updated from the frame.
-    REQUIRE(!rxs.toggle);                         // In anticipation of the next frame.
-    REQUIRE(rxs.redundant_transport_index == 2);  // Updated from the update.
+    REQUIRE(rxs.transfer_id == 12U);          // Updated from the frame.
+    REQUIRE(!rxs.toggle);                     // In anticipation of the next frame.
+    REQUIRE(rxs.redundant_iface_index == 2);  // Updated from the update.
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -547,7 +546,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B\x0B\x0B\x0B\x0B"));
     REQUIRE(rxs.transfer_id == 10U);
     REQUIRE(!rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(rxs.redundant_iface_index == 2);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -566,7 +565,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B\x0B\x0B\x0B\x0B"));
     REQUIRE(rxs.transfer_id == 10U);
     REQUIRE(!rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(rxs.redundant_iface_index == 2);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -585,7 +584,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 11U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(rxs.redundant_iface_index == 2);
     REQUIRE(transfer.timestamp_usec == 20'000'200);
     REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
@@ -613,7 +612,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7"));
     REQUIRE(rxs.transfer_id == 0);
     REQUIRE(!rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -632,7 +631,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 1U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(transfer.timestamp_usec == 30'000'000);
     REQUIRE(transfer.metadata.priority == CanardPrioritySlow);
     REQUIRE(transfer.metadata.transfer_kind == CanardTransferKindMessage);
@@ -660,7 +659,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == crc("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7"));
     REQUIRE(rxs.transfer_id == 31U);
     REQUIRE(!rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
 
@@ -679,7 +678,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 0U);
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 0);
+    REQUIRE(rxs.redundant_iface_index == 0);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);  // Deallocated on failure.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 
@@ -698,7 +697,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 31U);  // Reset.
     REQUIRE(rxs.toggle);
-    REQUIRE(rxs.redundant_transport_index == 2);
+    REQUIRE(rxs.redundant_iface_index == 2);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 }
