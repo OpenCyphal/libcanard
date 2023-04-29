@@ -27,7 +27,7 @@ If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 - Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
 - Purely reactive API without the need for background servicing.
 - Support for the Classic CAN and CAN FD.
-- Support for redundant transports.
+- Support for redundant network interfaces.
 - Compatibility with 8/16/32/64-bit platforms.
 - Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 32K RAM.
 - Implemented in ≈1000 lines of code.
@@ -124,7 +124,7 @@ Use [Nunavut](https://github.com/OpenCyphal/nunavut) to automatically generate
 The CAN frames generated from the message transfer are now stored in the `queue`.
 We need to pick them out one by one and have them transmitted.
 Normally, the following fragment should be invoked periodically to unload the CAN frames from the
-prioritized transmission queue (or several, if redundant interfaces are used) into the CAN driver:
+prioritized transmission queue (or several, if redundant network interfaces are used) into the CAN driver:
 
 ```c
 for (const CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  // Peek at the top of the queue.
@@ -236,6 +236,10 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
   instead if necessary.
 - Simplify the transfer reassembly state machine to address [#212](https://github.com/OpenCyphal/libcanard/issues/212).
   See also <https://forum.opencyphal.org/t/amendment-to-the-transfer-reception-state-machine-implementations/1870>.
+
+#### v3.1.1
+
+- Refactor the transfer reassembly state machine to enhance its maintainability and robustness.
 
 ### v3.0
 

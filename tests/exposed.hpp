@@ -45,14 +45,14 @@ struct TxItem final : CanardTxQueueItem
 
 struct RxSession
 {
-    CanardMicrosecond transfer_timestamp_usec   = std::numeric_limits<std::uint64_t>::max();
-    std::size_t       total_payload_size        = 0U;
-    std::size_t       payload_size              = 0U;
-    std::uint8_t*     payload                   = nullptr;
-    TransferCRC       calculated_crc            = 0U;
-    CanardTransferID  transfer_id               = std::numeric_limits<std::uint8_t>::max();
-    std::uint8_t      redundant_transport_index = std::numeric_limits<std::uint8_t>::max();
-    bool              toggle                    = false;
+    CanardMicrosecond transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
+    std::size_t       total_payload_size      = 0U;
+    std::size_t       payload_size            = 0U;
+    std::uint8_t*     payload                 = nullptr;
+    TransferCRC       calculated_crc          = 0U;
+    CanardTransferID  transfer_id             = std::numeric_limits<std::uint8_t>::max();
+    std::uint8_t      redundant_iface_index   = std::numeric_limits<std::uint8_t>::max();
+    bool              toggle                  = false;
 };
 
 struct RxFrameModel
@@ -112,7 +112,7 @@ void rxSessionRestart(CanardInstance* const ins, RxSession* const rxs);
 auto rxSessionUpdate(CanardInstance* const     ins,
                      RxSession* const          rxs,
                      const RxFrameModel* const frame,
-                     const std::uint8_t        redundant_transport_index,
+                     const std::uint8_t        redundant_iface_index,
                      const CanardMicrosecond   transfer_id_timeout_usec,
                      const std::size_t         extent,
                      CanardRxTransfer* const   out_transfer) -> std::int8_t;
