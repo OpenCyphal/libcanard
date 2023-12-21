@@ -3,7 +3,6 @@
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
 
 #include "canard.h"
-#include "_canard_cavl.h"
 #include <string.h>
 
 // --------------------------------------------- BUILD CONFIGURATION ---------------------------------------------
@@ -37,6 +36,10 @@
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
 #    error "Unsupported language: ISO C99 or a newer version is required."
 #endif
+
+// --------------------------------------------- INTERNAL INCLUDES ----------------------------------------------
+
+#include "_canard_cavl.h"
 
 // --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
 
