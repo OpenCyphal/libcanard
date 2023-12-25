@@ -38,6 +38,7 @@
 #endif
 
 // --------------------------------------------- INTERNAL INCLUDES ----------------------------------------------
+// The internal includes are placed here after the config header is included and CANARD_ASSERT is defined.
 
 #include "_canard_cavl.h"
 
