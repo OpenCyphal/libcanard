@@ -241,6 +241,11 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 - Refactor the transfer reassembly state machine to enhance its maintainability and robustness.
 
+#### v3.1.2
+
+- Allow redefinition of CANARD_ASSERT via the config header;
+  see [#219](https://github.com/OpenCyphal/libcanard/pull/219).
+
 ### v3.0
 
 - Update branding as [UAVCAN v1 is renamed to Cyphal](https://forum.opencyphal.org/t/uavcan-v1-is-now-cyphal/1622).
