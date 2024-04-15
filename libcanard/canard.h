@@ -649,6 +649,10 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
                            const CanardTransferKind transfer_kind,
                            const CanardPortID       port_id);
 
+int8_t canardRxHasSubscription(CanardInstance* const    ins,
+                               const CanardTransferKind transfer_kind,
+                               const CanardPortID       port_id);
+
 /// Utilities for generating CAN controller hardware acceptance filter configurations
 /// to accept specific subjects, services, or nodes.
 ///

@@ -200,6 +200,11 @@ public:
         return canardRxUnsubscribe(&canard_, transfer_kind, port_id);
     }
 
+    [[nodiscard]] auto rxHasSubscription(const CanardTransferKind transfer_kind, const CanardPortID port_id)
+    {
+        return canardRxHasSubscription(&canard_, transfer_kind, port_id);
+    }
+
     /// The items are sorted by port-ID.
     [[nodiscard]] auto getSubs(const CanardTransferKind tk) const -> std::vector<const CanardRxSubscription*>
     {

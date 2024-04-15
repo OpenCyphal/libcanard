@@ -1238,6 +1238,30 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     return out;
 }
 
+int8_t canardRxHasSubscription(CanardInstance* const    ins,
+                               const CanardTransferKind transfer_kind,
+                               const CanardPortID       port_id)
+{
+    int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
+    const size_t tk  = (size_t) transfer_kind;
+    if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
+    {
+        CanardPortID                      port_id_mutable = port_id;
+        const CanardRxSubscription* const sub             = (const CanardRxSubscription*) (void*)
+            cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL);
+        if (sub != NULL)
+        {
+            CANARD_ASSERT(sub->port_id == port_id);
+            out = 1;
+        }
+        else
+        {
+            out = 0;
+        }
+    }
+    return out;
+}
+
 CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id)
 {
     CanardFilter out = {0};
