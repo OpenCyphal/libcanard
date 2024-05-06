@@ -659,10 +659,10 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
 ///
 /// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
 /// This function does not allocate new memory.
-int8_t canardRxGetSubscription(CanardInstance* const    ins,
-                               const CanardTransferKind transfer_kind,
-                               const CanardPortID       port_id,
-                               CanardRxSubscription**   const out_subscription);
+int8_t canardRxGetSubscription(CanardInstance* const        ins,
+                               const CanardTransferKind     transfer_kind,
+                               const CanardPortID           port_id,
+                               CanardRxSubscription** const out_subscription);
 
 /// Utilities for generating CAN controller hardware acceptance filter configurations
 /// to accept specific subjects, services, or nodes.

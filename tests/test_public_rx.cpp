@@ -368,9 +368,10 @@ TEST_CASE("RxSubscriptionErrors")
 
     // These calls should not touch `fake_ptr`!
     //
-    CanardRxSubscription fake_sub{};
+    CanardRxSubscription  fake_sub{};
     CanardRxSubscription* fake_ptr = &fake_sub;
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxGetSubscription(nullptr, CanardTransferKindMessage, 0, &fake_ptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardRxGetSubscription(nullptr, CanardTransferKindMessage, 0, &fake_ptr));
     REQUIRE(fake_ptr == &fake_sub);
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxGetSubscription(&ins.getInstance(), kind.value, 0, &fake_ptr));
     REQUIRE(fake_ptr == &fake_sub);
