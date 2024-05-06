@@ -345,6 +345,9 @@ TEST_CASE("RxSubscriptionErrors")
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(nullptr, CanardTransferKindMessage, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(&ins.getInstance(), kind.value, 0));
 
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxHasSubscription(nullptr, CanardTransferKindMessage, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxHasSubscription(&ins.getInstance(), kind.value, 0));
+
     CanardFrame frame{};
     frame.payload_size = 1U;
     CanardRxTransfer transfer{};

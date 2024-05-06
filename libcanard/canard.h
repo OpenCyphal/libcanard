@@ -649,6 +649,12 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
                            const CanardTransferKind transfer_kind,
                            const CanardPortID       port_id);
 
+/// This function allows to check the effect of canardRxSubscribe() and canardRxUnsubscribe().
+/// The return value is 1 if the specified subscription exists, 0 otherwise.
+/// The return value is a negated invalid argument error if any of the input arguments are invalid.
+///
+/// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
+/// This function does not allocate new memory.
 int8_t canardRxHasSubscription(CanardInstance* const    ins,
                                const CanardTransferKind transfer_kind,
                                const CanardPortID       port_id);
