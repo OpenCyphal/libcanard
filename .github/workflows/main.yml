@@ -148,9 +148,9 @@ jobs:
         sudo apt install -y gcc-multilib g++-multilib
 
     - name: Set up JDK
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
-        java-version: 11
+        java-version: 17
         distribution: zulu
 
     - name: Cache SonarCloud packages
