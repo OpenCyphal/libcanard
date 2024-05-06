@@ -1,15 +1,15 @@
 ---
-Language:        Cpp
+Language: Cpp
 # BasedOnStyle:  LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AlignEscapedNewlines: Left
-AlignOperands:   true
+AlignOperands: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortBlocksOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Inline
 AllowShortIfStatementsOnASingleLine: Never
@@ -42,26 +42,26 @@ BreakBeforeTernaryOperators: true
 BreakConstructorInitializers: AfterColon
 # BreakInheritanceList: AfterColon
 BreakStringLiterals: true
-ColumnLimit:     120
-CommentPragmas:  '^ (coverity|pragma:)'
+ColumnLimit: 120
+CommentPragmas: '^ (coverity|pragma:)'
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 Cpp11BracedListStyle: true
 DerivePointerAlignment: false
-DisableFormat:   false
+DisableFormat: false
 ExperimentalAutoDetectBinPacking: false
 FixNamespaceComments: true
-ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
+ForEachMacros: [ foreach, Q_FOREACH, BOOST_FOREACH ]
 IncludeBlocks: Preserve
 IndentCaseLabels: false
 IndentPPDirectives: AfterHash
-IndentWidth:     4
+IndentWidth: 4
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false
 MacroBlockBegin: ''
-MacroBlockEnd:   ''
+MacroBlockEnd: ''
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
 PenaltyBreakAssignment: 2
@@ -72,8 +72,8 @@ PenaltyBreakString: 1000
 PenaltyExcessCharacter: 1000000
 PenaltyReturnTypeOnItsOwnLine: 10000            # Raised intentionally because it hurts readability
 PointerAlignment: Left
-ReflowComments:  true
-SortIncludes:    false
+ReflowComments: true
+SortIncludes: Never
 SortUsingDeclarations: false
 SpaceAfterCStyleCast: true
 SpaceAfterTemplateKeyword: true
@@ -85,12 +85,12 @@ SpaceBeforeCtorInitializerColon: true
 SpaceBeforeRangeBasedForLoopColon: true
 SpaceInEmptyParentheses: false
 SpacesBeforeTrailingComments: 2
-SpacesInAngles:  false
+SpacesInAngles: false
 SpacesInCStyleCastParentheses: false
 SpacesInContainerLiterals: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard:        Cpp11
-TabWidth:        8
-UseTab:          Never
+Standard: c++14
+TabWidth: 8
+UseTab: Never
 ...

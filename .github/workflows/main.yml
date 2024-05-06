@@ -17,7 +17,7 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -59,7 +59,7 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-multilib g++-multilib
@@ -89,7 +89,7 @@ jobs:
       mcu: at90can64
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-avr avr-libc
@@ -105,7 +105,7 @@ jobs:
     env:
       flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: |
           sudo apt update -y && sudo apt upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
@@ -116,8 +116,8 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: DoozyX/clang-format-lint-action@v0.15
+      - uses: actions/checkout@v4
+      - uses: DoozyX/clang-format-lint-action@v0.17
         with:
           source: './libcanard ./tests'
           exclude: './tests/catch'
@@ -132,13 +132,13 @@ jobs:
       contains(github.event.head_commit.message, '#sonar')
     runs-on: ubuntu-latest
     env:
-      SONAR_SCANNER_VERSION: 4.8.0.2856
+      SONAR_SCANNER_VERSION: 5.0.1.3006
       SONAR_SERVER_URL: "https://sonarcloud.io"
       BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -148,13 +148,13 @@ jobs:
         sudo apt install -y gcc-multilib g++-multilib
 
     - name: Set up JDK
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
-        java-version: 11
+        java-version: 17
         distribution: zulu
 
     - name: Cache SonarCloud packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.sonar/cache
         key: ${{ runner.os }}-sonar

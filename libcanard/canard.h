@@ -94,7 +94,7 @@ extern "C" {
 /// Semantic version of this library (not the Cyphal specification).
 /// API will be backward compatible within the same major version.
 #define CANARD_VERSION_MAJOR 3
-#define CANARD_VERSION_MINOR 1
+#define CANARD_VERSION_MINOR 2
 
 /// The version number of the Cyphal specification implemented by this library.
 #define CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR 1
@@ -648,6 +648,21 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
 int8_t canardRxUnsubscribe(CanardInstance* const    ins,
                            const CanardTransferKind transfer_kind,
                            const CanardPortID       port_id);
+
+/// This function allows to check the effect of canardRxSubscribe() and canardRxUnsubscribe().
+///
+/// The return value is 1 if the specified subscription exists, 0 otherwise.
+/// The return value is a negated invalid argument error if any of the input arguments are invalid.
+/// Output out_subscription could be NULL, but if it is not, it will be populated with the pointer to the existing
+/// subscription. In case the subscription does not exist (or error), out_subscription won't be touched.
+/// Result pointer to the subscription is valid until the subscription is terminated.
+///
+/// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
+/// This function does not allocate new memory.
+int8_t canardRxGetSubscription(CanardInstance* const        ins,
+                               const CanardTransferKind     transfer_kind,
+                               const CanardPortID           port_id,
+                               CanardRxSubscription** const out_subscription);
 
 /// Utilities for generating CAN controller hardware acceptance filter configurations
 /// to accept specific subjects, services, or nodes.

@@ -39,6 +39,5 @@ Checks: >-
   -modernize-macro-to-enum,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
-AnalyzeTemporaryDtors: false
 FormatStyle: file
 ...

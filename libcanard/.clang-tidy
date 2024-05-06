@@ -27,6 +27,5 @@ CheckOptions:
     value: '99'
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*'
-AnalyzeTemporaryDtors: false
 FormatStyle: file
 ...

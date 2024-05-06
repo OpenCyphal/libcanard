@@ -50,3 +50,7 @@ build-avr/
 
 # Pycache
 __pycache__/
+
+# OS stuff
+.DS_Store
+*.bak
