@@ -230,6 +230,10 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
 
+### v3.2
+
+- Added new `canardRxGetSubscription`.
+
 ### v3.1
 
 - Remove the Dockerfile; use [toolshed](https://github.com/OpenCyphal/docker_toolchains/pkgs/container/toolshed)
