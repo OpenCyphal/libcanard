@@ -52,8 +52,10 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 32, 2'000'000, sub_msg));  // New.
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(&sub_msg == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(0 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 1'000'000, sub_msg));  // Replaced.
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(&sub_msg == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getMessageSubs().at(0)->port_id == 0b0110011001100);
     REQUIRE(ins.getMessageSubs().at(0)->extent == 16);
@@ -67,6 +69,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindRequest, 0b0000110011, 20, 3'000'000, sub_req));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindRequest, 0b0000110011));
+    REQUIRE(&sub_req == ins.rxGetSubscription(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getResponseSubs().empty());
     REQUIRE(ins.getRequestSubs().at(0) == &sub_req);
@@ -80,6 +83,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000111100, 10, 100'000, sub_res));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000111100));
+    REQUIRE(&sub_res == ins.rxGetSubscription(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getResponseSubs().at(0) == &sub_res);
     REQUIRE(ins.getResponseSubs().at(0)->port_id == 0b0000111100);
@@ -93,6 +97,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000000000));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindResponse, 0b0000000000, 10, 1'000, sub_res2));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000000000));
+    REQUIRE(&sub_res2 == ins.rxGetSubscription(CanardTransferKindResponse, 0b0000000000));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getResponseSubs().at(0) == &sub_res2);
     REQUIRE(ins.getResponseSubs().at(0)->port_id == 0b0000000000);
@@ -177,8 +182,10 @@ TEST_CASE("RxBasic0")
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindMessage, 0b0110011001100));  // Repeat, nothing to do.
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
     ins.getAllocator().deallocate(msg_payload);
@@ -213,18 +220,28 @@ TEST_CASE("RxBasic0")
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindRequest, 0b0000110011));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindRequest, 0b0000110011));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindRequest, 0b0000110011));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000111100));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000111100));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindResponse, 0b0000111100));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000000000));
     REQUIRE(1 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000000000));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000000000));
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindResponse, 0b0000000000));
     REQUIRE(0 == ins.rxUnsubscribe(CanardTransferKindResponse, 0b0000000000));
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindResponse, 0b0000000000));
+    // Should not modify output if the subscription is not found.
+    CanardRxSubscription* out_sub = &sub_msg;
+    REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindResponse, 0b0000000000));
+    REQUIRE(0 == canardRxGetSubscription(&ins.getInstance(), CanardTransferKindResponse, 0b0000000000, &out_sub));
+    REQUIRE(out_sub == &sub_msg);
 }
 
 TEST_CASE("RxAnonymous")
@@ -263,6 +280,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 16, 2'000'000, sub_msg));  // New.
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(&sub_msg == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
 
     // Accepted anonymous message.
     subscription = nullptr;
@@ -345,8 +363,17 @@ TEST_CASE("RxSubscriptionErrors")
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(nullptr, CanardTransferKindMessage, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(&ins.getInstance(), kind.value, 0));
 
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxHasSubscription(nullptr, CanardTransferKindMessage, 0));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxHasSubscription(&ins.getInstance(), kind.value, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxGetSubscription(nullptr, CanardTransferKindMessage, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxGetSubscription(&ins.getInstance(), kind.value, 0, nullptr));
+
+    // These calls should not touch `fake_ptr`!
+    //
+    CanardRxSubscription fake_sub{};
+    CanardRxSubscription* fake_ptr = &fake_sub;
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxGetSubscription(nullptr, CanardTransferKindMessage, 0, &fake_ptr));
+    REQUIRE(fake_ptr == &fake_sub);
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxGetSubscription(&ins.getInstance(), kind.value, 0, &fake_ptr));
+    REQUIRE(fake_ptr == &fake_sub);
 
     CanardFrame frame{};
     frame.payload_size = 1U;
@@ -387,6 +414,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 50, 1'000'000, sub_msg));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(&sub_msg == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getMessageSubs().at(0)->port_id == 0b0110011001100);
     REQUIRE(ins.getMessageSubs().at(0)->extent == 50);
@@ -496,6 +524,7 @@ TEST_CASE("Issue212")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 50, 1, sub_msg));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(&sub_msg == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getMessageSubs().at(0)->port_id == 0b0110011001100);
     REQUIRE(ins.getMessageSubs().at(0)->extent == 50);
@@ -602,6 +631,7 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(1 == ins.rxSubscribe(CanardTransferKindMessage, 0b0110011001100, 50, 5, sub_msg));
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
+    REQUIRE(&sub_msg == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getMessageSubs().at(0) == &sub_msg);
     REQUIRE(ins.getMessageSubs().at(0)->port_id == 0b0110011001100);
     REQUIRE(ins.getMessageSubs().at(0)->extent == 50);

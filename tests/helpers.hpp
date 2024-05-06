@@ -202,7 +202,14 @@ public:
 
     [[nodiscard]] auto rxHasSubscription(const CanardTransferKind transfer_kind, const CanardPortID port_id)
     {
-        return canardRxHasSubscription(&canard_, transfer_kind, port_id);
+        return canardRxGetSubscription(&canard_, transfer_kind, port_id, nullptr);
+    }
+
+    [[nodiscard]] auto rxGetSubscription(const CanardTransferKind transfer_kind, const CanardPortID port_id)
+    {
+        CanardRxSubscription* out_subscription = nullptr;
+        canardRxGetSubscription(&canard_, transfer_kind, port_id, &out_subscription);
+        return out_subscription;
     }
 
     /// The items are sorted by port-ID.
