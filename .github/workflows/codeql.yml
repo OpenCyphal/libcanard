@@ -1,0 +1,65 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:  # The branches below must be a subset of the branches above
+    branches: [ "master" ]
+  schedule:
+    - cron: '20 11 * * 2'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: 'ubuntu-latest'
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'cpp' ]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        config-file: .github/codeql-config.yaml
+        languages: ${{ matrix.language }}
+
+    - run: |
+        sudo apt update -y && sudo apt upgrade -y
+        sudo apt install -y gcc-multilib g++-multilib
+        cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1
+        make all -j2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
+        upload: false   # Upload will be performed after the filtering done below.
+        output: sarif-results
+
+    # https://github.com/advanced-security/filter-sarif
+    - name: Remove irrelevant output
+      uses: advanced-security/filter-sarif@v1
+      with:
+        patterns: |
+          -tests/**
+        input:  sarif-results/${{ matrix.language }}.sarif
+        output: sarif-results/${{ matrix.language }}.sarif
+
+    - uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: sarif-results/${{ matrix.language }}.sarif
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: codeql-${{github.job}}
+        path: '*'
+        retention-days: 7
+        if-no-files-found: error
