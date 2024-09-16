@@ -1,0 +1,9 @@
+# Metadata for using libcanard as an ESP-IDF component.
+
+# Note: Version is not specified in this file,
+# because the 'esp_publish.yml' GitHub action
+# automatically sets it based on the release version.
+
+description: "OpenCyphal for embedded systems."
+url: "https://github.com/OpenCyphal/libcanard"
+license: "MIT"

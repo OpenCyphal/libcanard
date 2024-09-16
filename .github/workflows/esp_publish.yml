@@ -1,0 +1,23 @@
+# This workflow gets triggered when a GitHub release is published.
+# It publishes this project to the ESP component registry.
+
+name: Publish component to https://components.espressif.com
+on:
+  release:
+    types: [published]
+
+jobs:
+  upload_components:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Upload to the ESP component registry
+        uses: espressif/upload-components-ci-action@v1
+        with:
+          name: "libcanard"
+          version: ${{ github.event.release.tag_name }}
+          namespace: "opencyphal"
+          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
