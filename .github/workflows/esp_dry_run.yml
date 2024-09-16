@@ -19,6 +19,7 @@ jobs:
         with:
           dry_run: True
           name: "libcanard"
-          version: ${{ github.event.release.tag_name }}
+          # Meaningless version for the purpose of dry run.
+          version: "0.0.0"
           namespace: "opencyphal"
           api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
