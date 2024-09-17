@@ -4,6 +4,6 @@
 # because the 'esp_publish.yml' GitHub action
 # automatically sets it based on the release version.
 
-description: "OpenCyphal for embedded systems."
+description: "Cyphal/CAN for embedded systems."
 url: "https://github.com/OpenCyphal/libcanard"
 license: "MIT"
