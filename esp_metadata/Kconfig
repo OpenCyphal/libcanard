@@ -21,5 +21,4 @@ config CANARD_CRC_TABLE
         Doing so is expected to save ca. 500 bytes of ROM and
         increase the cost of RX/TX transfer processing by ~half.
 
-
 endmenu

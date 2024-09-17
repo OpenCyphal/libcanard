@@ -16,7 +16,7 @@ jobs:
 
       - name: Dry-run upload to the ESP component registry
         run: |
-          bash .github/workflows/package_esp_component.sh
+          bash esp_metadata/package_esp_component.sh
           export IDF_COMPONENT_API_TOKEN="${{ secrets.IDF_COMPONENT_API_TOKEN }}"
           cd package/libcanard
           compote component upload --namespace opencyphal --name libcanard --version 0.0.0 --dry-run
