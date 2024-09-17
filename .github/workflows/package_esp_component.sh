@@ -21,6 +21,6 @@ cp esp_metadata/idf_component.yml   package/libcanard/idf_component.yml
 # Install compote, a tool for uploading ESP-IDF components.
 python3 -m pip install --upgrade idf-component-manager
 
-echo "Component successfully packaged ESP component into package/libcanard:"
+echo "Successfully packaged ESP component into package/libcanard:"
 find package/libcanard
 echo
