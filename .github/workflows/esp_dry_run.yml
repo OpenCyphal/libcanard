@@ -2,12 +2,12 @@
 # It does a dry-run of publishing this project to the ESP component registry.
 # The project won't actually be published.
 
-name: Dry-run ESP-IDF component upload.
+name: Dry-run upload to the ESP component registry
 on:
   workflow_dispatch:
 
 jobs:
-  upload_components:
+  upload_component:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,11 +15,8 @@ jobs:
           submodules: "recursive"
 
       - name: Dry-run upload to the ESP component registry
-        uses: espressif/upload-components-ci-action@v1
-        with:
-          dry_run: True
-          name: "libcanard"
-          # Meaningless version for the purpose of dry run.
-          version: "0.0.0"
-          namespace: "opencyphal"
-          api_token: ${{ secrets.IDF_COMPONENT_API_TOKEN }}
+        run: |
+          bash .github/workflows/package_esp_component.sh
+          export IDF_COMPONENT_API_TOKEN="${{ secrets.IDF_COMPONENT_API_TOKEN }}"
+          cd package/libcanard
+          compote component upload --namespace opencyphal --name libcanard --version 0.0.0 --dry-run

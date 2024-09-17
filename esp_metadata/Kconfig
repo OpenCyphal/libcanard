@@ -1,7 +1,9 @@
-# This file defines customizable build options
-# if libcanard is used as an ESP-IDF component.
-# Configure these values by running 'idf.py menuconfig' in this
-# directory.
+# This file is used when packaging libcanard
+# for the ESP-IDF component registry:
+# https://components.espressif.com/
+
+# This file defines customizable ESP-IDF build options
+# that can be configured by running 'idf.py menuconfig'.
 
 menu "Libcanard"
 

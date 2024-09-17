@@ -1,8 +1,9 @@
-# This file sets up builds if libcanard is used
-# as an ESP-IDF component.
+# This file is used when packaging libcanard
+# for the ESP-IDF component registry:
+# https://components.espressif.com/
 
-idf_component_register(SRCS "libcanard/canard.c"
-                       INCLUDE_DIRS "libcanard/")
+idf_component_register(SRCS "canard.c"
+                       INCLUDE_DIRS "include")
 
 # Apply the Kconfig options to the source file.
 
