@@ -1,0 +1,12 @@
+# This file is used when packaging libcanard
+# for the ESP-IDF component registry:
+# https://components.espressif.com/
+
+# Note: Version is not specified in this file,
+# because the 'esp_publish.yml' GitHub action
+# automatically sets it based on the release version.
+
+description: "Cyphal/CAN for embedded systems."
+license: "MIT"
+url: "https://github.com/OpenCyphal/libcanard"
+repository: "https://github.com/OpenCyphal/libcanard"

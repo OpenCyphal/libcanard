@@ -1,0 +1,24 @@
+# This file is used when packaging libcanard
+# for the ESP-IDF component registry:
+# https://components.espressif.com/
+
+# This file defines customizable ESP-IDF build options
+# that can be configured by running 'idf.py menuconfig'.
+
+menu "Libcanard"
+
+config CANARD_ASSERTIONS
+    bool "Enable libcanard assertions."
+    default y
+    help
+        Set to 'n' to disable libcanard assertions.
+
+config CANARD_CRC_TABLE
+    bool "Enable libcanard CRC table"
+    default y
+    help
+        Set to 'n' to use slow but ROM-efficient transfer-CRC computation algorithm.
+        Doing so is expected to save ca. 500 bytes of ROM and
+        increase the cost of RX/TX transfer processing by ~half.
+
+endmenu

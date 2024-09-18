@@ -1,0 +1,22 @@
+# This workflow gets triggered when a GitHub release is published.
+# It publishes this project to the public ESP-IDF component registry.
+
+name: Publish component to the ESP-IDF registry
+on:
+  release:
+    types: [published]
+
+jobs:
+  upload_component:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Publish component to the ESP-IDF registry
+        run: |
+          bash esp_metadata/package_esp_component.sh
+          export IDF_COMPONENT_API_TOKEN="${{ secrets.IDF_COMPONENT_API_TOKEN }}"
+          cd package/libcanard
+          compote component upload --namespace opencyphal --name libcanard --version ${{ github.event.release.tag_name }}
