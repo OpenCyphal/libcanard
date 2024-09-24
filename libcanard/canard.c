@@ -808,12 +808,19 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
 
 /// Evaluates the state of the RX session with respect to time and the new frame, and restarts it if necessary.
 /// The next step is to accept the frame if the transfer-ID, toggle but, and transport index match; reject otherwise.
-/// The logic of this function is simple: it restarts the reassembler if the start-of-transfer flag is set and
-/// any two of the three conditions are met:
+/// The logic of this function is simple: in the most cases (see below exception) it restarts the reassembler
+/// if the start-of-transfer flag is set and any two of the three conditions are met:
 ///
 ///     - The frame has arrived over the same interface as the previous transfer.
 ///     - New transfer-ID is detected.
 ///     - The transfer-ID timeout has expired.
+///
+/// The only exception is when the transfer-ID timeout has expired and the new frame has the same transfer-ID as it
+/// was expected BUT not on the same transport as before. In this case, the reassembler is "restarted" only
+/// if the total payload size is zero (meaning that the reassembler has not been started yet), and so could be more
+/// "relaxed" and not so sticky to the transport index. This case was discovered during libcyphal development when
+/// multiple redundant transports were used in context of multiple concurrent RPC clients for the same service id.
+/// For more information see https://github.com/OpenCyphal/libcanard/issues/228
 ///
 /// Notice that mere TID-timeout is not enough to restart to prevent the interface index oscillation;
 /// while this is not visible at the application layer, it may delay the transfer arrival.
@@ -831,14 +838,18 @@ CANARD_PRIVATE void rxSessionSynchronize(CanardInternalRxSession* const rxs,
     // Examples: rxComputeTransferIDDifference(2, 3)==31
     //           rxComputeTransferIDDifference(2, 2)==0
     //           rxComputeTransferIDDifference(2, 1)==1
-    const bool tid_new = rxComputeTransferIDDifference(rxs->transfer_id, frame->transfer_id) > 1;
+    const bool tid_match = rxs->transfer_id == frame->transfer_id;
+    const bool tid_new   = rxComputeTransferIDDifference(rxs->transfer_id, frame->transfer_id) > 1;
     // The transfer ID timeout is measured relative to the timestamp of the last start-of-transfer frame.
     const bool tid_timeout = (frame->timestamp_usec > rxs->transfer_timestamp_usec) &&
                              ((frame->timestamp_usec - rxs->transfer_timestamp_usec) > transfer_id_timeout_usec);
+    // The total payload size is zero when a new transfer reassembling has not been started yet, hence the idle.
+    const bool idle = 0U == rxs->total_payload_size;
 
     const bool restartable = (same_transport && tid_new) ||      //
                              (same_transport && tid_timeout) ||  //
-                             (tid_new && tid_timeout);
+                             (tid_timeout && tid_new) ||         //
+                             (tid_timeout && tid_match && idle);
     // Restarting the transfer reassembly only makes sense if the new frame is a start of transfer.
     // Otherwise, the new transfer would be impossible to reassemble anyway since the first frame is lost.
     if (frame->start_of_transfer && restartable)
