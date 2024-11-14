@@ -1243,7 +1243,7 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
             {
                 if (sub->sessions[i] != NULL)
                 {
-                    ins->memory_free(ins, sub->sessions[i]->payload, sub->sessions[i]->payload_size);
+                    ins->memory_free(ins, sub->sessions[i]->payload, sub->extent);
                 }
                 ins->memory_free(ins, sub->sessions[i], sizeof(*sub->sessions[i]));
                 sub->sessions[i] = NULL;
