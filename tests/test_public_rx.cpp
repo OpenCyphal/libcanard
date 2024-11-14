@@ -188,7 +188,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
-    ins.getAllocator().deallocate(msg_payload);
+    ins.getAllocator().deallocate(msg_payload, 16);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 3);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 20));
 
@@ -321,7 +321,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(ensureAllNullptr(ins.getMessageSubs().at(0)->sessions));  // No RX states!
 
     // Release the memory.
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 
@@ -440,7 +440,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -491,7 +491,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }
@@ -565,7 +565,7 @@ TEST_CASE("Issue212")
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -599,7 +599,7 @@ TEST_CASE("Issue212")
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }
@@ -668,7 +668,7 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -692,7 +692,7 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -713,7 +713,7 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }

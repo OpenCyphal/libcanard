@@ -229,7 +229,7 @@ TEST_CASE("rxSessionWritePayload")
     REQUIRE(rxs.payload[9] == 9);
 
     // Restart frees the buffer. The transfer-ID will be incremented, too.
-    rxSessionRestart(&ins.getInstance(), &rxs);
+    rxSessionRestart(&ins.getInstance(), &rxs, 10);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
     REQUIRE(rxs.payload_size == 0);
@@ -242,7 +242,7 @@ TEST_CASE("rxSessionWritePayload")
     rxs.calculated_crc = 0x1234U;
     rxs.transfer_id    = 23;
     rxs.toggle         = false;
-    rxSessionRestart(&ins.getInstance(), &rxs);
+    rxSessionRestart(&ins.getInstance(), &rxs, 10);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
     REQUIRE(rxs.payload_size == 0);
@@ -255,7 +255,7 @@ TEST_CASE("rxSessionWritePayload")
     rxs.calculated_crc = 0x1234U;
     rxs.transfer_id    = 31;
     rxs.toggle         = false;
-    rxSessionRestart(&ins.getInstance(), &rxs);
+    rxSessionRestart(&ins.getInstance(), &rxs, 10);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
     REQUIRE(rxs.payload_size == 0);
@@ -343,7 +343,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x01\x01", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // Valid next transfer, wrong transport.
     frame.timestamp_usec = 10'000'100;
@@ -379,7 +379,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x03\x03\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // Same TID.
     frame.timestamp_usec = 10'000'200;
@@ -416,7 +416,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05\x05\x05", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // Restart due to TID timeout, switch iface.
     frame.timestamp_usec = 20'000'000;
@@ -440,7 +440,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05\x05\x05", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // Multi-frame, first.
     frame.timestamp_usec  = 20'000'100;
@@ -518,7 +518,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07\x09\x09", 16));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // TID timeout does not occur until SOT; see https://github.com/OpenCyphal/libcanard/issues/212.
     frame.timestamp_usec    = 30'000'000;
@@ -619,7 +619,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0D\x0D\x0D", 10));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // CRC SPLIT -- first frame.
     frame.timestamp_usec    = 30'000'000;
@@ -666,7 +666,7 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(0 == std::memcmp(transfer.payload, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E", 7));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload, 16);
 
     // BAD CRC -- first frame.
     frame.timestamp_usec    = 30'001'000;

@@ -193,7 +193,7 @@ TEST_CASE("RoundtripSimple")
                         REQUIRE(transfer.payload_size == 0U);
                     }
 
-                    ins_rx.getAllocator().deallocate(transfer.payload);
+                    ins_rx.getAllocator().deallocate(transfer.payload, subscription->extent);
                     std::free(ref_payload);  // NOLINT
                 }
                 else
@@ -212,7 +212,7 @@ TEST_CASE("RoundtripSimple")
 
             {
                 const std::lock_guard locker(lock);
-                ins_tx.getAllocator().deallocate(ti);
+                ins_tx.getAllocator().deallocate(ti, (ti != nullptr) ? ti->allocated_size : 0);
             }
 
             if (std::chrono::steady_clock::now() > deadline)

@@ -103,7 +103,7 @@ public:
         return p;
     }
 
-    void deallocate(void* const user_pointer)
+    void deallocate(void* const user_pointer, const std::size_t amount)
     {
         if (user_pointer != nullptr)
         {
@@ -114,7 +114,12 @@ public:
                 throw std::logic_error("Attempted to deallocate memory that was never allocated; ptr=" +
                                        std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
             }
-            const auto [p, amount] = *it;
+            const auto [p, expected_amount] = *it;
+            if (amount != expected_amount)
+            {
+                throw std::logic_error("Attempted to deallocate wrong size memory at ptr=" +
+                                       std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
+            }
             if ((0 != std::memcmp(p - canary_.size(), canary_.begin(), canary_.size())) ||
                 (0 != std::memcmp(p + amount, canary_.begin(), canary_.size())))
             {
@@ -240,10 +245,10 @@ private:
         return p->allocator_.allocate(amount);
     }
 
-    static void trampolineDeallocate(CanardInstance* const ins, void* const pointer)
+    static void trampolineDeallocate(CanardInstance* const ins, void* const pointer, const std::size_t amount)
     {
         auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        p->allocator_.deallocate(pointer);
+        p->allocator_.deallocate(pointer, amount);
     }
 
     CanardInstance canard_ = canardInit(&Instance::trampolineAllocate, &Instance::trampolineDeallocate);

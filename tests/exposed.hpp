@@ -107,7 +107,7 @@ auto rxSessionWritePayload(CanardInstance* const ins,
                            const std::size_t     payload_size,
                            const void* const     payload) -> std::int8_t;
 
-void rxSessionRestart(CanardInstance* const ins, RxSession* const rxs);
+void rxSessionRestart(CanardInstance* const ins, RxSession* const rxs, const std::size_t allocated_size);
 
 auto rxSessionUpdate(CanardInstance* const     ins,
                      RxSession* const          rxs,

@@ -285,6 +285,10 @@ struct CanardTxQueueItem
     /// Frames whose transmission deadline is in the past shall be dropped.
     CanardMicrosecond tx_deadline_usec;
 
+    /// Amount of memory allocated for the whole this item, including the payload frame.
+    /// In use to deallocate the item by passing this value to the memory manager (`memFree`).
+    size_t allocated_size;
+
     /// The actual CAN frame data.
     CanardFrame frame;
 };
@@ -349,11 +353,12 @@ typedef struct CanardRxTransfer
 typedef void* (*CanardMemoryAllocate)(CanardInstance* ins, size_t amount);
 
 /// The counterpart of the above -- this function is invoked to return previously allocated memory to the allocator.
-/// The semantics are similar to free():
+/// The semantics are similar to free(), but with additional `amount` parameter:
 ///     - The pointer was previously returned by the allocation function.
 ///     - The pointer may be NULL, in which case the function shall have no effect.
 ///     - The execution time should be constant (O(1)).
-typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer);
+///     - The amount is the same as it was during allocation.
+typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer, size_t amount);
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
 struct CanardInstance

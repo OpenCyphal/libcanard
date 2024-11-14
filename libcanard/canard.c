@@ -303,9 +303,12 @@ CANARD_PRIVATE TxItem* txAllocateQueueItem(CanardInstance* const   ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(payload_size > 0U);
-    TxItem* const out = (TxItem*) ins->memory_allocate(ins, (sizeof(TxItem) - CANARD_MTU_MAX) + payload_size);
+    const size_t tx_item_size = (sizeof(TxItem) - CANARD_MTU_MAX) + payload_size;
+    TxItem* const out = (TxItem*) ins->memory_allocate(ins, tx_item_size);
     if (out != NULL)
     {
+        out->base.allocated_size = tx_item_size;
+
         out->base.base.up    = NULL;
         out->base.base.lr[0] = NULL;
         out->base.base.lr[1] = NULL;
@@ -532,7 +535,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
             while (head != NULL)
             {
                 CanardTxQueueItem* const next = head->next_in_transfer;
-                ins->memory_free(ins, head);
+                ins->memory_free(ins, head, head->allocated_size);
                 head = next;
             }
         }
@@ -729,11 +732,13 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
     return out;
 }
 
-CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRxSession* const rxs)
+CANARD_PRIVATE void rxSessionRestart(CanardInstance* const          ins,
+                                     CanardInternalRxSession* const rxs,
+                                     const size_t                   allocated_size)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
-    ins->memory_free(ins, rxs->payload);  // May be NULL, which is OK.
+    ins->memory_free(ins, rxs->payload, allocated_size);  // May be NULL, which is OK.
     rxs->total_payload_size = 0U;
     rxs->payload_size       = 0U;
     rxs->payload            = NULL;
@@ -773,7 +778,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
     if (out < 0)
     {
         CANARD_ASSERT(-CANARD_ERROR_OUT_OF_MEMORY == out);
-        rxSessionRestart(ins, rxs);  // Out-of-memory.
+        rxSessionRestart(ins, rxs, extent);  // Out-of-memory.
     }
     else if (frame->end_of_transfer)
     {
@@ -797,7 +802,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
 
             rxs->payload = NULL;  // Ownership passed over to the application, nullify to prevent freeing.
         }
-        rxSessionRestart(ins, rxs);  // Successful completion.
+        rxSessionRestart(ins, rxs, extent);  // Successful completion.
     }
     else
     {
@@ -1236,8 +1241,11 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
             out = 1;
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
             {
-                ins->memory_free(ins, (sub->sessions[i] != NULL) ? sub->sessions[i]->payload : NULL);
-                ins->memory_free(ins, sub->sessions[i]);
+                if (sub->sessions[i] != NULL)
+                {
+                    ins->memory_free(ins, sub->sessions[i]->payload, sub->sessions[i]->payload_size);
+                }
+                ins->memory_free(ins, sub->sessions[i], sizeof(*sub->sessions[i]));
                 sub->sessions[i] = NULL;
             }
         }
