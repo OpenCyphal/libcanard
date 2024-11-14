@@ -303,8 +303,8 @@ CANARD_PRIVATE TxItem* txAllocateQueueItem(CanardInstance* const   ins,
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(payload_size > 0U);
-    const size_t tx_item_size = (sizeof(TxItem) - CANARD_MTU_MAX) + payload_size;
-    TxItem* const out = (TxItem*) ins->memory_allocate(ins, tx_item_size);
+    const size_t  tx_item_size = (sizeof(TxItem) - CANARD_MTU_MAX) + payload_size;
+    TxItem* const out          = (TxItem*) ins->memory_allocate(ins, tx_item_size);
     if (out != NULL)
     {
         out->base.allocated_size = tx_item_size;
