@@ -191,9 +191,10 @@ TEST_CASE("RoundtripSimple")
                     else
                     {
                         REQUIRE(transfer.payload_size == 0U);
+                        REQUIRE(transfer.allocated_size == 0U);
                     }
 
-                    ins_rx.getAllocator().deallocate(transfer.payload, subscription->extent);
+                    ins_rx.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
                     std::free(ref_payload);  // NOLINT
                 }
                 else

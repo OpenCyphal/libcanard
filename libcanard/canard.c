@@ -790,6 +790,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
             out_transfer->timestamp_usec = rxs->transfer_timestamp_usec;
             out_transfer->payload_size   = rxs->payload_size;
             out_transfer->payload        = rxs->payload;
+            out_transfer->allocated_size = (rxs->payload != NULL) ? extent : 0U;
 
             // Cut off the CRC from the payload if it's there -- we don't want to expose it to the user.
             CANARD_ASSERT(rxs->total_payload_size >= rxs->payload_size);
@@ -983,6 +984,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
             out_transfer->timestamp_usec = frame->timestamp_usec;
             out_transfer->payload_size   = payload_size;
             out_transfer->payload        = payload;
+            out_transfer->allocated_size = subscription->extent;
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
             // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
             (void) memcpy(payload, frame->payload, payload_size);  // NOLINT

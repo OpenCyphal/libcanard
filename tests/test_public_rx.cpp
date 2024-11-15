@@ -118,11 +118,16 @@ TEST_CASE("RxBasic0")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 0);
+    REQUIRE(transfer.allocated_size == 16);
     REQUIRE(0 == std::memcmp(transfer.payload, "", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 16));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    auto* msg_payload = transfer.payload;  // Will need it later.
+
+    // Will need these later.
+    //
+    auto* const msg_payload        = transfer.payload;
+    const auto  payload_alloc_size = transfer.allocated_size;
 
     // Provide the space for an extra session and its payload.
     ins.getAllocator().setAllocationCeiling(sizeof(RxSession) * 2 + 16 + 20);
@@ -150,6 +155,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100101);
     REQUIRE(transfer.metadata.transfer_id == 4);
     REQUIRE(transfer.payload_size == 3);
+    REQUIRE(transfer.allocated_size == 20);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);  // Two SESSIONS and two PAYLOAD BUFFERS.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
@@ -188,7 +194,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
-    ins.getAllocator().deallocate(msg_payload, 16);
+    ins.getAllocator().deallocate(msg_payload, payload_alloc_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 3);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 20));
 
@@ -204,6 +210,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(transfer.metadata.remote_node_id == 0b0011011);
     REQUIRE(transfer.metadata.transfer_id == 3);
     REQUIRE(transfer.payload_size == 1);
+    REQUIRE(transfer.allocated_size == 10);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x05", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 10 + 20));
@@ -298,6 +305,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 16);  // Truncated.
+    REQUIRE(transfer.allocated_size == 16);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
@@ -315,13 +323,14 @@ TEST_CASE("RxAnonymous")
     REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 16);  // Truncated.
+    REQUIRE(transfer.allocated_size == 16);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F\x10", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
     REQUIRE(ensureAllNullptr(ins.getMessageSubs().at(0)->sessions));  // No RX states!
 
     // Release the memory.
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
 
@@ -337,6 +346,7 @@ TEST_CASE("RxAnonymous")
     REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 6);  // NOT truncated.
+    REQUIRE(transfer.allocated_size == 16);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);      // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 6);       // Smaller allocation.
@@ -436,11 +446,12 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 1);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x42", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -484,6 +495,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 2);
     REQUIRE(transfer.payload_size == 11);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload,
                              "\x01\x02\x03\x04\x05\x06\x07"
                              "DUCK",
@@ -491,7 +503,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }
@@ -561,11 +573,12 @@ TEST_CASE("Issue212")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 2);
     REQUIRE(transfer.payload_size == 14);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E", 14));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -595,11 +608,12 @@ TEST_CASE("Issue212")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 3);
     REQUIRE(transfer.payload_size == 14);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E", 14));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }
@@ -664,11 +678,12 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 0);
     REQUIRE(transfer.payload_size == 14);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E", 14));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -688,11 +703,12 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 0);  // same
     REQUIRE(transfer.payload_size == 8);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07\x08", 8));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 
@@ -709,11 +725,12 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
     REQUIRE(transfer.metadata.remote_node_id == 0b0100111);
     REQUIRE(transfer.metadata.transfer_id == 0);  // same
     REQUIRE(transfer.payload_size == 7);
+    REQUIRE(transfer.allocated_size == 50);
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06\x07", 7));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 2);  // The SESSION and the PAYLOAD BUFFER.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (sizeof(RxSession) + 50));
     REQUIRE(ins.getMessageSubs().at(0)->sessions[0b0100111] != nullptr);
-    ins.getAllocator().deallocate(transfer.payload, subscription->extent);
+    ins.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);  // The payload buffer is gone.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == sizeof(RxSession));
 }
