@@ -57,7 +57,7 @@ TEST_CASE("RoundtripSimple")
     ins_rx.getAllocator().setAllocationCeiling(rx_worst_case_memory_consumption);  // This is guaranteed to be enough.
 
     helpers::Instance ins_tx;
-    helpers::TxQueue  que_tx(1024UL * 1024U * 1024U, CANARD_MTU_CAN_FD);
+    helpers::TxQueue  que_tx(1024UL * 1024U * 1024U, CANARD_MTU_CAN_FD, ins_tx.makeCanardMemoryResource());
     ins_tx.setNodeID(99);
     ins_tx.getAllocator().setAllocationCeiling(1024UL * 1024U * 1024U);
 

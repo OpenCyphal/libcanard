@@ -173,7 +173,11 @@ private:
 class Instance
 {
 public:
-    Instance() { canard_.user_reference = this; }
+    Instance()
+    {
+        canard_.user_reference        = this;
+        canard_.memory.user_reference = this;
+    }
 
     virtual ~Instance() = default;
 
@@ -181,6 +185,11 @@ public:
     Instance(const Instance&&)                    = delete;
     auto operator=(const Instance&) -> Instance&  = delete;
     auto operator=(const Instance&&) -> Instance& = delete;
+
+    [[nodiscard]] auto makeCanardMemoryResource() -> CanardMemoryResource
+    {
+        return {this, &Instance::trampolineDeallocate, &Instance::trampolineAllocate};
+    }
 
     [[nodiscard]] auto rxAccept(const CanardMicrosecond      timestamp_usec,
                                 const CanardFrame&           frame,
@@ -239,26 +248,27 @@ public:
     [[nodiscard]] auto getInstance() const -> const CanardInstance& { return canard_; }
 
 private:
-    static auto trampolineAllocate(CanardInstance* const ins, const std::size_t amount) -> void*
+    static auto trampolineAllocate(void* const user_reference, const std::size_t size) -> void*
     {
-        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        return p->allocator_.allocate(amount);
+        auto* p = reinterpret_cast<Instance*>(user_reference);
+        return p->allocator_.allocate(size);
     }
 
-    static void trampolineDeallocate(CanardInstance* const ins, void* const pointer, const std::size_t amount)
+    static void trampolineDeallocate(void* const user_reference, const size_t size, void* const pointer)
     {
-        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        p->allocator_.deallocate(pointer, amount);
+        auto* p = reinterpret_cast<Instance*>(user_reference);
+        p->allocator_.deallocate(pointer, size);
     }
 
-    CanardInstance canard_ = canardInit(&Instance::trampolineAllocate, &Instance::trampolineDeallocate);
+    CanardInstance canard_ = canardInit({nullptr, &Instance::trampolineDeallocate, &Instance::trampolineAllocate});
     TestAllocator  allocator_;
 };
 
 class TxQueue
 {
 public:
-    explicit TxQueue(const std::size_t capacity, const std::size_t mtu_bytes) : que_(canardTxInit(capacity, mtu_bytes))
+    explicit TxQueue(const std::size_t capacity, const std::size_t mtu_bytes, const CanardMemoryResource memory) :
+        que_(canardTxInit(capacity, mtu_bytes, memory))
     {
         enforce(que_.user_reference == nullptr, "Incorrect initialization of the user reference in TxQueue");
         enforce(que_.mtu_bytes == mtu_bytes, "Incorrect MTU");

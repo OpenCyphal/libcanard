@@ -11,7 +11,7 @@ TEST_CASE("TxBasic0")
     using exposed::TxItem;
 
     helpers::Instance ins;
-    helpers::TxQueue  que(200, CANARD_MTU_CAN_FD);
+    helpers::TxQueue  que(200, CANARD_MTU_CAN_FD, ins.makeCanardMemoryResource());
 
     auto& alloc = ins.getAllocator();
 
@@ -342,7 +342,7 @@ TEST_CASE("TxBasic0")
 TEST_CASE("TxBasic1")
 {
     helpers::Instance ins;
-    helpers::TxQueue  que(3, CANARD_MTU_CAN_FD);  // Limit capacity at 3 frames.
+    helpers::TxQueue  que(3, CANARD_MTU_CAN_FD, ins.makeCanardMemoryResource());  // Limit capacity at 3 frames.
 
     auto& alloc = ins.getAllocator();
 
