@@ -984,7 +984,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
             out_transfer->timestamp_usec = frame->timestamp_usec;
             out_transfer->payload_size   = payload_size;
             out_transfer->payload        = payload;
-            out_transfer->allocated_size = subscription->extent;
+            out_transfer->allocated_size = payload_size;
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
             // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
             (void) memcpy(payload, frame->payload, payload_size);  // NOLINT

@@ -345,8 +345,8 @@ TEST_CASE("RxAnonymous")
     REQUIRE(transfer.metadata.port_id == 0b0110011001100);
     REQUIRE(transfer.metadata.remote_node_id == CANARD_NODE_ID_UNSET);
     REQUIRE(transfer.metadata.transfer_id == 0);
-    REQUIRE(transfer.payload_size == 6);  // NOT truncated.
-    REQUIRE(transfer.allocated_size == 16);
+    REQUIRE(transfer.payload_size == 6);    // NOT truncated.
+    REQUIRE(transfer.allocated_size == 6);  // Less than extent b/c it's anonymous single frame transfer.
     REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x02\x03\x04\x05\x06", 0));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);      // The PAYLOAD BUFFER only! No session for anons.
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 6);       // Smaller allocation.

@@ -346,7 +346,8 @@ typedef struct CanardRxTransfer
     void* payload;
 
     /// Size of the allocated payload buffer in bytes.
-    /// Normally equal to the extent specified in the subscription, but may be zero if the payload pointer is NULL.
+    /// Normally equal to the extent specified in the subscription, but could be less (equal to `payload_size`)
+    /// in case of single frame transfer, or even zero if the payload pointer is NULL.
     size_t allocated_size;
 } CanardRxTransfer;
 
