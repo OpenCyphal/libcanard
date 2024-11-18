@@ -93,8 +93,8 @@ extern "C" {
 
 /// Semantic version of this library (not the Cyphal specification).
 /// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 3
-#define CANARD_VERSION_MINOR 3
+#define CANARD_VERSION_MAJOR 4
+#define CANARD_VERSION_MINOR 0
 
 /// The version number of the Cyphal specification implemented by this library.
 #define CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR 1
