@@ -333,8 +333,8 @@ struct CanardTxQueueItem
     /// Frames whose transmission deadline is in the past shall be dropped.
     CanardMicrosecond tx_deadline_usec;
 
-    /// Amount of memory allocated for the whole this item, including the payload frame.
-    /// In use to deallocate the item by passing this value to the memory manager (`memFree`).
+    /// The amount of memory allocated for this item, including the frame payload.
+    /// This value is needed for memory deallocation because the deallocation function takes the fragment size.
     size_t allocated_size;
 
     /// The actual CAN frame data.
