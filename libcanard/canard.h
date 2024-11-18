@@ -285,6 +285,10 @@ struct CanardTxQueueItem
     /// Frames whose transmission deadline is in the past shall be dropped.
     CanardMicrosecond tx_deadline_usec;
 
+    /// Amount of memory allocated for the whole this item, including the payload frame.
+    /// In use to deallocate the item by passing this value to the memory manager (`memFree`).
+    size_t allocated_size;
+
     /// The actual CAN frame data.
     CanardFrame frame;
 };
@@ -332,10 +336,19 @@ typedef struct CanardRxTransfer
     /// The time system may be arbitrary as long as the clock is monotonic (steady).
     CanardMicrosecond timestamp_usec;
 
+    /// Size of the payload data in bytes.
+    /// The value is always less than or equal to the extent specified in the subscription.
     /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
-    /// The application is required to deallocate the payload buffer after the transfer is processed.
     size_t payload_size;
-    void*  payload;
+
+    /// The application is required to deallocate the payload buffer after the transfer is processed.
+    /// Allocated buffer size (`allocated_size`, not `payload_size`) should be used to deallocate the buffer.
+    void* payload;
+
+    /// Size of the allocated payload buffer in bytes.
+    /// Normally equal to the extent specified in the subscription, but could be less (equal to `payload_size`)
+    /// in case of single frame transfer, or even zero if the payload pointer is NULL.
+    size_t allocated_size;
 } CanardRxTransfer;
 
 /// A pointer to the memory allocation function. The semantics are similar to malloc():
@@ -349,11 +362,12 @@ typedef struct CanardRxTransfer
 typedef void* (*CanardMemoryAllocate)(CanardInstance* ins, size_t amount);
 
 /// The counterpart of the above -- this function is invoked to return previously allocated memory to the allocator.
-/// The semantics are similar to free():
+/// The semantics are similar to free(), but with additional `amount` parameter:
 ///     - The pointer was previously returned by the allocation function.
 ///     - The pointer may be NULL, in which case the function shall have no effect.
 ///     - The execution time should be constant (O(1)).
-typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer);
+///     - The amount is the same as it was during allocation.
+typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer, size_t amount);
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
 struct CanardInstance

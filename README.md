@@ -71,9 +71,10 @@ static void* memAllocate(CanardInstance* const canard, const size_t amount)
     return o1heapAllocate(my_allocator, amount);
 }
 
-static void memFree(CanardInstance* const canard, void* const pointer)
+static void memFree(CanardInstance* const canard, void* const pointer, const size_t amount)
 {
     (void) canard;
+    (void) amount;
     o1heapFree(my_allocator, pointer);
 }
 ```

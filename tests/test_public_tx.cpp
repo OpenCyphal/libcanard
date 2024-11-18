@@ -129,7 +129,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 8));
     REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[11]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    auto* item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -138,7 +139,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 7));
     REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[7]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -149,7 +151,8 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[2]);
     REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[3]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -181,7 +184,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 31));
     REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -191,7 +195,8 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[30]);
     REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -200,7 +205,8 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[0]);
     REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[1]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -223,7 +229,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 31));
     REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -232,7 +239,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data() + 31U, 31));
     REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -242,7 +250,8 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[1]);
     REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[2]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -263,7 +272,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 63));
     REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[63]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -277,7 +287,8 @@ TEST_CASE("TxBasic0")
     REQUIRE((CRC112Padding12 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[62]);  // CRC
     REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[63]);        // Tail
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -297,7 +308,8 @@ TEST_CASE("TxBasic0")
     REQUIRE(ti->frame.payload_size == 1);
     REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[0]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'004'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -444,7 +456,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 8));
     REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[11]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    auto* item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -453,7 +466,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 7));
     REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[7]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -464,7 +478,8 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC8 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[2]);
     REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[3]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -494,7 +509,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 31));
     REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -504,7 +520,8 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC61 >> 8U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[30]);
     REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -513,7 +530,8 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC61 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[0]);
     REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[1]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -536,7 +554,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 31));
     REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -545,7 +564,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data() + 31U, 31));
     REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -555,7 +575,8 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC62 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[1]);
     REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[2]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -576,7 +597,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(0 == std::memcmp(ti->frame.payload, payload.data(), 63));
     REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[63]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -590,7 +612,8 @@ TEST_CASE("TxBasic1")
     REQUIRE((CRC112Padding12 & 0xFFU) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[62]);  // CRC
     REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[63]);        // Tail
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -610,7 +633,8 @@ TEST_CASE("TxBasic1")
     REQUIRE(ti->frame.payload_size == 1);
     REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload)[0]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'004'000ULL);
-    ins.getAllocator().deallocate(que.pop(ti));
+    item = que.pop(ti);
+    ins.getAllocator().deallocate(item, item->allocated_size);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
