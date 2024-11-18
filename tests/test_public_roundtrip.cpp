@@ -11,9 +11,11 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 
 TEST_CASE("RoundtripSimple")
 {
@@ -32,9 +34,7 @@ TEST_CASE("RoundtripSimple")
     helpers::Instance ins_rx;
     ins_rx.setNodeID(111);
 
-    const auto get_random_priority = []() {
-        return static_cast<CanardPriority>(getRandomNatural(CANARD_PRIORITY_MAX + 1U));
-    };
+    const auto get_random_priority = []() { return getRandomNatural<CanardPriority>(CANARD_PRIORITY_MAX + 1U); };
     std::array<TxState, 6> tx_states{
         TxState{CanardTransferKindMessage, get_random_priority(), 8191, 1000},
         TxState{CanardTransferKindMessage, get_random_priority(), 511, 0},
@@ -61,7 +61,8 @@ TEST_CASE("RoundtripSimple")
     ins_tx.setNodeID(99);
     ins_tx.getAllocator().setAllocationCeiling(1024UL * 1024U * 1024U);
 
-    using Pending = std::tuple<CanardTransferMetadata, std::size_t, void*>;
+    using PayloadPtr = std::unique_ptr<std::uint8_t[]>;  // NOLINT
+    using Pending    = std::tuple<CanardTransferMetadata, std::size_t, PayloadPtr>;
     std::unordered_map<CanardMicrosecond, Pending> pending_transfers;
 
     std::atomic<CanardMicrosecond> transfer_counter      = 0;
@@ -74,12 +75,12 @@ TEST_CASE("RoundtripSimple")
     const auto writer_thread_fun = [&]() {
         while (keep_going)
         {
-            auto& st = tx_states.at(getRandomNatural(std::size(tx_states)));
+            auto& st = tx_states.at(getRandomNatural<std::size_t>(std::size(tx_states)));
 
             // Generate random payload. The size may be larger than expected to test the implicit truncation rule.
-            const auto  payload_size = getRandomNatural(st.extent + 1024U);
-            auto* const payload      = static_cast<std::uint8_t*>(std::malloc(payload_size));  // NOLINT
-            std::generate_n(payload, payload_size, [&]() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+            const auto payload_size = getRandomNatural<std::size_t>(st.extent + 1024U);
+            PayloadPtr payload{new std::uint8_t[payload_size]};
+            std::generate_n(payload.get(), payload_size, [&]() { return getRandomNatural<std::uint8_t>(256U); });
 
             // Generate the transfer.
             const CanardMicrosecond timestamp_usec = transfer_counter++;
@@ -92,16 +93,17 @@ TEST_CASE("RoundtripSimple")
             tran.transfer_id = (st.transfer_id++) & CANARD_TRANSFER_ID_MAX;
 
             // Use a random MTU.
-            que_tx.setMTU(static_cast<std::uint8_t>(getRandomNatural(256U)));
+            que_tx.setMTU(getRandomNatural<std::size_t>(256U));
 
             // Push the transfer.
             bool sleep = false;
             {
                 const std::lock_guard locker(lock);
-                const auto result = que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, payload_size, payload);
+                const auto            result =
+                    que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, payload_size, payload.get());
                 if (result > 0)
                 {
-                    pending_transfers.emplace(timestamp_usec, Pending{tran, payload_size, payload});
+                    pending_transfers.emplace(timestamp_usec, Pending{tran, payload_size, std::move(payload)});
                     frames_in_flight += static_cast<std::uint64_t>(result);
                     peak_frames_in_flight = std::max<std::uint64_t>(peak_frames_in_flight, frames_in_flight);
                 }
@@ -171,10 +173,10 @@ TEST_CASE("RoundtripSimple")
                         const std::lock_guard locker(lock);
                         const auto            pt_it = pending_transfers.find(transfer.timestamp_usec);
                         REQUIRE(pt_it != pending_transfers.end());
-                        reference = pt_it->second;
+                        reference = std::move(pt_it->second);
                         pending_transfers.erase(pt_it);
                     }
-                    const auto [ref_meta, ref_payload_size, ref_payload] = reference;
+                    const auto [ref_meta, ref_payload_size, ref_payload] = std::move(reference);
 
                     REQUIRE(transfer.metadata.priority == ref_meta.priority);
                     REQUIRE(transfer.metadata.transfer_kind == ref_meta.transfer_kind);
@@ -185,7 +187,7 @@ TEST_CASE("RoundtripSimple")
                     if (transfer.payload != nullptr)
                     {
                         REQUIRE(0 == std::memcmp(transfer.payload,
-                                                 ref_payload,
+                                                 ref_payload.get(),
                                                  std::min(transfer.payload_size, ref_payload_size)));
                     }
                     else
@@ -195,7 +197,6 @@ TEST_CASE("RoundtripSimple")
                     }
 
                     ins_rx.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
-                    std::free(ref_payload);  // NOLINT
                 }
                 else
                 {
@@ -238,9 +239,9 @@ TEST_CASE("RoundtripSimple")
     std::cout << "PEAK FRAMES IN FLIGHT: " << peak_frames_in_flight << std::endl;
 
     std::size_t i = 0;
-    for (const auto& [k, v] : pending_transfers)
+    for (auto& [k, v] : pending_transfers)
     {
-        const auto [ref_meta, ref_payload_size, ref_payload] = v;
+        const auto [ref_meta, ref_payload_size, ref_payload] = std::move(v);
         std::cout << "#" << i++ << "/" << std::size(pending_transfers) << ":"        //
                   << " ts=" << k                                                     //
                   << " prio=" << static_cast<std::uint16_t>(ref_meta.priority)       //

@@ -44,7 +44,7 @@ inline void free(CanardInstance* const ins, void* const pointer)
 
 /// We can't use the recommended true random std::random because it cannot be seeded by Catch2 (the testing framework).
 template <typename T>
-inline auto getRandomNatural(const T upper_open) -> T
+auto getRandomNatural(const std::size_t upper_open) -> T
 {
     return static_cast<T>(static_cast<std::size_t>(std::rand()) % upper_open);  // NOLINT
 }
@@ -95,7 +95,7 @@ public:
                 throw std::bad_alloc();  // This is a test suite failure, not a failed test. Mind the difference.
             }
             p += canary_.size();
-            std::generate_n(p, amount, []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+            std::generate_n(p, amount, []() { return getRandomNatural<std::uint8_t>(256U); });
             std::memcpy(p - canary_.size(), canary_.begin(), canary_.size());
             std::memcpy(p + amount, canary_.begin(), canary_.size());
             allocated_.emplace(p, amount);
@@ -128,7 +128,7 @@ public:
             }
             std::generate_n(p - canary_.size(),  // Damage the memory to make sure it's not used after deallocation.
                             amount + canary_.size() * 2U,
-                            []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+                            []() { return getRandomNatural<std::uint8_t>(256U); });
             std::free(p - canary_.size());  // NOLINT we require manual memory management here.
             allocated_.erase(it);
         }
@@ -158,7 +158,7 @@ private:
     static auto makeCanary() -> std::array<std::uint8_t, 256>
     {
         std::array<std::uint8_t, 256> out{};
-        std::generate_n(out.begin(), out.size(), []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+        std::generate_n(out.begin(), out.size(), []() { return getRandomNatural<std::uint8_t>(256U); });
         return out;
     }
 
@@ -254,7 +254,7 @@ private:
         return p->allocator_.allocate(size);
     }
 
-    static void trampolineDeallocate(void* const user_reference, const size_t size, void* const pointer)
+    static void trampolineDeallocate(void* const user_reference, const std::size_t size, void* const pointer)
     {
         auto* p = reinterpret_cast<Instance*>(user_reference);
         p->allocator_.deallocate(pointer, size);
@@ -288,7 +288,7 @@ public:
     [[nodiscard]] auto push(CanardInstance* const         ins,
                             const CanardMicrosecond       transmission_deadline_usec,
                             const CanardTransferMetadata& metadata,
-                            const size_t                  payload_size,
+                            const std::size_t             payload_size,
                             const void* const             payload)
     {
         checkInvariants();
