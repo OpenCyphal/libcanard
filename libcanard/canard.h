@@ -93,8 +93,8 @@ extern "C" {
 
 /// Semantic version of this library (not the Cyphal specification).
 /// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 3
-#define CANARD_VERSION_MINOR 3
+#define CANARD_VERSION_MAJOR 4
+#define CANARD_VERSION_MINOR 0
 
 /// The version number of the Cyphal specification implemented by this library.
 #define CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR 1
@@ -234,6 +234,47 @@ typedef struct
     CanardTransferID transfer_id;
 } CanardTransferMetadata;
 
+/// A pointer to the memory allocation function. The semantics are similar to malloc():
+///     - The returned pointer shall point to an uninitialized block of memory that is at least "amount" bytes large.
+///     - If there is not enough memory, the returned pointer shall be NULL.
+///     - The memory shall be aligned at least at max_align_t.
+///     - The execution time should be constant (O(1)).
+///     - The worst-case memory fragmentation should be bounded and easily predictable.
+/// If the standard dynamic memory manager of the target platform does not satisfy the above requirements,
+/// consider using O1Heap: https://github.com/pavel-kirienko/o1heap.
+///
+/// The value of the user reference is taken from the corresponding field of the memory resource structure.
+typedef void* (*CanardMemoryAllocate)(void* const user_reference, const size_t size);
+
+/// The counterpart of the above -- this function is invoked to return previously allocated memory to the allocator.
+/// The semantics are similar to free(), but with additional `amount` parameter:
+///     - The pointer was previously returned by the allocation function.
+///     - The pointer may be NULL, in which case the function shall have no effect.
+///     - The execution time should be constant (O(1)).
+///     - The amount is the same as it was during allocation.
+///
+/// The value of the user reference is taken from the corresponding field of the memory resource structure.
+typedef void (*CanardMemoryDeallocate)(void* const user_reference, const size_t size, void* const pointer);
+
+/// A kind of memory resource that can only be used to free memory previously allocated by the user.
+/// Instances are mostly intended to be passed by value.
+struct CanardMemoryDeleter
+{
+    void*                  user_reference;  ///< Passed as the first argument.
+    CanardMemoryDeallocate deallocate;      ///< Shall be a valid pointer.
+};
+
+/// A memory resource encapsulates the dynamic memory allocation and deallocation facilities.
+/// Note that the library allocates a large amount of small fixed-size objects for bookkeeping purposes;
+/// allocators for them can be implemented using fixed-size block pools to eliminate extrinsic memory fragmentation.
+/// Instances are mostly intended to be passed by value.
+struct CanardMemoryResource
+{
+    void*                  user_reference;  ///< Passed as the first argument.
+    CanardMemoryDeallocate deallocate;      ///< Shall be a valid pointer.
+    CanardMemoryAllocate   allocate;        ///< Shall be a valid pointer.
+};
+
 /// Prioritized transmission queue that keeps CAN frames destined for transmission via one CAN interface.
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
 /// Applications that are not interested in transmission may have zero queues.
@@ -263,6 +304,13 @@ typedef struct CanardTxQueue
     /// The root of the priority queue is NULL if the queue is empty. Do not modify this field!
     CanardTreeNode* root;
 
+    /// The memory resource used by this queue for allocating the enqueued items (CAN frames).
+    /// There is exactly one allocation per enqueued item, each allocation contains both the CanardTxQueueItem
+    /// and its payload, hence the size is variable.
+    /// In a simple application, there would be just one memory resource shared by all parts of the library.
+    /// If the application knows its MTU, it can use block allocation to avoid extrinsic fragmentation.
+    struct CanardMemoryResource memory;
+
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
     void* user_reference;
@@ -285,8 +333,8 @@ struct CanardTxQueueItem
     /// Frames whose transmission deadline is in the past shall be dropped.
     CanardMicrosecond tx_deadline_usec;
 
-    /// Amount of memory allocated for the whole this item, including the payload frame.
-    /// In use to deallocate the item by passing this value to the memory manager (`memFree`).
+    /// The amount of memory allocated for this item, including the frame payload.
+    /// This value is needed for memory deallocation because the deallocation function takes the fragment size.
     size_t allocated_size;
 
     /// The actual CAN frame data.
@@ -351,24 +399,6 @@ typedef struct CanardRxTransfer
     size_t allocated_size;
 } CanardRxTransfer;
 
-/// A pointer to the memory allocation function. The semantics are similar to malloc():
-///     - The returned pointer shall point to an uninitialized block of memory that is at least "amount" bytes large.
-///     - If there is not enough memory, the returned pointer shall be NULL.
-///     - The memory shall be aligned at least at max_align_t.
-///     - The execution time should be constant (O(1)).
-///     - The worst-case memory fragmentation should be bounded and easily predictable.
-/// If the standard dynamic memory manager of the target platform does not satisfy the above requirements,
-/// consider using O1Heap: https://github.com/pavel-kirienko/o1heap.
-typedef void* (*CanardMemoryAllocate)(CanardInstance* ins, size_t amount);
-
-/// The counterpart of the above -- this function is invoked to return previously allocated memory to the allocator.
-/// The semantics are similar to free(), but with additional `amount` parameter:
-///     - The pointer was previously returned by the allocation function.
-///     - The pointer may be NULL, in which case the function shall have no effect.
-///     - The execution time should be constant (O(1)).
-///     - The amount is the same as it was during allocation.
-typedef void (*CanardMemoryFree)(CanardInstance* ins, void* pointer, size_t amount);
-
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
 struct CanardInstance
 {
@@ -390,8 +420,7 @@ struct CanardInstance
     /// The following API functions may allocate memory:   canardRxAccept(), canardTxPush().
     /// The following API functions may deallocate memory: canardRxAccept(), canardRxSubscribe(), canardRxUnsubscribe().
     /// The exact memory requirement and usage model is specified for each function in its documentation.
-    CanardMemoryAllocate memory_allocate;
-    CanardMemoryFree     memory_free;
+    struct CanardMemoryResource memory;
 
     /// Read-only DO NOT MODIFY THIS
     CanardTreeNode* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
@@ -413,13 +442,13 @@ typedef struct CanardFilter
 
 /// Construct a new library instance.
 /// The default values will be assigned as specified in the structure field documentation.
-/// If any of the pointers are NULL, the behavior is undefined.
+/// If any of the memory resource pointers are NULL, the behavior is undefined.
 ///
 /// The instance does not hold any resources itself except for the allocated memory.
 /// To safely discard it, simply remove all existing subscriptions, and don't forget about the TX queues.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const CanardMemoryFree memory_free);
+CanardInstance canardInit(const struct CanardMemoryResource memory);
 
 /// Construct a new transmission queue instance with the specified values for capacity and mtu_bytes.
 /// No memory allocation is going to take place until the queue is actually pushed to.
@@ -429,7 +458,7 @@ CanardInstance canardInit(const CanardMemoryAllocate memory_allocate, const Cana
 /// To safely discard it, simply pop all items from the queue.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
+CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const struct CanardMemoryResource memory);
 
 /// This function serializes a transfer into a sequence of transport frames and inserts them into the prioritized
 /// transmission queue at the appropriate position. Afterwards, the application is supposed to take the enqueued frames
@@ -477,7 +506,7 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes);
 /// allocation; a multi-frame transfer of N frames takes N allocations. The size of each allocation is
 /// (sizeof(CanardTxQueueItem) + MTU).
 int32_t canardTxPush(CanardTxQueue* const                que,
-                     CanardInstance* const               ins,
+                     const CanardInstance* const         ins,
                      const CanardMicrosecond             tx_deadline_usec,
                      const CanardTransferMetadata* const metadata,
                      const size_t                        payload_size,
