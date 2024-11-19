@@ -57,6 +57,9 @@ reused in the target application to speed up the design of the media IO layer (d
 
 ## Example
 
+## TODO: Update to show how to use the new sized de-allocations, and how not to confuse payload_size and allocated_size.
+☝ todo will be addressed as soon as the new API is stable (tx, rx, and "zero copy" aspects).
+
 The example augments the documentation but does not replace it.
 
 The library requires a constant-complexity deterministic dynamic memory allocator.
