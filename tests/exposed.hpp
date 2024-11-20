@@ -19,17 +19,17 @@ struct TxItem final : CanardTxQueueItem
 {
     [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
     {
-        return reinterpret_cast<const std::uint8_t*>(frame.payload)[offset];
+        return static_cast<const std::uint8_t*>(frame.payload.data)[offset];
     }
 
     [[nodiscard]] auto getTailByte() const
     {
-        if (frame.payload_size < 1U)
+        if (frame.payload.size < 1U)
         {
             // Can't use REQUIRE because it is not thread-safe.
             throw std::logic_error("Can't get the tail byte because the frame payload is empty.");
         }
-        return getPayloadByte(frame.payload_size - 1U);
+        return getPayloadByte(frame.payload.size - 1U);
     }
 
     [[nodiscard]] auto isStartOfTransfer() const { return (getTailByte() & 128U) != 0; }

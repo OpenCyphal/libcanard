@@ -171,6 +171,12 @@ struct CanardTreeNode
     int8_t          bf;     ///< Do not access this field.
 };
 
+struct CanardPayload
+{
+    size_t      size;
+    const void* data;
+};
+
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
 /// CAN frames with 11-bit ID are not used by Cyphal/CAN and so they are not supported by the library.
 typedef struct
@@ -179,14 +185,13 @@ typedef struct
     uint32_t extended_can_id;
 
     /// The useful data in the frame. The length value is not to be confused with DLC!
-    /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
+    /// If the payload is empty (payload.size = 0), the payload.data pointer may be NULL.
     /// For RX frames: the library does not expect the lifetime of the pointee to extend beyond the point of return
     /// from the API function. That is, the pointee can be invalidated immediately after the frame has been processed.
     /// For TX frames: the frame and the payload are allocated within the same dynamic memory fragment, so their
     /// lifetimes are identical; when the frame is freed, the payload is invalidated.
     /// A more detailed overview of the dataflow and related resource management issues is provided in the API docs.
-    size_t      payload_size;
-    const void* payload;
+    struct CanardPayload payload;
 } CanardFrame;
 
 /// Conversion look-up table from CAN DLC to data length.
@@ -509,8 +514,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
                      const CanardInstance* const         ins,
                      const CanardMicrosecond             tx_deadline_usec,
                      const CanardTransferMetadata* const metadata,
-                     const size_t                        payload_size,
-                     const void* const                   payload);
+                     const struct CanardPayload          payload);
 
 /// This function accesses the top element of the prioritized transmission queue. The queue itself is not modified
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport

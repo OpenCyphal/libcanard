@@ -30,8 +30,7 @@ TEST_CASE("RxBasic0")
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {std::size(payload), payload_storage.data()};
         return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
@@ -268,8 +267,7 @@ TEST_CASE("RxAnonymous")
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {std::size(payload), payload_storage.data()};
         return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
@@ -387,7 +385,7 @@ TEST_CASE("RxSubscriptionErrors")
     REQUIRE(fake_ptr == &fake_sub);
 
     CanardFrame frame{};
-    frame.payload_size = 1U;
+    frame.payload.size = 1U;
     CanardRxTransfer transfer{};
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(&ins.getInstance(), 0, &frame, 0, &transfer, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxAccept(nullptr, 0, &frame, 0, &transfer, nullptr));
@@ -413,8 +411,7 @@ TEST_CASE("Issue189")  // https://github.com/OpenCyphal/libcanard/issues/189
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {std::size(payload), payload_storage.data()};
         return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
@@ -525,8 +522,7 @@ TEST_CASE("Issue212")
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {std::size(payload), payload_storage.data()};
         return ins.rxAccept(timestamp_usec, frame, redundant_iface_index, transfer, &subscription);
     };
 
@@ -634,8 +630,7 @@ TEST_CASE("RxFixedTIDWithSmallTimeout")
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {std::size(payload), payload_storage.data()};
         return ins.rxAccept(timestamp_usec, frame, 0, transfer, &subscription);
     };
 

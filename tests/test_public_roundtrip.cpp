@@ -100,7 +100,7 @@ TEST_CASE("RoundtripSimple")
             {
                 const std::lock_guard locker(lock);
                 const auto            result =
-                    que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, payload_size, payload.get());
+                    que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, {payload_size, payload.get()});
                 if (result > 0)
                 {
                     pending_transfers.emplace(timestamp_usec, Pending{tran, payload_size, std::move(payload)});
@@ -148,10 +148,10 @@ TEST_CASE("RoundtripSimple")
 
             if (ti != nullptr)
             {
-                const auto tail = static_cast<const std::uint8_t*>(ti->frame.payload)[ti->frame.payload_size - 1U];
+                const auto tail = static_cast<const std::uint8_t*>(ti->frame.payload.data)[ti->frame.payload.size - 1U];
                 log_file << ti->tx_deadline_usec << " "                                                              //
                          << std::hex << std::setfill('0') << std::setw(8) << ti->frame.extended_can_id               //
-                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << ti->frame.payload_size << "] "  //
+                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << ti->frame.payload.size << "] "  //
                          << (static_cast<bool>(tail & 128U) ? 'S' : ' ')                                             //
                          << (static_cast<bool>(tail & 64U) ? 'E' : ' ')                                              //
                          << (static_cast<bool>(tail & 32U) ? 'T' : ' ')                                              //

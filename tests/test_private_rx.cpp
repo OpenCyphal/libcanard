@@ -20,8 +20,7 @@ TEST_CASE("rxTryParseFrame")
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {payload_storage.size(), payload_storage.data()};
         model                 = RxFrameModel{};
         return rxTryParseFrame(timestamp_usec, &frame, &model);
     };
