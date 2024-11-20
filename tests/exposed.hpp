@@ -56,17 +56,17 @@ struct RxSession
 
 struct RxFrameModel
 {
-    CanardMicrosecond   timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
-    CanardPriority      priority            = CanardPriorityOptional;
-    CanardTransferKind  transfer_kind       = CanardTransferKindMessage;
-    CanardPortID        port_id             = std::numeric_limits<std::uint16_t>::max();
-    CanardNodeID        source_node_id      = CANARD_NODE_ID_UNSET;
-    CanardNodeID        destination_node_id = CANARD_NODE_ID_UNSET;
-    CanardTransferID    transfer_id         = std::numeric_limits<std::uint8_t>::max();
-    bool                start_of_transfer   = false;
-    bool                end_of_transfer     = false;
-    bool                toggle              = false;
-    CanardPayload       payload             = {0U, nullptr};
+    CanardMicrosecond  timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
+    CanardPriority     priority            = CanardPriorityOptional;
+    CanardTransferKind transfer_kind       = CanardTransferKindMessage;
+    CanardPortID       port_id             = std::numeric_limits<std::uint16_t>::max();
+    CanardNodeID       source_node_id      = CANARD_NODE_ID_UNSET;
+    CanardNodeID       destination_node_id = CANARD_NODE_ID_UNSET;
+    CanardTransferID   transfer_id         = std::numeric_limits<std::uint8_t>::max();
+    bool               start_of_transfer   = false;
+    bool               end_of_transfer     = false;
+    bool               toggle              = false;
+    CanardPayload      payload             = {0U, nullptr};
 };
 
 // Extern C effectively discards the outer namespaces.

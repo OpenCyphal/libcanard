@@ -338,7 +338,7 @@ TEST_CASE("rxSessionUpdate")
     // Accept one transfer.
     REQUIRE(1 == update(1, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 10'000'000);
-    REQUIRE(rxs.payload.size == 0);   // Handed over to the output transfer.
+    REQUIRE(rxs.payload.size == 0);        // Handed over to the output transfer.
     REQUIRE(rxs.payload.data == nullptr);  // Handed over to the output transfer.
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);  // Incremented.
@@ -363,7 +363,7 @@ TEST_CASE("rxSessionUpdate")
     frame.payload.data   = reinterpret_cast<const uint8_t*>("\x02\x02\x02");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 10'000'000);
-    REQUIRE(rxs.payload.size == 0);   // Handed over to the output transfer.
+    REQUIRE(rxs.payload.size == 0);        // Handed over to the output transfer.
     REQUIRE(rxs.payload.data == nullptr);  // Handed over to the output transfer.
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);  // Incremented.
