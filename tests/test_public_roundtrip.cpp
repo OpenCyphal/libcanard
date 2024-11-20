@@ -184,19 +184,19 @@ TEST_CASE("RoundtripSimple")
                     REQUIRE(transfer.metadata.remote_node_id == ins_tx.getNodeID());
                     REQUIRE(transfer.metadata.transfer_id == ref_meta.transfer_id);
                     // The payload size is not checked because the variance is huge due to padding and truncation.
-                    if (transfer.payload != nullptr)
+                    if (transfer.payload.data != nullptr)
                     {
-                        REQUIRE(0 == std::memcmp(transfer.payload,
+                        REQUIRE(0 == std::memcmp(transfer.payload.data,
                                                  ref_payload.get(),
-                                                 std::min(transfer.payload_size, ref_payload_size)));
+                                                 std::min(transfer.payload.size, ref_payload_size)));
                     }
                     else
                     {
-                        REQUIRE(transfer.payload_size == 0U);
-                        REQUIRE(transfer.allocated_size == 0U);
+                        REQUIRE(transfer.payload.size == 0U);
+                        REQUIRE(transfer.payload.allocated_size == 0U);
                     }
 
-                    ins_rx.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
+                    ins_rx.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
                 }
                 else
                 {

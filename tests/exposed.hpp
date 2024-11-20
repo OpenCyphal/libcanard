@@ -45,14 +45,13 @@ struct TxItem final : CanardTxQueueItem
 
 struct RxSession
 {
-    CanardMicrosecond transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
-    std::size_t       total_payload_size      = 0U;
-    std::size_t       payload_size            = 0U;
-    std::uint8_t*     payload                 = nullptr;
-    TransferCRC       calculated_crc          = 0U;
-    CanardTransferID  transfer_id             = std::numeric_limits<std::uint8_t>::max();
-    std::uint8_t      redundant_iface_index   = std::numeric_limits<std::uint8_t>::max();
-    bool              toggle                  = false;
+    CanardMicrosecond    transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
+    std::size_t          total_payload_size      = 0U;
+    CanardMutablePayload payload                 = {0U, nullptr, 0U};
+    TransferCRC          calculated_crc          = 0U;
+    CanardTransferID     transfer_id             = std::numeric_limits<std::uint8_t>::max();
+    std::uint8_t         redundant_iface_index   = std::numeric_limits<std::uint8_t>::max();
+    bool                 toggle                  = false;
 };
 
 struct RxFrameModel
@@ -67,8 +66,7 @@ struct RxFrameModel
     bool                start_of_transfer   = false;
     bool                end_of_transfer     = false;
     bool                toggle              = false;
-    std::size_t         payload_size        = 0U;
-    const std::uint8_t* payload             = nullptr;
+    CanardPayload       payload             = {0U, nullptr};
 };
 
 // Extern C effectively discards the outer namespaces.
