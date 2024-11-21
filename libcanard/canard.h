@@ -171,6 +171,33 @@ struct CanardTreeNode
     int8_t          bf;     ///< Do not access this field.
 };
 
+struct CanardPayload
+{
+    /// Size of the payload data in bytes.
+    /// If the payload is empty (size = 0), the payload pointer may be NULL.
+    size_t size;
+
+    /// Pointer to the payload data buffer.
+    const void* data;
+};
+
+struct CanardMutablePayload
+{
+    /// Size of the payload data in bytes.
+    /// The value is always less than or equal to the extent specified in the subscription.
+    /// If the payload is empty (`size` = 0), the `data` pointer may be NULL.
+    size_t size;
+
+    /// The application is required to deallocate the payload buffer after the transfer is processed.
+    /// Allocated buffer size (`allocated_size`, not `size`) should be used to deallocate the buffer.
+    void* data;
+
+    /// Size of the allocated data buffer in bytes.
+    /// Normally equal to the extent specified in the subscription, but could be less (equal to `size`)
+    /// in case of single frame transfer, or even zero if the `data` pointer is NULL.
+    size_t allocated_size;
+};
+
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
 /// CAN frames with 11-bit ID are not used by Cyphal/CAN and so they are not supported by the library.
 typedef struct
@@ -179,14 +206,13 @@ typedef struct
     uint32_t extended_can_id;
 
     /// The useful data in the frame. The length value is not to be confused with DLC!
-    /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
+    /// If the payload is empty (payload.size = 0), the payload.data pointer may be NULL.
     /// For RX frames: the library does not expect the lifetime of the pointee to extend beyond the point of return
     /// from the API function. That is, the pointee can be invalidated immediately after the frame has been processed.
     /// For TX frames: the frame and the payload are allocated within the same dynamic memory fragment, so their
     /// lifetimes are identical; when the frame is freed, the payload is invalidated.
     /// A more detailed overview of the dataflow and related resource management issues is provided in the API docs.
-    size_t      payload_size;
-    const void* payload;
+    struct CanardPayload payload;
 } CanardFrame;
 
 /// Conversion look-up table from CAN DLC to data length.
@@ -384,19 +410,8 @@ typedef struct CanardRxTransfer
     /// The time system may be arbitrary as long as the clock is monotonic (steady).
     CanardMicrosecond timestamp_usec;
 
-    /// Size of the payload data in bytes.
-    /// The value is always less than or equal to the extent specified in the subscription.
-    /// If the payload is empty (payload_size = 0), the payload pointer may be NULL.
-    size_t payload_size;
-
-    /// The application is required to deallocate the payload buffer after the transfer is processed.
-    /// Allocated buffer size (`allocated_size`, not `payload_size`) should be used to deallocate the buffer.
-    void* payload;
-
-    /// Size of the allocated payload buffer in bytes.
-    /// Normally equal to the extent specified in the subscription, but could be less (equal to `payload_size`)
-    /// in case of single frame transfer, or even zero if the payload pointer is NULL.
-    size_t allocated_size;
+    /// The application is required to deallocate the payload after the transfer is processed.
+    struct CanardMutablePayload payload;
 } CanardRxTransfer;
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
@@ -509,8 +524,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
                      const CanardInstance* const         ins,
                      const CanardMicrosecond             tx_deadline_usec,
                      const CanardTransferMetadata* const metadata,
-                     const size_t                        payload_size,
-                     const void* const                   payload);
+                     const struct CanardPayload          payload);
 
 /// This function accesses the top element of the prioritized transmission queue. The queue itself is not modified
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport

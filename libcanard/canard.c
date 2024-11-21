@@ -132,12 +132,12 @@ CANARD_PRIVATE TransferCRC crcAddByte(const TransferCRC crc, const uint8_t byte)
 #endif
 }
 
-CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const size_t size, const void* const data)
+CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const struct CanardPayload payload)
 {
-    CANARD_ASSERT((data != NULL) || (size == 0U));
+    CANARD_ASSERT((payload.data != NULL) || (payload.size == 0U));
     TransferCRC    out = crc;
-    const uint8_t* p   = (const uint8_t*) data;
-    for (size_t i = 0; i < size; i++)
+    const uint8_t* p   = (const uint8_t*) payload.data;
+    for (size_t i = 0; i < payload.size; i++)
     {
         out = crcAddByte(out, *p);
         ++p;
@@ -208,8 +208,7 @@ CANARD_PRIVATE size_t adjustPresentationLayerMTU(const size_t mtu_bytes)
 }
 
 CANARD_PRIVATE int32_t txMakeCANID(const CanardTransferMetadata* const tr,
-                                   const size_t                        payload_size,
-                                   const void* const                   payload,
+                                   const struct CanardPayload          payload,
                                    const CanardNodeID                  local_node_id,
                                    const size_t                        presentation_layer_mtu)
 {
@@ -224,10 +223,10 @@ CANARD_PRIVATE int32_t txMakeCANID(const CanardTransferMetadata* const tr,
             out = (int32_t) txMakeMessageSessionSpecifier(tr->port_id, local_node_id);
             CANARD_ASSERT(out >= 0);
         }
-        else if (payload_size <= presentation_layer_mtu)
+        else if (payload.size <= presentation_layer_mtu)
         {
-            CANARD_ASSERT((payload != NULL) || (payload_size == 0U));
-            const CanardNodeID c    = (CanardNodeID) (crcAdd(CRC_INITIAL, payload_size, payload) & CANARD_NODE_ID_MAX);
+            CANARD_ASSERT((payload.data != NULL) || (payload.size == 0U));
+            const CanardNodeID c    = (CanardNodeID) (crcAdd(CRC_INITIAL, payload) & CANARD_NODE_ID_MAX);
             const uint32_t     spec = txMakeMessageSessionSpecifier(tr->port_id, c) | FLAG_ANONYMOUS_MESSAGE;
             CANARD_ASSERT(spec <= CAN_EXT_ID_MASK);
             out = (int32_t) spec;
@@ -317,8 +316,8 @@ CANARD_PRIVATE TxItem* txAllocateQueueItem(CanardTxQueue* const    que,
         out->base.next_in_transfer = NULL;  // Last by default.
         out->base.tx_deadline_usec = deadline_usec;
 
-        out->base.frame.payload_size    = payload_size;
-        out->base.frame.payload         = out->payload_buffer;
+        out->base.frame.payload.size    = payload_size;
+        out->base.frame.payload.data    = out->payload_buffer;
         out->base.frame.extended_can_id = id;
     }
     return out;
@@ -337,34 +336,33 @@ CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference,  // NOSONAR Cav
 }
 
 /// Returns the number of frames enqueued or error (i.e., =1 or <0).
-CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const    que,
-                                         const CanardMicrosecond deadline_usec,
-                                         const uint32_t          can_id,
-                                         const CanardTransferID  transfer_id,
-                                         const size_t            payload_size,
-                                         const void* const       payload)
+CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const       que,
+                                         const CanardMicrosecond    deadline_usec,
+                                         const uint32_t             can_id,
+                                         const CanardTransferID     transfer_id,
+                                         const struct CanardPayload payload)
 {
     CANARD_ASSERT(que != NULL);
-    CANARD_ASSERT((payload != NULL) || (payload_size == 0));
-    const size_t frame_payload_size = txRoundFramePayloadSizeUp(payload_size + 1U);
-    CANARD_ASSERT(frame_payload_size > payload_size);
-    const size_t padding_size = frame_payload_size - payload_size - 1U;
-    CANARD_ASSERT((padding_size + payload_size + 1U) == frame_payload_size);
+    CANARD_ASSERT((payload.data != NULL) || (payload.size == 0));
+    const size_t frame_payload_size = txRoundFramePayloadSizeUp(payload.size + 1U);
+    CANARD_ASSERT(frame_payload_size > payload.size);
+    const size_t padding_size = frame_payload_size - payload.size - 1U;
+    CANARD_ASSERT((padding_size + payload.size + 1U) == frame_payload_size);
     int32_t       out = 0;
     TxItem* const tqi =
         (que->size < que->capacity) ? txAllocateQueueItem(que, can_id, deadline_usec, frame_payload_size) : NULL;
     if (tqi != NULL)
     {
-        if (payload_size > 0U)  // The check is needed to avoid calling memcpy() with a NULL pointer, it's an UB.
+        if (payload.size > 0U)  // The check is needed to avoid calling memcpy() with a NULL pointer, it's an UB.
         {
-            CANARD_ASSERT(payload != NULL);
+            CANARD_ASSERT(payload.data != NULL);
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
             // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-            (void) memcpy(&tqi->payload_buffer[0], payload, payload_size);  // NOLINT
+            (void) memcpy(&tqi->payload_buffer[0], payload.data, payload.size);  // NOLINT
         }
         // Clang-Tidy raises an error recommending the use of memset_s() instead.
         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-        (void) memset(&tqi->payload_buffer[payload_size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
+        (void) memset(&tqi->payload_buffer[payload.size], PADDING_BYTE_VALUE, padding_size);  // NOLINT
         tqi->payload_buffer[frame_payload_size - 1U] = txMakeTailByte(true, true, true, transfer_id);
         // Insert the newly created TX item into the queue.
         const CanardTreeNode* const res = cavlSearch(&que->root, &tqi->base.base, &txAVLPredicate, &avlTrivialFactory);
@@ -383,25 +381,24 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const    que,
 }
 
 /// Produces a chain of Tx queue items for later insertion into the Tx queue. The tail is NULL if OOM.
-CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const    que,
-                                                 const size_t            presentation_layer_mtu,
-                                                 const CanardMicrosecond deadline_usec,
-                                                 const uint32_t          can_id,
-                                                 const CanardTransferID  transfer_id,
-                                                 const size_t            payload_size,
-                                                 const void* const       payload)
+CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const       que,
+                                                 const size_t               presentation_layer_mtu,
+                                                 const CanardMicrosecond    deadline_usec,
+                                                 const uint32_t             can_id,
+                                                 const CanardTransferID     transfer_id,
+                                                 const struct CanardPayload payload)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(presentation_layer_mtu > 0U);
-    CANARD_ASSERT(payload_size > presentation_layer_mtu);  // Otherwise, a single-frame transfer should be used.
-    CANARD_ASSERT(payload != NULL);
+    CANARD_ASSERT(payload.size > presentation_layer_mtu);  // Otherwise, a single-frame transfer should be used.
+    CANARD_ASSERT(payload.data != NULL);
 
     TxChain        out                   = {NULL, NULL, 0};
-    const size_t   payload_size_with_crc = payload_size + CRC_SIZE_BYTES;
+    const size_t   payload_size_with_crc = payload.size + CRC_SIZE_BYTES;
     size_t         offset                = 0U;
-    TransferCRC    crc                   = crcAdd(CRC_INITIAL, payload_size, payload);
+    TransferCRC    crc                   = crcAdd(CRC_INITIAL, payload);
     bool           toggle                = INITIAL_TOGGLE_STATE;
-    const uint8_t* payload_ptr           = (const uint8_t*) payload;
+    const uint8_t* payload_ptr           = (const uint8_t*) payload.data;
     while (offset < payload_size_with_crc)
     {
         out.size++;
@@ -429,9 +426,9 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const    que,
         // Copy the payload into the frame.
         const size_t frame_payload_size = frame_payload_size_with_tail - 1U;
         size_t       frame_offset       = 0U;
-        if (offset < payload_size)
+        if (offset < payload.size)
         {
-            size_t move_size = payload_size - offset;
+            size_t move_size = payload.size - offset;
             if (move_size > frame_payload_size)
             {
                 move_size = frame_payload_size;
@@ -446,7 +443,7 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const    que,
         }
 
         // Handle the last frame of the transfer: it is special because it also contains padding and CRC.
-        if (offset >= payload_size)
+        if (offset >= payload.size)
         {
             // Insert padding -- only in the last frame. Don't forget to include padding into the CRC.
             while ((frame_offset + CRC_SIZE_BYTES) < frame_payload_size)
@@ -457,14 +454,14 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const    que,
             }
 
             // Insert the CRC.
-            if ((frame_offset < frame_payload_size) && (offset == payload_size))
+            if ((frame_offset < frame_payload_size) && (offset == payload.size))
             {
                 // SonarQube incorrectly detects a buffer overflow here.
                 out.tail->payload_buffer[frame_offset] = (uint8_t) (crc >> BITS_PER_BYTE);  // NOSONAR
                 ++frame_offset;
                 ++offset;
             }
-            if ((frame_offset < frame_payload_size) && (offset > payload_size))
+            if ((frame_offset < frame_payload_size) && (offset > payload.size))
             {
                 out.tail->payload_buffer[frame_offset] = (uint8_t) (crc & BYTE_MAX);
                 ++frame_offset;
@@ -473,7 +470,7 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const    que,
         }
 
         // Finalize the frame.
-        CANARD_ASSERT((frame_offset + 1U) == out.tail->base.frame.payload_size);
+        CANARD_ASSERT((frame_offset + 1U) == out.tail->base.frame.payload.size);
         // SonarQube incorrectly detects a buffer overflow here.
         out.tail->payload_buffer[frame_offset] =  // NOSONAR
             txMakeTailByte(out.head == out.tail, offset >= payload_size_with_crc, toggle, transfer_id);
@@ -483,31 +480,25 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const    que,
 }
 
 /// Returns the number of frames enqueued or error.
-CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const    que,
-                                        const size_t            presentation_layer_mtu,
-                                        const CanardMicrosecond deadline_usec,
-                                        const uint32_t          can_id,
-                                        const CanardTransferID  transfer_id,
-                                        const size_t            payload_size,
-                                        const void* const       payload)
+CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const       que,
+                                        const size_t               presentation_layer_mtu,
+                                        const CanardMicrosecond    deadline_usec,
+                                        const uint32_t             can_id,
+                                        const CanardTransferID     transfer_id,
+                                        const struct CanardPayload payload)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(presentation_layer_mtu > 0U);
-    CANARD_ASSERT(payload_size > presentation_layer_mtu);  // Otherwise, a single-frame transfer should be used.
+    CANARD_ASSERT(payload.size > presentation_layer_mtu);  // Otherwise, a single-frame transfer should be used.
 
     int32_t      out                   = 0;  // The number of frames enqueued or negated error.
-    const size_t payload_size_with_crc = payload_size + CRC_SIZE_BYTES;
+    const size_t payload_size_with_crc = payload.size + CRC_SIZE_BYTES;
     const size_t num_frames = ((payload_size_with_crc + presentation_layer_mtu) - 1U) / presentation_layer_mtu;
     CANARD_ASSERT(num_frames >= 2);
     if ((que->size + num_frames) <= que->capacity)  // Bail early if we can see that we won't fit anyway.
     {
-        const TxChain sq = txGenerateMultiFrameChain(que,
-                                                     presentation_layer_mtu,
-                                                     deadline_usec,
-                                                     can_id,
-                                                     transfer_id,
-                                                     payload_size,
-                                                     payload);
+        const TxChain sq =
+            txGenerateMultiFrameChain(que, presentation_layer_mtu, deadline_usec, can_id, transfer_id, payload);
         if (sq.tail != NULL)
         {
             CanardTxQueueItem* next = &sq.head->base;
@@ -559,29 +550,27 @@ typedef struct CanardInternalRxSession
 {
     CanardMicrosecond transfer_timestamp_usec;  ///< Timestamp of the last received start-of-transfer.
     size_t            total_payload_size;       ///< The payload size before the implicit truncation, including the CRC.
-    size_t            payload_size;             ///< How many bytes received so far.
-    uint8_t*          payload;                  ///< Dynamically allocated and handed off to the application when done.
-    TransferCRC       calculated_crc;           ///< Updated with the received payload in real time.
-    CanardTransferID  transfer_id;
-    uint8_t           redundant_iface_index;  ///< Arbitrary value in [0, 255].
-    bool              toggle;
+    struct CanardMutablePayload payload;        ///< Dynamically allocated and handed off to the application when done.
+    TransferCRC                 calculated_crc;  ///< Updated with the received payload in real time.
+    CanardTransferID            transfer_id;
+    uint8_t                     redundant_iface_index;  ///< Arbitrary value in [0, 255].
+    bool                        toggle;
 } CanardInternalRxSession;
 
 /// High-level transport frame model.
 typedef struct
 {
-    CanardMicrosecond  timestamp_usec;
-    CanardPriority     priority;
-    CanardTransferKind transfer_kind;
-    CanardPortID       port_id;
-    CanardNodeID       source_node_id;
-    CanardNodeID       destination_node_id;
-    CanardTransferID   transfer_id;
-    bool               start_of_transfer;
-    bool               end_of_transfer;
-    bool               toggle;
-    size_t             payload_size;
-    const void*        payload;
+    CanardMicrosecond    timestamp_usec;
+    CanardPriority       priority;
+    CanardTransferKind   transfer_kind;
+    CanardPortID         port_id;
+    CanardNodeID         source_node_id;
+    CanardNodeID         destination_node_id;
+    CanardTransferID     transfer_id;
+    bool                 start_of_transfer;
+    bool                 end_of_transfer;
+    bool                 toggle;
+    struct CanardPayload payload;
 } RxFrameModel;
 
 /// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid Cyphal/CAN frame.
@@ -593,9 +582,9 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
     CANARD_ASSERT(frame->extended_can_id <= CAN_EXT_ID_MASK);
     CANARD_ASSERT(out != NULL);
     bool valid = false;
-    if (frame->payload_size > 0)
+    if (frame->payload.size > 0)
     {
-        CANARD_ASSERT(frame->payload != NULL);
+        CANARD_ASSERT(frame->payload.data != NULL);
         out->timestamp_usec = timestamp_usec;
 
         // CAN ID parsing.
@@ -626,12 +615,12 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
         }
 
         // Payload parsing.
-        out->payload_size = frame->payload_size - 1U;  // Cut off the tail byte.
-        out->payload      = frame->payload;
+        out->payload.size = frame->payload.size - 1U;  // Cut off the tail byte.
+        out->payload.data = frame->payload.data;
 
         // Tail byte parsing.
         // Intentional violation of MISRA: pointer arithmetics is required to locate the tail byte. Unavoidable.
-        const uint8_t tail     = *(((const uint8_t*) out->payload) + out->payload_size);  // NOSONAR
+        const uint8_t tail     = *(((const uint8_t*) out->payload.data) + out->payload.size);  // NOSONAR
         out->transfer_id       = tail & CANARD_TRANSFER_ID_MAX;
         out->start_of_transfer = ((tail & TAIL_START_OF_TRANSFER) != 0);
         out->end_of_transfer   = ((tail & TAIL_END_OF_TRANSFER) != 0);
@@ -644,9 +633,9 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
         valid = valid &&
                 ((out->start_of_transfer && out->end_of_transfer) || (CANARD_NODE_ID_UNSET != out->source_node_id));
         // Non-last frames of a multi-frame transfer shall utilize the MTU fully.
-        valid = valid && ((out->payload_size >= MFT_NON_LAST_FRAME_PAYLOAD_MIN) || out->end_of_transfer);
+        valid = valid && ((out->payload.size >= MFT_NON_LAST_FRAME_PAYLOAD_MIN) || out->end_of_transfer);
         // A frame that is a part of a multi-frame transfer cannot be empty (tail byte not included).
-        valid = valid && ((out->payload_size > 0) || (out->start_of_transfer && out->end_of_transfer));
+        valid = valid && ((out->payload.size > 0) || (out->start_of_transfer && out->end_of_transfer));
     }
     return valid;
 }
@@ -655,7 +644,7 @@ CANARD_PRIVATE void rxInitTransferMetadataFromFrame(const RxFrameModel* const   
                                                     CanardTransferMetadata* const out_transfer)
 {
     CANARD_ASSERT(frame != NULL);
-    CANARD_ASSERT(frame->payload != NULL);
+    CANARD_ASSERT(frame->payload.data != NULL);
     CANARD_ASSERT(out_transfer != NULL);
     out_transfer->priority       = frame->priority;
     out_transfer->transfer_kind  = frame->transfer_kind;
@@ -681,35 +670,35 @@ CANARD_PRIVATE uint8_t rxComputeTransferIDDifference(const uint8_t a, const uint
 CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
                                             CanardInternalRxSession* const rxs,
                                             const size_t                   extent,
-                                            const size_t                   payload_size,
-                                            const void* const              payload)
+                                            const struct CanardPayload     payload)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
-    CANARD_ASSERT((payload != NULL) || (payload_size == 0U));
-    CANARD_ASSERT(rxs->payload_size <= extent);  // This invariant is enforced by the subscription logic.
-    CANARD_ASSERT(rxs->payload_size <= rxs->total_payload_size);
+    CANARD_ASSERT((payload.data != NULL) || (payload.size == 0U));
+    CANARD_ASSERT(rxs->payload.size <= extent);  // This invariant is enforced by the subscription logic.
+    CANARD_ASSERT(rxs->payload.size <= rxs->total_payload_size);
 
-    rxs->total_payload_size += payload_size;
+    rxs->total_payload_size += payload.size;
 
     // Allocate the payload lazily, as late as possible.
-    if ((NULL == rxs->payload) && (extent > 0U))
+    if ((NULL == rxs->payload.data) && (extent > 0U))
     {
-        CANARD_ASSERT(rxs->payload_size == 0);
-        rxs->payload = ins->memory.allocate(ins->memory.user_reference, extent);
+        CANARD_ASSERT(rxs->payload.size == 0);
+        rxs->payload.data           = ins->memory.allocate(ins->memory.user_reference, extent);
+        rxs->payload.allocated_size = extent;
     }
 
     int8_t out = 0;
-    if (rxs->payload != NULL)
+    if (rxs->payload.data != NULL)
     {
         // Copy the payload into the contiguous buffer. Apply the implicit truncation rule if necessary.
-        size_t bytes_to_copy = payload_size;
-        if ((rxs->payload_size + bytes_to_copy) > extent)
+        size_t bytes_to_copy = payload.size;
+        if ((rxs->payload.size + bytes_to_copy) > extent)
         {
-            CANARD_ASSERT(rxs->payload_size <= extent);
-            bytes_to_copy = extent - rxs->payload_size;
-            CANARD_ASSERT((rxs->payload_size + bytes_to_copy) == extent);
-            CANARD_ASSERT(bytes_to_copy < payload_size);
+            CANARD_ASSERT(rxs->payload.size <= extent);
+            bytes_to_copy = extent - rxs->payload.size;
+            CANARD_ASSERT((rxs->payload.size + bytes_to_copy) == extent);
+            CANARD_ASSERT(bytes_to_copy < payload.size);
         }
         // This memcpy() call here is one of the two variable-complexity operations in the RX pipeline;
         // the other one is the search of the matching subscription state.
@@ -717,31 +706,34 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
         // Intentional violation of MISRA: indexing on a pointer. This is done to avoid pointer arithmetics.
         // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-        (void) memcpy(&rxs->payload[rxs->payload_size], payload, bytes_to_copy);  // NOLINT NOSONAR
-        rxs->payload_size += bytes_to_copy;
-        CANARD_ASSERT(rxs->payload_size <= extent);
+        (void) memcpy(((uint8_t*) rxs->payload.data) + rxs->payload.size,  // NOLINT NOSONAR
+                      payload.data,
+                      bytes_to_copy);
+        rxs->payload.size += bytes_to_copy;
+        CANARD_ASSERT(rxs->payload.size <= extent);
+        CANARD_ASSERT(rxs->payload.size <= rxs->payload.allocated_size);
     }
     else
     {
-        CANARD_ASSERT(rxs->payload_size == 0);
+        CANARD_ASSERT(rxs->payload.size == 0);
         out = (extent > 0U) ? -CANARD_ERROR_OUT_OF_MEMORY : 0;
     }
     CANARD_ASSERT(out <= 0);
     return out;
 }
 
-CANARD_PRIVATE void rxSessionRestart(CanardInstance* const          ins,
-                                     CanardInternalRxSession* const rxs,
-                                     const size_t                   allocated_size)
+CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRxSession* const rxs)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
-    ins->memory.deallocate(ins->memory.user_reference, allocated_size, rxs->payload);  // May be NULL, which is OK.
-    rxs->total_payload_size = 0U;
-    rxs->payload_size       = 0U;
-    rxs->payload            = NULL;
-    rxs->calculated_crc     = CRC_INITIAL;
-    rxs->transfer_id        = (CanardTransferID) ((rxs->transfer_id + 1U) & CANARD_TRANSFER_ID_MAX);
+    // `rxs->payload.data` may be NULL, which is OK.
+    ins->memory.deallocate(ins->memory.user_reference, rxs->payload.allocated_size, rxs->payload.data);
+    rxs->total_payload_size     = 0U;
+    rxs->payload.size           = 0U;
+    rxs->payload.data           = NULL;
+    rxs->payload.allocated_size = 0U;
+    rxs->calculated_crc         = CRC_INITIAL;
+    rxs->transfer_id            = (CanardTransferID) ((rxs->transfer_id + 1U) & CANARD_TRANSFER_ID_MAX);
     // The transport index is retained.
     rxs->toggle = INITIAL_TOGGLE_STATE;
 }
@@ -755,7 +747,7 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
     CANARD_ASSERT(frame != NULL);
-    CANARD_ASSERT(frame->payload != NULL);
+    CANARD_ASSERT(frame->payload.data != NULL);
     CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
     CANARD_ASSERT(out_transfer != NULL);
 
@@ -769,14 +761,14 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
     {
         // Update the CRC. Observe that the implicit truncation rule may apply here: the payload may be
         // truncated, but its CRC is validated always anyway.
-        rxs->calculated_crc = crcAdd(rxs->calculated_crc, frame->payload_size, frame->payload);
+        rxs->calculated_crc = crcAdd(rxs->calculated_crc, frame->payload);
     }
 
-    int8_t out = rxSessionWritePayload(ins, rxs, extent, frame->payload_size, frame->payload);
+    int8_t out = rxSessionWritePayload(ins, rxs, extent, frame->payload);
     if (out < 0)
     {
         CANARD_ASSERT(-CANARD_ERROR_OUT_OF_MEMORY == out);
-        rxSessionRestart(ins, rxs, extent);  // Out-of-memory.
+        rxSessionRestart(ins, rxs);  // Out-of-memory.
     }
     else if (frame->end_of_transfer)
     {
@@ -786,22 +778,23 @@ CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
             out = 1;  // One transfer received, notify the application.
             rxInitTransferMetadataFromFrame(frame, &out_transfer->metadata);
             out_transfer->timestamp_usec = rxs->transfer_timestamp_usec;
-            out_transfer->payload_size   = rxs->payload_size;
             out_transfer->payload        = rxs->payload;
-            out_transfer->allocated_size = (rxs->payload != NULL) ? extent : 0U;
 
             // Cut off the CRC from the payload if it's there -- we don't want to expose it to the user.
-            CANARD_ASSERT(rxs->total_payload_size >= rxs->payload_size);
-            const size_t truncated_amount = rxs->total_payload_size - rxs->payload_size;
+            CANARD_ASSERT(rxs->total_payload_size >= rxs->payload.size);
+            const size_t truncated_amount = rxs->total_payload_size - rxs->payload.size;
             if ((!single_frame) && (CRC_SIZE_BYTES > truncated_amount))  // Single-frame transfers don't have CRC.
             {
-                CANARD_ASSERT(out_transfer->payload_size >= (CRC_SIZE_BYTES - truncated_amount));
-                out_transfer->payload_size -= CRC_SIZE_BYTES - truncated_amount;
+                CANARD_ASSERT(out_transfer->payload.size >= (CRC_SIZE_BYTES - truncated_amount));
+                out_transfer->payload.size -= CRC_SIZE_BYTES - truncated_amount;
             }
 
-            rxs->payload = NULL;  // Ownership passed over to the application, nullify to prevent freeing.
+            // Ownership passed over to the application, nullify to prevent freeing.
+            rxs->payload.size           = 0U;
+            rxs->payload.data           = NULL;
+            rxs->payload.allocated_size = 0U;
         }
-        rxSessionRestart(ins, rxs, extent);  // Successful completion.
+        rxSessionRestart(ins, rxs);  // Successful completion.
     }
     else
     {
@@ -860,7 +853,7 @@ CANARD_PRIVATE void rxSessionSynchronize(CanardInternalRxSession* const rxs,
     {
         CANARD_ASSERT(frame->start_of_transfer);
         rxs->total_payload_size    = 0U;
-        rxs->payload_size          = 0U;  // The buffer is not released because we still need it.
+        rxs->payload.size          = 0U;  // The buffer is not released because we still need it.
         rxs->calculated_crc        = CRC_INITIAL;
         rxs->transfer_id           = frame->transfer_id;
         rxs->toggle                = INITIAL_TOGGLE_STATE;
@@ -923,7 +916,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
     CANARD_ASSERT(subscription != NULL);
     CANARD_ASSERT(subscription->port_id == frame->port_id);
     CANARD_ASSERT(frame != NULL);
-    CANARD_ASSERT(frame->payload != NULL);
+    CANARD_ASSERT(frame->payload.data != NULL);
     CANARD_ASSERT(frame->transfer_id <= CANARD_TRANSFER_ID_MAX);
     CANARD_ASSERT((CANARD_NODE_ID_UNSET == frame->destination_node_id) || (ins->node_id == frame->destination_node_id));
     CANARD_ASSERT(out_transfer != NULL);
@@ -943,8 +936,9 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
             {
                 rxs->transfer_timestamp_usec = frame->timestamp_usec;
                 rxs->total_payload_size      = 0U;
-                rxs->payload_size            = 0U;
-                rxs->payload                 = NULL;
+                rxs->payload.size            = 0U;
+                rxs->payload.data            = NULL;
+                rxs->payload.allocated_size  = 0U;
                 rxs->calculated_crc          = CRC_INITIAL;
                 rxs->transfer_id             = frame->transfer_id;
                 rxs->redundant_iface_index   = redundant_iface_index;
@@ -975,18 +969,18 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
         // We have to copy the data into an allocated storage because the API expects it: the lifetime shall be
         // independent of the input data and the memory shall be free-able.
         const size_t payload_size =
-            (subscription->extent < frame->payload_size) ? subscription->extent : frame->payload_size;
-        void* const payload = ins->memory.allocate(ins->memory.user_reference, payload_size);
-        if (payload != NULL)
+            (subscription->extent < frame->payload.size) ? subscription->extent : frame->payload.size;
+        void* const payload_data = ins->memory.allocate(ins->memory.user_reference, payload_size);
+        if (payload_data != NULL)
         {
             rxInitTransferMetadataFromFrame(frame, &out_transfer->metadata);
-            out_transfer->timestamp_usec = frame->timestamp_usec;
-            out_transfer->payload_size   = payload_size;
-            out_transfer->payload        = payload;
-            out_transfer->allocated_size = payload_size;
+            out_transfer->timestamp_usec         = frame->timestamp_usec;
+            out_transfer->payload.size           = payload_size;
+            out_transfer->payload.data           = payload_data;
+            out_transfer->payload.allocated_size = payload_size;
             // Clang-Tidy raises an error recommending the use of memcpy_s() instead.
             // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
-            (void) memcpy(payload, frame->payload, payload_size);  // NOLINT
+            (void) memcpy(payload_data, frame->payload.data, payload_size);  // NOLINT
             out = 1;
         }
         else
@@ -1061,24 +1055,18 @@ int32_t canardTxPush(CanardTxQueue* const                que,
                      const CanardInstance* const         ins,
                      const CanardMicrosecond             tx_deadline_usec,
                      const CanardTransferMetadata* const metadata,
-                     const size_t                        payload_size,
-                     const void* const                   payload)
+                     const struct CanardPayload          payload)
 {
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
-    if ((ins != NULL) && (que != NULL) && (metadata != NULL) && ((payload != NULL) || (0U == payload_size)))
+    if ((ins != NULL) && (que != NULL) && (metadata != NULL) && ((payload.data != NULL) || (0U == payload.size)))
     {
         const size_t  pl_mtu       = adjustPresentationLayerMTU(que->mtu_bytes);
-        const int32_t maybe_can_id = txMakeCANID(metadata, payload_size, payload, ins->node_id, pl_mtu);
+        const int32_t maybe_can_id = txMakeCANID(metadata, payload, ins->node_id, pl_mtu);
         if (maybe_can_id >= 0)
         {
-            if (payload_size <= pl_mtu)
+            if (payload.size <= pl_mtu)
             {
-                out = txPushSingleFrame(que,
-                                        tx_deadline_usec,
-                                        (uint32_t) maybe_can_id,
-                                        metadata->transfer_id,
-                                        payload_size,
-                                        payload);
+                out = txPushSingleFrame(que, tx_deadline_usec, (uint32_t) maybe_can_id, metadata->transfer_id, payload);
                 CANARD_ASSERT((out < 0) || (out == 1));
             }
             else
@@ -1088,7 +1076,6 @@ int32_t canardTxPush(CanardTxQueue* const                que,
                                        tx_deadline_usec,
                                        (uint32_t) maybe_can_id,
                                        metadata->transfer_id,
-                                       payload_size,
                                        payload);
                 CANARD_ASSERT((out < 0) || (out >= 2));
             }
@@ -1142,7 +1129,7 @@ int8_t canardRxAccept(CanardInstance* const        ins,
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (out_transfer != NULL) && (frame != NULL) && (frame->extended_can_id <= CAN_EXT_ID_MASK) &&
-        ((frame->payload != NULL) || (0 == frame->payload_size)))
+        ((frame->payload.data != NULL) || (0 == frame->payload.size)))
     {
         RxFrameModel model = {0};
         if (rxTryParseFrame(timestamp_usec, frame, &model))
@@ -1242,12 +1229,15 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
             out = 1;
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
             {
-                if (sub->sessions[i] != NULL)
+                CanardInternalRxSession* const session = sub->sessions[i];
+                if (session != NULL)
                 {
-                    ins->memory.deallocate(ins->memory.user_reference, sub->extent, sub->sessions[i]->payload);
+                    ins->memory.deallocate(ins->memory.user_reference,
+                                           session->payload.allocated_size,
+                                           session->payload.data);
+                    ins->memory.deallocate(ins->memory.user_reference, sizeof(*session), session);
+                    sub->sessions[i] = NULL;
                 }
-                ins->memory.deallocate(ins->memory.user_reference, sizeof(*sub->sessions[i]), sub->sessions[i]);
-                sub->sessions[i] = NULL;
             }
         }
         else

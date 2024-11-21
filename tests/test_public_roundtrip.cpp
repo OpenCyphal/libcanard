@@ -100,7 +100,7 @@ TEST_CASE("RoundtripSimple")
             {
                 const std::lock_guard locker(lock);
                 const auto            result =
-                    que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, payload_size, payload.get());
+                    que_tx.push(&ins_tx.getInstance(), timestamp_usec, tran, {payload_size, payload.get()});
                 if (result > 0)
                 {
                     pending_transfers.emplace(timestamp_usec, Pending{tran, payload_size, std::move(payload)});
@@ -148,10 +148,10 @@ TEST_CASE("RoundtripSimple")
 
             if (ti != nullptr)
             {
-                const auto tail = static_cast<const std::uint8_t*>(ti->frame.payload)[ti->frame.payload_size - 1U];
+                const auto tail = static_cast<const std::uint8_t*>(ti->frame.payload.data)[ti->frame.payload.size - 1U];
                 log_file << ti->tx_deadline_usec << " "                                                              //
                          << std::hex << std::setfill('0') << std::setw(8) << ti->frame.extended_can_id               //
-                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << ti->frame.payload_size << "] "  //
+                         << " [" << std::dec << std::setfill(' ') << std::setw(2) << ti->frame.payload.size << "] "  //
                          << (static_cast<bool>(tail & 128U) ? 'S' : ' ')                                             //
                          << (static_cast<bool>(tail & 64U) ? 'E' : ' ')                                              //
                          << (static_cast<bool>(tail & 32U) ? 'T' : ' ')                                              //
@@ -184,19 +184,19 @@ TEST_CASE("RoundtripSimple")
                     REQUIRE(transfer.metadata.remote_node_id == ins_tx.getNodeID());
                     REQUIRE(transfer.metadata.transfer_id == ref_meta.transfer_id);
                     // The payload size is not checked because the variance is huge due to padding and truncation.
-                    if (transfer.payload != nullptr)
+                    if (transfer.payload.data != nullptr)
                     {
-                        REQUIRE(0 == std::memcmp(transfer.payload,
+                        REQUIRE(0 == std::memcmp(transfer.payload.data,
                                                  ref_payload.get(),
-                                                 std::min(transfer.payload_size, ref_payload_size)));
+                                                 std::min(transfer.payload.size, ref_payload_size)));
                     }
                     else
                     {
-                        REQUIRE(transfer.payload_size == 0U);
-                        REQUIRE(transfer.allocated_size == 0U);
+                        REQUIRE(transfer.payload.size == 0U);
+                        REQUIRE(transfer.payload.allocated_size == 0U);
                     }
 
-                    ins_rx.getAllocator().deallocate(transfer.payload, transfer.allocated_size);
+                    ins_rx.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
                 }
                 else
                 {

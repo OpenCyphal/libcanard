@@ -19,17 +19,17 @@ struct TxItem final : CanardTxQueueItem
 {
     [[nodiscard]] auto getPayloadByte(const std::size_t offset) const -> std::uint8_t
     {
-        return reinterpret_cast<const std::uint8_t*>(frame.payload)[offset];
+        return static_cast<const std::uint8_t*>(frame.payload.data)[offset];
     }
 
     [[nodiscard]] auto getTailByte() const
     {
-        if (frame.payload_size < 1U)
+        if (frame.payload.size < 1U)
         {
             // Can't use REQUIRE because it is not thread-safe.
             throw std::logic_error("Can't get the tail byte because the frame payload is empty.");
         }
-        return getPayloadByte(frame.payload_size - 1U);
+        return getPayloadByte(frame.payload.size - 1U);
     }
 
     [[nodiscard]] auto isStartOfTransfer() const { return (getTailByte() & 128U) != 0; }
@@ -45,30 +45,28 @@ struct TxItem final : CanardTxQueueItem
 
 struct RxSession
 {
-    CanardMicrosecond transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
-    std::size_t       total_payload_size      = 0U;
-    std::size_t       payload_size            = 0U;
-    std::uint8_t*     payload                 = nullptr;
-    TransferCRC       calculated_crc          = 0U;
-    CanardTransferID  transfer_id             = std::numeric_limits<std::uint8_t>::max();
-    std::uint8_t      redundant_iface_index   = std::numeric_limits<std::uint8_t>::max();
-    bool              toggle                  = false;
+    CanardMicrosecond    transfer_timestamp_usec = std::numeric_limits<std::uint64_t>::max();
+    std::size_t          total_payload_size      = 0U;
+    CanardMutablePayload payload                 = {0U, nullptr, 0U};
+    TransferCRC          calculated_crc          = 0U;
+    CanardTransferID     transfer_id             = std::numeric_limits<std::uint8_t>::max();
+    std::uint8_t         redundant_iface_index   = std::numeric_limits<std::uint8_t>::max();
+    bool                 toggle                  = false;
 };
 
 struct RxFrameModel
 {
-    CanardMicrosecond   timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
-    CanardPriority      priority            = CanardPriorityOptional;
-    CanardTransferKind  transfer_kind       = CanardTransferKindMessage;
-    CanardPortID        port_id             = std::numeric_limits<std::uint16_t>::max();
-    CanardNodeID        source_node_id      = CANARD_NODE_ID_UNSET;
-    CanardNodeID        destination_node_id = CANARD_NODE_ID_UNSET;
-    CanardTransferID    transfer_id         = std::numeric_limits<std::uint8_t>::max();
-    bool                start_of_transfer   = false;
-    bool                end_of_transfer     = false;
-    bool                toggle              = false;
-    std::size_t         payload_size        = 0U;
-    const std::uint8_t* payload             = nullptr;
+    CanardMicrosecond  timestamp_usec      = std::numeric_limits<std::uint64_t>::max();
+    CanardPriority     priority            = CanardPriorityOptional;
+    CanardTransferKind transfer_kind       = CanardTransferKindMessage;
+    CanardPortID       port_id             = std::numeric_limits<std::uint16_t>::max();
+    CanardNodeID       source_node_id      = CANARD_NODE_ID_UNSET;
+    CanardNodeID       destination_node_id = CANARD_NODE_ID_UNSET;
+    CanardTransferID   transfer_id         = std::numeric_limits<std::uint8_t>::max();
+    bool               start_of_transfer   = false;
+    bool               end_of_transfer     = false;
+    bool               toggle              = false;
+    CanardPayload      payload             = {0U, nullptr};
 };
 
 // Extern C effectively discards the outer namespaces.

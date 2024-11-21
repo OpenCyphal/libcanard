@@ -288,12 +288,11 @@ public:
     [[nodiscard]] auto push(CanardInstance* const         ins,
                             const CanardMicrosecond       transmission_deadline_usec,
                             const CanardTransferMetadata& metadata,
-                            const std::size_t             payload_size,
-                            const void* const             payload)
+                            const struct CanardPayload    payload)
     {
         checkInvariants();
         const auto size_before = que_.size;
-        const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
+        const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload);
         const auto num_added   = static_cast<std::size_t>(ret);
         enforce((ret < 0) || ((size_before + num_added) == que_.size), "Unexpected size change after push");
         checkInvariants();
