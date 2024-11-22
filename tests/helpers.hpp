@@ -193,7 +193,7 @@ public:
 
     [[nodiscard]] auto rxAccept(const CanardMicrosecond      timestamp_usec,
                                 const CanardFrame&           frame,
-                                const uint8_t                redundant_iface_index,
+                                const std::uint8_t           redundant_iface_index,
                                 CanardRxTransfer&            out_transfer,
                                 CanardRxSubscription** const out_subscription)
     {
@@ -327,6 +327,8 @@ public:
         checkInvariants();
         return static_cast<exposed::TxItem*>(out);  // NOLINT static downcast
     }
+
+    void freeItem(Instance& ins, CanardTxQueueItem* const item) { canardTxFree(&que_, &ins.getInstance(), item); }
 
     [[nodiscard]] auto getSize() const
     {

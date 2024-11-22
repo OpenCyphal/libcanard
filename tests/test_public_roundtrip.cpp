@@ -4,16 +4,22 @@
 #include "helpers.hpp"
 #include "exposed.hpp"
 #include "catch.hpp"
+
+#include <canard.h>
+
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <memory>
 #include <mutex>
 #include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 
@@ -160,9 +166,11 @@ TEST_CASE("RoundtripSimple")
 
                 CanardRxTransfer      transfer{};
                 CanardRxSubscription* subscription = nullptr;
-                const std::int8_t result = ins_rx.rxAccept(ti->tx_deadline_usec, ti->frame, 0, transfer, &subscription);
+                const CanardFrame     frame        = {.extended_can_id = ti->frame.extended_can_id,
+                                                      .payload = {.size = ti->frame.payload.size, .data = ti->frame.payload.data}};
+                const std::int8_t     result = ins_rx.rxAccept(ti->tx_deadline_usec, frame, 0, transfer, &subscription);
                 REQUIRE(0 == ins_rx.rxAccept(ti->tx_deadline_usec,
-                                             ti->frame,
+                                             frame,
                                              1,
                                              transfer,
                                              &subscription));  // Redundant interface will never be used here.
@@ -214,7 +222,7 @@ TEST_CASE("RoundtripSimple")
 
             {
                 const std::lock_guard locker(lock);
-                ins_tx.getAllocator().deallocate(ti, (ti != nullptr) ? ti->allocated_size : 0);
+                que_tx.freeItem(ins_tx, ti);
             }
 
             if (std::chrono::steady_clock::now() > deadline)

@@ -215,6 +215,13 @@ typedef struct
     struct CanardPayload payload;
 } CanardFrame;
 
+/// TODO: docs!
+struct CanardMutableFrame
+{
+    uint32_t                    extended_can_id;
+    struct CanardMutablePayload payload;
+};
+
 /// Conversion look-up table from CAN DLC to data length.
 extern const uint8_t CanardCANDLCToLength[16];
 
@@ -359,12 +366,8 @@ struct CanardTxQueueItem
     /// Frames whose transmission deadline is in the past shall be dropped.
     CanardMicrosecond tx_deadline_usec;
 
-    /// The amount of memory allocated for this item, including the frame payload.
-    /// This value is needed for memory deallocation because the deallocation function takes the fragment size.
-    size_t allocated_size;
-
     /// The actual CAN frame data.
-    CanardFrame frame;
+    struct CanardMutableFrame frame;
 };
 
 /// Transfer subscription state. The application can register its interest in a particular kind of data exchanged
@@ -553,13 +556,20 @@ const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que);
 /// This function transfers the ownership of the specified element of the prioritized transmission queue from the queue
 /// to the application. The element does not necessarily need to be the top one -- it is safe to dequeue any element.
 /// The element is dequeued but not invalidated; it is the responsibility of the application to deallocate the
-/// memory used by the object later. The memory SHALL NOT be deallocated UNTIL this function is invoked.
-/// The function returns the same pointer that it is given except that it becomes mutable.
+/// memory used by the object later (use `canardTxFree` helper).The memory SHALL NOT be deallocated UNTIL this function
+/// is invoked. The function returns the same pointer that it is given except that it becomes mutable.
 ///
 /// If any of the arguments are NULL, the function has no effect and returns NULL.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
 CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem* const item);
+
+/// This is a helper that frees the memory allocated (from the instance memory) for the item,
+/// as well as the internal frame payload buffer (if any) associated with it (using TX queue memory).
+/// If the item argument is NULL, the function has no effect. The time complexity is constant.
+/// If the item frame payload is NULL then it is assumed that the payload buffer was already freed,
+/// or moved to different ownership (f.e. to media layer).
+void canardTxFree(CanardTxQueue* const que, const CanardInstance* const ins, CanardTxQueueItem* const item);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a
