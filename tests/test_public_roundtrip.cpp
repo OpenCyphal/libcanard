@@ -166,9 +166,8 @@ TEST_CASE("RoundtripSimple")
 
                 CanardRxTransfer      transfer{};
                 CanardRxSubscription* subscription = nullptr;
-                const CanardFrame     frame        = {.extended_can_id = ti->frame.extended_can_id,
-                                                      .payload = {.size = ti->frame.payload.size, .data = ti->frame.payload.data}};
-                const std::int8_t     result = ins_rx.rxAccept(ti->tx_deadline_usec, frame, 0, transfer, &subscription);
+                const CanardFrame frame = {ti->frame.extended_can_id, {ti->frame.payload.size, ti->frame.payload.data}};
+                const std::int8_t result = ins_rx.rxAccept(ti->tx_deadline_usec, frame, 0, transfer, &subscription);
                 REQUIRE(0 == ins_rx.rxAccept(ti->tx_deadline_usec,
                                              frame,
                                              1,
