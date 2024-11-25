@@ -1102,14 +1102,14 @@ int32_t canardTxPush(CanardTxQueue* const                que,
     return out;
 }
 
-const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que)
+CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que)
 {
-    const CanardTxQueueItem* out = NULL;
+    CanardTxQueueItem* out = NULL;
     if (que != NULL)
     {
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
-        out = (const CanardTxQueueItem*) (void*) cavlFindExtremum(que->root, false);
+        out = (CanardTxQueueItem*) (void*) cavlFindExtremum(que->root, false);
     }
     return out;
 }

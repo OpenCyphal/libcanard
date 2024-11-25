@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <numeric>
 
 TEST_CASE("TxBasic0")
 {
@@ -22,10 +23,7 @@ TEST_CASE("TxBasic0")
     auto& alloc = ins.getAllocator();
 
     std::array<std::uint8_t, 1024> payload{};
-    for (std::size_t i = 0; i < std::size(payload); i++)
-    {
-        payload.at(i) = static_cast<std::uint8_t>(i & 0xFFU);
-    }
+    std::iota(payload.begin(), payload.end(), 0U);
 
     REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
     REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
@@ -355,10 +353,7 @@ TEST_CASE("TxBasic1")
     auto& alloc = ins.getAllocator();
 
     std::array<std::uint8_t, 1024> payload{};
-    for (std::size_t i = 0; i < std::size(payload); i++)
-    {
-        payload.at(i) = static_cast<std::uint8_t>(i & 0xFFU);
-    }
+    std::iota(payload.begin(), payload.end(), 0U);
 
     REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
     REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
@@ -672,4 +667,142 @@ TEST_CASE("TxBasic1")
     REQUIRE(nullptr == canardTxPeek(nullptr));
     REQUIRE(nullptr == canardTxPop(nullptr, nullptr));             // No effect.
     REQUIRE(nullptr == canardTxPop(&que.getInstance(), nullptr));  // No effect.
+}
+
+TEST_CASE("TxPayloadOwnership")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{3, CANARD_MTU_CAN_FD};  // Limit capacity at 3 frames.
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push single-frame with padding, peek, take ownership of the payload, pop and free.
+    {
+        meta.priority       = CanardPriorityNominal;
+        meta.transfer_kind  = CanardTransferKindMessage;
+        meta.port_id        = 321;
+        meta.remote_node_id = CANARD_NODE_ID_UNSET;
+        meta.transfer_id    = 21;
+        REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'000'000ULL, meta, {8, payload.data()}));
+        REQUIRE(1 == que.getSize());
+        REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Peek and check the payload.
+        CanardTxQueueItem* ti = que.peek();
+        REQUIRE(nullptr != ti);  // Make sure we get the same frame again.
+        REQUIRE(ti->frame.payload.size == 12);
+        REQUIRE(ti->frame.payload.allocated_size == 12);
+        REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 8));
+        REQUIRE(ti->tx_deadline_usec == 1'000'000'000'000ULL);
+        REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Transfer ownership of the payload (by freeing it and nullifying the pointer).
+        tx_alloc.deallocate(ti->frame.payload.data, ti->frame.payload.allocated_size);
+        ti->frame.payload.data           = nullptr;
+        ti->frame.payload.allocated_size = 0U;
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Pop the item.
+        ti = que.pop(ti);
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Free TX item
+        que.freeItem(ins, ti);
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == ins_alloc.getTotalAllocatedAmount());
+    }
+
+    // 2. Push two-frames, peek, do NOT take ownership of the payload, pop and free.
+    {
+        que.setMTU(8);
+        ins.setNodeID(42);
+        meta.transfer_id = 22;
+        REQUIRE(2 == que.push(&ins.getInstance(), 2'000'000'000'000ULL, meta, {8, payload.data()}));
+        REQUIRE(2 == que.getSize());
+        REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+        // a) Peek and check the payload of the 1st frame
+        {
+            CanardTxQueueItem* ti = que.peek();
+            REQUIRE(nullptr != ti);
+            REQUIRE(ti->frame.payload.size == 8);
+            REQUIRE(ti->frame.payload.allocated_size == 8);
+            REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 7));
+            REQUIRE(ti->tx_deadline_usec == 2'000'000'000'000ULL);
+            REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+            // Pop the item.
+            ti = que.pop(ti);
+            REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+            // Free TX item
+            que.freeItem(ins, ti);
+            REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+        }
+        // b) Peek and check the payload of the 2nd frame
+        {
+            CanardTxQueueItem* ti = que.peek();
+            REQUIRE(nullptr != ti);
+            REQUIRE(ti->frame.payload.size == 4);
+            REQUIRE(ti->frame.payload.allocated_size == 4);
+            REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data() + 7, 1));
+            REQUIRE(ti->tx_deadline_usec == 2'000'000'000'000ULL);
+            REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+            // Pop the item.
+            ti = que.pop(ti);
+            REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+            // Free TX item
+            que.freeItem(ins, ti);
+            REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
+        }
+    }
 }

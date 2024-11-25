@@ -542,21 +542,29 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 ///
 /// If the queue is non-empty, the returned value is a pointer to its top element (i.e., the next frame to transmit).
 /// The returned pointer points to an object allocated in the dynamic storage; it should be eventually freed by the
-/// application by calling CanardInstance::memory_free(). The memory shall not be freed before the entry is removed
+/// application by calling `udpardTxFree`. The memory shall not be freed before the entry is removed
 /// from the queue by calling canardTxPop(); this is because until canardTxPop() is executed, the library retains
 /// ownership of the object. The pointer retains validity until explicitly freed by the application; in other words,
 /// calling canardTxPop() does not invalidate the object.
 ///
-/// The payload buffer is located shortly after the object itself, in the same memory fragment. The application shall
-/// not attempt to free it.
+/// The payload buffer is allocated in the dynamic storage of the queue. The application may transfer ownership of
+/// the payload to a different application component (f.e. to transmission media) by copying the pointer and then
+/// (if the ownership transfer was accepted) by nullifying payload fields of the frame (`data` & `allocated_size`).
+/// If these fields stay with their original values, the `canardTxFree` (after proper `canardTxPop of course) will
+/// deallocate the payload buffer. In any case, the payload has to be eventually deallocated by the TX queue memory
+/// resource. It will be automatically done by the `canardTxFree` (if the payload still stays in the item),
+/// OR if moved, it is the responsibility of theapplication to eventually (f.e. at the end of transmission) deallocate
+/// the memory with TX queue memory resource. Note that the mentioned above nullification of the payload fields is the
+/// only reason why a returned TX item pointer is mutable. It was constant in the past (before v4),
+/// but it was changed to be mutable to allow the payload ownership transfer.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
-const CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que);
+CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que);
 
 /// This function transfers the ownership of the specified element of the prioritized transmission queue from the queue
 /// to the application. The element does not necessarily need to be the top one -- it is safe to dequeue any element.
 /// The element is dequeued but not invalidated; it is the responsibility of the application to deallocate the
-/// memory used by the object later (use `canardTxFree` helper).The memory SHALL NOT be deallocated UNTIL this function
+/// memory used by the object later (use `canardTxFree` helper). The memory SHALL NOT be deallocated UNTIL this function
 /// is invoked. The function returns the same pointer that it is given except that it becomes mutable.
 ///
 /// If any of the arguments are NULL, the function has no effect and returns NULL.
