@@ -46,14 +46,14 @@
 /// Much like with dynamic memory, the time complexity of every API function is well-characterized, allowing the
 /// application to guarantee predictable real-time performance.
 ///
-/// The TX pipeline is managed with the help of four API functions. The first one -- canardTxInit() -- is used for
+/// The TX pipeline is managed with the help of five API functions. The first one -- canardTxInit() -- is used for
 /// constructing a new TX queue, of which there should be as many as there are redundant CAN interfaces;
 /// each queue is managed independently. When the application needs to emit a transfer, it invokes canardTxPush()
 /// on each queue separately. The function splits the transfer into CAN frames and stores them into the queue.
 /// The application then picks the produced CAN frames from the queue one-by-one by calling canardTxPeek() followed
 /// by canardTxPop() -- the former allows the application to look at the next frame scheduled for transmission,
 /// and the latter tells the library that the frame shall be removed from the queue.
-/// Popped frames need to be manually deallocated by the application upon transmission.
+/// Popped frames need to be manually deallocated by the application upon transmission by calling canardTxFree().
 ///
 /// The RX pipeline is managed with the help of three API functions; unlike the TX pipeline, there is one shared
 /// state for all redundant interfaces that manages deduplication transparently. The main function canardRxAccept()
@@ -215,7 +215,8 @@ typedef struct
     struct CanardPayload payload;
 } CanardFrame;
 
-/// TODO: docs!
+/// Similar to the `CanardFrame` structure, but with a mutable payload (including `allocated_size` of the payload).
+/// In use when payload memory ownership might be transferred.
 struct CanardMutableFrame
 {
     uint32_t                    extended_can_id;
@@ -280,11 +281,11 @@ typedef struct
 typedef void* (*CanardMemoryAllocate)(void* const user_reference, const size_t size);
 
 /// The counterpart of the above -- this function is invoked to return previously allocated memory to the allocator.
-/// The semantics are similar to free(), but with additional `amount` parameter:
+/// The semantics are similar to free(), but with additional `size` parameter:
 ///     - The pointer was previously returned by the allocation function.
 ///     - The pointer may be NULL, in which case the function shall have no effect.
 ///     - The execution time should be constant (O(1)).
-///     - The amount is the same as it was during allocation.
+///     - The size is the same as it was during allocation.
 ///
 /// The value of the user reference is taken from the corresponding field of the memory resource structure.
 typedef void (*CanardMemoryDeallocate)(void* const user_reference, const size_t size, void* const pointer);
@@ -311,7 +312,9 @@ struct CanardMemoryResource
 /// Prioritized transmission queue that keeps CAN frames destined for transmission via one CAN interface.
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
 /// Applications that are not interested in transmission may have zero queues.
-/// All operations (push, peek, pop) are O(log n); there is exactly one heap allocation per element.
+/// All operations (push, peek, pop) are O(log n); there are exactly two heap allocations per element:
+/// - the first for bookkeeping purposes (CanardTxQueueItem)
+/// - second for payload storage (the frame data)
 /// API functions that work with this type are named "canardTx*()", find them below.
 typedef struct CanardTxQueue
 {
@@ -337,11 +340,16 @@ typedef struct CanardTxQueue
     /// The root of the priority queue is NULL if the queue is empty. Do not modify this field!
     CanardTreeNode* root;
 
-    /// The memory resource used by this queue for allocating the enqueued items (CAN frames).
-    /// There is exactly one allocation per enqueued item, each allocation contains both the CanardTxQueueItem
-    /// and its payload, hence the size is variable.
+    /// The memory resource used by this queue for allocating payload data (CAN frames).
+    /// There is exactly one allocation per enqueued item. Its size is equal to the MTU of the queue.
+    /// Memory for the queue item is allocated separately from the instance memory resource.
     /// In a simple application, there would be just one memory resource shared by all parts of the library.
-    /// If the application knows its MTU, it can use block allocation to avoid extrinsic fragmentation.
+    /// If the application knows its MTU, it can use block allocation to avoid extrinsic fragmentation,
+    /// as well as a dedicated memory pool specifically for the TX queue payload for transmission.
+    /// Dedicated memory resources could be useful also for systems with special memory requirements for payload data.
+    /// For example, such a memory resource could be integrated with a peripheral DMA controller. So that
+    /// memory is allocated directly in the peripheral's memory space. Then it will be filled with payload data by
+    /// the Canard, and finally it will be ready to be directly transmitted by DMA HW (avoiding the need for copying).
     struct CanardMemoryResource memory;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
@@ -473,7 +481,7 @@ CanardInstance canardInit(const struct CanardMemoryResource memory);
 /// Applications are expected to have one instance of this type per redundant interface.
 ///
 /// The instance does not hold any resources itself except for the allocated memory.
-/// To safely discard it, simply pop all items from the queue.
+/// To safely discard it, simply pop all items from the queue and free them.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
 CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const struct CanardMemoryResource memory);
@@ -520,9 +528,12 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const 
 /// The time complexity is O(p + log e), where p is the amount of payload in the transfer, and e is the number of
 /// frames already enqueued in the transmission queue.
 ///
-/// The memory allocation requirement is one allocation per transport frame. A single-frame transfer takes one
-/// allocation; a multi-frame transfer of N frames takes N allocations. The size of each allocation is
-/// (sizeof(CanardTxQueueItem) + MTU).
+/// The memory allocation requirement is two allocations per transport frame. A single-frame transfer takes two
+/// allocations; a multi-frame transfer of N frames takes N*2 allocations. In each pair of allocations:
+/// - the first allocation is for CanardTxQueueItem; the size is `sizeof(CanardTxQueueItem)`;
+///   the Canard instance memory resource is used for this allocation (and later for deallocation);
+/// - the second allocation is for payload storage (the frame data) - size is normally MTU but could be less for
+///   the last frame of the transfer; the TX queue memory resource is used for this allocation.
 int32_t canardTxPush(CanardTxQueue* const                que,
                      const CanardInstance* const         ins,
                      const CanardMicrosecond             tx_deadline_usec,
@@ -553,7 +564,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// If these fields stay with their original values, the `canardTxFree` (after proper `canardTxPop of course) will
 /// deallocate the payload buffer. In any case, the payload has to be eventually deallocated by the TX queue memory
 /// resource. It will be automatically done by the `canardTxFree` (if the payload still stays in the item),
-/// OR if moved, it is the responsibility of theapplication to eventually (f.e. at the end of transmission) deallocate
+/// OR if moved, it is the responsibility of the application to eventually (f.e. at the end of transmission) deallocate
 /// the memory with TX queue memory resource. Note that the mentioned above nullification of the payload fields is the
 /// only reason why a returned TX item pointer is mutable. It was constant in the past (before v4),
 /// but it was changed to be mutable to allow the payload ownership transfer.
