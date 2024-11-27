@@ -340,8 +340,10 @@ typedef struct CanardTxQueue
     /// The root of the priority queue is NULL if the queue is empty. Do not modify this field!
     CanardTreeNode* root;
 
-    /// The memory resource used by this queue for allocating payload data (CAN frames).
-    /// There is exactly one allocation per enqueued item. Its size is equal to the MTU of the queue.
+    /// The memory resource used by this queue for allocating the payload data (CAN frames).
+    /// There is exactly one allocation of payload buffer per enqueued item (not considering the item itself
+    /// b/c it is allocated from different memory resource - the instance one; see CanardInstance::memory).
+    /// The size of the allocation is equal (or might be less for the last frame) to the MTU of the queue.
     /// Memory for the queue item is allocated separately from the instance memory resource.
     /// In a simple application, there would be just one memory resource shared by all parts of the library.
     /// If the application knows its MTU, it can use block allocation to avoid extrinsic fragmentation,
