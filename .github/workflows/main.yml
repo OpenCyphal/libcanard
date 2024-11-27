@@ -22,6 +22,8 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
+          # we don't need firefox but it takes a lot of time to upgrade
+          snap disable firefox && snap remove --purge firefox
           sudo apt update -y && sudo apt upgrade -y
           sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
@@ -61,6 +63,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
+          # we don't need firefox but it takes a lot of time to upgrade
+          snap disable firefox && snap remove --purge firefox
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-multilib g++-multilib
       - run: >
@@ -91,6 +95,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
+          # we don't need firefox but it takes a lot of time to upgrade
+          snap disable firefox && snap remove --purge firefox
           sudo apt update -y && sudo apt upgrade -y
           sudo apt install gcc-avr avr-libc
           avr-gcc --version
@@ -107,6 +113,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
+          # we don't need firefox but it takes a lot of time to upgrade
+          snap disable firefox && snap remove --purge firefox
           sudo apt update -y && sudo apt upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
       - run: arm-none-eabi-gcc libcanard/*.c -c -std=c99 ${{ env.flags }}
@@ -144,6 +152,8 @@ jobs:
 
     - name: Install Dependencies
       run: |
+        # we don't need firefox but it takes a lot of time to upgrade
+        snap disable firefox && snap remove --purge firefox
         sudo apt update -y && sudo apt upgrade -y
         sudo apt install -y gcc-multilib g++-multilib
 
