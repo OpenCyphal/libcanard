@@ -269,7 +269,7 @@ typedef struct
 } CanardTransferMetadata;
 
 /// A pointer to the memory allocation function. The semantics are similar to malloc():
-///     - The returned pointer shall point to an uninitialized block of memory that is at least "amount" bytes large.
+///     - The returned pointer shall point to an uninitialized block of memory that is at least `size` bytes large.
 ///     - If there is not enough memory, the returned pointer shall be NULL.
 ///     - The memory shall be aligned at least at max_align_t.
 ///     - The execution time should be constant (O(1)).
@@ -347,9 +347,9 @@ typedef struct CanardTxQueue
     /// If the application knows its MTU, it can use block allocation to avoid extrinsic fragmentation,
     /// as well as a dedicated memory pool specifically for the TX queue payload for transmission.
     /// Dedicated memory resources could be useful also for systems with special memory requirements for payload data.
-    /// For example, such a memory resource could be integrated with a peripheral DMA controller. So that
-    /// memory is allocated directly in the peripheral's memory space. Then it will be filled with payload data by
-    /// the Canard, and finally it will be ready to be directly transmitted by DMA HW (avoiding the need for copying).
+    /// For example, such a memory resource could be integrated with the CAN message RAM. So that memory
+    /// is allocated directly in the peripheral's memory space. Then it will be filled with payload data by
+    /// the Canard, and finally it will be ready to be directly transmitted by the HW (avoiding the need for copying).
     struct CanardMemoryResource memory;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
@@ -553,7 +553,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 ///
 /// If the queue is non-empty, the returned value is a pointer to its top element (i.e., the next frame to transmit).
 /// The returned pointer points to an object allocated in the dynamic storage; it should be eventually freed by the
-/// application by calling `udpardTxFree`. The memory shall not be freed before the entry is removed
+/// application by calling `canardTxFree`. The memory shall not be freed before the entry is removed
 /// from the queue by calling canardTxPop(); this is because until canardTxPop() is executed, the library retains
 /// ownership of the object. The pointer retains validity until explicitly freed by the application; in other words,
 /// calling canardTxPop() does not invalidate the object.
@@ -587,7 +587,7 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
 /// as well as the internal frame payload buffer (if any) associated with it (using TX queue memory).
 /// If the item argument is NULL, the function has no effect. The time complexity is constant.
 /// If the item frame payload is NULL then it is assumed that the payload buffer was already freed,
-/// or moved to different ownership (f.e. to media layer).
+/// or moved to a different owner (f.e. to media layer).
 void canardTxFree(CanardTxQueue* const que, const CanardInstance* const ins, CanardTxQueueItem* const item);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant

@@ -97,7 +97,7 @@ TEST_CASE("TxBasic0")
         REQUIRE(!q.at(2)->isToggleBitSet());
     }
 
-    // Single-frame, OOM.
+    // Single-frame, OOM for item.
     alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount());  // Seal up the heap at this level.
     meta.priority    = CanardPriorityLow;
     meta.transfer_id = 23;
@@ -105,8 +105,16 @@ TEST_CASE("TxBasic0")
             que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, {1, payload.data()}));
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
+    // The same, but OK for item allocation and OOM for payload data.
+    alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount() + sizeof(TxItem));  // Seal up the heap at this level.
+    meta.priority    = CanardPriorityLow;
+    meta.transfer_id = 23;
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
+            que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, {1, payload.data()}));
+    REQUIRE(3 == que.getSize());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
 
-    // Multi-frame, first frame added successfully, then OOM. The entire transaction rejected.
+    // Multi-frame, first frame added successfully, then OOM. The entire transaction was rejected.
     alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount() + sizeof(TxItem) + 10U);
     meta.priority    = CanardPriorityHigh;
     meta.transfer_id = 24;

@@ -296,7 +296,7 @@ CANARD_PRIVATE CanardTxQueueItem* txAllocateQueueItem(CanardTxQueue* const      
     // TX queue items are allocated in the memory pool of the instance.
     // These items are just TX pipeline support structures, they are not directly transfer payload data.
     // In contrast, see below allocation of the payload buffer from a different memory pool.
-    CanardTxQueueItem* const out = ins->memory.allocate(ins->memory.user_reference, sizeof(CanardTxQueueItem));
+    CanardTxQueueItem* out = ins->memory.allocate(ins->memory.user_reference, sizeof(CanardTxQueueItem));
     if (out != NULL)
     {
         out->base.up    = NULL;
@@ -310,16 +310,18 @@ CANARD_PRIVATE CanardTxQueueItem* txAllocateQueueItem(CanardTxQueue* const      
         // The payload is allocated in the memory pool of the TX queue.
         // The memory pool of the queue is supposed to be provided by the media.
         void* const payload_data = que->memory.allocate(que->memory.user_reference, payload_size);
-        if (payload_data == NULL)
+        if (NULL != payload_data)
+        {
+            out->frame.payload.size           = payload_size;
+            out->frame.payload.data           = payload_data;
+            out->frame.payload.allocated_size = payload_size;
+            out->frame.extended_can_id        = id;
+        }
+        else
         {
             ins->memory.deallocate(ins->memory.user_reference, sizeof(CanardTxQueueItem), out);
-            return NULL;
+            out = NULL;
         }
-
-        out->frame.payload.size           = payload_size;
-        out->frame.payload.data           = payload_data;
-        out->frame.payload.allocated_size = payload_size;
-        out->frame.extended_can_id        = id;
     }
     return out;
 }
@@ -366,7 +368,7 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const        que,
         // We ignore it because the safe functions are poorly supported; reliance on them may limit the portability.
         uint8_t* const frame_bytes = tqi->frame.payload.data;
         (void) memset(frame_bytes + payload.size, PADDING_BYTE_VALUE, padding_size);  // NOLINT
-        *(frame_bytes + frame_payload_size - 1U) = txMakeTailByte(true, true, true, transfer_id);
+        *(frame_bytes + (frame_payload_size - 1U)) = txMakeTailByte(true, true, true, transfer_id);
         // Insert the newly created TX item into the queue.
         const CanardTreeNode* const res = cavlSearch(&que->root, &tqi->base, &txAVLPredicate, &avlTrivialFactory);
         (void) res;
