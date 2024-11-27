@@ -4,7 +4,14 @@
 #include "exposed.hpp"
 #include "helpers.hpp"
 #include "catch.hpp"
+
+#include <canard.h>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <numeric>
 
 TEST_CASE("TxBasic0")
 {
@@ -16,10 +23,7 @@ TEST_CASE("TxBasic0")
     auto& alloc = ins.getAllocator();
 
     std::array<std::uint8_t, 1024> payload{};
-    for (std::size_t i = 0; i < std::size(payload); i++)
-    {
-        payload.at(i) = static_cast<std::uint8_t>(i & 0xFFU);
-    }
+    std::iota(payload.begin(), payload.end(), 0U);
 
     REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
     REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
@@ -38,7 +42,7 @@ TEST_CASE("TxBasic0")
     meta.transfer_id    = 21;
     REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'000'000ULL, meta, {8, payload.data()}));
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     REQUIRE(10 < alloc.getTotalAllocatedAmount());
     REQUIRE(160 > alloc.getTotalAllocatedAmount());
     REQUIRE(que.peek()->tx_deadline_usec == 1'000'000'000'000ULL);
@@ -66,7 +70,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(2 ==
             que.push(&ins.getInstance(), 1'000'000'000'100ULL, meta, {8, payload.data()}));  // 8 bytes --> 2 frames
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
 
@@ -93,23 +97,31 @@ TEST_CASE("TxBasic0")
         REQUIRE(!q.at(2)->isToggleBitSet());
     }
 
-    // Single-frame, OOM.
+    // Single-frame, OOM for item.
     alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount());  // Seal up the heap at this level.
     meta.priority    = CanardPriorityLow;
     meta.transfer_id = 23;
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, {1, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
+    // The same, but OK for item allocation and OOM for payload data.
+    alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount() + sizeof(TxItem));  // Seal up the heap at this level.
+    meta.priority    = CanardPriorityLow;
+    meta.transfer_id = 23;
+    REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
+            que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, {1, payload.data()}));
+    REQUIRE(3 == que.getSize());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
 
-    // Multi-frame, first frame added successfully, then OOM. The entire transaction rejected.
+    // Multi-frame, first frame added successfully, then OOM. The entire transaction was rejected.
     alloc.setAllocationCeiling(alloc.getTotalAllocatedAmount() + sizeof(TxItem) + 10U);
     meta.priority    = CanardPriorityHigh;
     meta.transfer_id = 24;
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             que.push(&ins.getInstance(), 1'000'000'000'300ULL, meta, {100, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
 
@@ -132,9 +144,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[11]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'000ULL);
     auto* item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 8);
@@ -142,9 +154,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[7]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 4);
@@ -154,7 +166,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[3]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -176,7 +188,7 @@ TEST_CASE("TxBasic0")
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
     REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'001'000ULL, meta, {31 + 30, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
@@ -187,9 +199,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 32);
@@ -198,9 +210,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 2);  // The last byte of CRC plus the tail byte.
@@ -208,7 +220,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[1]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -221,7 +233,7 @@ TEST_CASE("TxBasic0")
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
     REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'002'000ULL, meta, {31 + 31, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
@@ -232,9 +244,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 32);
@@ -242,9 +254,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 3);  // The CRC plus the tail byte.
@@ -253,7 +265,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[2]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -266,7 +278,7 @@ TEST_CASE("TxBasic0")
     // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
     REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'003'000ULL, meta, {112, payload.data()}));
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     // Read the generated frames.
     ti = que.peek();
     REQUIRE(nullptr != ti);
@@ -275,9 +287,9 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[63]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 64);
@@ -290,7 +302,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[63]);        // Tail
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -298,7 +310,7 @@ TEST_CASE("TxBasic0")
     meta.transfer_id = 28;
     REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'004'000ULL, meta, {0, nullptr}));
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     REQUIRE(120 > alloc.getTotalAllocatedAmount());
     REQUIRE(que.peek()->tx_deadline_usec == 1'000'000'004'000ULL);
     REQUIRE(que.peek()->frame.payload.size == 1);
@@ -311,7 +323,7 @@ TEST_CASE("TxBasic0")
     REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[0]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'004'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -349,10 +361,7 @@ TEST_CASE("TxBasic1")
     auto& alloc = ins.getAllocator();
 
     std::array<std::uint8_t, 1024> payload{};
-    for (std::size_t i = 0; i < std::size(payload); i++)
-    {
-        payload.at(i) = static_cast<std::uint8_t>(i & 0xFFU);
-    }
+    std::iota(payload.begin(), payload.end(), 0U);
 
     REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
     REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
@@ -369,7 +378,7 @@ TEST_CASE("TxBasic1")
     meta.transfer_id    = 21;
     REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'000'000ULL, meta, {8, payload.data()}));
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     REQUIRE(10 < alloc.getTotalAllocatedAmount());
     REQUIRE(160 > alloc.getTotalAllocatedAmount());
     REQUIRE(que.peek()->tx_deadline_usec == 1'000'000'000'000ULL);
@@ -397,7 +406,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(2 ==
             que.push(&ins.getInstance(), 1'000'000'000'100ULL, meta, {8, payload.data()}));  // 8 bytes --> 2 frames
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
 
@@ -430,7 +439,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             que.push(&ins.getInstance(), 1'000'000'000'200ULL, meta, {1, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
 
     // Multi-frame, no frames are added -- bail early always.
     meta.priority    = CanardPriorityHigh;
@@ -438,7 +447,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             que.push(&ins.getInstance(), 1'000'000'000'300ULL, meta, {100, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
 
@@ -461,9 +470,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b11100000U | 21U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[11]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'000ULL);
     auto* item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 8);
@@ -471,9 +480,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b10100000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[7]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 4);
@@ -483,7 +492,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b01000000U | 22U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[3]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'000'100ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
     ti = que.peek();
@@ -503,7 +512,7 @@ TEST_CASE("TxBasic1")
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (30+1+1) + (1+1)
     REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'001'000ULL, meta, {31 + 30, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
@@ -514,9 +523,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b10100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 32);
@@ -525,9 +534,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b00000000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 2);  // The last byte of CRC plus the tail byte.
@@ -535,7 +544,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b01100000U | 25U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[1]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'001'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -548,7 +557,7 @@ TEST_CASE("TxBasic1")
     // CRC takes 2 bytes at the end; 3 frames: (31+1) + (31+1) + (2+1)
     REQUIRE(3 == que.push(&ins.getInstance(), 1'000'000'002'000ULL, meta, {31 + 31, payload.data()}));
     REQUIRE(3 == que.getSize());
-    REQUIRE(3 == alloc.getNumAllocatedFragments());
+    REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
     REQUIRE(400 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
@@ -559,9 +568,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b10100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 32);
@@ -569,9 +578,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b00000000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[31]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 3);  // The CRC plus the tail byte.
@@ -580,7 +589,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b01100000U | 26U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[2]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'002'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -593,7 +602,7 @@ TEST_CASE("TxBasic1")
     // 63 + 63 - 2 = 124 bytes; 124 - 112 = 12 bytes of padding.
     REQUIRE(2 == que.push(&ins.getInstance(), 1'000'000'003'000ULL, meta, {112, payload.data()}));
     REQUIRE(2 == que.getSize());
-    REQUIRE(2 == alloc.getNumAllocatedFragments());
+    REQUIRE(4 == alloc.getNumAllocatedFragments());
     // Read the generated frames.
     ti = que.peek();
     REQUIRE(nullptr != ti);
@@ -602,9 +611,9 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b10100000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[63]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     ti = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 64);
@@ -617,7 +626,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b01000000U | 27U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[63]);        // Tail
     REQUIRE(ti->tx_deadline_usec == 1'000'000'003'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -625,7 +634,7 @@ TEST_CASE("TxBasic1")
     meta.transfer_id = 28;
     REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'004'000ULL, meta, {0, nullptr}));
     REQUIRE(1 == que.getSize());
-    REQUIRE(1 == alloc.getNumAllocatedFragments());
+    REQUIRE(2 == alloc.getNumAllocatedFragments());
     REQUIRE(120 > alloc.getTotalAllocatedAmount());
     REQUIRE(que.peek()->tx_deadline_usec == 1'000'000'004'000ULL);
     REQUIRE(que.peek()->frame.payload.size == 1);
@@ -638,7 +647,7 @@ TEST_CASE("TxBasic1")
     REQUIRE((0b11100000U | 28U) == reinterpret_cast<const std::uint8_t*>(ti->frame.payload.data)[0]);
     REQUIRE(ti->tx_deadline_usec == 1'000'000'004'000ULL);
     item = que.pop(ti);
-    ins.getAllocator().deallocate(item, item->allocated_size);
+    que.freeItem(ins, item);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
@@ -666,4 +675,142 @@ TEST_CASE("TxBasic1")
     REQUIRE(nullptr == canardTxPeek(nullptr));
     REQUIRE(nullptr == canardTxPop(nullptr, nullptr));             // No effect.
     REQUIRE(nullptr == canardTxPop(&que.getInstance(), nullptr));  // No effect.
+}
+
+TEST_CASE("TxPayloadOwnership")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{3, CANARD_MTU_CAN_FD};  // Limit capacity at 3 frames.
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push single-frame with padding, peek, take ownership of the payload, pop and free.
+    {
+        meta.priority       = CanardPriorityNominal;
+        meta.transfer_kind  = CanardTransferKindMessage;
+        meta.port_id        = 321;
+        meta.remote_node_id = CANARD_NODE_ID_UNSET;
+        meta.transfer_id    = 21;
+        REQUIRE(1 == que.push(&ins.getInstance(), 1'000'000'000'000ULL, meta, {8, payload.data()}));
+        REQUIRE(1 == que.getSize());
+        REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Peek and check the payload.
+        CanardTxQueueItem* ti = que.peek();
+        REQUIRE(nullptr != ti);  // Make sure we get the same frame again.
+        REQUIRE(ti->frame.payload.size == 12);
+        REQUIRE(ti->frame.payload.allocated_size == 12);
+        REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 8));
+        REQUIRE(ti->tx_deadline_usec == 1'000'000'000'000ULL);
+        REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Transfer ownership of the payload (by freeing it and nullifying the pointer).
+        tx_alloc.deallocate(ti->frame.payload.data, ti->frame.payload.allocated_size);
+        ti->frame.payload.data           = nullptr;
+        ti->frame.payload.allocated_size = 0U;
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Pop the item.
+        ti = que.pop(ti);
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Free TX item
+        que.freeItem(ins, ti);
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == ins_alloc.getTotalAllocatedAmount());
+    }
+
+    // 2. Push two-frames, peek, do NOT take ownership of the payload, pop and free.
+    {
+        que.setMTU(8);
+        ins.setNodeID(42);
+        meta.transfer_id = 22;
+        REQUIRE(2 == que.push(&ins.getInstance(), 2'000'000'000'000ULL, meta, {8, payload.data()}));
+        REQUIRE(2 == que.getSize());
+        REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+        // a) Peek and check the payload of the 1st frame
+        {
+            CanardTxQueueItem* ti = que.peek();
+            REQUIRE(nullptr != ti);
+            REQUIRE(ti->frame.payload.size == 8);
+            REQUIRE(ti->frame.payload.allocated_size == 8);
+            REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 7));
+            REQUIRE(ti->tx_deadline_usec == 2'000'000'000'000ULL);
+            REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+            // Pop the item.
+            ti = que.pop(ti);
+            REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+            // Free TX item
+            que.freeItem(ins, ti);
+            REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+        }
+        // b) Peek and check the payload of the 2nd frame
+        {
+            CanardTxQueueItem* ti = que.peek();
+            REQUIRE(nullptr != ti);
+            REQUIRE(ti->frame.payload.size == 4);
+            REQUIRE(ti->frame.payload.allocated_size == 4);
+            REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data() + 7, 1));
+            REQUIRE(ti->tx_deadline_usec == 2'000'000'000'000ULL);
+            REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+            // Pop the item.
+            ti = que.pop(ti);
+            REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+            // Free TX item
+            que.freeItem(ins, ti);
+            REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
+        }
+    }
 }

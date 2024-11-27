@@ -4,7 +4,7 @@
 #pragma once
 
 #include "canard.h"
-#include <cstdarg>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
