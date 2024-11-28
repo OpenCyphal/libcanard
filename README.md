@@ -57,9 +57,6 @@ reused in the target application to speed up the design of the media IO layer (d
 
 ## Example
 
-## TODO: Update to show how to use the new sized de-allocations, and how not to confuse payload_size and allocated_size.
-☝ todo will be addressed as soon as the new API is stable (tx, rx, and "zero copy" aspects).
-
 The example augments the documentation but does not replace it.
 
 The library requires a constant-complexity deterministic dynamic memory allocator.
@@ -68,16 +65,16 @@ so let's suppose that we're using [O1Heap](https://github.com/pavel-kirienko/o1h
 We are going to need basic wrappers:
 
 ```c
-static void* memAllocate(CanardInstance* const canard, const size_t amount)
+static void* memAllocate(void* const user_reference, const size_t size)
 {
-    (void) canard;
-    return o1heapAllocate(my_allocator, amount);
+    (void) user_reference;
+    return o1heapAllocate(my_allocator, size);
 }
 
-static void memFree(CanardInstance* const canard, void* const pointer, const size_t amount)
+static void memFree(void* const user_reference, const size_t size, void* const pointer)
 {
-    (void) canard;
-    (void) amount;
+    (void) user_reference;
+    (void) size;
     o1heapFree(my_allocator, pointer);
 }
 ```
@@ -85,22 +82,26 @@ static void memFree(CanardInstance* const canard, void* const pointer, const siz
 Init a library instance:
 
 ```c
-CanardInstance canard = canardInit(&memAllocate, &memFree);
+const struct CanardMemoryResource memory{nullptr, &memAllocate, &memFree};
+struct CanardInstance canard = canardInit(memory);
 canard.node_id = 42;                        // Defaults to anonymous; can be set up later at any point.
 ```
 
 In order to be able to send transfers over the network, we will need one transmission queue per redundant CAN interface:
 
 ```c
-CanardTxQueue queue = canardTxInit(100,                 // Limit the size of the queue at 100 frames.
-                                   CANARD_MTU_CAN_FD);  // Set MTU = 64 bytes. There is also CANARD_MTU_CAN_CLASSIC.
+const struct CanardMemoryResource tx_memory{nullptr, memAllocate, memFree};
+struct CanardTxQueue queue = canardTxInit(
+    100,                // Limit the size of the queue at 100 frames.
+    CANARD_MTU_CAN_FD,  // Set MTU = 64 bytes. There is also CANARD_MTU_CAN_CLASSIC.
+    tx_memory);
 ```
 
 Publish a message (message serialization not shown):
 
 ```c
 static uint8_t my_message_transfer_id;  // Must be static or heap-allocated to retain state between calls.
-const CanardTransferMetadata transfer_metadata = {
+const struct CanardTransferMetadata transfer_metadata = {
     .priority       = CanardPriorityNominal,
     .transfer_kind  = CanardTransferKindMessage,
     .port_id        = 1234,                       // This is the subject-ID.
@@ -131,7 +132,7 @@ Normally, the following fragment should be invoked periodically to unload the CA
 prioritized transmission queue (or several, if redundant network interfaces are used) into the CAN driver:
 
 ```c
-for (const CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  // Peek at the top of the queue.
+for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  // Peek at the top of the queue.
 {
     if ((0U == ti->tx_deadline_usec) || (ti->tx_deadline_usec > getCurrentMicroseconds()))  // Check the deadline.
     {
@@ -141,7 +142,7 @@ for (const CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  
         }
     }
     // After the frame is transmitted or if it has timed out while waiting, pop it from the queue and deallocate:
-    canard.memory_free(&canard, canardTxPop(&queue, ti));
+    canardTxFree(&queue, &canard, canardTxPop(&queue, ti));
 }
 ```
 
@@ -150,7 +151,7 @@ from any of the redundant interfaces.
 But first, we need to subscribe:
 
 ```c
-CanardRxSubscription heartbeat_subscription;
+struct CanardRxSubscription heartbeat_subscription;
 (void) canardRxSubscribe(&canard,   // Subscribe to messages uavcan.node.Heartbeat.
                          CanardTransferKindMessage,
                          7509,      // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
@@ -158,7 +159,7 @@ CanardRxSubscription heartbeat_subscription;
                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
                          &heartbeat_subscription);
 
-CanardRxSubscription my_service_subscription;
+struct CanardRxSubscription my_service_subscription;
 (void) canardRxSubscribe(&canard,   // Subscribe to an arbitrary service response.
                          CanardTransferKindResponse,  // Specify that we want service responses, not requests.
                          123,       // The Service-ID whose responses we will receive.
@@ -183,7 +184,7 @@ Normally, however, an embedded application would subscribe once and roll with it
 Okay, this is how we receive transfers:
 
 ```c
-CanardRxTransfer transfer;
+struct CanardRxTransfer transfer;
 const int8_t result = canardRxAccept(&canard,
                                      rx_timestamp_usec,          // When the frame was received, in microseconds.
                                      &received_frame,            // The CAN frame received from the bus.
@@ -216,15 +217,15 @@ the number of irrelevant transfers processed in software.
 
 ```c
 // Generate an acceptance filter to receive only uavcan.node.Heartbeat.1.0 messages (fixed port-ID 7509):
-CanardFilter heartbeat_config = canardMakeFilterForSubject(7509);
+struct CanardFilter heartbeat_config = canardMakeFilterForSubject(7509);
 // And to receive only uavcan.register.Access.1.0 service transfers (fixed port-ID 384):
-CanardFilter register_access_config = canardMakeFilterForService(384, ins.node_id);
+struct CanardFilter register_access_config = canardMakeFilterForService(384, ins.node_id);
 
 // You can also combine the two filter configurations into one (may also accept irrelevant messages).
 // This allows consolidating a large set of configurations to fit the number of hardware filters.
 // For more information on the optimal subset of configurations to consolidate to minimize wasted CPU,
 // see the Cyphal specification.
-CanardFilter combined_config =
+struct CanardFilter combined_config =
         canardConsolidateFilters(&heartbeat_config, &register_access_config);
 configureHardwareFilters(combined_config.extended_can_id, combined_config.extended_mask);
 ```
@@ -233,6 +234,10 @@ Full API specification is available in the documentation.
 If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
+
+### v4.0
+
+#### TODO: Highlight the most important changes. Mention migration guide doc.
 
 ### v3.2
 
