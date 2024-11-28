@@ -237,7 +237,8 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ### v4.0
 
-#### TODO: Highlight the most important changes. Mention migration guide doc.
+- Updating from Libcanard v3 to v4 involves several significant changes, especially in memory management and API function prototypes.
+- Please follow [MIGRATION_v3.x_to_v4.0](MIGRATION_v3.x_to_v4.0.md) guide and carefully update your code.
 
 ### v3.2
 
