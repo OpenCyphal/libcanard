@@ -132,16 +132,13 @@ extern "C" {
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC 2000000UL
 
 // Forward declarations.
-typedef struct CanardInstance    CanardInstance;
-typedef struct CanardTreeNode    CanardTreeNode;
-typedef struct CanardTxQueueItem CanardTxQueueItem;
-typedef uint64_t                 CanardMicrosecond;
-typedef uint16_t                 CanardPortID;
-typedef uint8_t                  CanardNodeID;
-typedef uint8_t                  CanardTransferID;
+typedef uint64_t CanardMicrosecond;
+typedef uint16_t CanardPortID;
+typedef uint8_t  CanardNodeID;
+typedef uint8_t  CanardTransferID;
 
 /// Transfer priority level mnemonics per the recommendations given in the Cyphal Specification.
-typedef enum
+enum CanardPriority
 {
     CanardPriorityExceptional = 0,
     CanardPriorityImmediate   = 1,
@@ -151,24 +148,24 @@ typedef enum
     CanardPriorityLow         = 5,
     CanardPrioritySlow        = 6,
     CanardPriorityOptional    = 7,
-} CanardPriority;
+};
 
 /// Transfer kinds as defined by the Cyphal Specification.
-typedef enum
+enum CanardTransferKind
 {
     CanardTransferKindMessage  = 0,  ///< Multicast, from publisher to all subscribers.
     CanardTransferKindResponse = 1,  ///< Point-to-point, from server to client.
     CanardTransferKindRequest  = 2,  ///< Point-to-point, from client to server.
-} CanardTransferKind;
+};
 #define CANARD_NUM_TRANSFER_KINDS 3
 
 /// The AVL tree node structure is exposed here to avoid pointer casting/arithmetics inside the library.
 /// The user code is not expected to interact with this type except if advanced introspection is required.
 struct CanardTreeNode
 {
-    CanardTreeNode* up;     ///< Do not access this field.
-    CanardTreeNode* lr[2];  ///< Left and right children of this node may be accessed for tree traversal.
-    int8_t          bf;     ///< Do not access this field.
+    struct CanardTreeNode* up;     ///< Do not access this field.
+    struct CanardTreeNode* lr[2];  ///< Left and right children of this node may be accessed for tree traversal.
+    int8_t                 bf;     ///< Do not access this field.
 };
 
 struct CanardPayload
@@ -200,7 +197,7 @@ struct CanardMutablePayload
 
 /// CAN data frame with an extended 29-bit ID. RTR/Error frames are not used and therefore not modeled here.
 /// CAN frames with 11-bit ID are not used by Cyphal/CAN and so they are not supported by the library.
-typedef struct
+struct CanardFrame
 {
     /// 29-bit extended ID. The bits above 29-th shall be zero.
     uint32_t extended_can_id;
@@ -213,7 +210,7 @@ typedef struct
     /// lifetimes are identical; when the frame is freed, the payload is invalidated.
     /// A more detailed overview of the dataflow and related resource management issues is provided in the API docs.
     struct CanardPayload payload;
-} CanardFrame;
+};
 
 /// Similar to the `CanardFrame` structure, but with a mutable payload (including `allocated_size` of the payload).
 /// In use when payload memory ownership might be transferred.
@@ -233,13 +230,13 @@ extern const uint8_t CanardCANLengthToDLC[65];
 /// Per Specification, a transfer is represented on the wire as a non-empty set of transport frames (i.e., CAN frames).
 /// The library is responsible for serializing transfers into transport frames when transmitting, and reassembling
 /// transfers from an incoming stream of frames (possibly duplicated if redundant interfaces are used) during reception.
-typedef struct
+struct CanardTransferMetadata
 {
     /// Per the Specification, all frames belonging to a given transfer shall share the same priority level.
     /// If this is not the case, then this field contains the priority level of the last frame to arrive.
-    CanardPriority priority;
+    enum CanardPriority priority;
 
-    CanardTransferKind transfer_kind;
+    enum CanardTransferKind transfer_kind;
 
     /// Subject-ID for message publications; service-ID for service requests/responses.
     CanardPortID port_id;
@@ -266,7 +263,7 @@ typedef struct
     /// A simple and robust way of managing transfer-ID counters is to keep a separate static variable per subject-ID
     /// and per (service-ID, server-node-ID) pair.
     CanardTransferID transfer_id;
-} CanardTransferMetadata;
+};
 
 /// A pointer to the memory allocation function. The semantics are similar to malloc():
 ///     - The returned pointer shall point to an uninitialized block of memory that is at least `size` bytes large.
@@ -316,7 +313,7 @@ struct CanardMemoryResource
 /// - the first for bookkeeping purposes (CanardTxQueueItem)
 /// - second for payload storage (the frame data)
 /// API functions that work with this type are named "canardTx*()", find them below.
-typedef struct CanardTxQueue
+struct CanardTxQueue
 {
     /// The maximum number of frames this queue is allowed to contain. An attempt to push more will fail with an
     /// out-of-memory error even if the memory is not exhausted. This value can be changed by the user at any moment.
@@ -338,7 +335,7 @@ typedef struct CanardTxQueue
     size_t size;
 
     /// The root of the priority queue is NULL if the queue is empty. Do not modify this field!
-    CanardTreeNode* root;
+    struct CanardTreeNode* root;
 
     /// The memory resource used by this queue for allocating the payload data (CAN frames).
     /// There is exactly one allocation of payload buffer per enqueued item (not considering the item itself
@@ -357,20 +354,20 @@ typedef struct CanardTxQueue
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
     void* user_reference;
-} CanardTxQueue;
+};
 
 /// One frame stored in the transmission queue along with its metadata.
 struct CanardTxQueueItem
 {
     /// Internal use only; do not access this field.
-    CanardTreeNode base;
+    struct CanardTreeNode base;
 
     /// Points to the next frame in this transfer or NULL. This field is mostly intended for own needs of the library.
     /// Normally, the application would not use it because transfer frame ordering is orthogonal to global TX ordering.
     /// It can be useful though for pulling pending frames from the TX queue if at least one frame of their transfer
     /// failed to transmit; the idea is that if at least one frame is missing, the transfer will not be received by
     /// remote nodes anyway, so all its remaining frames can be dropped from the queue at once using canardTxPop().
-    CanardTxQueueItem* next_in_transfer;
+    struct CanardTxQueueItem* next_in_transfer;
 
     /// This is the same value that is passed to canardTxPush().
     /// Frames whose transmission deadline is in the past shall be dropped.
@@ -389,9 +386,9 @@ struct CanardTxQueueItem
 ///
 /// The memory footprint of a subscription is large. On a 32-bit platform it slightly exceeds half a KiB.
 /// This is an intentional time-memory trade-off: use a large look-up table to ensure predictable temporal properties.
-typedef struct CanardRxSubscription
+struct CanardRxSubscription
 {
-    CanardTreeNode base;  ///< Read-only DO NOT MODIFY THIS
+    struct CanardTreeNode base;  ///< Read-only DO NOT MODIFY THIS
 
     CanardMicrosecond transfer_id_timeout_usec;
     size_t            extent;   ///< Read-only DO NOT MODIFY THIS
@@ -412,12 +409,12 @@ typedef struct CanardRxSubscription
     /// system. Since this is a general-purpose library, we have to pick a middle ground so we use the more complex
     /// but more memory-efficient approach.
     struct CanardInternalRxSession* sessions[CANARD_NODE_ID_MAX + 1U];  ///< Read-only DO NOT MODIFY THIS
-} CanardRxSubscription;
+};
 
 /// Reassembled incoming transfer returned by canardRxAccept().
-typedef struct CanardRxTransfer
+struct CanardRxTransfer
 {
-    CanardTransferMetadata metadata;
+    struct CanardTransferMetadata metadata;
 
     /// The timestamp of the first received CAN frame of this transfer.
     /// The time system may be arbitrary as long as the clock is monotonic (steady).
@@ -425,7 +422,7 @@ typedef struct CanardRxTransfer
 
     /// The application is required to deallocate the payload after the transfer is processed.
     struct CanardMutablePayload payload;
-} CanardRxTransfer;
+};
 
 /// This is the core structure that keeps all of the states and allocated resources of the library instance.
 struct CanardInstance
@@ -451,13 +448,13 @@ struct CanardInstance
     struct CanardMemoryResource memory;
 
     /// Read-only DO NOT MODIFY THIS
-    CanardTreeNode* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
+    struct CanardTreeNode* rx_subscriptions[CANARD_NUM_TRANSFER_KINDS];
 };
 
 /// CAN acceptance filter configuration with an extended 29-bit ID utilizing an ID + mask filter scheme.
 /// Filter configuration can be programmed into a CAN controller to filter out irrelevant messages in hardware.
 /// This allows the software application to reduce CPU load spent on processing irrelevant messages.
-typedef struct CanardFilter
+struct CanardFilter
 {
     /// 29-bit extended ID. Defines the extended CAN ID to filter incoming frames against.
     /// The bits above 29-th shall be zero.
@@ -466,7 +463,7 @@ typedef struct CanardFilter
     /// Only bits that are enabled are compared to the extended_can_id for filtering.
     /// The bits above 29-th shall be zero.
     uint32_t extended_mask;
-} CanardFilter;
+};
 
 /// Construct a new library instance.
 /// The default values will be assigned as specified in the structure field documentation.
@@ -476,7 +473,7 @@ typedef struct CanardFilter
 /// To safely discard it, simply remove all existing subscriptions, and don't forget about the TX queues.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-CanardInstance canardInit(const struct CanardMemoryResource memory);
+struct CanardInstance canardInit(const struct CanardMemoryResource memory);
 
 /// Construct a new transmission queue instance with the specified values for capacity and mtu_bytes.
 /// No memory allocation is going to take place until the queue is actually pushed to.
@@ -486,7 +483,9 @@ CanardInstance canardInit(const struct CanardMemoryResource memory);
 /// To safely discard it, simply pop all items from the queue and free them.
 ///
 /// The time complexity is constant. This function does not invoke the dynamic memory manager.
-CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const struct CanardMemoryResource memory);
+struct CanardTxQueue canardTxInit(const size_t                      capacity,
+                                  const size_t                      mtu_bytes,
+                                  const struct CanardMemoryResource memory);
 
 /// This function serializes a transfer into a sequence of transport frames and inserts them into the prioritized
 /// transmission queue at the appropriate position. Afterwards, the application is supposed to take the enqueued frames
@@ -536,11 +535,11 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const 
 ///   the Canard instance memory resource is used for this allocation (and later for deallocation);
 /// - the second allocation is for payload storage (the frame data) - size is normally MTU but could be less for
 ///   the last frame of the transfer; the TX queue memory resource is used for this allocation.
-int32_t canardTxPush(CanardTxQueue* const                que,
-                     const CanardInstance* const         ins,
-                     const CanardMicrosecond             tx_deadline_usec,
-                     const CanardTransferMetadata* const metadata,
-                     const struct CanardPayload          payload);
+int32_t canardTxPush(struct CanardTxQueue* const                que,
+                     const struct CanardInstance* const         ins,
+                     const CanardMicrosecond                    tx_deadline_usec,
+                     const struct CanardTransferMetadata* const metadata,
+                     const struct CanardPayload                 payload);
 
 /// This function accesses the top element of the prioritized transmission queue. The queue itself is not modified
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport
@@ -563,7 +562,7 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// The payload buffer is allocated in the dynamic storage of the queue. The application may transfer ownership of
 /// the payload to a different application component (f.e. to transmission media) by copying the pointer and then
 /// (if the ownership transfer was accepted) by nullifying payload fields of the frame (`data` & `allocated_size`).
-/// If these fields stay with their original values, the `canardTxFree` (after proper `canardTxPop of course) will
+/// If these fields stay with their original values, the `canardTxFree` (after proper `canardTxPop` of course) will
 /// deallocate the payload buffer. In any case, the payload has to be eventually deallocated by the TX queue memory
 /// resource. It will be automatically done by the `canardTxFree` (if the payload still stays in the item),
 /// OR if moved, it is the responsibility of the application to eventually (f.e. at the end of transmission) deallocate
@@ -572,25 +571,27 @@ int32_t canardTxPush(CanardTxQueue* const                que,
 /// but it was changed to be mutable to allow the payload ownership transfer.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
-CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que);
+struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que);
 
 /// This function transfers the ownership of the specified element of the prioritized transmission queue from the queue
 /// to the application. The element does not necessarily need to be the top one -- it is safe to dequeue any element.
 /// The element is dequeued but not invalidated; it is the responsibility of the application to deallocate the
 /// memory used by the object later (use `canardTxFree` helper). The memory SHALL NOT be deallocated UNTIL this function
-/// is invoked. The function returns the same pointer that it is given except that it becomes mutable.
+/// is invoked. The function returns the same pointer that it is given.
 ///
 /// If any of the arguments are NULL, the function has no effect and returns NULL.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
-CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem* const item);
+struct CanardTxQueueItem* canardTxPop(struct CanardTxQueue* const que, struct CanardTxQueueItem* const item);
 
 /// This is a helper that frees the memory allocated (from the instance memory) for the item,
 /// as well as the internal frame payload buffer (if any) associated with it (using TX queue memory).
 /// If the item argument is NULL, the function has no effect. The time complexity is constant.
 /// If the item frame payload is NULL then it is assumed that the payload buffer was already freed,
 /// or moved to a different owner (f.e. to media layer).
-void canardTxFree(CanardTxQueue* const que, const CanardInstance* const ins, CanardTxQueueItem* const item);
+void canardTxFree(struct CanardTxQueue* const        que,
+                  const struct CanardInstance* const ins,
+                  struct CanardTxQueueItem* const    item);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a
@@ -678,12 +679,12 @@ void canardTxFree(CanardTxQueue* const que, const CanardInstance* const ins, Can
 ///     - The received frame is a valid Cyphal/CAN transport frame, but there is no matching subscription,
 ///       the frame did not complete a transfer, the frame forms an invalid frame sequence, the frame is a duplicate,
 ///       the frame is unicast to a different node (address mismatch).
-int8_t canardRxAccept(CanardInstance* const        ins,
-                      const CanardMicrosecond      timestamp_usec,
-                      const CanardFrame* const     frame,
-                      const uint8_t                redundant_iface_index,
-                      CanardRxTransfer* const      out_transfer,
-                      CanardRxSubscription** const out_subscription);
+int8_t canardRxAccept(struct CanardInstance* const        ins,
+                      const CanardMicrosecond             timestamp_usec,
+                      const struct CanardFrame* const     frame,
+                      const uint8_t                       redundant_iface_index,
+                      struct CanardRxTransfer* const      out_transfer,
+                      struct CanardRxSubscription** const out_subscription);
 
 /// This function creates a new subscription, allowing the application to register its interest in a particular
 /// category of transfers. The library will reject all transport frames for which there is no active subscription.
@@ -716,12 +717,12 @@ int8_t canardRxAccept(CanardInstance* const        ins,
 /// Subscription instances have large look-up tables to ensure that the temporal properties of the algorithms are
 /// invariant to the network configuration (i.e., a node that is validated on a network containing one other node
 /// will provably perform identically on a network that contains X nodes). This is a conscious time-memory trade-off.
-int8_t canardRxSubscribe(CanardInstance* const       ins,
-                         const CanardTransferKind    transfer_kind,
-                         const CanardPortID          port_id,
-                         const size_t                extent,
-                         const CanardMicrosecond     transfer_id_timeout_usec,
-                         CanardRxSubscription* const out_subscription);
+int8_t canardRxSubscribe(struct CanardInstance* const       ins,
+                         const enum CanardTransferKind      transfer_kind,
+                         const CanardPortID                 port_id,
+                         const size_t                       extent,
+                         const CanardMicrosecond            transfer_id_timeout_usec,
+                         struct CanardRxSubscription* const out_subscription);
 
 /// This function reverses the effect of canardRxSubscribe().
 /// If the subscription is found, all its memory is de-allocated (session states and payload buffers); to determine
@@ -733,9 +734,9 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
 ///
 /// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
 /// This function does not allocate new memory.
-int8_t canardRxUnsubscribe(CanardInstance* const    ins,
-                           const CanardTransferKind transfer_kind,
-                           const CanardPortID       port_id);
+int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
+                           const enum CanardTransferKind transfer_kind,
+                           const CanardPortID            port_id);
 
 /// This function allows to check the effect of canardRxSubscribe() and canardRxUnsubscribe().
 ///
@@ -747,10 +748,10 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
 ///
 /// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
 /// This function does not allocate new memory.
-int8_t canardRxGetSubscription(CanardInstance* const        ins,
-                               const CanardTransferKind     transfer_kind,
-                               const CanardPortID           port_id,
-                               CanardRxSubscription** const out_subscription);
+int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
+                               const enum CanardTransferKind       transfer_kind,
+                               const CanardPortID                  port_id,
+                               struct CanardRxSubscription** const out_subscription);
 
 /// Utilities for generating CAN controller hardware acceptance filter configurations
 /// to accept specific subjects, services, or nodes.
@@ -761,14 +762,14 @@ int8_t canardRxGetSubscription(CanardInstance* const        ins,
 /// as well as the Cyphal specification for details.
 
 /// Generate an acceptance filter configuration to accept a specific subject ID.
-CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id);
+struct CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id);
 
 /// Generate an acceptance filter configuration to accept both requests and responses for a specific service.
 ///
 /// Users may prefer to instead use a catch-all acceptance filter configuration for accepting
 /// all service requests and responses targeted at the specified local node ID.
 /// See canardMakeFilterForServices() for this.
-CanardFilter canardMakeFilterForService(const CanardPortID service_id, const CanardNodeID local_node_id);
+struct CanardFilter canardMakeFilterForService(const CanardPortID service_id, const CanardNodeID local_node_id);
 
 /// Generate an acceptance filter configuration to accept all service
 /// requests and responses targeted to the specified local node ID.
@@ -777,7 +778,7 @@ CanardFilter canardMakeFilterForService(const CanardPortID service_id, const Can
 /// and the fact that a service directed at a specific node is not likely to be rejected by that node,
 /// a user may prefer to use this over canardMakeFilterForService()
 /// in order to simplify the API usage and reduce the number of required hardware CAN acceptance filters.
-CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id);
+struct CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id);
 
 /// Consolidate two acceptance filter configurations into a single configuration.
 ///
@@ -794,7 +795,7 @@ CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id);
 /// if information about the frequency of occurrence of different transfers is not known.
 /// For details, see the "Automatic hardware acceptance filter configuration" note under the Cyphal/CAN section
 /// in the Transport Layer chapter of the Cyphal specification.
-CanardFilter canardConsolidateFilters(const CanardFilter* const a, const CanardFilter* const b);
+struct CanardFilter canardConsolidateFilters(const struct CanardFilter* const a, const struct CanardFilter* const b);
 
 #ifdef __cplusplus
 }

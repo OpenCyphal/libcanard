@@ -317,7 +317,7 @@ public:
         return static_cast<exposed::TxItem*>(ret);  // NOLINT static downcast
     }
 
-    [[nodiscard]] auto pop(const CanardTxQueueItem* const which) -> exposed::TxItem*
+    [[nodiscard]] auto pop(CanardTxQueueItem* const which) -> exposed::TxItem*
     {
         checkInvariants();
         const auto size_before  = que_.size;

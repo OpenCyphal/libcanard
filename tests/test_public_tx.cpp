@@ -127,8 +127,8 @@ TEST_CASE("TxBasic0")
 
     // Pop the queue.
     // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
-    constexpr std::uint16_t  CRC8 = 0x178DU;
-    const CanardTxQueueItem* ti   = que.peek();
+    constexpr std::uint16_t CRC8 = 0x178DU;
+    CanardTxQueueItem*      ti   = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 12);
     REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 8));
@@ -453,8 +453,8 @@ TEST_CASE("TxBasic1")
 
     // Pop the queue.
     // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
-    constexpr std::uint16_t  CRC8 = 0x178DU;
-    const CanardTxQueueItem* ti   = que.peek();
+    constexpr std::uint16_t CRC8 = 0x178DU;
+    CanardTxQueueItem*      ti   = que.peek();
     REQUIRE(nullptr != ti);
     REQUIRE(ti->frame.payload.size == 12);
     REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 8));

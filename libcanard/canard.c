@@ -71,9 +71,9 @@
 #define INITIAL_TOGGLE_STATE true
 
 /// Used for inserting new items into AVL trees.
-CANARD_PRIVATE CanardTreeNode* avlTrivialFactory(void* const user_reference)
+CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
 {
-    return (CanardTreeNode*) user_reference;
+    return (struct CanardTreeNode*) user_reference;
 }
 
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
@@ -150,9 +150,9 @@ CANARD_PRIVATE TransferCRC crcAdd(const TransferCRC crc, const struct CanardPayl
 /// Chain of TX frames prepared for insertion into a TX queue.
 typedef struct
 {
-    CanardTxQueueItem* head;
-    CanardTxQueueItem* tail;
-    size_t             size;
+    struct CanardTxQueueItem* head;
+    struct CanardTxQueueItem* tail;
+    size_t                    size;
 } TxChain;
 
 CANARD_PRIVATE uint32_t txMakeMessageSessionSpecifier(const CanardPortID subject_id, const CanardNodeID src_node_id)
@@ -196,10 +196,10 @@ CANARD_PRIVATE size_t adjustPresentationLayerMTU(const size_t mtu_bytes)
     return mtu - 1U;
 }
 
-CANARD_PRIVATE int32_t txMakeCANID(const CanardTransferMetadata* const tr,
-                                   const struct CanardPayload          payload,
-                                   const CanardNodeID                  local_node_id,
-                                   const size_t                        presentation_layer_mtu)
+CANARD_PRIVATE int32_t txMakeCANID(const struct CanardTransferMetadata* const tr,
+                                   const struct CanardPayload                 payload,
+                                   const CanardNodeID                         local_node_id,
+                                   const size_t                               presentation_layer_mtu)
 {
     CANARD_ASSERT(tr != NULL);
     CANARD_ASSERT(presentation_layer_mtu > 0);
@@ -284,11 +284,11 @@ CANARD_PRIVATE size_t txRoundFramePayloadSizeUp(const size_t x)
 }
 
 /// The item is only allocated and initialized, but NOT included into the queue! The caller needs to do that.
-CANARD_PRIVATE CanardTxQueueItem* txAllocateQueueItem(CanardTxQueue* const        que,
-                                                      const CanardInstance* const ins,
-                                                      const uint32_t              id,
-                                                      const CanardMicrosecond     deadline_usec,
-                                                      const size_t                payload_size)
+CANARD_PRIVATE struct CanardTxQueueItem* txAllocateQueueItem(struct CanardTxQueue* const        que,
+                                                             const struct CanardInstance* const ins,
+                                                             const uint32_t                     id,
+                                                             const CanardMicrosecond            deadline_usec,
+                                                             const size_t                       payload_size)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(payload_size > 0U);
@@ -296,7 +296,7 @@ CANARD_PRIVATE CanardTxQueueItem* txAllocateQueueItem(CanardTxQueue* const      
     // TX queue items are allocated in the memory pool of the instance.
     // These items are just TX pipeline support structures, they are not directly transfer payload data.
     // In contrast, see below allocation of the payload buffer from a different memory pool.
-    CanardTxQueueItem* out = ins->memory.allocate(ins->memory.user_reference, sizeof(CanardTxQueueItem));
+    struct CanardTxQueueItem* out = ins->memory.allocate(ins->memory.user_reference, sizeof(struct CanardTxQueueItem));
     if (out != NULL)
     {
         out->base.up    = NULL;
@@ -319,7 +319,7 @@ CANARD_PRIVATE CanardTxQueueItem* txAllocateQueueItem(CanardTxQueue* const      
         }
         else
         {
-            ins->memory.deallocate(ins->memory.user_reference, sizeof(CanardTxQueueItem), out);
+            ins->memory.deallocate(ins->memory.user_reference, sizeof(struct CanardTxQueueItem), out);
             out = NULL;
         }
     }
@@ -330,21 +330,21 @@ CANARD_PRIVATE CanardTxQueueItem* txAllocateQueueItem(CanardTxQueue* const      
 /// This ensures that CAN frames with the same CAN ID are transmitted in the FIFO order.
 /// Frames that should be transmitted earlier compare smaller (i.e., put on the left side of the tree).
 CANARD_PRIVATE int8_t txAVLPredicate(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-                                     const CanardTreeNode* const node)
+                                     const struct CanardTreeNode* const node)
 {
-    const CanardTxQueueItem* const target = (const CanardTxQueueItem*) user_reference;
-    const CanardTxQueueItem* const other  = (const CanardTxQueueItem*) (const void*) node;
+    const struct CanardTxQueueItem* const target = (const struct CanardTxQueueItem*) user_reference;
+    const struct CanardTxQueueItem* const other  = (const struct CanardTxQueueItem*) (const void*) node;
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->frame.extended_can_id >= other->frame.extended_can_id) ? +1 : -1;
 }
 
 /// Returns the number of frames enqueued or error (i.e., =1 or <0).
-CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const        que,
-                                         const CanardInstance* const ins,
-                                         const CanardMicrosecond     deadline_usec,
-                                         const uint32_t              can_id,
-                                         const CanardTransferID      transfer_id,
-                                         const struct CanardPayload  payload)
+CANARD_PRIVATE int32_t txPushSingleFrame(struct CanardTxQueue* const        que,
+                                         const struct CanardInstance* const ins,
+                                         const CanardMicrosecond            deadline_usec,
+                                         const uint32_t                     can_id,
+                                         const CanardTransferID             transfer_id,
+                                         const struct CanardPayload         payload)
 {
     CANARD_ASSERT((que != NULL) && (ins != NULL));
     CANARD_ASSERT((payload.data != NULL) || (payload.size == 0));
@@ -352,8 +352,8 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const        que,
     CANARD_ASSERT(frame_payload_size > payload.size);
     const size_t padding_size = frame_payload_size - payload.size - 1U;
     CANARD_ASSERT((padding_size + payload.size + 1U) == frame_payload_size);
-    int32_t                  out = 0;
-    CanardTxQueueItem* const tqi =
+    int32_t                         out = 0;
+    struct CanardTxQueueItem* const tqi =
         (que->size < que->capacity) ? txAllocateQueueItem(que, ins, can_id, deadline_usec, frame_payload_size) : NULL;
     if (tqi != NULL)
     {
@@ -370,7 +370,8 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const        que,
         (void) memset(frame_bytes + payload.size, PADDING_BYTE_VALUE, padding_size);  // NOLINT
         *(frame_bytes + (frame_payload_size - 1U)) = txMakeTailByte(true, true, true, transfer_id);
         // Insert the newly created TX item into the queue.
-        const CanardTreeNode* const res = cavlSearch(&que->root, &tqi->base, &txAVLPredicate, &avlTrivialFactory);
+        const struct CanardTreeNode* const res =
+            cavlSearch(&que->root, &tqi->base, &txAVLPredicate, &avlTrivialFactory);
         (void) res;
         CANARD_ASSERT(res == &tqi->base);
         que->size++;
@@ -386,13 +387,13 @@ CANARD_PRIVATE int32_t txPushSingleFrame(CanardTxQueue* const        que,
 }
 
 /// Produces a chain of Tx queue items for later insertion into the Tx queue. The tail is NULL if OOM.
-CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const        que,
-                                                 const CanardInstance* const ins,
-                                                 const size_t                presentation_layer_mtu,
-                                                 const CanardMicrosecond     deadline_usec,
-                                                 const uint32_t              can_id,
-                                                 const CanardTransferID      transfer_id,
-                                                 const struct CanardPayload  payload)
+CANARD_PRIVATE TxChain txGenerateMultiFrameChain(struct CanardTxQueue* const        que,
+                                                 const struct CanardInstance* const ins,
+                                                 const size_t                       presentation_layer_mtu,
+                                                 const CanardMicrosecond            deadline_usec,
+                                                 const uint32_t                     can_id,
+                                                 const CanardTransferID             transfer_id,
+                                                 const struct CanardPayload         payload)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(presentation_layer_mtu > 0U);
@@ -412,7 +413,7 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const        que
             ((payload_size_with_crc - offset) < presentation_layer_mtu)
                 ? txRoundFramePayloadSizeUp((payload_size_with_crc - offset) + 1U)  // Padding in the last frame only.
                 : (presentation_layer_mtu + 1U);
-        CanardTxQueueItem* const tqi =
+        struct CanardTxQueueItem* const tqi =
             txAllocateQueueItem(que, ins, can_id, deadline_usec, frame_payload_size_with_tail);
         if (NULL == out.head)
         {
@@ -488,13 +489,13 @@ CANARD_PRIVATE TxChain txGenerateMultiFrameChain(CanardTxQueue* const        que
 }
 
 /// Returns the number of frames enqueued or error.
-CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const        que,
-                                        const CanardInstance* const ins,
-                                        const size_t                presentation_layer_mtu,
-                                        const CanardMicrosecond     deadline_usec,
-                                        const uint32_t              can_id,
-                                        const CanardTransferID      transfer_id,
-                                        const struct CanardPayload  payload)
+CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
+                                        const struct CanardInstance* const ins,
+                                        const size_t                       presentation_layer_mtu,
+                                        const CanardMicrosecond            deadline_usec,
+                                        const uint32_t                     can_id,
+                                        const CanardTransferID             transfer_id,
+                                        const struct CanardPayload         payload)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(presentation_layer_mtu > 0U);
@@ -510,10 +511,10 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const        que,
             txGenerateMultiFrameChain(que, ins, presentation_layer_mtu, deadline_usec, can_id, transfer_id, payload);
         if (sq.tail != NULL)
         {
-            CanardTxQueueItem* next = sq.head;
+            struct CanardTxQueueItem* next = sq.head;
             do
             {
-                const CanardTreeNode* const res =
+                const struct CanardTreeNode* const res =
                     cavlSearch(&que->root, &next->base, &txAVLPredicate, &avlTrivialFactory);
                 (void) res;
                 CANARD_ASSERT(res == &next->base);
@@ -528,11 +529,11 @@ CANARD_PRIVATE int32_t txPushMultiFrame(CanardTxQueue* const        que,
         }
         else
         {
-            out                     = -CANARD_ERROR_OUT_OF_MEMORY;
-            CanardTxQueueItem* head = sq.head;
+            out                            = -CANARD_ERROR_OUT_OF_MEMORY;
+            struct CanardTxQueueItem* head = sq.head;
             while (head != NULL)
             {
-                CanardTxQueueItem* const next = head->next_in_transfer;
+                struct CanardTxQueueItem* const next = head->next_in_transfer;
                 canardTxFree(que, ins, head);
                 head = next;
             }
@@ -569,23 +570,23 @@ typedef struct CanardInternalRxSession
 /// High-level transport frame model.
 typedef struct
 {
-    CanardMicrosecond    timestamp_usec;
-    CanardPriority       priority;
-    CanardTransferKind   transfer_kind;
-    CanardPortID         port_id;
-    CanardNodeID         source_node_id;
-    CanardNodeID         destination_node_id;
-    CanardTransferID     transfer_id;
-    bool                 start_of_transfer;
-    bool                 end_of_transfer;
-    bool                 toggle;
-    struct CanardPayload payload;
+    CanardMicrosecond       timestamp_usec;
+    enum CanardPriority     priority;
+    enum CanardTransferKind transfer_kind;
+    CanardPortID            port_id;
+    CanardNodeID            source_node_id;
+    CanardNodeID            destination_node_id;
+    CanardTransferID        transfer_id;
+    bool                    start_of_transfer;
+    bool                    end_of_transfer;
+    bool                    toggle;
+    struct CanardPayload    payload;
 } RxFrameModel;
 
 /// Returns truth if the frame is valid and parsed successfully. False if the frame is not a valid Cyphal/CAN frame.
-CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
-                                    const CanardFrame* const frame,
-                                    RxFrameModel* const      out)
+CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond         timestamp_usec,
+                                    const struct CanardFrame* const frame,
+                                    RxFrameModel* const             out)
 {
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(frame->extended_can_id <= CAN_EXT_ID_MASK);
@@ -598,7 +599,7 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
 
         // CAN ID parsing.
         const uint32_t can_id = frame->extended_can_id;
-        out->priority         = (CanardPriority) ((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
+        out->priority         = (enum CanardPriority)((can_id >> OFFSET_PRIORITY) & CANARD_PRIORITY_MAX);
         out->source_node_id   = (CanardNodeID) (can_id & CANARD_NODE_ID_MAX);
         if (0 == (can_id & FLAG_SERVICE_NOT_MESSAGE))
         {
@@ -649,8 +650,8 @@ CANARD_PRIVATE bool rxTryParseFrame(const CanardMicrosecond  timestamp_usec,
     return valid;
 }
 
-CANARD_PRIVATE void rxInitTransferMetadataFromFrame(const RxFrameModel* const     frame,
-                                                    CanardTransferMetadata* const out_transfer)
+CANARD_PRIVATE void rxInitTransferMetadataFromFrame(const RxFrameModel* const            frame,
+                                                    struct CanardTransferMetadata* const out_transfer)
 {
     CANARD_ASSERT(frame != NULL);
     CANARD_ASSERT(frame->payload.data != NULL);
@@ -676,7 +677,7 @@ CANARD_PRIVATE uint8_t rxComputeTransferIDDifference(const uint8_t a, const uint
     return (uint8_t) diff;
 }
 
-CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
+CANARD_PRIVATE int8_t rxSessionWritePayload(struct CanardInstance* const   ins,
                                             CanardInternalRxSession* const rxs,
                                             const size_t                   extent,
                                             const struct CanardPayload     payload)
@@ -731,7 +732,7 @@ CANARD_PRIVATE int8_t rxSessionWritePayload(CanardInstance* const          ins,
     return out;
 }
 
-CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRxSession* const rxs)
+CANARD_PRIVATE void rxSessionRestart(struct CanardInstance* const ins, CanardInternalRxSession* const rxs)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
@@ -747,11 +748,11 @@ CANARD_PRIVATE void rxSessionRestart(CanardInstance* const ins, CanardInternalRx
     rxs->toggle = INITIAL_TOGGLE_STATE;
 }
 
-CANARD_PRIVATE int8_t rxSessionAcceptFrame(CanardInstance* const          ins,
+CANARD_PRIVATE int8_t rxSessionAcceptFrame(struct CanardInstance* const   ins,
                                            CanardInternalRxSession* const rxs,
                                            const RxFrameModel* const      frame,
                                            const size_t                   extent,
-                                           CanardRxTransfer* const        out_transfer)
+                                           struct CanardRxTransfer* const out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
@@ -877,13 +878,13 @@ CANARD_PRIVATE void rxSessionSynchronize(CanardInternalRxSession* const rxs,
 /// are given and the particular algorithms are left to be implementation-defined. Such abstract approach is much
 /// advantageous because it allows implementers to choose whatever solution works best for the specific application at
 /// hand, while the wire compatibility is still guaranteed by the high-level requirements given in the specification.
-CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
+CANARD_PRIVATE int8_t rxSessionUpdate(struct CanardInstance* const   ins,
                                       CanardInternalRxSession* const rxs,
                                       const RxFrameModel* const      frame,
                                       const uint8_t                  redundant_iface_index,
                                       const CanardMicrosecond        transfer_id_timeout_usec,
                                       const size_t                   extent,
-                                      CanardRxTransfer* const        out_transfer)
+                                      struct CanardRxTransfer* const out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(rxs != NULL);
@@ -915,11 +916,11 @@ CANARD_PRIVATE int8_t rxSessionUpdate(CanardInstance* const          ins,
     return out;
 }
 
-CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
-                                    CanardRxSubscription* const subscription,
-                                    const RxFrameModel* const   frame,
-                                    const uint8_t               redundant_iface_index,
-                                    CanardRxTransfer* const     out_transfer)
+CANARD_PRIVATE int8_t rxAcceptFrame(struct CanardInstance* const       ins,
+                                    struct CanardRxSubscription* const subscription,
+                                    const RxFrameModel* const          frame,
+                                    const uint8_t                      redundant_iface_index,
+                                    struct CanardRxTransfer* const     out_transfer)
 {
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(subscription != NULL);
@@ -1002,10 +1003,10 @@ CANARD_PRIVATE int8_t rxAcceptFrame(CanardInstance* const       ins,
 
 CANARD_PRIVATE int8_t
 rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-                                const CanardTreeNode* const node)
+                                const struct CanardTreeNode* const node)
 {
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
-    const CanardPortID  other     = ((const CanardRxSubscription*) (const void*) node)->port_id;
+    const CanardPortID  other     = ((const struct CanardRxSubscription*) (const void*) node)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
@@ -1013,9 +1014,9 @@ rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API
 
 CANARD_PRIVATE int8_t
 rxSubscriptionPredicateOnStruct(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-                                const CanardTreeNode* const node)
+                                const struct CanardTreeNode* const node)
 {
-    return rxSubscriptionPredicateOnPortID(&((CanardRxSubscription*) user_reference)->port_id, node);
+    return rxSubscriptionPredicateOnPortID(&((struct CanardRxSubscription*) user_reference)->port_id, node);
 }
 
 // --------------------------------------------- PUBLIC API ---------------------------------------------
@@ -1032,11 +1033,11 @@ const uint8_t CanardCANLengthToDLC[65] = {
     15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,  // 49-64
 };
 
-CanardInstance canardInit(const struct CanardMemoryResource memory)
+struct CanardInstance canardInit(const struct CanardMemoryResource memory)
 {
     CANARD_ASSERT(memory.allocate != NULL);
     CANARD_ASSERT(memory.deallocate != NULL);
-    const CanardInstance out = {
+    const struct CanardInstance out = {
         .user_reference   = NULL,
         .node_id          = CANARD_NODE_ID_UNSET,
         .memory           = memory,
@@ -1045,11 +1046,13 @@ CanardInstance canardInit(const struct CanardMemoryResource memory)
     return out;
 }
 
-CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const struct CanardMemoryResource memory)
+struct CanardTxQueue canardTxInit(const size_t                      capacity,
+                                  const size_t                      mtu_bytes,
+                                  const struct CanardMemoryResource memory)
 {
     CANARD_ASSERT(memory.allocate != NULL);
     CANARD_ASSERT(memory.deallocate != NULL);
-    CanardTxQueue out = {
+    struct CanardTxQueue out = {
         .capacity       = capacity,
         .mtu_bytes      = mtu_bytes,
         .size           = 0,
@@ -1060,11 +1063,11 @@ CanardTxQueue canardTxInit(const size_t capacity, const size_t mtu_bytes, const 
     return out;
 }
 
-int32_t canardTxPush(CanardTxQueue* const                que,
-                     const CanardInstance* const         ins,
-                     const CanardMicrosecond             tx_deadline_usec,
-                     const CanardTransferMetadata* const metadata,
-                     const struct CanardPayload          payload)
+int32_t canardTxPush(struct CanardTxQueue* const                que,
+                     const struct CanardInstance* const         ins,
+                     const CanardMicrosecond                    tx_deadline_usec,
+                     const struct CanardTransferMetadata* const metadata,
+                     const struct CanardPayload                 payload)
 {
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (que != NULL) && (metadata != NULL) && ((payload.data != NULL) || (0U == payload.size)))
@@ -1104,27 +1107,22 @@ int32_t canardTxPush(CanardTxQueue* const                que,
     return out;
 }
 
-CanardTxQueueItem* canardTxPeek(const CanardTxQueue* const que)
+struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
 {
-    CanardTxQueueItem* out = NULL;
+    struct CanardTxQueueItem* out = NULL;
     if (que != NULL)
     {
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
-        out = (CanardTxQueueItem*) (void*) cavlFindExtremum(que->root, false);
+        out = (struct CanardTxQueueItem*) (void*) cavlFindExtremum(que->root, false);
     }
     return out;
 }
 
-CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem* const item)
+struct CanardTxQueueItem* canardTxPop(struct CanardTxQueue* const que, struct CanardTxQueueItem* const item)
 {
-    CanardTxQueueItem* out = NULL;
     if ((que != NULL) && (item != NULL))
     {
-        // Intentional violation of MISRA: casting away const qualifier. This is considered safe because the API
-        // contract dictates that the pointer shall point to a mutable entity in RAM previously allocated by the
-        // memory manager. It is difficult to avoid this cast in this context.
-        out = (CanardTxQueueItem*) item;  // NOSONAR casting away const qualifier.
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         // Note that the highest-priority frame is always a leaf node in the AVL tree, which means that it is very
@@ -1132,10 +1130,12 @@ CanardTxQueueItem* canardTxPop(CanardTxQueue* const que, const CanardTxQueueItem
         cavlRemove(&que->root, &item->base);
         que->size--;
     }
-    return out;
+    return item;
 }
 
-void canardTxFree(CanardTxQueue* const que, const CanardInstance* const ins, CanardTxQueueItem* item)
+void canardTxFree(struct CanardTxQueue* const        que,
+                  const struct CanardInstance* const ins,
+                  struct CanardTxQueueItem*          item)
 {
     if (item != NULL)
     {
@@ -1146,16 +1146,16 @@ void canardTxFree(CanardTxQueue* const que, const CanardInstance* const ins, Can
                                    item->frame.payload.data);
         }
 
-        ins->memory.deallocate(ins->memory.user_reference, sizeof(CanardTxQueueItem), item);
+        ins->memory.deallocate(ins->memory.user_reference, sizeof(struct CanardTxQueueItem), item);
     }
 }
 
-int8_t canardRxAccept(CanardInstance* const        ins,
-                      const CanardMicrosecond      timestamp_usec,
-                      const CanardFrame* const     frame,
-                      const uint8_t                redundant_iface_index,
-                      CanardRxTransfer* const      out_transfer,
-                      CanardRxSubscription** const out_subscription)
+int8_t canardRxAccept(struct CanardInstance* const        ins,
+                      const CanardMicrosecond             timestamp_usec,
+                      const struct CanardFrame* const     frame,
+                      const uint8_t                       redundant_iface_index,
+                      struct CanardRxTransfer* const      out_transfer,
+                      struct CanardRxSubscription** const out_subscription)
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (out_transfer != NULL) && (frame != NULL) && (frame->extended_can_id <= CAN_EXT_ID_MASK) &&
@@ -1169,11 +1169,11 @@ int8_t canardRxAccept(CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                CanardRxSubscription* const sub =
-                    (CanardRxSubscription*) (void*) cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
-                                                               &model.port_id,
-                                                               &rxSubscriptionPredicateOnPortID,
-                                                               NULL);
+                struct CanardRxSubscription* const sub = (struct CanardRxSubscription*) (void*)
+                    cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
+                               &model.port_id,
+                               &rxSubscriptionPredicateOnPortID,
+                               NULL);
                 if (out_subscription != NULL)
                 {
                     *out_subscription = sub;  // Expose selected instance to the caller.
@@ -1202,12 +1202,12 @@ int8_t canardRxAccept(CanardInstance* const        ins,
     return out;
 }
 
-int8_t canardRxSubscribe(CanardInstance* const       ins,
-                         const CanardTransferKind    transfer_kind,
-                         const CanardPortID          port_id,
-                         const size_t                extent,
-                         const CanardMicrosecond     transfer_id_timeout_usec,
-                         CanardRxSubscription* const out_subscription)
+int8_t canardRxSubscribe(struct CanardInstance* const       ins,
+                         const enum CanardTransferKind      transfer_kind,
+                         const CanardPortID                 port_id,
+                         const size_t                       extent,
+                         const CanardMicrosecond            transfer_id_timeout_usec,
+                         struct CanardRxSubscription* const out_subscription)
 {
     int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
     const size_t tk  = (size_t) transfer_kind;
@@ -1229,10 +1229,10 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
                 // We could accept an extra argument that would instruct us to pre-allocate sessions here?
                 out_subscription->sessions[i] = NULL;
             }
-            const CanardTreeNode* const res = cavlSearch(&ins->rx_subscriptions[tk],
-                                                         out_subscription,
-                                                         &rxSubscriptionPredicateOnStruct,
-                                                         &avlTrivialFactory);
+            const struct CanardTreeNode* const res = cavlSearch(&ins->rx_subscriptions[tk],
+                                                                out_subscription,
+                                                                &rxSubscriptionPredicateOnStruct,
+                                                                &avlTrivialFactory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
             out = (out > 0) ? 0 : 1;
@@ -1241,16 +1241,16 @@ int8_t canardRxSubscribe(CanardInstance* const       ins,
     return out;
 }
 
-int8_t canardRxUnsubscribe(CanardInstance* const    ins,
-                           const CanardTransferKind transfer_kind,
-                           const CanardPortID       port_id)
+int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
+                           const enum CanardTransferKind transfer_kind,
+                           const CanardPortID            port_id)
 {
     int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
     const size_t tk  = (size_t) transfer_kind;
     if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
-        CanardPortID                port_id_mutable = port_id;
-        CanardRxSubscription* const sub             = (CanardRxSubscription*) (void*)
+        CanardPortID                       port_id_mutable = port_id;
+        struct CanardRxSubscription* const sub             = (struct CanardRxSubscription*) (void*)
             cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL);
         if (sub != NULL)
         {
@@ -1278,17 +1278,17 @@ int8_t canardRxUnsubscribe(CanardInstance* const    ins,
     return out;
 }
 
-int8_t canardRxGetSubscription(CanardInstance* const        ins,
-                               const CanardTransferKind     transfer_kind,
-                               const CanardPortID           port_id,
-                               CanardRxSubscription** const out_subscription)
+int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
+                               const enum CanardTransferKind       transfer_kind,
+                               const CanardPortID                  port_id,
+                               struct CanardRxSubscription** const out_subscription)
 {
     int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
     const size_t tk  = (size_t) transfer_kind;
     if ((ins != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
-        CanardPortID                port_id_mutable = port_id;
-        CanardRxSubscription* const sub             = (CanardRxSubscription*) (void*)
+        CanardPortID                       port_id_mutable = port_id;
+        struct CanardRxSubscription* const sub             = (struct CanardRxSubscription*) (void*)
             cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL);
         if (sub != NULL)
         {
@@ -1307,9 +1307,9 @@ int8_t canardRxGetSubscription(CanardInstance* const        ins,
     return out;
 }
 
-CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id)
+struct CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id)
 {
-    CanardFilter out = {0};
+    struct CanardFilter out = {0};
 
     out.extended_can_id = ((uint32_t) subject_id) << OFFSET_SUBJECT_ID;
     out.extended_mask   = FLAG_SERVICE_NOT_MESSAGE | FLAG_RESERVED_07 | (CANARD_SUBJECT_ID_MAX << OFFSET_SUBJECT_ID);
@@ -1317,9 +1317,9 @@ CanardFilter canardMakeFilterForSubject(const CanardPortID subject_id)
     return out;
 }
 
-CanardFilter canardMakeFilterForService(const CanardPortID service_id, const CanardNodeID local_node_id)
+struct CanardFilter canardMakeFilterForService(const CanardPortID service_id, const CanardNodeID local_node_id)
 {
-    CanardFilter out = {0};
+    struct CanardFilter out = {0};
 
     out.extended_can_id = FLAG_SERVICE_NOT_MESSAGE | (((uint32_t) service_id) << OFFSET_SERVICE_ID) |
                           (((uint32_t) local_node_id) << OFFSET_DST_NODE_ID);
@@ -1329,9 +1329,9 @@ CanardFilter canardMakeFilterForService(const CanardPortID service_id, const Can
     return out;
 }
 
-CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id)
+struct CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id)
 {
-    CanardFilter out = {0};
+    struct CanardFilter out = {0};
 
     out.extended_can_id = FLAG_SERVICE_NOT_MESSAGE | (((uint32_t) local_node_id) << OFFSET_DST_NODE_ID);
     out.extended_mask   = FLAG_SERVICE_NOT_MESSAGE | FLAG_RESERVED_23 | (CANARD_NODE_ID_MAX << OFFSET_DST_NODE_ID);
@@ -1339,9 +1339,9 @@ CanardFilter canardMakeFilterForServices(const CanardNodeID local_node_id)
     return out;
 }
 
-CanardFilter canardConsolidateFilters(const CanardFilter* a, const CanardFilter* b)
+struct CanardFilter canardConsolidateFilters(const struct CanardFilter* a, const struct CanardFilter* b)
 {
-    CanardFilter out = {0};
+    struct CanardFilter out = {0};
 
     out.extended_mask   = a->extended_mask & b->extended_mask & ~(a->extended_can_id ^ b->extended_can_id);
     out.extended_can_id = a->extended_can_id & out.extended_mask;
