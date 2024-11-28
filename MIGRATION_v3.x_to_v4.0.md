@@ -2,26 +2,11 @@
 
 This guide is intended to help developers migrate their applications from Libcanard version 3.x to version 4.0. It outlines the key changes between the two versions and provides step-by-step instructions to update your code accordingly.
 
-## Table of Contents
-
-- [Migration Guide: Updating from Libcanard v3.x to v4.0](#migration-guide-updating-from-libcanard-v3x-to-v40)
-  - [Table of Contents](#table-of-contents)
-  - [Introduction](#introduction)
-  - [Version Changes](#version-changes)
-  - [API Changes](#api-changes)
-    - [New Functions](#new-functions)
-    - [Modified Functions](#modified-functions)
-    - [Removed Functions](#removed-functions)
-  - [Data Structure Changes](#data-structure-changes)
-    - [Type Definitions](#type-definitions)
-    - [Struct Modifications](#struct-modifications)
-  - [Memory Management Changes](#memory-management-changes)
-  - [Migration Steps](#migration-steps)
-  - [Conclusion](#conclusion)
-
 ## Introduction
 
 Libcanard is a compact implementation of the Cyphal/CAN protocol designed for high-integrity real-time embedded systems. Version 4 introduces several changes that may impact your existing codebase. This guide will help you understand these changes and update your application accordingly.
+
+These changes do not affect wire compatibility.
 
 ## Version Changes
 
@@ -265,9 +250,3 @@ Several functions have updated prototypes and usage patterns:
 7. **Test Thoroughly**:
    - After making the changes, thoroughly test your application to ensure that it functions correctly with the new library version.
    - Pay special attention to memory management and potential leaks.
-
-## Conclusion
-
-Updating from Libcanard v3.x to v4.0 involves several significant changes, especially in memory management and API function prototypes. By following this guide and carefully updating your code, you can migrate your application to use the new version of the library successfully.
-
-For more detailed information, refer to the updated Libcanard documentation and consider reaching out to the maintainers or community if you encounter any issues.
