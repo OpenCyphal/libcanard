@@ -71,6 +71,11 @@
 
 #define INITIAL_TOGGLE_STATE true
 
+#define CONTAINER_OF(type, ptr, member) \
+    ((type*) (((ptr) == NULL) ? NULL : (void*) ((char*) (ptr) - offsetof(type, member))))
+#define CONST_CONTAINER_OF(type, ptr, member) \
+    ((const type*) (((ptr) == NULL) ? NULL : (const void*) ((const char*) (ptr) - offsetof(type, member))))
+
 /// Used for inserting new items into AVL trees.
 CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
 {
@@ -332,8 +337,6 @@ CANARD_PRIVATE struct CanardTxQueueItem* txAllocateQueueItem(struct CanardTxQueu
     return out;
 }
 
-#define CONTAINER_OF(type, ptr, member) ((type*) (((ptr) == NULL) ? NULL : ((char*) (ptr) - offsetof(type, member))))
-
 /// Frames with identical CAN ID that are added later always compare greater than their counterparts with same CAN ID.
 /// This ensures that CAN frames with the same CAN ID are transmitted in the FIFO order.
 /// Frames that should be transmitted earlier compare smaller (i.e., put on the left side of the tree).
@@ -341,10 +344,10 @@ CANARD_PRIVATE int8_t txAVLPriorityPredicate(           //
     void* const                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
     const struct CanardTreeNode* const node)
 {
-    typedef const struct CanardTxQueueItem ConstTxItem;
+    typedef struct CanardTxQueueItem TxItem;
 
-    ConstTxItem* const target = CONTAINER_OF(ConstTxItem, user_reference, priority_base);
-    ConstTxItem* const other  = CONTAINER_OF(ConstTxItem, node, priority_base);
+    const TxItem* const target = CONST_CONTAINER_OF(TxItem, user_reference, priority_base);
+    const TxItem* const other  = CONST_CONTAINER_OF(TxItem, node, priority_base);
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->frame.extended_can_id >= other->frame.extended_can_id) ? +1 : -1;
 }
@@ -357,10 +360,10 @@ CANARD_PRIVATE int8_t txAVLDeadlinePredicate(           //
     void* const                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
     const struct CanardTreeNode* const node)
 {
-    typedef const struct CanardTxQueueItem ConstTxItem;
+    typedef struct CanardTxQueueItem TxItem;
 
-    ConstTxItem* const target = CONTAINER_OF(ConstTxItem, user_reference, deadline_base);
-    ConstTxItem* const other  = CONTAINER_OF(ConstTxItem, node, deadline_base);
+    const TxItem* const target = CONST_CONTAINER_OF(TxItem, user_reference, deadline_base);
+    const TxItem* const other  = CONST_CONTAINER_OF(TxItem, node, deadline_base);
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->tx_deadline_usec >= other->tx_deadline_usec) ? +1 : -1;
 }
@@ -1048,7 +1051,7 @@ rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API
                                 const struct CanardTreeNode* const node)
 {
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
-    const CanardPortID  other     = CONTAINER_OF(const struct CanardRxSubscription, node, base)->port_id;
+    const CanardPortID  other     = CONST_CONTAINER_OF(struct CanardRxSubscription, node, base)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
