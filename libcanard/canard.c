@@ -72,9 +72,9 @@
 #define INITIAL_TOGGLE_STATE true
 
 #define CONTAINER_OF(type, ptr, member) \
-    ((type*) (((ptr) == NULL) ? NULL : (void*) ((char*) (ptr) -offsetof(type, member))))
+    ((type*) (((ptr) == NULL) ? NULL : (void*) (((char*) (ptr)) -offsetof(type, member))))
 #define CONST_CONTAINER_OF(type, ptr, member) \
-    ((const type*) (((ptr) == NULL) ? NULL : (const void*) ((const char*) (ptr) -offsetof(type, member))))
+    ((const type*) (((ptr) == NULL) ? NULL : (const void*) (((const char*) (ptr)) -offsetof(type, member))))
 
 /// Used for inserting new items into AVL trees.
 CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
