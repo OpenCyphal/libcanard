@@ -72,9 +72,9 @@
 #define INITIAL_TOGGLE_STATE true
 
 #define CONTAINER_OF(type, ptr, member) \
-    ((type*) (((ptr) == NULL) ? NULL : (void*) ((char*) (ptr) - offsetof(type, member))))
+    ((type*) (((ptr) == NULL) ? NULL : (void*) ((char*) (ptr) -offsetof(type, member))))
 #define CONST_CONTAINER_OF(type, ptr, member) \
-    ((const type*) (((ptr) == NULL) ? NULL : (const void*) ((const char*) (ptr) - offsetof(type, member))))
+    ((const type*) (((ptr) == NULL) ? NULL : (const void*) ((const char*) (ptr) -offsetof(type, member))))
 
 /// Used for inserting new items into AVL trees.
 CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
@@ -1050,6 +1050,7 @@ CANARD_PRIVATE int8_t
 rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
                                 const struct CanardTreeNode* const node)
 {
+    CANARD_ASSERT((user_reference != NULL) && (node != NULL));
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
     const CanardPortID  other     = CONST_CONTAINER_OF(struct CanardRxSubscription, node, base)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
