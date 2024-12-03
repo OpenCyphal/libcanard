@@ -30,7 +30,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == alloc.getNumAllocatedFragments());
 
-    alloc.setAllocationCeiling(400);
+    alloc.setAllocationCeiling(496);
 
     CanardTransferMetadata meta{};
 
@@ -72,7 +72,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
 
     // Check the TX queue.
     {
@@ -123,7 +123,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
 
     // Pop the queue.
     // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
@@ -190,7 +190,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
     ti = que.peek();
     REQUIRE(nullptr != ti);
@@ -235,7 +235,7 @@ TEST_CASE("TxBasic0")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
     ti = que.peek();
     REQUIRE(nullptr != ti);
@@ -341,11 +341,11 @@ TEST_CASE("TxBasic0")
     REQUIRE(nullptr == ti);
 
     // Error handling.
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
-            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}));
+            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), 1'000'000'006'000ULL, meta, {1, nullptr}));
 
     REQUIRE(nullptr == canardTxPeek(nullptr));
@@ -408,7 +408,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
 
     // Check the TX queue.
     {
@@ -449,7 +449,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(20 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
 
     // Pop the queue.
     // hex(pycyphal.transport.commons.crc.CRC16CCITT.new(list(range(8))).value)
@@ -514,7 +514,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
     ti = que.peek();
     REQUIRE(nullptr != ti);
@@ -559,7 +559,7 @@ TEST_CASE("TxBasic1")
     REQUIRE(3 == que.getSize());
     REQUIRE(6 == alloc.getNumAllocatedFragments());
     REQUIRE(40 < alloc.getTotalAllocatedAmount());
-    REQUIRE(400 > alloc.getTotalAllocatedAmount());
+    REQUIRE(496 > alloc.getTotalAllocatedAmount());
     // Read the generated frames.
     ti = que.peek();
     REQUIRE(nullptr != ti);
@@ -665,11 +665,11 @@ TEST_CASE("TxBasic1")
     REQUIRE(nullptr == ti);
 
     // Error handling.
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
-            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}));
+            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), 1'000'000'006'000ULL, meta, {1, nullptr}));
 
     REQUIRE(nullptr == canardTxPeek(nullptr));
