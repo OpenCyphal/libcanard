@@ -300,11 +300,17 @@ public:
                             const CanardMicrosecond       now_usec = 0ULL)
     {
         checkInvariants();
-        const auto size_before = que_.size;
-        const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload, now_usec);
-        const auto num_added   = static_cast<std::size_t>(ret);
-        enforce((ret < 0) || ((size_before + num_added) == que_.size), "Unexpected size change after push");
+
+        const auto size_before    = que_.size;
+        const auto dropped_before = que_.stats.dropped_frames;
+
+        const auto ret       = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload, now_usec);
+        const auto num_added = static_cast<std::size_t>(ret);
+
+        enforce((ret < 0) || ((size_before + num_added + dropped_before - que_.stats.dropped_frames) == que_.size),
+                "Unexpected size change after push");
         checkInvariants();
+
         return ret;
     }
 

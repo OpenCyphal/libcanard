@@ -814,3 +814,119 @@ TEST_CASE("TxPayloadOwnership")
         }
     }
 }
+
+TEST_CASE("TxFlushExpired")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{2, CANARD_MTU_CAN_FD};  // Limit capacity at 2 frames.
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(CANARD_NODE_ID_UNSET == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_FD == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    CanardMicrosecond       now      = 10'000'000ULL;  // 10s
+    const CanardMicrosecond deadline = 1'000'000ULL;   // 1s
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push single-frame with padding, peek. @ 10s
+    {
+        meta.priority       = CanardPriorityNominal;
+        meta.transfer_kind  = CanardTransferKindMessage;
+        meta.port_id        = 321;
+        meta.remote_node_id = CANARD_NODE_ID_UNSET;
+        meta.transfer_id    = 21;
+        REQUIRE(1 == que.push(&ins.getInstance(), now + deadline, meta, {8, payload.data()}, now));
+        REQUIRE(1 == que.getSize());
+        REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Peek and check the payload.
+        CanardTxQueueItem* ti = que.peek();
+        REQUIRE(nullptr != ti);  // Make sure we get the same frame again.
+        REQUIRE(ti->frame.payload.size == 12);
+        REQUIRE(ti->frame.payload.allocated_size == 12);
+        REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 8));
+        REQUIRE(ti->tx_deadline_usec == now + deadline);
+        REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+        // Don't pop and free the item - we gonna flush it by the next push at 12s.
+    }
+
+    now += 2 * deadline;  // 10s -> 12s
+
+    // 2. Push two-frames, peek. @ 12s (after 2x deadline)
+    //    These 2 frames should still fit into the queue (with capacity 2) despite one expired frame still there.`
+    {
+        que.setMTU(8);
+        ins.setNodeID(42);
+        meta.transfer_id = 22;
+        REQUIRE(2 == que.push(&ins.getInstance(), now + deadline, meta, {8, payload.data()}, now));
+        REQUIRE(2 == que.getSize());
+        REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 == que.getInstance().stats.dropped_frames);
+
+        // a) Peek and check the payload of the 1st frame
+        CanardTxQueueItem* ti = NULL;
+        {
+            ti = que.peek();
+            REQUIRE(nullptr != ti);
+            REQUIRE(ti->frame.payload.size == 8);
+            REQUIRE(ti->frame.payload.allocated_size == 8);
+            REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data(), 7));
+            REQUIRE(ti->tx_deadline_usec == now + deadline);
+            REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+            REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
+            REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+            REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+            // Don't pop and free the item - we gonna flush it by the next push @ 14s.
+        }
+        // b) Check the payload of the 2nd frame
+        {
+            ti = ti->next_in_transfer;
+            REQUIRE(nullptr != ti);
+            REQUIRE(ti->frame.payload.size == 4);
+            REQUIRE(ti->frame.payload.allocated_size == 4);
+            REQUIRE(0 == std::memcmp(ti->frame.payload.data, payload.data() + 7, 1));
+            REQUIRE(ti->tx_deadline_usec == now + deadline);
+
+            // Don't pop and free the item - we gonna flush it by the next push @ 14s.
+        }
+    }
+
+    now += 2 * deadline;  // 12s -> 14s
+
+    // 3. Push three-frames, peek. @ 14s (after another 2x deadline)
+    //    These 3 frames should not fit into the queue (with capacity 2),
+    //    but as a side effect, the expired frames (from push @ 12s) should be flushed as well.
+    {
+        meta.transfer_id = 23;
+        REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
+                que.push(&ins.getInstance(), now + deadline, meta, {8 * 2, payload.data()}, now));
+        REQUIRE(0 == que.getSize());
+        REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+        REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+        REQUIRE(0 == ins_alloc.getTotalAllocatedAmount());
+        REQUIRE(1 + 2 == que.getInstance().stats.dropped_frames);
+
+        REQUIRE(nullptr == que.peek());
+    }
+}

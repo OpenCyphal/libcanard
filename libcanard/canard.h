@@ -309,7 +309,7 @@ struct CanardMemoryResource
 /// Holds the statistics of a transmission queue.
 struct CanardTxQueueStats
 {
-    /// Holds number of dropped TX frames (due to timeout when `now > deadline`).
+    /// Holds number of dropped TX frames due to timeout (when `now > deadline`) or b/c of transmission failures.
     size_t dropped_frames;
 };
 
@@ -458,8 +458,9 @@ struct CanardInstance
     /// The time complexity models given in the API documentation are made on the assumption that the memory management
     /// functions have constant complexity O(1).
     ///
-    /// The following API functions may allocate memory:   canardRxAccept(), canardTxPush().
-    /// The following API functions may deallocate memory: canardRxAccept(), canardRxSubscribe(), canardRxUnsubscribe().
+    /// The following API functions may allocate memory:   canardTxPush(), canardRxAccept().
+    /// The following API functions may deallocate memory: canardTxPush(), canardTxFree(), canardRxAccept(),
+    /// canardRxSubscribe(), canardRxUnsubscribe().
     /// The exact memory requirement and usage model is specified for each function in its documentation.
     struct CanardMemoryResource memory;
 

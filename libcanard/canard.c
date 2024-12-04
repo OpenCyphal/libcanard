@@ -72,9 +72,9 @@
 #define INITIAL_TOGGLE_STATE true
 
 #define CONTAINER_OF(type, ptr, member) \
-    ((type*) (((ptr) == NULL) ? NULL : (void*) (((char*) (ptr)) - offsetof(type, member))))
-#define CONST_CONTAINER_OF(type, ptr, member) \
     ((const type*) (((ptr) == NULL) ? NULL : (const void*) (((const char*) (ptr)) - offsetof(type, member))))
+#define MUTABLE_CONTAINER_OF(type, ptr, member) \
+    ((type*) (((ptr) == NULL) ? NULL : (void*) (((char*) (ptr)) - offsetof(type, member))))
 
 /// Used for inserting new items into AVL trees.
 CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
@@ -346,8 +346,8 @@ CANARD_PRIVATE int8_t txAVLPriorityPredicate(           //
 {
     typedef struct CanardTxQueueItem TxItem;
 
-    const TxItem* const target = CONST_CONTAINER_OF(TxItem, user_reference, priority_base);
-    const TxItem* const other  = CONST_CONTAINER_OF(TxItem, node, priority_base);
+    const TxItem* const target = CONTAINER_OF(TxItem, user_reference, priority_base);
+    const TxItem* const other  = CONTAINER_OF(TxItem, node, priority_base);
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->frame.extended_can_id >= other->frame.extended_can_id) ? +1 : -1;
 }
@@ -362,8 +362,8 @@ CANARD_PRIVATE int8_t txAVLDeadlinePredicate(           //
 {
     typedef struct CanardTxQueueItem TxItem;
 
-    const TxItem* const target = CONST_CONTAINER_OF(TxItem, user_reference, deadline_base);
-    const TxItem* const other  = CONST_CONTAINER_OF(TxItem, node, deadline_base);
+    const TxItem* const target = CONTAINER_OF(TxItem, user_reference, deadline_base);
+    const TxItem* const other  = CONTAINER_OF(TxItem, node, deadline_base);
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->tx_deadline_usec >= other->tx_deadline_usec) ? +1 : -1;
 }
@@ -590,6 +590,35 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
     }
     CANARD_ASSERT((out < 0) || (out >= 2));
     return out;
+}
+
+/// Flushes expired transfers by comparing deadline timestamps of the pending transfers with the current time.
+CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        que,
+                                            const struct CanardInstance* const ins,
+                                            const CanardMicrosecond            now_usec)
+{
+    struct CanardTxQueueItem* tx_item = NULL;
+    while (NULL != (tx_item = MUTABLE_CONTAINER_OF(  //
+                        struct CanardTxQueueItem,
+                        cavlFindExtremum(que->deadline_root, false),
+                        deadline_base)))
+    {
+        if (now_usec <= tx_item->tx_deadline_usec)
+        {
+            // The queue is sorted by deadline, so we can stop here.
+            break;
+        }
+
+        // All frames of the transfer are released at once b/c they all have the same deadline.
+        struct CanardTxQueueItem* tx_item_to_free = NULL;
+        while (NULL != (tx_item_to_free = canardTxPop(que, tx_item)))
+        {
+            tx_item = tx_item_to_free->next_in_transfer;
+            canardTxFree(que, ins, tx_item_to_free);
+
+            que->stats.dropped_frames++;
+        }
+    }
 }
 
 // --------------------------------------------- RECEPTION ---------------------------------------------
@@ -1052,7 +1081,7 @@ rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API
 {
     CANARD_ASSERT((user_reference != NULL) && (node != NULL));
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
-    const CanardPortID  other     = CONST_CONTAINER_OF(struct CanardRxSubscription, node, base)->port_id;
+    const CanardPortID  other     = CONTAINER_OF(struct CanardRxSubscription, node, base)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
@@ -1063,7 +1092,7 @@ rxSubscriptionPredicateOnStruct(void* const user_reference,  // NOSONAR Cavl API
                                 const struct CanardTreeNode* const node)
 {
     return rxSubscriptionPredicateOnPortID(  //
-        &CONTAINER_OF(struct CanardRxSubscription, user_reference, base)->port_id,
+        &MUTABLE_CONTAINER_OF(struct CanardRxSubscription, user_reference, base)->port_id,
         node);
 }
 
@@ -1119,6 +1148,15 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
                      const struct CanardPayload                 payload,
                      const CanardMicrosecond                    now_usec)
 {
+    // Before pushing payload (potentially in multiple frames), we need to try to flush any expired transfers.
+    // This is necessary to ensure that we don't exhaust the capacity of the queue by holding outdated frames.
+    // The flushing is done by comparing deadline timestamps of the pending transfers with the current time,
+    // which makes sense only if the current time is known (bigger than zero).
+    if (now_usec > 0)
+    {
+        txFlushExpiredTransfers(que, ins, now_usec);
+    }
+
     (void) now_usec;
 
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
@@ -1167,7 +1205,7 @@ struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
         // Paragraph 6.7.2.1.15 of the C standard says:
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         struct CanardTreeNode* const priority_node = cavlFindExtremum(que->priority_root, false);
-        out = CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
+        out = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
     }
     return out;
 }
@@ -1223,7 +1261,7 @@ int8_t canardRxAccept(struct CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                struct CanardRxSubscription* const sub = CONTAINER_OF(  //
+                struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(  //
                     struct CanardRxSubscription,
                     cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
                                &model.port_id,
@@ -1307,7 +1345,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct CanardRxSubscription* const sub = CONTAINER_OF(  //
+        struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(  //
             struct CanardRxSubscription,
             cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL),
             base);
@@ -1348,7 +1386,7 @@ int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct CanardRxSubscription* const sub = CONTAINER_OF(  //
+        struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(  //
             struct CanardRxSubscription,
             cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL),
             base);
