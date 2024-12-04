@@ -815,7 +815,7 @@ TEST_CASE("TxPayloadOwnership")
     }
 }
 
-TEST_CASE("TxFlushExpired")
+TEST_CASE("TxPushFlushExpired")
 {
     helpers::Instance ins;
     helpers::TxQueue  que{2, CANARD_MTU_CAN_FD};  // Limit capacity at 2 frames.
@@ -929,4 +929,325 @@ TEST_CASE("TxFlushExpired")
 
         REQUIRE(nullptr == que.peek());
     }
+}
+
+TEST_CASE("TxPollSingleFrame")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{2, CANARD_MTU_CAN_FD};  // Limit capacity at 2 frames.
+
+    que.setMTU(8);
+    ins.setNodeID(42);
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(42 == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_CLASSIC == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    CanardMicrosecond           now      = 10'000'000ULL;  // 10s
+    constexpr CanardMicrosecond deadline = 1'000'000ULL;   // 1s
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push single frame @ 10s
+    //
+    meta.priority       = CanardPriorityNominal;
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.port_id        = 321;
+    meta.remote_node_id = CANARD_NODE_ID_UNSET;
+    meta.transfer_id    = 21;
+    REQUIRE(1 == que.push(&ins.getInstance(), now + deadline, meta, {7, payload.data()}, now));
+    REQUIRE(1 == que.getSize());
+    REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+    // 2. Poll; emulate media is busy @ 10s + 100us
+    //
+    std::size_t total_handler_calls = 0;
+    REQUIRE(0 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline);
+        REQUIRE(frame.payload.size == 8);
+        REQUIRE(frame.payload.allocated_size == 8);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+        return 0;  // Emulate that TX media is busy.
+    }));
+    REQUIRE(1 == total_handler_calls);
+    REQUIRE(1 == que.getSize());
+    REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+
+    // 3. Poll; emulate media is ready @ 10s + 200us
+    //
+    REQUIRE(1 == que.poll(ins, now + 200, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline);
+        REQUIRE(frame.payload.size == 8);
+        REQUIRE(frame.payload.allocated_size == 8);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+        return 1;  // Emulate that TX media accepted the frame.
+    }));
+    REQUIRE(2 == total_handler_calls);
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+
+    // 3. Poll when queue is empty @ 10s + 300us
+    //
+    REQUIRE(0 == que.poll(ins, now + 300, [&](auto, auto&) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        FAIL("This should not be called.");
+        return -1;
+    }));
+    REQUIRE(2 == total_handler_calls);
+    REQUIRE(0 == que.getSize());
+}
+
+TEST_CASE("TxPollMultiFrame")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{2, CANARD_MTU_CAN_FD};  // Limit capacity at 2 frames.
+
+    que.setMTU(8);
+    ins.setNodeID(42);
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(42 == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_CLASSIC == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    CanardMicrosecond           now      = 10'000'000ULL;  // 10s
+    constexpr CanardMicrosecond deadline = 1'000'000ULL;   // 1s
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push two frames @ 10s
+    //
+    meta.priority       = CanardPriorityNominal;
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.port_id        = 321;
+    meta.remote_node_id = CANARD_NODE_ID_UNSET;
+    meta.transfer_id    = 21;
+    REQUIRE(2 == que.push(&ins.getInstance(), now + deadline, meta, {8, payload.data()}, now));
+    REQUIRE(2 == que.getSize());
+    REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 + 4 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+    // 2. Poll 1st frame @ 10s + 100us
+    //
+    std::size_t total_handler_calls = 0;
+    REQUIRE(1 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline);
+        REQUIRE(frame.payload.size == 8);
+        REQUIRE(frame.payload.allocated_size == 8);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+        return 1;
+    }));
+    REQUIRE(1 == total_handler_calls);
+    REQUIRE(1 == que.getSize());
+    REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+
+    // 3. Poll 2nd frame @ 10s + 200us
+    //
+    REQUIRE(1 == que.poll(ins, now + 200, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline);
+        REQUIRE(frame.payload.size == 4);
+        REQUIRE(frame.payload.allocated_size == 4);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data() + 7, 1));
+        return 1;
+    }));
+    REQUIRE(2 == total_handler_calls);
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+}
+
+TEST_CASE("TxPollDropFrameOnFailure")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{2, CANARD_MTU_CAN_FD};  // Limit capacity at 2 frames.
+
+    que.setMTU(8);
+    ins.setNodeID(42);
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(42 == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_CLASSIC == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    constexpr CanardMicrosecond now      = 10'000'000ULL;  // 10s
+    constexpr CanardMicrosecond deadline = 1'000'000ULL;   // 1s
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push two frames @ 10s
+    //
+    meta.priority       = CanardPriorityNominal;
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.port_id        = 321;
+    meta.remote_node_id = CANARD_NODE_ID_UNSET;
+    meta.transfer_id    = 21;
+    REQUIRE(2 == que.push(&ins.getInstance(), now + deadline, meta, {8, payload.data()}, now));
+    REQUIRE(2 == que.getSize());
+    REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 + 4 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+    // 2. Poll 1st frame; emulate media failure @ 10s + 100us
+    //
+    std::size_t total_handler_calls = 0;
+    REQUIRE(-1 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline);
+        REQUIRE(frame.payload.size == 8);
+        REQUIRE(frame.payload.allocated_size == 8);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+        return -1;
+    }));
+    REQUIRE(1 == total_handler_calls);
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(2 == que.getInstance().stats.dropped_frames);
+}
+
+TEST_CASE("TxPollDropExpired")
+{
+    helpers::Instance ins;
+    helpers::TxQueue  que{2, CANARD_MTU_CAN_FD};  // Limit capacity at 2 frames.
+
+    que.setMTU(8);
+    ins.setNodeID(42);
+
+    auto& tx_alloc  = que.getAllocator();
+    auto& ins_alloc = ins.getAllocator();
+
+    std::array<std::uint8_t, 1024> payload{};
+    std::iota(payload.begin(), payload.end(), 0U);
+
+    REQUIRE(42 == ins.getNodeID());
+    REQUIRE(CANARD_MTU_CAN_CLASSIC == que.getMTU());
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+
+    CanardMicrosecond           now      = 10'000'000ULL;  // 10s
+    constexpr CanardMicrosecond deadline = 1'000'000ULL;   // 1s
+
+    CanardTransferMetadata meta{};
+
+    // 1. Push nominal priority frame @ 10s
+    //
+    meta.priority       = CanardPriorityNominal;
+    meta.transfer_kind  = CanardTransferKindMessage;
+    meta.port_id        = 321;
+    meta.remote_node_id = CANARD_NODE_ID_UNSET;
+    meta.transfer_id    = 21;
+    REQUIRE(1 == que.push(&ins.getInstance(), now + deadline, meta, {7, payload.data()}, now));
+    REQUIRE(1 == que.getSize());
+    REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
+
+    // 2. Push high priority frame @ 10s + 1'000us
+    //
+    meta.priority      = CanardPriorityHigh;
+    meta.transfer_kind = CanardTransferKindMessage;
+    meta.port_id       = 321;
+    meta.transfer_id   = 22;
+    REQUIRE(1 == que.push(&ins.getInstance(), now + deadline - 1, meta, {7, payload.data() + 100}, now + 1'000));
+    REQUIRE(2 == que.getSize());
+    REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 + 8 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+
+    // 3. Poll a frame (should be the high priority one); emulate media is busy @ 10s + 2'000us
+    //
+    std::size_t total_handler_calls = 0;
+    REQUIRE(0 == que.poll(ins, now + 2'000, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline - 1);
+        REQUIRE(frame.payload.size == 8);
+        REQUIRE(frame.payload.allocated_size == 8);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data() + 100, 7));
+        return 0;
+    }));
+    REQUIRE(1 == total_handler_calls);
+    REQUIRE(2 == que.getSize());
+    REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(8 + 8 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+
+    // 3. Poll a frame (should be nominal priority one b/c the high has been expired) @ 10s + deadline
+    //
+    REQUIRE(1 == que.poll(ins, now + deadline, [&](auto deadline_usec, auto& frame) -> std::int8_t {
+        //
+        ++total_handler_calls;
+        REQUIRE(deadline_usec == now + deadline);
+        REQUIRE(frame.payload.size == 8);
+        REQUIRE(frame.payload.allocated_size == 8);
+        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+        return 1;
+    }));
+    REQUIRE(2 == total_handler_calls);
+    REQUIRE(0 == que.getSize());
+    REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
+    REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
+    REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
+    REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
+    REQUIRE(1 == que.getInstance().stats.dropped_frames);
 }

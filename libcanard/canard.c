@@ -594,13 +594,14 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
 
 CANARD_PRIVATE void txPopAndFreeTransfer(struct CanardTxQueue* const        que,
                                          const struct CanardInstance* const ins,
-                                         struct CanardTxQueueItem*          tx_item,
+                                         struct CanardTxQueueItem* const    tx_item,
                                          const bool                         drop_whole_transfer)
 {
+    struct CanardTxQueueItem* curr_tx_item    = tx_item;
     struct CanardTxQueueItem* tx_item_to_free = NULL;
-    while (NULL != (tx_item_to_free = canardTxPop(que, tx_item)))
+    while (NULL != (tx_item_to_free = canardTxPop(que, curr_tx_item)))
     {
-        tx_item = tx_item_to_free->next_in_transfer;
+        curr_tx_item = tx_item_to_free->next_in_transfer;
         canardTxFree(que, ins, tx_item_to_free);
 
         if (!drop_whole_transfer)
