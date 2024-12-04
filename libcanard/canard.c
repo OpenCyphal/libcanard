@@ -1169,8 +1169,6 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
         txFlushExpiredTransfers(que, ins, now_usec);
     }
 
-    (void) now_usec;
-
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (que != NULL) && (metadata != NULL) && ((payload.data != NULL) || (0U == payload.size)))
     {
@@ -1263,7 +1261,7 @@ int8_t canardTxPoll(struct CanardTxQueue* const        que,
     int8_t out = 0;
 
     // Before peeking a frame to transmit, we need to try to flush any expired transfers.
-    // This will not only ensure asap freeing of the queue capacity, but also makes sure that the following
+    // This will not only ensure ASAP freeing of the queue capacity, but also makes sure that the following
     // `canardTxPeek` will return a not expired item (if any), so we don't need to check the deadline again.
     // The flushing is done by comparing deadline timestamps of the pending transfers with the current time,
     // which makes sense only if the current time is known (bigger than zero).
@@ -1282,12 +1280,12 @@ int8_t canardTxPoll(struct CanardTxQueue* const        que,
 
             // We gonna release (pop and free) the frame if the handler returned:
             // - either a positive value - the frame has been successfully accepted by the handler;
-            // - or a negative value - the frame has been rejected by the handler due to failure.
+            // - or a negative value - the frame has been rejected by the handler due to a failure.
             // Zero value means that the handler cannot accept the frame at the moment, so we keep it in the queue.
             if (out != 0)
             {
                 // In case of a failure, it makes sense to drop the whole transfer immediately
-                // b/c at least one this frame has been rejected, so the whole transfer is useless.
+                // b/c at least  this frame has been rejected, so the whole transfer is useless.
                 const bool drop_whole_transfer = (out < 0);
                 txPopAndFreeTransfer(que, ins, tx_item, drop_whole_transfer);
             }
