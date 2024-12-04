@@ -313,6 +313,29 @@ struct CanardTxQueueStats
     size_t dropped_frames;
 };
 
+/// Defines the signature of the TX frame handler function.
+///
+/// The handler function is intended to be invoked from Canard TX polling (see details for the `canardTxPoll()`).
+///
+/// @param user_reference The user reference passed to `canardTxPoll()`.
+/// @param deadline_usec The deadline of the frame that is being handled.
+/// @param frame The mutable frame that is being handled.
+/// @return The result of the handling operation:
+/// - Any positive value: the frame was successfully handled.
+///   This indicates that the frame payload was accepted (and its ownership could be potentially moved,
+///   see `canardTxPeek` for the details), and the frame can be safely removed from the queue.
+/// - Zero: the frame was not handled, and so the frame should be kept in the queue.
+///   It will be retried on some future `canardTxPoll()` call according to the queue state in the future.
+///   This case is useful when TX hardware is busy, and the frame should be retried later.
+/// - Any negative value: the frame was rejected due to an unrecoverable failure.
+///   This indicates to the caller (`canardTxPoll`) that the frame should be dropped from the queue,
+///   as well as all other frames belonging to the same transfer. The `dropped_frames` counter in the TX queue stats
+///   will be incremented for each frame dropped in this way.
+///
+typedef int8_t (*CanardTxFrameHandler)(void* const                user_reference,
+                                       const CanardMicrosecond    deadline_usec,
+                                       struct CanardMutableFrame* frame);
+
 /// Prioritized transmission queue that keeps CAN frames destined for transmission via one CAN interface.
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
 /// Applications that are not interested in transmission may have zero queues.
@@ -612,6 +635,31 @@ struct CanardTxQueueItem* canardTxPop(struct CanardTxQueue* const que, struct Ca
 void canardTxFree(struct CanardTxQueue* const        que,
                   const struct CanardInstance* const ins,
                   struct CanardTxQueueItem* const    item);
+
+/// This is a helper that combines several Canard TX calls (`canardTxPeek`, `canardTxPop` and `canardTxFree`)
+/// into one "polling" algorythm. It simplifies the whole process of transmitting frames to just two function calls:
+/// - `canardTxPush` to enqueue the frames
+/// - `canardTxPoll` to dequeue, transmit and free a single frame
+///
+/// The algorythm implements a typical pattern of de-queuing, transmitting and freeing a TX queue item,
+/// as well as handling transmission failures, retries, and deadline timeouts.
+///
+/// The function is intended to be periodically called, most probably on a signal that the previous TX frame
+/// transmission has been completed, and so the next TX frame (if any) could be polled from the TX queue.
+///
+/// @param que The TX queue to poll.
+/// @param ins The Canard instance.
+/// @param now_usec The current time in microseconds. It is used to determine if the frame has timed out.
+/// @param user_reference The user reference to be passed to the frame handler.
+/// @param frame_handler The frame handler function that will be called to transmit the frame.
+/// @return Zero if the queue is empty or there is no frame handler (NULL).
+///         Otherwise, the result from the frame handler call. See `CanardTxFrameHandler` documentation.
+///
+int8_t canardTxPoll(struct CanardTxQueue* const        que,
+                    const struct CanardInstance* const ins,
+                    const CanardMicrosecond            now_usec,
+                    void* const                        user_reference,
+                    const CanardTxFrameHandler         frame_handler);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a

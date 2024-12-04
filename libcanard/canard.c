@@ -592,6 +592,25 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
     return out;
 }
 
+CANARD_PRIVATE void txPopAndFreeTransfer(struct CanardTxQueue* const        que,
+                                         const struct CanardInstance* const ins,
+                                         struct CanardTxQueueItem*          tx_item,
+                                         const bool                         drop_whole_transfer)
+{
+    struct CanardTxQueueItem* tx_item_to_free = NULL;
+    while (NULL != (tx_item_to_free = canardTxPop(que, tx_item)))
+    {
+        tx_item = tx_item_to_free->next_in_transfer;
+        canardTxFree(que, ins, tx_item_to_free);
+
+        if (!drop_whole_transfer)
+        {
+            break;
+        }
+        que->stats.dropped_frames++;
+    }
+}
+
 /// Flushes expired transfers by comparing deadline timestamps of the pending transfers with the current time.
 CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        que,
                                             const struct CanardInstance* const ins,
@@ -609,15 +628,8 @@ CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        q
             break;
         }
 
-        // All frames of the transfer are released at once b/c they all have the same deadline.
-        struct CanardTxQueueItem* tx_item_to_free = NULL;
-        while (NULL != (tx_item_to_free = canardTxPop(que, tx_item)))
-        {
-            tx_item = tx_item_to_free->next_in_transfer;
-            canardTxFree(que, ins, tx_item_to_free);
-
-            que->stats.dropped_frames++;
-        }
+        // All frames of the transfer are dropped at once b/c they all have the same deadline.
+        txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
     }
 }
 
@@ -1240,6 +1252,50 @@ void canardTxFree(struct CanardTxQueue* const        que,
 
         ins->memory.deallocate(ins->memory.user_reference, sizeof(struct CanardTxQueueItem), item);
     }
+}
+
+int8_t canardTxPoll(struct CanardTxQueue* const        que,
+                    const struct CanardInstance* const ins,
+                    const CanardMicrosecond            now_usec,
+                    void* const                        user_reference,
+                    const CanardTxFrameHandler         frame_handler)
+{
+    int8_t out = 0;
+
+    // Before peeking a frame to transmit, we need to try to flush any expired transfers.
+    // This will not only ensure asap freeing of the queue capacity, but also makes sure that the following
+    // `canardTxPeek` will return a not expired item (if any), so we don't need to check the deadline again.
+    // The flushing is done by comparing deadline timestamps of the pending transfers with the current time,
+    // which makes sense only if the current time is known (bigger than zero).
+    if (now_usec > 0)
+    {
+        txFlushExpiredTransfers(que, ins, now_usec);
+    }
+
+    if (frame_handler != NULL)
+    {
+        struct CanardTxQueueItem* const tx_item = canardTxPeek(que);
+        if (tx_item != NULL)
+        {
+            // No need to check the deadline again, as we have already flushed all expired transfers.
+            out = frame_handler(user_reference, tx_item->tx_deadline_usec, &tx_item->frame);
+
+            // We gonna release (pop and free) the frame if the handler returned:
+            // - either a positive value - the frame has been successfully accepted by the handler;
+            // - or a negative value - the frame has been rejected by the handler due to failure.
+            // Zero value means that the handler cannot accept the frame at the moment, so we keep it in the queue.
+            if (out != 0)
+            {
+                // In case of a failure, it makes sense to drop the whole transfer immediately
+                // b/c at least one this frame has been rejected, so the whole transfer is useless.
+                const bool drop_whole_transfer = (out < 0);
+                txPopAndFreeTransfer(que, ins, tx_item, drop_whole_transfer);
+            }
+        }
+    }
+
+    CANARD_ASSERT(out <= 1);
+    return out;
 }
 
 int8_t canardRxAccept(struct CanardInstance* const        ins,
