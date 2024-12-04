@@ -883,7 +883,7 @@ TEST_CASE("TxFlushExpired")
         REQUIRE(1 == que.getInstance().stats.dropped_frames);
 
         // a) Peek and check the payload of the 1st frame
-        CanardTxQueueItem* ti = NULL;
+        CanardTxQueueItem* ti = nullptr;
         {
             ti = que.peek();
             REQUIRE(nullptr != ti);
@@ -919,7 +919,7 @@ TEST_CASE("TxFlushExpired")
     {
         meta.transfer_id = 23;
         REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
-                que.push(&ins.getInstance(), now + deadline, meta, {8 * 2, payload.data()}, now));
+                que.push(&ins.getInstance(), now + deadline, meta, {8ULL * 2ULL, payload.data()}, now));
         REQUIRE(0 == que.getSize());
         REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
         REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
