@@ -970,7 +970,11 @@ TEST_CASE("TxPollSingleFrame")
     REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
 
-    // 2. Poll; emulate media is busy @ 10s + 100us
+    // 2. Poll without time and handler.
+    //
+    REQUIRE(0 == que.poll(ins, 0, nullptr));
+
+    // 3. Poll; emulate media is busy @ 10s + 100us
     //
     std::size_t total_handler_calls = 0;
     REQUIRE(0 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
@@ -990,7 +994,7 @@ TEST_CASE("TxPollSingleFrame")
     REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
     REQUIRE(0 == que.getInstance().stats.dropped_frames);
 
-    // 3. Poll; emulate media is ready @ 10s + 200us
+    // 4. Poll; emulate media is ready @ 10s + 200us
     //
     REQUIRE(1 == que.poll(ins, now + 200, [&](auto deadline_usec, auto& frame) -> std::int8_t {
         //
