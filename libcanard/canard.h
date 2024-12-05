@@ -322,7 +322,7 @@ struct CanardTxQueueStats
 /// @param frame The mutable frame that is being handled.
 /// @return The result of the handling operation:
 /// - Any positive value: the frame was successfully handled.
-///   This indicates that the frame payload was accepted (and its ownership could be potentially moved,
+///   This indicates that the frame payload was accepted (and its payload ownership could be potentially moved,
 ///   see `canardTxPeek` for the details), and the frame can be safely removed from the queue.
 /// - Zero: the frame was not handled, and so the frame should be kept in the queue.
 ///   It will be retried on some future `canardTxPoll()` call according to the queue state in the future.
@@ -546,6 +546,11 @@ struct CanardTxQueue canardTxInit(const size_t                      capacity,
 /// be dropped (incrementing `CanardTxQueueStats::dropped_frames` field per such a frame).
 /// If this timeout behavior is not needed, the timestamp value can be set to zero.
 ///
+/// The described above automatic dropping of timed-out frames was added in the v4 of the library as an optional
+/// feature. It is applied only to the frames that are already in the TX queue (not the new ones that are being pushed
+/// in this call). The feature can be disabled by passing zero time in the `now_usec` parameter,
+/// so that it will be up to the application to track the `tx_deadline_usec` (see `canardTxPeek`).
+///
 /// The function returns the number of frames enqueued into the prioritized TX queue (which is always a positive
 /// number) in case of success (so that the application can track the number of items in the TX queue if necessary).
 /// In case of failure, the function returns a negated error code: either invalid argument or out-of-memory.
@@ -590,8 +595,8 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
 ///
 /// The timestamp values of returned frames are initialized with tx_deadline_usec from canardTxPush().
 /// Timestamps are used to specify the transmission deadline. It is up to the application and/or the media layer
-/// to implement the discardment of timed-out transport frames. The library does not check it, so a frame that is
-/// already timed out may be returned here.
+/// to implement the discardment of timed-out transport frames. The library does not check it in this call,
+/// so a frame that is already timed out may be returned here.
 ///
 /// If the queue is empty or if the argument is NULL, the returned value is NULL.
 ///
@@ -650,6 +655,7 @@ void canardTxFree(struct CanardTxQueue* const        que,
 /// @param que The TX queue to poll.
 /// @param ins The Canard instance.
 /// @param now_usec The current time in microseconds. It is used to determine if the frame has timed out.
+///                 Use zero value to disable automatic dropping of timed-out frames.
 /// @param user_reference The user reference to be passed to the frame handler.
 /// @param frame_handler The frame handler function that will be called to transmit the frame.
 /// @return Zero if the queue is empty or there is no frame handler (NULL).

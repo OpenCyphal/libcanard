@@ -597,11 +597,11 @@ CANARD_PRIVATE void txPopAndFreeTransfer(struct CanardTxQueue* const        que,
                                          struct CanardTxQueueItem* const    tx_item,
                                          const bool                         drop_whole_transfer)
 {
-    struct CanardTxQueueItem* curr_tx_item    = tx_item;
-    struct CanardTxQueueItem* tx_item_to_free = NULL;
-    while (NULL != (tx_item_to_free = canardTxPop(que, curr_tx_item)))
+    struct CanardTxQueueItem* next_tx_item    = tx_item;
+    struct CanardTxQueueItem* tx_item_to_free = canardTxPop(que, next_tx_item);
+    while (NULL != tx_item_to_free)
     {
-        curr_tx_item = tx_item_to_free->next_in_transfer;
+        next_tx_item = tx_item_to_free->next_in_transfer;
         canardTxFree(que, ins, tx_item_to_free);
 
         if (!drop_whole_transfer)
@@ -609,6 +609,8 @@ CANARD_PRIVATE void txPopAndFreeTransfer(struct CanardTxQueue* const        que,
             break;
         }
         que->stats.dropped_frames++;
+
+        tx_item_to_free = canardTxPop(que, next_tx_item);
     }
 }
 
@@ -617,11 +619,11 @@ CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        q
                                             const struct CanardInstance* const ins,
                                             const CanardMicrosecond            now_usec)
 {
-    struct CanardTxQueueItem* tx_item = NULL;
-    while (NULL != (tx_item = MUTABLE_CONTAINER_OF(  //
-                        struct CanardTxQueueItem,
-                        cavlFindExtremum(que->deadline_root, false),
-                        deadline_base)))
+    struct CanardTxQueueItem* tx_item = MUTABLE_CONTAINER_OF(  //
+        struct CanardTxQueueItem,
+        cavlFindExtremum(que->deadline_root, false),
+        deadline_base);
+    while (NULL != tx_item)
     {
         if (now_usec <= tx_item->tx_deadline_usec)
         {
@@ -631,6 +633,11 @@ CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        q
 
         // All frames of the transfer are dropped at once b/c they all have the same deadline.
         txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
+
+        tx_item = MUTABLE_CONTAINER_OF(  //
+            struct CanardTxQueueItem,
+            cavlFindExtremum(que->deadline_root, false),
+            deadline_base);
     }
 }
 
@@ -1213,8 +1220,6 @@ struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
     struct CanardTxQueueItem* out = NULL;
     if (que != NULL)
     {
-        // Paragraph 6.7.2.1.15 of the C standard says:
-        //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         struct CanardTreeNode* const priority_node = cavlFindExtremum(que->priority_root, false);
         out = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
     }
