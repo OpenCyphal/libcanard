@@ -362,7 +362,7 @@ public:
                             &ins.getInstance(),
                             now_usec,
                             &frame_handler,
-                            [](auto* user_reference, const auto deadline_usec, auto* frame) -> std::int8_t {
+                            [](auto* user_reference, const auto deadline_usec, auto* const frame) -> std::int8_t {
                                 //
                                 const auto* const handler_ptr = static_cast<FrameHandler*>(user_reference);
                                 return (*handler_ptr)(deadline_usec, *frame);

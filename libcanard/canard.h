@@ -332,9 +332,9 @@ struct CanardTxQueueStats
 ///   as well as all other frames belonging to the same transfer. The `dropped_frames` counter in the TX queue stats
 ///   will be incremented for each frame dropped in this way.
 ///
-typedef int8_t (*CanardTxFrameHandler)(void* const                user_reference,
-                                       const CanardMicrosecond    deadline_usec,
-                                       struct CanardMutableFrame* frame);
+typedef int8_t (*CanardTxFrameHandler)(void* const                      user_reference,
+                                       const CanardMicrosecond          deadline_usec,
+                                       struct CanardMutableFrame* const frame);
 
 /// Prioritized transmission queue that keeps CAN frames destined for transmission via one CAN interface.
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
