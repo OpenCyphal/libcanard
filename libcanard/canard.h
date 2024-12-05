@@ -306,6 +306,13 @@ struct CanardMemoryResource
     CanardMemoryAllocate   allocate;        ///< Shall be a valid pointer.
 };
 
+/// Holds the statistics of a transmission queue.
+struct CanardTxQueueStats
+{
+    /// Holds number of dropped TX frames due to timeout (when `now > deadline`) or b/c of transmission failures.
+    size_t dropped_frames;
+};
+
 /// Prioritized transmission queue that keeps CAN frames destined for transmission via one CAN interface.
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
 /// Applications that are not interested in transmission may have zero queues.
@@ -335,7 +342,10 @@ struct CanardTxQueue
     size_t size;
 
     /// The root of the priority queue is NULL if the queue is empty. Do not modify this field!
-    struct CanardTreeNode* root;
+    struct CanardTreeNode* priority_root;
+
+    /// The root of the deadline queue is NULL if the queue is empty. Do not modify this field!
+    struct CanardTreeNode* deadline_root;
 
     /// The memory resource used by this queue for allocating the payload data (CAN frames).
     /// There is exactly one allocation of payload buffer per enqueued item (not considering the item itself
@@ -354,13 +364,19 @@ struct CanardTxQueue
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
     void* user_reference;
+
+    /// Holds the statistics of this TX queue.
+    struct CanardTxQueueStats stats;
 };
 
 /// One frame stored in the transmission queue along with its metadata.
 struct CanardTxQueueItem
 {
     /// Internal use only; do not access this field.
-    struct CanardTreeNode base;
+    struct CanardTreeNode priority_base;
+
+    /// Internal use only; do not access this field.
+    struct CanardTreeNode deadline_base;
 
     /// Points to the next frame in this transfer or NULL. This field is mostly intended for own needs of the library.
     /// Normally, the application would not use it because transfer frame ordering is orthogonal to global TX ordering.
@@ -442,8 +458,9 @@ struct CanardInstance
     /// The time complexity models given in the API documentation are made on the assumption that the memory management
     /// functions have constant complexity O(1).
     ///
-    /// The following API functions may allocate memory:   canardRxAccept(), canardTxPush().
-    /// The following API functions may deallocate memory: canardRxAccept(), canardRxSubscribe(), canardRxUnsubscribe().
+    /// The following API functions may allocate memory:   canardTxPush(), canardRxAccept().
+    /// The following API functions may deallocate memory: canardTxPush(), canardTxFree(), canardRxAccept(),
+    /// canardRxSubscribe(), canardRxUnsubscribe().
     /// The exact memory requirement and usage model is specified for each function in its documentation.
     struct CanardMemoryResource memory;
 
@@ -502,7 +519,9 @@ struct CanardTxQueue canardTxInit(const size_t                      capacity,
 /// frames (so all frames will have the same timestamp value). This feature is intended to facilitate transmission
 /// deadline tracking, i.e., aborting frames that could not be transmitted before the specified deadline.
 /// Therefore, normally, the timestamp value should be in the future.
-/// The library itself, however, does not use or check this value in any way, so it can be zero if not needed.
+/// The library uses `now > deadline` comparison to determine which frames timed out, and so could
+/// be dropped (incrementing `CanardTxQueueStats::dropped_frames` field per such a frame).
+/// If this timeout behavior is not needed, the timestamp value can be set to zero.
 ///
 /// The function returns the number of frames enqueued into the prioritized TX queue (which is always a positive
 /// number) in case of success (so that the application can track the number of items in the TX queue if necessary).
@@ -539,7 +558,8 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
                      const struct CanardInstance* const         ins,
                      const CanardMicrosecond                    tx_deadline_usec,
                      const struct CanardTransferMetadata* const metadata,
-                     const struct CanardPayload                 payload);
+                     const struct CanardPayload                 payload,
+                     const CanardMicrosecond                    now_usec);
 
 /// This function accesses the top element of the prioritized transmission queue. The queue itself is not modified
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport

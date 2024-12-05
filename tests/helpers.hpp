@@ -296,14 +296,21 @@ public:
     [[nodiscard]] auto push(CanardInstance* const         ins,
                             const CanardMicrosecond       transmission_deadline_usec,
                             const CanardTransferMetadata& metadata,
-                            const struct CanardPayload    payload)
+                            const struct CanardPayload    payload,
+                            const CanardMicrosecond       now_usec = 0ULL)
     {
         checkInvariants();
-        const auto size_before = que_.size;
-        const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload);
-        const auto num_added   = static_cast<std::size_t>(ret);
-        enforce((ret < 0) || ((size_before + num_added) == que_.size), "Unexpected size change after push");
+
+        const auto size_before    = que_.size;
+        const auto dropped_before = que_.stats.dropped_frames;
+
+        const auto ret       = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload, now_usec);
+        const auto num_added = static_cast<std::size_t>(ret);
+
+        enforce((ret < 0) || ((size_before + num_added + dropped_before - que_.stats.dropped_frames) == que_.size),
+                "Unexpected size change after push");
         checkInvariants();
+
         return ret;
     }
 
@@ -341,7 +348,18 @@ public:
     [[nodiscard]] auto getSize() const
     {
         std::size_t out = 0;
-        traverse(que_.root, [&](auto* _) {
+        traverse(que_.priority_root, [&](auto* _) {
+            (void) _;
+            out++;
+        });
+        enforce(que_.size == out, "Size miscalculation");
+        return out;
+    }
+
+    [[nodiscard]] auto getDeadlineQueueSize() const
+    {
+        std::size_t out = 0;
+        traverse(que_.deadline_root, [&](auto* _) {
             (void) _;
             out++;
         });
@@ -352,7 +370,7 @@ public:
     [[nodiscard]] auto linearize() const -> std::vector<const exposed::TxItem*>
     {
         std::vector<const exposed::TxItem*> out;
-        traverse(que_.root, [&](const CanardTreeNode* const item) {
+        traverse(que_.priority_root, [&](const CanardTreeNode* const item) {
             out.push_back(reinterpret_cast<const exposed::TxItem*>(item));
         });
         enforce(out.size() == getSize(), "Internal error");
@@ -393,6 +411,7 @@ private:
     {
         enforce(que_.user_reference == this, "User reference damaged");
         enforce(que_.size == getSize(), "Size miscalculation");
+        enforce(que_.size == getDeadlineQueueSize(), "Deadline queue size miscalculation");
     }
 
     TestAllocator allocator_;
