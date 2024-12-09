@@ -217,7 +217,7 @@ Several functions have updated prototypes and usage patterns:
 
 Frames in the TX queue that have exceeded their `tx_deadline_usec` can now be automatically dropped when `now_usec` is provided to `canardTxPush()` or `canardTxPoll()`.
 
-- **Benefit**: Reduces the need for manual management of timed-out frames.
+- **Benefit**: Reduces the worst-case peak memory footprint.
 - **Optional**: Feature can be disabled by passing `0` for `now_usec`.
 
 #### Migration Steps

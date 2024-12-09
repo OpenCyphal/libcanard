@@ -313,14 +313,10 @@ struct CanardTxQueueStats
     size_t dropped_frames;
 };
 
-/// Defines the signature of the TX frame handler function.
-///
 /// The handler function is intended to be invoked from Canard TX polling (see details for the `canardTxPoll()`).
 ///
-/// @param user_reference The user reference passed to `canardTxPoll()`.
-/// @param deadline_usec The deadline of the frame that is being handled.
-/// @param frame The mutable frame that is being handled.
-/// @return The result of the handling operation:
+/// The user reference parameter what was passed to canardTxPoll.
+/// The return result of the handling operation:
 /// - Any positive value: the frame was successfully handled.
 ///   This indicates that the frame payload was accepted (and its payload ownership could be potentially moved,
 ///   see `canardTxPeek` for the details), and the frame can be safely removed from the queue.
@@ -642,24 +638,23 @@ void canardTxFree(struct CanardTxQueue* const        que,
                   struct CanardTxQueueItem* const    item);
 
 /// This is a helper that combines several Canard TX calls (`canardTxPeek`, `canardTxPop` and `canardTxFree`)
-/// into one "polling" algorythm. It simplifies the whole process of transmitting frames to just two function calls:
+/// into one "polling" algorithm. It simplifies the whole process of transmitting frames to just two function calls:
 /// - `canardTxPush` to enqueue the frames
 /// - `canardTxPoll` to dequeue, transmit and free a single frame
 ///
-/// The algorythm implements a typical pattern of de-queuing, transmitting and freeing a TX queue item,
+/// The algorithm implements a typical pattern of de-queuing, transmitting and freeing a TX queue item,
 /// as well as handling transmission failures, retries, and deadline timeouts.
 ///
 /// The function is intended to be periodically called, most probably on a signal that the previous TX frame
 /// transmission has been completed, and so the next TX frame (if any) could be polled from the TX queue.
 ///
-/// @param que The TX queue to poll.
-/// @param ins The Canard instance.
-/// @param now_usec The current time in microseconds. It is used to determine if the frame has timed out.
-///                 Use zero value to disable automatic dropping of timed-out frames.
-/// @param user_reference The user reference to be passed to the frame handler.
-/// @param frame_handler The frame handler function that will be called to transmit the frame.
-/// @return Zero if the queue is empty or there is no frame handler (NULL).
-///         Otherwise, the result from the frame handler call. See `CanardTxFrameHandler` documentation.
+/// The current time is used to determine if the frame has timed out. Use zero value to disable automatic dropping
+/// of timed-out frames. The user reference will be passed to the frame handler (see CanardTxFrameHandler), which
+/// will be called to transmit the frame.
+///
+/// Return value is zero if the queue is empty,
+/// or `-CANARD_ERROR_INVALID_ARGUMENT` if there is no (NULL) queue, instance or handler.
+/// Otherwise, the value will be from the result of the frame handler call (see CanardTxFrameHandler).
 ///
 int8_t canardTxPoll(struct CanardTxQueue* const        que,
                     const struct CanardInstance* const ins,

@@ -970,9 +970,14 @@ TEST_CASE("TxPollSingleFrame")
     REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
 
-    // 2. Poll without time and handler.
+    // 2. Poll with invalid arguments.
     //
-    REQUIRE(0 == que.poll(ins, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // null queue
+            canardTxPoll(nullptr, &ins.getInstance(), 0, nullptr, [](auto*, auto, auto*) -> std::int8_t { return 0; }));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // null instance
+            canardTxPoll(&que.getInstance(), nullptr, 0, nullptr, [](auto*, auto, auto*) -> std::int8_t { return 0; }));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // null handler
+            canardTxPoll(&que.getInstance(), &ins.getInstance(), 0, nullptr, nullptr));
 
     // 3. Poll; emulate media is busy @ 10s + 100us
     //
