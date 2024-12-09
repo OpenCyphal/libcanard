@@ -9,10 +9,14 @@
 #include <array>
 #include <atomic>
 #include <cstdarg>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
+#include <limits>
 #include <mutex>
-#include <numeric>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -87,7 +91,7 @@ public:
         std::uint8_t*          p = nullptr;
         if ((amount > 0U) && ((getTotalAllocatedAmount() + amount) <= ceiling_))
         {
-            const auto amount_with_canaries = amount + canary_.size() * 2U;
+            const auto amount_with_canaries = amount + (canary_.size() * 2U);
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
             p = static_cast<std::uint8_t*>(std::malloc(amount_with_canaries));  // NOLINT
             if (p == nullptr)
@@ -127,7 +131,7 @@ public:
                                        std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
             }
             std::generate_n(p - canary_.size(),  // Damage the memory to make sure it's not used after deallocation.
-                            amount + canary_.size() * 2U,
+                            amount + (canary_.size() * 2U),
                             []() { return getRandomNatural<std::uint8_t>(256U); });
             std::free(p - canary_.size());  // NOLINT we require manual memory management here.
             allocated_.erase(it);
@@ -344,6 +348,26 @@ public:
     }
 
     void freeItem(Instance& ins, CanardTxQueueItem* const item) { canardTxFree(&que_, &ins.getInstance(), item); }
+
+    using FrameHandler = std::function<std::int8_t(const CanardMicrosecond, CanardMutableFrame&)>;
+
+    [[nodiscard]] auto poll(Instance& ins, const CanardMicrosecond now_usec, FrameHandler frame_handler)
+    {
+        if (!frame_handler)
+        {
+            return canardTxPoll(&que_, &ins.getInstance(), now_usec, nullptr, nullptr);
+        }
+
+        return canardTxPoll(&que_,
+                            &ins.getInstance(),
+                            now_usec,
+                            &frame_handler,
+                            [](auto* user_reference, const auto deadline_usec, auto* const frame) -> std::int8_t {
+                                //
+                                const auto* const handler_ptr = static_cast<FrameHandler*>(user_reference);
+                                return (*handler_ptr)(deadline_usec, *frame);
+                            });
+    }
 
     [[nodiscard]] auto getSize() const
     {

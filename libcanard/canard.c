@@ -592,16 +592,44 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
     return out;
 }
 
+CANARD_PRIVATE void txPopAndFreeTransfer(struct CanardTxQueue* const        que,
+                                         const struct CanardInstance* const ins,
+                                         struct CanardTxQueueItem* const    tx_item,
+                                         const bool                         drop_whole_transfer)
+{
+    CANARD_ASSERT(que != NULL);
+    CANARD_ASSERT(ins != NULL);
+    CANARD_ASSERT(tx_item != NULL);
+
+    struct CanardTxQueueItem* next_tx_item    = tx_item;
+    struct CanardTxQueueItem* tx_item_to_free = canardTxPop(que, next_tx_item);
+    while (NULL != tx_item_to_free)
+    {
+        next_tx_item = tx_item_to_free->next_in_transfer;
+        canardTxFree(que, ins, tx_item_to_free);
+
+        if (!drop_whole_transfer)
+        {
+            break;
+        }
+        que->stats.dropped_frames++;
+
+        tx_item_to_free = canardTxPop(que, next_tx_item);
+    }
+}
+
 /// Flushes expired transfers by comparing deadline timestamps of the pending transfers with the current time.
 CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        que,
                                             const struct CanardInstance* const ins,
                                             const CanardMicrosecond            now_usec)
 {
-    struct CanardTxQueueItem* tx_item = NULL;
-    while (NULL != (tx_item = MUTABLE_CONTAINER_OF(  //
-                        struct CanardTxQueueItem,
-                        cavlFindExtremum(que->deadline_root, false),
-                        deadline_base)))
+    CANARD_ASSERT(que != NULL);
+    CANARD_ASSERT(ins != NULL);
+    CANARD_ASSERT(now_usec > 0);
+
+    struct CanardTreeNode*    tx_node = cavlFindExtremum(que->deadline_root, false);
+    struct CanardTxQueueItem* tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
+    while (NULL != tx_item)
     {
         if (now_usec <= tx_item->tx_deadline_usec)
         {
@@ -609,15 +637,11 @@ CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        q
             break;
         }
 
-        // All frames of the transfer are released at once b/c they all have the same deadline.
-        struct CanardTxQueueItem* tx_item_to_free = NULL;
-        while (NULL != (tx_item_to_free = canardTxPop(que, tx_item)))
-        {
-            tx_item = tx_item_to_free->next_in_transfer;
-            canardTxFree(que, ins, tx_item_to_free);
+        // All frames of the transfer are dropped at once b/c they all have the same deadline.
+        txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
 
-            que->stats.dropped_frames++;
-        }
+        tx_node = cavlFindExtremum(que->deadline_root, false);
+        tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
     }
 }
 
@@ -1157,8 +1181,6 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
         txFlushExpiredTransfers(que, ins, now_usec);
     }
 
-    (void) now_usec;
-
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((ins != NULL) && (que != NULL) && (metadata != NULL) && ((payload.data != NULL) || (0U == payload.size)))
     {
@@ -1202,8 +1224,6 @@ struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
     struct CanardTxQueueItem* out = NULL;
     if (que != NULL)
     {
-        // Paragraph 6.7.2.1.15 of the C standard says:
-        //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         struct CanardTreeNode* const priority_node = cavlFindExtremum(que->priority_root, false);
         out = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
     }
@@ -1229,7 +1249,7 @@ void canardTxFree(struct CanardTxQueue* const        que,
                   const struct CanardInstance* const ins,
                   struct CanardTxQueueItem*          item)
 {
-    if (item != NULL)
+    if ((que != NULL) && (ins != NULL) && (item != NULL))
     {
         if (item->frame.payload.data != NULL)
         {
@@ -1240,6 +1260,53 @@ void canardTxFree(struct CanardTxQueue* const        que,
 
         ins->memory.deallocate(ins->memory.user_reference, sizeof(struct CanardTxQueueItem), item);
     }
+}
+
+int8_t canardTxPoll(struct CanardTxQueue* const        que,
+                    const struct CanardInstance* const ins,
+                    const CanardMicrosecond            now_usec,
+                    void* const                        user_reference,
+                    const CanardTxFrameHandler         frame_handler)
+{
+    int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
+    if ((que != NULL) && (ins != NULL) && (frame_handler != NULL))
+    {
+        // Before peeking a frame to transmit, we need to try to flush any expired transfers.
+        // This will not only ensure ASAP freeing of the queue capacity, but also makes sure that the following
+        // `canardTxPeek` will return a not expired item (if any), so we don't need to check the deadline again.
+        // The flushing is done by comparing deadline timestamps of the pending transfers with the current time,
+        // which makes sense only if the current time is known (bigger than zero).
+        if (now_usec > 0)
+        {
+            txFlushExpiredTransfers(que, ins, now_usec);
+        }
+
+        struct CanardTxQueueItem* const tx_item = canardTxPeek(que);
+        if (tx_item != NULL)
+        {
+            // No need to check the deadline again, as we have already flushed all expired transfers.
+            out = frame_handler(user_reference, tx_item->tx_deadline_usec, &tx_item->frame);
+
+            // We gonna release (pop and free) the frame if the handler returned:
+            // - either a positive value - the frame has been successfully accepted by the handler;
+            // - or a negative value - the frame has been rejected by the handler due to a failure.
+            // Zero value means that the handler cannot accept the frame at the moment, so we keep it in the queue.
+            if (out != 0)
+            {
+                // In case of a failure, it makes sense to drop the whole transfer immediately
+                // b/c at least this frame has been rejected, so the whole transfer is useless.
+                const bool drop_whole_transfer = (out < 0);
+                txPopAndFreeTransfer(que, ins, tx_item, drop_whole_transfer);
+            }
+        }
+        else
+        {
+            out = 0;  // No frames to transmit.
+        }
+    }
+
+    CANARD_ASSERT(out <= 1);
+    return out;
 }
 
 int8_t canardRxAccept(struct CanardInstance* const        ins,
@@ -1261,13 +1328,12 @@ int8_t canardRxAccept(struct CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(  //
-                    struct CanardRxSubscription,
-                    cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
-                               &model.port_id,
-                               &rxSubscriptionPredicateOnPortID,
-                               NULL),
-                    base);
+                struct CanardTreeNode* const sub_node = cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
+                                                                   &model.port_id,
+                                                                   &rxSubscriptionPredicateOnPortID,
+                                                                   NULL);
+                struct CanardRxSubscription* const sub =
+                    MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
                 if (out_subscription != NULL)
                 {
                     *out_subscription = sub;  // Expose selected instance to the caller.
@@ -1345,13 +1411,15 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(  //
-            struct CanardRxSubscription,
-            cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL),
-            base);
-        if (sub != NULL)
+        struct CanardTreeNode* const sub_node = cavlSearch(  //
+            &ins->rx_subscriptions[tk],
+            &port_id_mutable,
+            &rxSubscriptionPredicateOnPortID,
+            NULL);
+        if (sub_node != NULL)
         {
-            cavlRemove(&ins->rx_subscriptions[tk], &sub->base);
+            struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
+            cavlRemove(&ins->rx_subscriptions[tk], sub_node);
             CANARD_ASSERT(sub->port_id == port_id);
             out = 1;
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
@@ -1386,12 +1454,14 @@ int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(  //
-            struct CanardRxSubscription,
-            cavlSearch(&ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID, NULL),
-            base);
-        if (sub != NULL)
+        struct CanardTreeNode* const sub_node = cavlSearch(  //
+            &ins->rx_subscriptions[tk],
+            &port_id_mutable,
+            &rxSubscriptionPredicateOnPortID,
+            NULL);
+        if (sub_node != NULL)
         {
+            struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
             CANARD_ASSERT(sub->port_id == port_id);
             if (out_subscription != NULL)
             {
