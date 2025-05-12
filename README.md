@@ -146,6 +146,8 @@ for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;) 
 }
 ```
 
+💡 New in v4.0: optionally, you can now use `canardTxPoll()` that does the above for you.
+
 Transfer reception is done by feeding frames into the transfer reassembly state machine
 from any of the redundant interfaces.
 But first, we need to subscribe:
@@ -235,10 +237,11 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
 
-### v4.0
+### v4.0 -- WORK IN PROGRESS
 
-- Updating from Libcanard v3 to v4 involves several significant changes, especially in memory management and API function prototypes.
-- Please follow [MIGRATION_v3.x_to_v4.0](MIGRATION_v3.x_to_v4.0.md) guide and carefully update your code.
+Updating from Libcanard v3 to v4 involves several significant changes,
+especially in memory management and API function prototypes.
+Please follow the [MIGRATION_v3.x_to_v4.0](MIGRATION_v3.x_to_v4.0.md) guide and carefully update your code.
 
 ### v3.2
 
