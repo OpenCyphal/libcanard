@@ -129,7 +129,7 @@ TEST_CASE("RxBasic0")
     const auto  payload_alloc_size = transfer.payload.allocated_size;
 
     // Provide the space for an extra session and its payload.
-    ins.getAllocator().setAllocationCeiling(sizeof(RxSession) * 2 + 16 + 20);
+    ins.getAllocator().setAllocationCeiling((sizeof(RxSession) * 2) + 16 + 20);
 
     // Dropped request because the local node does not have a node-ID.
     subscription = nullptr;
@@ -157,7 +157,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(transfer.payload.allocated_size == 20);
     REQUIRE(0 == std::memcmp(transfer.payload.data, "\x01\x02\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);  // Two SESSIONS and two PAYLOAD BUFFERS.
-    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == ((2 * sizeof(RxSession)) + 16 + 20));
     REQUIRE(ins.getRequestSubs().at(0)->sessions[0b0100101] != nullptr);
 
     // Response transfer not accepted because the local node has a different node-ID.
@@ -172,16 +172,16 @@ TEST_CASE("RxBasic0")
             accept(0, 100'000'003, 0b100'10'0000111100'0011010'0011011, {5, 0b111'00001}));
     REQUIRE(subscription != nullptr);  // Subscription get assigned before error code
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
-    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == ((2 * sizeof(RxSession)) + 16 + 20));
 
     // Response transfer not accepted due to OOM -- can't allocate the buffer (RX session is allocated OK).
-    ins.getAllocator().setAllocationCeiling(3 * sizeof(RxSession) + 16 + 20);
+    ins.getAllocator().setAllocationCeiling((3 * sizeof(RxSession)) + 16 + 20);
     subscription = nullptr;
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
             accept(0, 100'000'003, 0b100'10'0000111100'0011010'0011011, {5, 0b111'00010}));
     REQUIRE(subscription != nullptr);  // Subscription get assigned before error code
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 5);
-    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (3 * sizeof(RxSession) + 16 + 20));
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == ((3 * sizeof(RxSession)) + 16 + 20));
 
     // Destroy the message subscription and the buffer to free up memory.
     REQUIRE(1 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
@@ -192,10 +192,10 @@ TEST_CASE("RxBasic0")
     REQUIRE(0 == ins.rxHasSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(nullptr == ins.rxGetSubscription(CanardTransferKindMessage, 0b0110011001100));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
-    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 16 + 20));
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == ((2 * sizeof(RxSession)) + 16 + 20));
     ins.getAllocator().deallocate(msg_payload, payload_alloc_size);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 3);
-    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 20));
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == ((2 * sizeof(RxSession)) + 20));
 
     // Same response accepted now. We have to keep incrementing the transfer-ID though because it's tracked.
     subscription = nullptr;
@@ -212,7 +212,7 @@ TEST_CASE("RxBasic0")
     REQUIRE(transfer.payload.allocated_size == 10);
     REQUIRE(0 == std::memcmp(transfer.payload.data, "\x05", 1));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 4);
-    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == (2 * sizeof(RxSession) + 10 + 20));
+    REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == ((2 * sizeof(RxSession)) + 10 + 20));
 
     // Bad frames shall be rejected silently.
     subscription = nullptr;

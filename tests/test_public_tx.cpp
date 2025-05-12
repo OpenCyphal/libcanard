@@ -5,8 +5,6 @@
 #include "helpers.hpp"
 #include "catch.hpp"
 
-#include <canard.h>
-
 #include <array>
 #include <cstddef>
 #include <cstdint>

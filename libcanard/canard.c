@@ -1,5 +1,5 @@
 /// This software is distributed under the terms of the MIT License.
-/// Copyright (c) 2016 OpenCyphal.
+/// Copyright (c) OpenCyphal.
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
 
 #include "canard.h"

@@ -1,4 +1,6 @@
-# Compact Cyphal/CAN in C
+<div align="center">
+
+# Cyphal/CAN transport in C
 
 [![Main Workflow](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=alert_status)](https://sonarcloud.io/dashboard?id=libcanard)
@@ -6,6 +8,10 @@
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=coverage)](https://sonarcloud.io/dashboard?id=libcanard)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=ncloc)](https://sonarcloud.io/dashboard?id=libcanard)
 [![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.opencyphal.org&color=1700b3)](https://forum.opencyphal.org)
+
+</div>
+
+-----
 
 Libcanard is a compact implementation of the Cyphal/CAN protocol stack in C99/C11 for high-integrity real-time
 embedded systems.
