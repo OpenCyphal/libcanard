@@ -170,26 +170,19 @@ struct CanardTreeNode
 
 struct CanardPayload
 {
-    /// Size of the payload data in bytes.
-    /// If the payload is empty (size = 0), the payload pointer may be NULL.
-    size_t size;
-
-    /// Pointer to the payload data buffer.
+    /// If size=0, the data pointer may be NULL.
+    size_t      size;
     const void* data;
 };
 
 struct CanardMutablePayload
 {
-    /// Size of the payload data in bytes.
-    /// The value is always less than or equal to the extent specified in the subscription.
-    /// If the payload is empty (size = 0), the data pointer may be NULL.
+    /// If size=0, the data pointer may be NULL.
     size_t size;
-
-    /// The application is required to deallocate the payload buffer after the transfer is processed.
-    /// Allocated buffer size allocated_size, not size) should be used to deallocate the buffer.
-    void* data;
+    void*  data;
 
     /// Always allocated_size >= size. Can be zero if the data pointer is NULL.
+    /// When deallocating memory, the allocated_size should be used as the argument to the allocator, not size.
     size_t allocated_size;
 };
 
@@ -304,28 +297,26 @@ struct CanardMemoryResource
     CanardMemoryAllocate   allocate;        ///< Shall be a valid pointer.
 };
 
-/// Holds the statistics of a transmission queue.
+/// Read-only statistics of a transmission queue.
 struct CanardTxQueueStats
 {
-    /// Holds the number of dropped TX frames due to timeout (when now>deadline) or b/c of transmission failures.
+    /// The number of TX frames dropped due to timeout (when now>deadline) or due to transmission failures.
     uint64_t dropped_frames;
 };
 
 /// The handler function is intended to be invoked from Canard TX polling (see details for the canardTxPoll()).
-///
-/// The user reference parameter what was passed to canardTxPoll.
+/// The user reference parameter is what was passed to canardTxPoll.
 /// The return result of the handling operation:
-/// - Any positive value: the frame was successfully handled.
-///   This indicates that the frame payload was accepted (and its payload ownership could be potentially moved,
-///   see canardTxPeek for the details), and the frame can be safely removed from the queue.
-/// - Zero: the frame was not handled, and so the frame should be kept in the queue.
-///   It will be retried on some future canardTxPoll() call according to the queue state in the future.
-///   This case is useful when TX hardware is busy, and the frame should be retried later.
-/// - Any negative value: the frame was rejected due to an unrecoverable failure.
-///   This indicates to the caller (canardTxPoll) that the frame should be dropped from the queue,
-///   as well as all other frames belonging to the same transfer. The dropped_frames counter in the TX queue stats
-///   will be incremented for each frame dropped in this way.
 ///
+/// - Any positive value: the frame was successfully handed over to the lower layer for transmission.
+///   The frame will be removed from the TX queue.
+///
+/// - Zero: the frame could not be handed over to the lower layer for transmission because it is not ready
+///   to accept one. Another attempt will be made at a later time when canardTxPoll() is invoked again.
+///
+/// - Any negative value: the frame was rejected due to an unrecoverable error.
+///   This frame along with all other frames of its transfer will be dropped from the TX queue.
+///   The statistical counters of this TX queue instance will be incremented accordingly.
 typedef int8_t (*CanardTxFrameHandler)(void* const                      user_reference,
                                        const CanardMicrosecond          deadline_usec,
                                        struct CanardMutableFrame* const frame);
@@ -334,8 +325,8 @@ typedef int8_t (*CanardTxFrameHandler)(void* const                      user_ref
 /// Applications with redundant interfaces are expected to have one instance of this type per interface.
 /// Applications that are not interested in transmission may have zero queues.
 /// All operations (push, peek, pop) are O(log n); there are exactly two heap allocations per element:
-/// - the first for bookkeeping purposes (CanardTxQueueItem)
-/// - second for payload storage (the frame data)
+/// 1. For bookkeeping purposes -- CanardTxQueueItem.
+/// 2. For payload storage -- the frame data itself transmitted over the wire.
 /// API functions that work with this type are named "canardTx*()", find them below.
 struct CanardTxQueue
 {
@@ -366,16 +357,16 @@ struct CanardTxQueue
 
     /// The memory resource used by this queue for allocating the payload data (CAN frames).
     /// There is exactly one allocation of payload buffer per enqueued item (not considering the item itself
-    /// b/c it is allocated from different memory resource - the instance one; see CanardInstance::memory).
-    /// The size of the allocation is equal (or might be less for the last frame) to the MTU of the queue.
-    /// Memory for the queue item is allocated separately from the instance memory resource.
+    /// b/c it is allocated from a different memory resource -- see CanardInstance::memory).
+    /// The size of the allocation is equal to the MTU of the queue except for the last frame.
+    /// The memory for the queue item is allocated separately from the instance memory resource.
+    ///
     /// In a simple application, there would be just one memory resource shared by all parts of the library.
-    /// If the application knows its MTU, it can use block allocation to avoid extrinsic fragmentation,
+    /// If the application knows its MTU, it can use fixed-size block allocation to avoid extrinsic fragmentation,
     /// as well as a dedicated memory pool specifically for the TX queue payload for transmission.
     /// Dedicated memory resources could be useful also for systems with special memory requirements for payload data.
-    /// For example, such a memory resource could be integrated with the CAN message RAM. So that memory
-    /// is allocated directly in the peripheral's memory space. Then it will be filled with payload data by
-    /// the Canard, and finally it will be ready to be directly transmitted by the HW (avoiding the need for copying).
+    /// For example, such a memory resource could be integrated with the CAN message RAM, so that memory
+    /// is allocated directly in the peripheral's address space eliminating an extra copy.
     struct CanardMemoryResource memory;
 
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
@@ -601,16 +592,15 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
 /// ownership of the object. The pointer retains validity until explicitly freed by the application; in other words,
 /// calling canardTxPop() does not invalidate the object.
 ///
-/// The payload buffer is allocated in the dynamic storage of the queue. The application may transfer ownership of
-/// the payload to a different application component (f.e. to transmission media) by copying the pointer and then
-/// (if the ownership transfer was accepted) by nullifying payload fields of the frame (data & allocated_size).
+/// The payload buffer is allocated in the memory resource of the queue. The application may transfer ownership of
+/// the payload to a different application component (e.g., to the transmission media) by copying the pointer and then
+/// (if the ownership transfer is accepted) by nullifying the payload fields of the frame (data & allocated_size).
 /// If these fields stay with their original values, the canardTxFree (after proper canardTxPop of course) will
 /// deallocate the payload buffer. In any case, the payload has to be eventually deallocated by the TX queue memory
-/// resource. It will be automatically done by the canardTxFree (if the payload still stays in the item),
-/// OR if moved, it is the responsibility of the application to eventually (f.e. at the end of transmission) deallocate
-/// the memory with TX queue memory resource. Note that the mentioned above nullification of the payload fields is the
-/// only reason why a returned TX item pointer is mutable. It was constant in the past (before v4),
-/// but it was changed to be mutable to allow the payload ownership transfer.
+/// resource. It will be automatically done by canardTxFree() (if the payload stays in the item);
+/// if moved, it is the responsibility of the application to eventually (e.g., at the end of transmission)
+/// deallocate the memory with TX queue memory resource. Note that the mentioned above nullification of the payload
+/// fields is the only reason why a returned TX item pointer is mutable.
 ///
 /// The time complexity is logarithmic of the queue size. This function does not invoke the dynamic memory manager.
 struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que);
@@ -630,30 +620,26 @@ struct CanardTxQueueItem* canardTxPop(struct CanardTxQueue* const que, struct Ca
 /// as well as the internal frame payload buffer (if any) associated with it (using TX queue memory).
 /// If the item argument is NULL, the function has no effect. The time complexity is constant.
 /// If the item frame payload is NULL then it is assumed that the payload buffer was already freed,
-/// or moved to a different owner (f.e. to media layer).
+/// or moved to a different owner (e.g., to the media layer).
 void canardTxFree(struct CanardTxQueue* const        que,
                   const struct CanardInstance* const ins,
                   struct CanardTxQueueItem* const    item);
 
 /// This is a helper that combines several Canard TX calls (canardTxPeek, canardTxPop and canardTxFree)
 /// into one "polling" algorithm. It simplifies the whole process of transmitting frames to just two function calls:
-/// - canardTxPush to enqueue the frames
-/// - canardTxPoll to dequeue, transmit and free a single frame
+/// - canardTxPush() to enqueue frames.
+/// - canardTxPoll() to dequeue, transmit, and free frames one-by-one.
 ///
 /// The algorithm implements a typical pattern of de-queuing, transmitting and freeing a TX queue item,
 /// as well as handling transmission failures, retries, and deadline timeouts.
-///
-/// The function is intended to be periodically called, most probably on a signal that the previous TX frame
-/// transmission has been completed, and so the next TX frame (if any) could be polled from the TX queue.
+/// The function is intended to be periodically called whenever a free TX slot appears in the CAN controller.
 ///
 /// The current time is used to determine if the frame has timed out. Use zero value to disable automatic dropping
-/// of timed-out frames. The user reference will be passed to the frame handler (see CanardTxFrameHandler), which
-/// will be called to transmit the frame.
+/// of timed-out frames. The user reference will be passed to the frame handler (see CanardTxFrameHandler).
 ///
-/// Return value is zero if the queue is empty,
-/// or -CANARD_ERROR_INVALID_ARGUMENT if there is no (NULL) queue, instance or handler.
-/// Otherwise, the value will be from the result of the frame handler call (see CanardTxFrameHandler).
-///
+/// The return value is zero if the queue is empty,
+/// or -CANARD_ERROR_INVALID_ARGUMENT if any of the arguments are invalid.
+/// Otherwise, the value is forwarded from the last frame handler call (see CanardTxFrameHandler).
 int8_t canardTxPoll(struct CanardTxQueue* const        que,
                     const struct CanardInstance* const ins,
                     const CanardMicrosecond            now_usec,
