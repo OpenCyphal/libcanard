@@ -339,11 +339,12 @@ TEST_CASE("TxBasic0")
     REQUIRE(nullptr == ti);
 
     // Error handling.
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}, 0));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}, 0));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}, 0, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
-            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}, 0));
+            canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}, 0, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), 1'000'000'006'000ULL, meta, {1, nullptr}));
 
     REQUIRE(nullptr == canardTxPeek(nullptr));
@@ -663,11 +664,12 @@ TEST_CASE("TxBasic1")
     REQUIRE(nullptr == ti);
 
     // Error handling.
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}, 0));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}, 0));
-    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}, 0));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, nullptr, {0, nullptr}, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardTxPush(nullptr, nullptr, 0, &meta, {0, nullptr}, 0, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
-            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}, 0));
+            canardTxPush(nullptr, &ins.getInstance(), 0, &meta, {0, nullptr}, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardTxPush(&que.getInstance(), &ins.getInstance(), 0, nullptr, {0, nullptr}, 0, nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == que.push(&ins.getInstance(), 1'000'000'006'000ULL, meta, {1, nullptr}));
 
     REQUIRE(nullptr == canardTxPeek(nullptr));
@@ -869,16 +871,17 @@ TEST_CASE("TxPushFlushExpired")
     // 2. Push two-frames, peek. @ 12s (after 2x deadline)
     //    These 2 frames should still fit into the queue (with capacity 2) despite one expired frame still there.`
     {
+        std::uint64_t frames_expired = 0;
         que.setMTU(8);
         ins.setNodeID(42);
         meta.transfer_id = 22;
-        REQUIRE(2 == que.push(&ins.getInstance(), now + deadline, meta, {8, payload.data()}, now));
+        REQUIRE(2 == que.push(&ins.getInstance(), now + deadline, meta, {8, payload.data()}, now, frames_expired));
         REQUIRE(2 == que.getSize());
         REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
         REQUIRE((8 + 4) == tx_alloc.getTotalAllocatedAmount());
         REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
         REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
-        REQUIRE(1 == que.getInstance().stats.dropped_frames);
+        REQUIRE(1 == frames_expired);
 
         // a) Peek and check the payload of the 1st frame
         CanardTxQueueItem* ti = nullptr;
@@ -915,15 +918,16 @@ TEST_CASE("TxPushFlushExpired")
     //    These 3 frames should not fit into the queue (with capacity 2),
     //    but as a side effect, the expired frames (from push @ 12s) should be flushed as well.
     {
-        meta.transfer_id = 23;
+        std::uint64_t frames_expired = 0;
+        meta.transfer_id             = 23;
         REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY ==
-                que.push(&ins.getInstance(), now + deadline, meta, {8ULL * 2ULL, payload.data()}, now));
+                que.push(&ins.getInstance(), now + deadline, meta, {8ULL * 2ULL, payload.data()}, now, frames_expired));
         REQUIRE(0 == que.getSize());
         REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
         REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
         REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
         REQUIRE(0 == ins_alloc.getTotalAllocatedAmount());
-        REQUIRE(1 + 2 == que.getInstance().stats.dropped_frames);
+        REQUIRE(2 == frames_expired);
 
         REQUIRE(nullptr == que.peek());
     }
@@ -971,61 +975,92 @@ TEST_CASE("TxPollSingleFrame")
     // 2. Poll with invalid arguments.
     //
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // null queue
-            canardTxPoll(nullptr, &ins.getInstance(), 0, nullptr, [](auto*, auto, auto*) -> std::int8_t { return 0; }));
+            canardTxPoll(
+                nullptr,
+                &ins.getInstance(),
+                0,
+                nullptr,
+                [](auto*, auto, auto*) -> std::int8_t { return 0; },
+                nullptr,
+                nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // null instance
-            canardTxPoll(&que.getInstance(), nullptr, 0, nullptr, [](auto*, auto, auto*) -> std::int8_t { return 0; }));
+            canardTxPoll(
+                &que.getInstance(),
+                nullptr,
+                0,
+                nullptr,
+                [](auto*, auto, auto*) -> std::int8_t { return 0; },
+                nullptr,
+                nullptr));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==  // null handler
-            canardTxPoll(&que.getInstance(), &ins.getInstance(), 0, nullptr, nullptr));
+            canardTxPoll(&que.getInstance(), &ins.getInstance(), 0, nullptr, nullptr, nullptr, nullptr));
 
     // 3. Poll; emulate media is busy @ 10s + 100us
     //
-    std::size_t total_handler_calls = 0;
-    REQUIRE(0 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        REQUIRE(deadline_usec == now + deadline);
-        REQUIRE(frame.payload.size == 8);
-        REQUIRE(frame.payload.allocated_size == 8);
-        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
-        return 0;  // Emulate that TX media is busy.
-    }));
+    helpers::TxQueue::PollStats poll_stats;
+    std::size_t                 total_handler_calls = 0;
+    REQUIRE(0 == que.poll(
+                     ins,
+                     now + 100,
+                     [&](auto deadline_usec, auto& frame) -> std::int8_t {
+                         //
+                         ++total_handler_calls;
+                         REQUIRE(deadline_usec == now + deadline);
+                         REQUIRE(frame.payload.size == 8);
+                         REQUIRE(frame.payload.allocated_size == 8);
+                         REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+                         return 0;  // Emulate that TX media is busy.
+                     },
+                     poll_stats));
     REQUIRE(1 == total_handler_calls);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
     REQUIRE(8 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 
     // 4. Poll; emulate media is ready @ 10s + 200us
     //
-    REQUIRE(1 == que.poll(ins, now + 200, [&](auto deadline_usec, auto& frame) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        REQUIRE(deadline_usec == now + deadline);
-        REQUIRE(frame.payload.size == 8);
-        REQUIRE(frame.payload.allocated_size == 8);
-        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
-        return 1;  // Emulate that TX media accepted the frame.
-    }));
+    REQUIRE(1 == que.poll(
+                     ins,
+                     now + 200,
+                     [&](auto deadline_usec, auto& frame) -> std::int8_t {
+                         //
+                         ++total_handler_calls;
+                         REQUIRE(deadline_usec == now + deadline);
+                         REQUIRE(frame.payload.size == 8);
+                         REQUIRE(frame.payload.allocated_size == 8);
+                         REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+                         return 1;  // Emulate that TX media accepted the frame.
+                     },
+                     poll_stats));
     REQUIRE(2 == total_handler_calls);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
     REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 
     // 3. Poll when queue is empty @ 10s + 300us
     //
-    REQUIRE(0 == que.poll(ins, now + 300, [&](auto, auto&) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        FAIL("This should not be called.");
-        return -1;
-    }));
+    REQUIRE(0 == que.poll(
+                     ins,
+                     now + 300,
+                     [&](auto, auto&) -> std::int8_t {
+                         //
+                         ++total_handler_calls;
+                         FAIL("This should not be called.");
+                         return -1;
+                     },
+                     poll_stats));
     REQUIRE(2 == total_handler_calls);
     REQUIRE(0 == que.getSize());
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 }
 
 TEST_CASE("TxPollMultiFrame")
@@ -1069,23 +1104,29 @@ TEST_CASE("TxPollMultiFrame")
 
     // 2. Poll 1st frame @ 10s + 100us
     //
-    std::size_t total_handler_calls = 0;
-    REQUIRE(1 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        REQUIRE(deadline_usec == now + deadline);
-        REQUIRE(frame.payload.size == 8);
-        REQUIRE(frame.payload.allocated_size == 8);
-        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
-        return 1;
-    }));
+    helpers::TxQueue::PollStats poll_stats;
+    std::size_t                 total_handler_calls = 0;
+    REQUIRE(1 == que.poll(
+                     ins,
+                     now + 100,
+                     [&](auto deadline_usec, auto& frame) -> std::int8_t {
+                         //
+                         ++total_handler_calls;
+                         REQUIRE(deadline_usec == now + deadline);
+                         REQUIRE(frame.payload.size == 8);
+                         REQUIRE(frame.payload.allocated_size == 8);
+                         REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+                         return 1;
+                     },
+                     poll_stats));
     REQUIRE(1 == total_handler_calls);
     REQUIRE(1 == que.getSize());
     REQUIRE(1 == tx_alloc.getNumAllocatedFragments());
     REQUIRE(4 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(1 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 1 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 
     // 3. Poll 2nd frame @ 10s + 200us
     //
@@ -1104,7 +1145,8 @@ TEST_CASE("TxPollMultiFrame")
     REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 }
 
 TEST_CASE("TxPollDropFrameOnFailure")
@@ -1148,23 +1190,29 @@ TEST_CASE("TxPollDropFrameOnFailure")
 
     // 2. Poll 1st frame; emulate media failure @ 10s + 100us
     //
-    std::size_t total_handler_calls = 0;
-    REQUIRE(-1 == que.poll(ins, now + 100, [&](auto deadline_usec, auto& frame) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        REQUIRE(deadline_usec == now + deadline);
-        REQUIRE(frame.payload.size == 8);
-        REQUIRE(frame.payload.allocated_size == 8);
-        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
-        return -1;
-    }));
+    helpers::TxQueue::PollStats poll_stats;
+    std::size_t                 total_handler_calls = 0;
+    REQUIRE(-1 == que.poll(
+                      ins,
+                      now + 100,
+                      [&](auto deadline_usec, auto& frame) -> std::int8_t {
+                          //
+                          ++total_handler_calls;
+                          REQUIRE(deadline_usec == now + deadline);
+                          REQUIRE(frame.payload.size == 8);
+                          REQUIRE(frame.payload.allocated_size == 8);
+                          REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+                          return -1;
+                      },
+                      poll_stats));
     REQUIRE(1 == total_handler_calls);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
     REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(2 == que.getInstance().stats.dropped_frames);
+    REQUIRE(2 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 }
 
 TEST_CASE("TxPollDropExpired")
@@ -1221,40 +1269,51 @@ TEST_CASE("TxPollDropExpired")
 
     // 3. Poll a frame (should be the high priority one); emulate media is busy @ 10s + 2'000us
     //
-    std::size_t total_handler_calls = 0;
-    REQUIRE(0 == que.poll(ins, now + 2'000, [&](auto deadline_usec, auto& frame) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        REQUIRE(deadline_usec == now + deadline - 1);
-        REQUIRE(frame.payload.size == 8);
-        REQUIRE(frame.payload.allocated_size == 8);
-        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data() + 100, 7));
-        return 0;
-    }));
+    helpers::TxQueue::PollStats poll_stats;
+    std::size_t                 total_handler_calls = 0;
+    REQUIRE(0 == que.poll(
+                     ins,
+                     now + 2'000,
+                     [&](auto deadline_usec, auto& frame) -> std::int8_t {
+                         //
+                         ++total_handler_calls;
+                         REQUIRE(deadline_usec == now + deadline - 1);
+                         REQUIRE(frame.payload.size == 8);
+                         REQUIRE(frame.payload.allocated_size == 8);
+                         REQUIRE(0 == std::memcmp(frame.payload.data, payload.data() + 100, 7));
+                         return 0;
+                     },
+                     poll_stats));
     REQUIRE(1 == total_handler_calls);
     REQUIRE(2 == que.getSize());
     REQUIRE(2 == tx_alloc.getNumAllocatedFragments());
     REQUIRE(8 + 8 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(2 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 2 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(0 == que.getInstance().stats.dropped_frames);
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(0 == poll_stats.frames_expired);
 
     // 3. Poll a frame (should be nominal priority one b/c the high has been expired) @ 10s + deadline
     //
-    REQUIRE(1 == que.poll(ins, now + deadline, [&](auto deadline_usec, auto& frame) -> std::int8_t {
-        //
-        ++total_handler_calls;
-        REQUIRE(deadline_usec == now + deadline);
-        REQUIRE(frame.payload.size == 8);
-        REQUIRE(frame.payload.allocated_size == 8);
-        REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
-        return 1;
-    }));
+    REQUIRE(1 == que.poll(
+                     ins,
+                     now + deadline,
+                     [&](auto deadline_usec, auto& frame) -> std::int8_t {
+                         //
+                         ++total_handler_calls;
+                         REQUIRE(deadline_usec == now + deadline);
+                         REQUIRE(frame.payload.size == 8);
+                         REQUIRE(frame.payload.allocated_size == 8);
+                         REQUIRE(0 == std::memcmp(frame.payload.data, payload.data(), 7));
+                         return 1;
+                     },
+                     poll_stats));
     REQUIRE(2 == total_handler_calls);
     REQUIRE(0 == que.getSize());
     REQUIRE(0 == tx_alloc.getNumAllocatedFragments());
     REQUIRE(0 == tx_alloc.getTotalAllocatedAmount());
     REQUIRE(0 == ins_alloc.getNumAllocatedFragments());
     REQUIRE(sizeof(CanardTxQueueItem) * 0 == ins_alloc.getTotalAllocatedAmount());
-    REQUIRE(1 == que.getInstance().stats.dropped_frames);
+    REQUIRE(0 == poll_stats.frames_failed);
+    REQUIRE(1 == poll_stats.frames_expired);
 }

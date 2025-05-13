@@ -297,13 +297,6 @@ struct CanardMemoryResource
     CanardMemoryAllocate   allocate;        ///< Shall be a valid pointer.
 };
 
-/// Read-only statistics of a transmission queue.
-struct CanardTxQueueStats
-{
-    /// The number of TX frames dropped due to timeout (when now>deadline) or due to transmission failures.
-    uint64_t dropped_frames;
-};
-
 /// The handler function is intended to be invoked from Canard TX polling (see details for the canardTxPoll()).
 /// The user reference parameter is what was passed to canardTxPoll.
 /// The return result of the handling operation:
@@ -372,9 +365,6 @@ struct CanardTxQueue
     /// This field can be arbitrarily mutated by the user. It is never accessed by the library.
     /// Its purpose is to simplify integration with OOP interfaces.
     void* user_reference;
-
-    /// Holds the statistics of this TX queue. Read-only.
-    struct CanardTxQueueStats stats;
 };
 
 /// One frame stored in the transmission queue along with its metadata.
@@ -467,8 +457,8 @@ struct CanardInstance
     /// functions have constant complexity O(1).
     ///
     /// The following API functions may allocate memory:   canardTxPush(), canardRxAccept().
-    /// The following API functions may deallocate memory: canardTxPush(), canardTxFree(), canardRxAccept(),
-    /// canardRxSubscribe(), canardRxUnsubscribe().
+    /// The following API functions may deallocate memory: canardTxPush(), canardTxFree(), canardTxPoll(),
+    ///                                                    canardRxAccept(), canardRxSubscribe(), canardRxUnsubscribe().
     /// The exact memory requirement and usage model is specified for each function in its documentation.
     struct CanardMemoryResource memory;
 
@@ -528,7 +518,7 @@ struct CanardTxQueue canardTxInit(const size_t                      capacity,
 /// deadline tracking, i.e., aborting frames that could not be transmitted before the specified deadline.
 /// Therefore, normally, the timestamp value should be in the future.
 /// The library compares (now>deadline) to determine which frames timed out, and so could
-/// be dropped (incrementing CanardTxQueueStats::dropped_frames).
+/// be dropped (incrementing frames_expired, unless NULL).
 /// If this timeout behavior is not needed, the timestamp value can be set to zero.
 ///
 /// The described above automatic dropping of timed-out frames was added in the v4 of the library as an optional
@@ -572,7 +562,8 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
                      const CanardMicrosecond                    tx_deadline_usec,
                      const struct CanardTransferMetadata* const metadata,
                      const struct CanardPayload                 payload,
-                     const CanardMicrosecond                    now_usec);
+                     const CanardMicrosecond                    now_usec,
+                     uint64_t* const                            frames_expired);
 
 /// This function accesses the top element of the prioritized transmission queue. The queue itself is not modified
 /// (i.e., the accessed element is not removed). The application should invoke this function to collect the transport
@@ -635,7 +626,12 @@ void canardTxFree(struct CanardTxQueue* const        que,
 /// The function is intended to be periodically called whenever a free TX slot appears in the CAN controller.
 ///
 /// The current time is used to determine if the frame has timed out. Use zero value to disable automatic dropping
-/// of timed-out frames. The user reference will be passed to the frame handler (see CanardTxFrameHandler).
+/// of timed-out frames. Frames that have been removed due to timeout increment frames_expired, unless NULL.
+///
+/// If at least one frame of a transfer fails to transmit (handler returns error), all frames of the transfer are
+/// removed from the queue and *frames_failed is incremented accordingly, unless NULL.
+///
+/// The user reference will be passed to the frame handler (see CanardTxFrameHandler).
 ///
 /// The return value is zero if the queue is empty,
 /// or -CANARD_ERROR_INVALID_ARGUMENT if any of the arguments are invalid.
@@ -644,7 +640,9 @@ int8_t canardTxPoll(struct CanardTxQueue* const        que,
                     const struct CanardInstance* const ins,
                     const CanardMicrosecond            now_usec,
                     void* const                        user_reference,
-                    const CanardTxFrameHandler         frame_handler);
+                    const CanardTxFrameHandler         frame_handler,
+                    uint64_t* const                    frames_expired,
+                    uint64_t* const                    frames_failed);
 
 /// This function implements the transfer reassembly logic. It accepts a transport frame from any of the redundant
 /// interfaces, locates the appropriate subscription state, and, if found, updates it. If the frame completed a

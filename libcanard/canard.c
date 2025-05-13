@@ -592,57 +592,58 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
     return out;
 }
 
-CANARD_PRIVATE void txPopAndFreeTransfer(struct CanardTxQueue* const        que,
-                                         const struct CanardInstance* const ins,
-                                         struct CanardTxQueueItem* const    tx_item,
-                                         const bool                         drop_whole_transfer)
+/// Returns the number of frames freed. The number is at most 1 unless drop_whole_transfer is true.
+CANARD_PRIVATE size_t txPopAndFreeTransfer(struct CanardTxQueue* const        que,
+                                           const struct CanardInstance* const ins,
+                                           struct CanardTxQueueItem* const    tx_item,
+                                           const bool                         drop_whole_transfer)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(tx_item != NULL);
 
+    size_t                    count           = 0;
     struct CanardTxQueueItem* next_tx_item    = tx_item;
     struct CanardTxQueueItem* tx_item_to_free = canardTxPop(que, next_tx_item);
     while (NULL != tx_item_to_free)
     {
         next_tx_item = tx_item_to_free->next_in_transfer;
         canardTxFree(que, ins, tx_item_to_free);
-
         if (!drop_whole_transfer)
         {
             break;
         }
-        que->stats.dropped_frames++;
-
+        count++;
         tx_item_to_free = canardTxPop(que, next_tx_item);
     }
+    return count;
 }
 
 /// Flushes expired transfers by comparing deadline timestamps of the pending transfers with the current time.
-CANARD_PRIVATE void txFlushExpiredTransfers(struct CanardTxQueue* const        que,
-                                            const struct CanardInstance* const ins,
-                                            const CanardMicrosecond            now_usec)
+/// Returns the number of expired frames.
+CANARD_PRIVATE size_t txFlushExpiredTransfers(struct CanardTxQueue* const        que,
+                                              const struct CanardInstance* const ins,
+                                              const CanardMicrosecond            now_usec)
 {
     CANARD_ASSERT(que != NULL);
     CANARD_ASSERT(ins != NULL);
     CANARD_ASSERT(now_usec > 0);
 
+    size_t                    count   = 0;
     struct CanardTreeNode*    tx_node = cavlFindExtremum(que->deadline_root, false);
     struct CanardTxQueueItem* tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
     while (NULL != tx_item)
     {
         if (now_usec <= tx_item->tx_deadline_usec)
         {
-            // The queue is sorted by deadline, so we can stop here.
-            break;
+            break;  // The queue is sorted by deadline, so we can stop here.
         }
-
-        // All frames of the transfer are dropped at once b/c they all have the same deadline.
-        txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
+        count += txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
 
         tx_node = cavlFindExtremum(que->deadline_root, false);
         tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
     }
+    return count;
 }
 
 // --------------------------------------------- RECEPTION ---------------------------------------------
@@ -1170,7 +1171,8 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
                      const CanardMicrosecond                    tx_deadline_usec,
                      const struct CanardTransferMetadata* const metadata,
                      const struct CanardPayload                 payload,
-                     const CanardMicrosecond                    now_usec)
+                     const CanardMicrosecond                    now_usec,
+                     uint64_t* const                            frames_expired)
 {
     // Before pushing payload (potentially in multiple frames), we need to try to flush any expired transfers.
     // This is necessary to ensure that we don't exhaust the capacity of the queue by holding outdated frames.
@@ -1178,7 +1180,11 @@ int32_t canardTxPush(struct CanardTxQueue* const                que,
     // which makes sense only if the current time is known (bigger than zero).
     if (now_usec > 0)
     {
-        txFlushExpiredTransfers(que, ins, now_usec);
+        const size_t count = txFlushExpiredTransfers(que, ins, now_usec);
+        if (frames_expired != NULL)
+        {
+            (*frames_expired) += count;
+        }
     }
 
     int32_t out = -CANARD_ERROR_INVALID_ARGUMENT;
@@ -1266,7 +1272,9 @@ int8_t canardTxPoll(struct CanardTxQueue* const        que,
                     const struct CanardInstance* const ins,
                     const CanardMicrosecond            now_usec,
                     void* const                        user_reference,
-                    const CanardTxFrameHandler         frame_handler)
+                    const CanardTxFrameHandler         frame_handler,
+                    uint64_t* const                    frames_expired,
+                    uint64_t* const                    frames_failed)
 {
     int8_t out = -CANARD_ERROR_INVALID_ARGUMENT;
     if ((que != NULL) && (ins != NULL) && (frame_handler != NULL))
@@ -1278,7 +1286,11 @@ int8_t canardTxPoll(struct CanardTxQueue* const        que,
         // which makes sense only if the current time is known (bigger than zero).
         if (now_usec > 0)
         {
-            txFlushExpiredTransfers(que, ins, now_usec);
+            const size_t count = txFlushExpiredTransfers(que, ins, now_usec);
+            if (frames_expired != NULL)
+            {
+                (*frames_expired) += count;
+            }
         }
 
         struct CanardTxQueueItem* const tx_item = canardTxPeek(que);
@@ -1286,17 +1298,18 @@ int8_t canardTxPoll(struct CanardTxQueue* const        que,
         {
             // No need to check the deadline again, as we have already flushed all expired transfers.
             out = frame_handler(user_reference, tx_item->tx_deadline_usec, &tx_item->frame);
-
             // We gonna release (pop and free) the frame if the handler returned:
             // - either a positive value - the frame has been successfully accepted by the handler;
             // - or a negative value - the frame has been rejected by the handler due to a failure.
             // Zero value means that the handler cannot accept the frame at the moment, so we keep it in the queue.
             if (out != 0)
             {
-                // In case of a failure, it makes sense to drop the whole transfer immediately
-                // b/c at least this frame has been rejected, so the whole transfer is useless.
-                const bool drop_whole_transfer = (out < 0);
-                txPopAndFreeTransfer(que, ins, tx_item, drop_whole_transfer);
+                const bool   failed = out < 0;
+                const size_t count  = txPopAndFreeTransfer(que, ins, tx_item, failed);
+                if (failed && (frames_failed != NULL))
+                {
+                    (*frames_failed) += count;
+                }
             }
         }
         else

@@ -66,7 +66,7 @@ static inline void traverse(const CanardTreeNode* const root, const F& fun)  // 
 
 /// An allocator that sits on top of the standard malloc() providing additional testing capabilities.
 /// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
-class TestAllocator
+class TestAllocator final
 {
 public:
     TestAllocator()                                         = default;
@@ -75,7 +75,7 @@ public:
     auto operator=(const TestAllocator&) -> TestAllocator&  = delete;
     auto operator=(const TestAllocator&&) -> TestAllocator& = delete;
 
-    virtual ~TestAllocator()
+    ~TestAllocator()
     {
         const std::unique_lock locker(lock_);
         for (const auto& pair : allocated_)
@@ -174,7 +174,7 @@ private:
 };
 
 /// An enhancing wrapper over the library to remove boilerplate from the tests.
-class Instance
+class Instance final
 {
 public:
     Instance()
@@ -183,7 +183,7 @@ public:
         canard_.memory.user_reference = this;
     }
 
-    virtual ~Instance() = default;
+    ~Instance() = default;
 
     Instance(const Instance&)                     = delete;
     Instance(const Instance&&)                    = delete;
@@ -268,7 +268,7 @@ private:
     TestAllocator  allocator_;
 };
 
-class TxQueue
+class TxQueue final
 {
 public:
     TxQueue(const std::size_t capacity, const std::size_t mtu_bytes) :
@@ -287,7 +287,7 @@ public:
         que_.user_reference = this;  // This is simply to ensure it is not overwritten unexpectedly.
         checkInvariants();
     }
-    virtual ~TxQueue() = default;
+    ~TxQueue() = default;
 
     TxQueue(const TxQueue&)                    = delete;
     TxQueue(TxQueue&&)                         = delete;
@@ -301,21 +301,31 @@ public:
                             const CanardMicrosecond       transmission_deadline_usec,
                             const CanardTransferMetadata& metadata,
                             const struct CanardPayload    payload,
-                            const CanardMicrosecond       now_usec = 0ULL)
+                            const CanardMicrosecond       now_usec,
+                            uint64_t&                     frames_expired)
     {
         checkInvariants();
 
-        const auto size_before    = que_.size;
-        const auto dropped_before = que_.stats.dropped_frames;
+        const auto size_before = que_.size;
+        uint64_t   dropped     = 0;
 
-        const auto ret       = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload, now_usec);
+        const auto ret = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload, now_usec, &dropped);
         const auto num_added = static_cast<std::size_t>(ret);
 
-        enforce((ret < 0) || ((size_before + num_added + dropped_before - que_.stats.dropped_frames) == que_.size),
-                "Unexpected size change after push");
+        enforce((ret < 0) || ((size_before + num_added - dropped) == que_.size), "Unexpected size change after push");
         checkInvariants();
 
+        frames_expired = dropped;
         return ret;
+    }
+    [[nodiscard]] auto push(CanardInstance* const         ins,
+                            const CanardMicrosecond       transmission_deadline_usec,
+                            const CanardTransferMetadata& metadata,
+                            const struct CanardPayload    payload,
+                            const CanardMicrosecond       now_usec = 0)
+    {
+        uint64_t frames_expired = 0;
+        return push(ins, transmission_deadline_usec, metadata, payload, now_usec, frames_expired);
     }
 
     [[nodiscard]] auto peek() const -> exposed::TxItem*
@@ -351,31 +361,49 @@ public:
 
     using FrameHandler = std::function<std::int8_t(const CanardMicrosecond, CanardMutableFrame&)>;
 
-    [[nodiscard]] auto poll(Instance& ins, const CanardMicrosecond now_usec, FrameHandler frame_handler)
+    struct PollStats
+    {
+        std::uint64_t frames_expired = 0;
+        std::uint64_t frames_failed  = 0;
+    };
+
+    [[nodiscard]] auto poll(Instance&               ins,
+                            const CanardMicrosecond now_usec,
+                            FrameHandler            frame_handler,
+                            PollStats&              poll_stats)
     {
         if (!frame_handler)
         {
-            return canardTxPoll(&que_, &ins.getInstance(), now_usec, nullptr, nullptr);
+            return canardTxPoll(&que_,
+                                &ins.getInstance(),
+                                now_usec,
+                                nullptr,
+                                nullptr,
+                                &poll_stats.frames_expired,
+                                &poll_stats.frames_failed);
         }
-
-        return canardTxPoll(&que_,
-                            &ins.getInstance(),
-                            now_usec,
-                            &frame_handler,
-                            [](auto* user_reference, const auto deadline_usec, auto* const frame) -> std::int8_t {
-                                //
-                                const auto* const handler_ptr = static_cast<FrameHandler*>(user_reference);
-                                return (*handler_ptr)(deadline_usec, *frame);
-                            });
+        return canardTxPoll(
+            &que_,
+            &ins.getInstance(),
+            now_usec,
+            &frame_handler,
+            [](auto* user_reference, const auto deadline_usec, auto* const frame) -> std::int8_t {
+                const auto* const handler_ptr = static_cast<FrameHandler*>(user_reference);
+                return (*handler_ptr)(deadline_usec, *frame);
+            },
+            &poll_stats.frames_expired,
+            &poll_stats.frames_failed);
+    }
+    [[nodiscard]] auto poll(Instance& ins, const CanardMicrosecond now_usec, const FrameHandler& frame_handler)
+    {
+        PollStats ps;
+        return poll(ins, now_usec, frame_handler, ps);
     }
 
     [[nodiscard]] auto getSize() const
     {
         std::size_t out = 0;
-        traverse(que_.priority_root, [&](auto* _) {
-            (void) _;
-            out++;
-        });
+        traverse(que_.priority_root, [&](auto*) { out++; });
         enforce(que_.size == out, "Size miscalculation");
         return out;
     }
@@ -383,10 +411,7 @@ public:
     [[nodiscard]] auto getDeadlineQueueSize() const
     {
         std::size_t out = 0;
-        traverse(que_.deadline_root, [&](auto* _) {
-            (void) _;
-            out++;
-        });
+        traverse(que_.deadline_root, [&](auto*) { out++; });
         enforce(que_.size == out, "Size miscalculation");
         return out;
     }

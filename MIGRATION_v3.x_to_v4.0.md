@@ -11,8 +11,8 @@ These changes do not affect wire compatibility.
 ## Version Changes
 
 - **Libcanard Version**:
-  - **Old**: `CANARD_VERSION_MAJOR 3`, `CANARD_VERSION_MINOR 3`
-  - **New**: `CANARD_VERSION_MAJOR 4`, `CANARD_VERSION_MINOR 0`
+  - **Old**: `CANARD_VERSION_MAJOR 3`
+  - **New**: `CANARD_VERSION_MAJOR 4`
 - **Cyphal Specification Version**: Remains the same (`1.0`).
 
 ## API Changes
@@ -23,10 +23,9 @@ These changes do not affect wire compatibility.
   - **Description**: A helper function to free memory allocated for transmission queue items, including the frame payload buffer.
   - **Prototype**:
     ```c
-    void canardTxFree(
-        struct CanardTxQueue* const        que,
-        const struct CanardInstance* const ins,
-        struct CanardTxQueueItem* const    item);
+    void canardTxFree(struct CanardTxQueue* const        que,
+                      const struct CanardInstance* const ins,
+                      struct CanardTxQueueItem* const    item);
     ```
   - **Usage**: After popping a transmission queue item using `canardTxPop`, use `canardTxFree` to deallocate its memory.
 
@@ -34,12 +33,13 @@ These changes do not affect wire compatibility.
   - **Description**: A helper function simplifies the transmission process by combining frame retrieval, transmission, and cleanup into a single function.
   - **Prototype**:
     ```c
-    int8_t canardTxPoll(
-        struct CanardTxQueue* const        que,
-        const struct CanardInstance* const ins,
-        const CanardMicrosecond            now_usec,
-        void* const                        user_reference,
-        const CanardTxFrameHandler         frame_handler
+    int8_t canardTxPoll(struct CanardTxQueue* const        que,
+                        const struct CanardInstance* const ins,
+                        const CanardMicrosecond            now_usec,
+                        void* const                        user_reference,
+                        const CanardTxFrameHandler         frame_handler,
+                        uint64_t* const                    frames_expired,
+                        uint64_t* const                    frames_failed);
     ```
     - **Purpose**: Streamlines the process of handling frames from the TX queue.
     - **Functionality**:
@@ -47,6 +47,7 @@ These changes do not affect wire compatibility.
       - Invokes a user-provided `frame_handler` to transmit the frame.
       - Manages frame cleanup based on the handler's return value.
       - Automatically drops timed-out frames if `now_usec` is provided.
+      - Increments the statistical counters `frames_expired` and `frames_failed` unless their pointers are NULL.
 
 ### Modified Functions
 
@@ -55,14 +56,12 @@ Several functions have updated prototypes and usage patterns:
 1. **`canardInit`**:
    - **Old Prototype**:
      ```c
-     CanardInstance canardInit(
-         const CanardMemoryAllocate memory_allocate,
-         const CanardMemoryFree     memory_free);
+     CanardInstance canardInit(const CanardMemoryAllocate memory_allocate,
+                               const CanardMemoryFree     memory_free);
      ```
    - **New Prototype**:
      ```c
-     struct CanardInstance canardInit(
-         const struct CanardMemoryResource memory);
+     struct CanardInstance canardInit(const struct CanardMemoryResource memory);
      ```
    - **Changes**:
      - Replaces `CanardMemoryAllocate` and `CanardMemoryFree` function pointers with a `CanardMemoryResource` struct.
@@ -70,16 +69,14 @@ Several functions have updated prototypes and usage patterns:
 1. **`canardTxInit`**:
    - **Old Prototype**:
      ```c
-     CanardTxQueue canardTxInit(
-         const size_t capacity,
-         const size_t mtu_bytes);
+     CanardTxQueue canardTxInit(const size_t capacity,
+                                const size_t mtu_bytes);
      ```
    - **New Prototype**:
      ```c
-     struct CanardTxQueue canardTxInit(
-         const size_t                      capacity,
-         const size_t                      mtu_bytes,
-         const struct CanardMemoryResource memory);
+     struct CanardTxQueue canardTxInit(const size_t                      capacity,
+                                       const size_t                      mtu_bytes,
+                                       const struct CanardMemoryResource memory);
      ```
    - **Changes**:
      - Adds a `CanardMemoryResource` parameter for memory allocation of payload data.
@@ -87,23 +84,22 @@ Several functions have updated prototypes and usage patterns:
 1. **`canardTxPush`**:
    - **Old Prototype**:
      ```c
-     int32_t canardTxPush(
-         CanardTxQueue* const                que,
-         CanardInstance* const               ins,
-         const CanardMicrosecond             tx_deadline_usec,
-         const CanardTransferMetadata* const metadata,
-         const size_t                        payload_size,
-         const void* const                   payload);
+     int32_t canardTxPush(CanardTxQueue* const                que,
+                          CanardInstance* const               ins,
+                          const CanardMicrosecond             tx_deadline_usec,
+                          const CanardTransferMetadata* const metadata,
+                          const size_t                        payload_size,
+                          const void* const                   payload);
      ```
    - **New Prototype**:
      ```c
-     int32_t canardTxPush(
-         struct CanardTxQueue* const                que,
-         const struct CanardInstance* const         ins,
-         const CanardMicrosecond                    tx_deadline_usec,
-         const struct CanardTransferMetadata* const metadata,
-         const struct CanardPayload                 payload,
-         const CanardMicrosecond                    now_usec);
+     int32_t canardTxPush(struct CanardTxQueue* const                que,
+                          const struct CanardInstance* const         ins,
+                          const CanardMicrosecond                    tx_deadline_usec,
+                          const struct CanardTransferMetadata* const metadata,
+                          const struct CanardPayload                 payload,
+                          const CanardMicrosecond                    now_usec,
+                          uint64_t* const                            frames_expired);
      ```
    - **Changes**:
      - Replaces `payload_size` and `payload` with a single `CanardPayload` struct.
@@ -111,6 +107,7 @@ Several functions have updated prototypes and usage patterns:
        - **Purpose**: Allows the library to automatically drop frames that have exceeded their transmission deadlines (`tx_deadline_usec`).
        - **Behavior**: If `now_usec` is greater than `tx_deadline_usec`, the frames already in the TX queue will be dropped, and the `dropped_frames` counter in `CanardTxQueueStats` will be incremented.
        - **Optional Feature**: Passing `0` for `now_usec` disables automatic dropping, maintaining previous behavior.
+     - Adds a new `frames_expired` parameter that is incremented for every expired frame, unless NULL.
 
 1. **`canardTxPeek`** and **`canardTxPop`**:
    - The functions now return and accept pointers to mutable `struct CanardTxQueueItem` instead of const pointers.
@@ -148,11 +145,9 @@ Several functions have updated prototypes and usage patterns:
 - **Function pointers**:
   - **Added** `CanardTxFrameHandler` function pointer type.
     ```c
-    typedef int8_t (*CanardTxFrameHandler)(
-        void* const                      user_reference,
-        const CanardMicrosecond          deadline_usec,
-        struct CanardMutableFrame* const frame
-    );
+    typedef int8_t (*CanardTxFrameHandler)(void* const                      user_reference,
+                                           const CanardMicrosecond          deadline_usec,
+                                           struct CanardMutableFrame* const frame);
     ``` 
 
 ### Struct Modifications
@@ -199,16 +194,11 @@ Several functions have updated prototypes and usage patterns:
 - **Allocation Functions**:
   - **Allocation**:
     ```c
-    typedef void* (*CanardMemoryAllocate)(
-        void* const user_reference,
-        const size_t size);
+    typedef void* (*CanardMemoryAllocate)(void* const user_reference, const size_t size);
     ```
   - **Deallocation**:
     ```c
-    typedef void (*CanardMemoryDeallocate)(
-        void* const user_reference,
-        const size_t size,
-        void* const pointer);
+    typedef void (*CanardMemoryDeallocate)(void* const user_reference, const size_t size, void* const pointer);
     ```
 
 ## Automatic Dropping of Timed-Out Frames
@@ -277,7 +267,8 @@ Frames in the TX queue that have exceeded their `tx_deadline_usec` can now be au
            .size = payload_size,
            .data = payload
        };
-       canardTxPush(que, ins, tx_deadline_usec, metadata, payload_struct, now_usec);
+       uint64_t frames_expired = 0;  // This is optional; pass NULL if not needed.
+       canardTxPush(que, ins, tx_deadline_usec, metadata, payload_struct, now_usec, &frames_expired);
        ```
 
 1. **Handle New Functions**:
@@ -296,11 +287,10 @@ Frames in the TX queue that have exceeded their `tx_deadline_usec` can now be au
    - If currently using `canardTxPeek()`, `canardTxPop()`, and `canardTxFree()`, consider replacing that logic with `canardTxPoll()` for simplicity.
      - Define a function matching the `CanardTxFrameHandler` signature:
        ```c
-       int8_t myFrameHandler(
-           void* const                user_reference,
-           const CanardMicrosecond    deadline_usec,
-           struct CanardMutableFrame* frame
-       ) {
+       int8_t myFrameHandler(void* const user_reference,
+                             const CanardMicrosecond deadline_usec,
+                             struct CanardMutableFrame* frame)
+       {
            // Implement transmission logic here
            // Return positive value on success - the frame will be released
            // Return zero to retry later - the frame will stay in the TX queue
@@ -314,12 +304,20 @@ Frames in the TX queue that have exceeded their `tx_deadline_usec` can now be au
        if (item != NULL) {
            // Handle deadline
            // Transmit item->frame
+           // Unless the media is busy:
            item = canardTxPop(queue, item);
            canardTxFree(queue, instance, item);
        }
-
        // After
-       int8_t result = canardTxPoll(queue, instance, now_usec, user_reference, myFrameHandler);       
+       uint64_t frames_expired = 0;  // The counters are optional; pass NULL if not needed.
+       uint64_t frames_failed  = 0;
+       int8_t result = canardTxPoll(queue,
+                                    instance,
+                                    now_usec,
+                                    user_reference,
+                                    myFrameHandler,
+                                    &frames_expired,
+                                    &frames_failed);
        ```
 1. **Update Struct Field Access**:
    - Adjust your code to access struct fields directly, considering the changes in struct definitions.
