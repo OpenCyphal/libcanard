@@ -105,7 +105,7 @@ Several functions have updated prototypes and usage patterns:
      - Replaces `payload_size` and `payload` with a single `CanardPayload` struct.
      - Adds a `now_usec` parameter for handling timed-out frames.
        - **Purpose**: Allows the library to automatically drop frames that have exceeded their transmission deadlines (`tx_deadline_usec`).
-       - **Behavior**: If `now_usec` is greater than `tx_deadline_usec`, the frames already in the TX queue will be dropped, and the `dropped_frames` counter in `CanardTxQueueStats` will be incremented.
+       - **Behavior**: If `now_usec` is greater than `tx_deadline_usec`, the frames already in the TX queue will be dropped, and the `frames_expired` counter will be incremented.
        - **Optional Feature**: Passing `0` for `now_usec` disables automatic dropping, maintaining previous behavior.
      - Adds a new `frames_expired` parameter that is incremented for every expired frame, unless NULL.
 
@@ -180,7 +180,6 @@ Several functions have updated prototypes and usage patterns:
 
 - **`CanardTxQueue`**:
   - Includes a `CanardMemoryResource` for payload data allocation.
-  - Includes a `CanardTxQueueStats` for tracking number of dropped frames.
 
 - **`CanardMemoryResource`** and **`CanardMemoryDeleter`**:
   - New structs to encapsulate memory allocation and deallocation functions along with user references.
@@ -219,7 +218,7 @@ Frames in the TX queue that have exceeded their `tx_deadline_usec` can now be au
 
 2. **Adjust Application Logic**:
 
-    - Monitor the `dropped_frames` counter in `CanardTxQueueStats` if tracking of dropped frames is required.
+    - Monitor the statistical counters if tracking of dropped frames is required.
 
 ## Migration Steps
 

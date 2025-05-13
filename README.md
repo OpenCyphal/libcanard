@@ -13,8 +13,7 @@
 
 -----
 
-Libcanard is a compact implementation of the Cyphal/CAN protocol stack in C99/C11 for high-integrity real-time
-embedded systems.
+Libcanard is a robust implementation of the Cyphal/CAN transport layer in C for high-integrity real-time embedded systems.
 
 [Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
 communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
@@ -36,7 +35,7 @@ If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
 - Support for redundant network interfaces.
 - Compatibility with 8/16/32/64-bit platforms.
 - Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 32K RAM.
-- Implemented in ≈1000 lines of code.
+- Implemented in ≈1000 SLoC.
 
 ## Platforms
 
@@ -49,11 +48,11 @@ The platform-specific media IO layer (driver) is supposed to be provided by the 
     +-------+-----------------+-------+
             |                 |
     +-------+-------+ +-------+-------+
-    |   Libcanard   | |  Media layer  |
+    |   Libcanard   | |   CAN driver  |
     +---------------+ +-------+-------+
                               |
                       +-------+-------+
-                      |    Hardware   |
+                      | CAN controller|
                       +---------------+
 
 The OpenCyphal Development Team maintains a collection of various platform-specific components in a separate repository
@@ -120,7 +119,8 @@ int32_t result = canardTxPush(&queue,               // Call this once per redund
                               tx_deadline_usec,     // Zero if transmission deadline is not limited.
                               &transfer_metadata,
                               47,                   // Size of the message payload (see Nunavut transpiler).
-                              "\x2D\x00" "Sancho, it strikes me thou art in great fear.");
+                              "\x2D\x00" "Sancho, it strikes me thou art in great fear.",
+                              NULL);
 if (result < 0)
 {
     // An error has occurred: either an argument is invalid, the TX queue is full, or we've run out of memory.
@@ -152,7 +152,7 @@ for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;) 
 }
 ```
 
-💡 New in v4.0: optionally, you can now use `canardTxPoll()` that does the above for you.
+💡 New in v4.0: optionally, you can now use `canardTxPoll()` that automates the above for you.
 
 Transfer reception is done by feeding frames into the transfer reassembly state machine
 from any of the redundant interfaces.
@@ -185,7 +185,7 @@ for example, `MyMessage.1.0` may have the maximum size of 100 bytes and the exte
 a revised version `MyMessage.1.1` may have the maximum size anywhere between 0 and 200 bytes.
 Extent values are provided per data type by DSDL transcompilers such as Nunavut.
 
-In Libcanard we use the term "subscription" not only for subjects (messages), but also for services, for simplicity.
+In Libcanard we use the term "subscription" not only for subjects (messages), but also for RPC services.
 
 We can subscribe and unsubscribe at runtime as many times as we want.
 Normally, however, an embedded application would subscribe once and roll with it.
@@ -245,8 +245,7 @@ If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ### v4.0 -- WORK IN PROGRESS
 
-Updating from Libcanard v3 to v4 involves several significant changes,
-especially in memory management and API function prototypes.
+Updating from Libcanard v3 to v4 involves several changes in memory management and TX frame expiration.
 Please follow the [MIGRATION_v3.x_to_v4.0](MIGRATION_v3.x_to_v4.0.md) guide and carefully update your code.
 
 ### v3.2
