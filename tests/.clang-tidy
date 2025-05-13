@@ -36,7 +36,11 @@ Checks: >-
   -*-no-malloc,
   -cert-msc30-c,
   -cert-msc50-cpp,
-  -modernize-macro-to-enum,
+  -*-macro-to-enum,
+  -misc-include-cleaner,
+  -bugprone-chained-comparison,
+  -performance-avoid-endl,
+  -*-use-ranges,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*\.hpp'
 FormatStyle: file

@@ -9,10 +9,14 @@
 #include <array>
 #include <atomic>
 #include <cstdarg>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
+#include <limits>
 #include <mutex>
-#include <numeric>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -44,7 +48,7 @@ inline void free(CanardInstance* const ins, void* const pointer)
 
 /// We can't use the recommended true random std::random because it cannot be seeded by Catch2 (the testing framework).
 template <typename T>
-inline auto getRandomNatural(const T upper_open) -> T
+auto getRandomNatural(const std::size_t upper_open) -> T
 {
     return static_cast<T>(static_cast<std::size_t>(std::rand()) % upper_open);  // NOLINT
 }
@@ -62,7 +66,7 @@ static inline void traverse(const CanardTreeNode* const root, const F& fun)  // 
 
 /// An allocator that sits on top of the standard malloc() providing additional testing capabilities.
 /// It allows the user to specify the maximum amount of memory that can be allocated; further requests will emulate OOM.
-class TestAllocator
+class TestAllocator final
 {
 public:
     TestAllocator()                                         = default;
@@ -71,7 +75,7 @@ public:
     auto operator=(const TestAllocator&) -> TestAllocator&  = delete;
     auto operator=(const TestAllocator&&) -> TestAllocator& = delete;
 
-    virtual ~TestAllocator()
+    ~TestAllocator()
     {
         const std::unique_lock locker(lock_);
         for (const auto& pair : allocated_)
@@ -87,7 +91,7 @@ public:
         std::uint8_t*          p = nullptr;
         if ((amount > 0U) && ((getTotalAllocatedAmount() + amount) <= ceiling_))
         {
-            const auto amount_with_canaries = amount + canary_.size() * 2U;
+            const auto amount_with_canaries = amount + (canary_.size() * 2U);
             // Clang-tidy complains about manual memory management. Suppressed because we need it for testing purposes.
             p = static_cast<std::uint8_t*>(std::malloc(amount_with_canaries));  // NOLINT
             if (p == nullptr)
@@ -95,7 +99,7 @@ public:
                 throw std::bad_alloc();  // This is a test suite failure, not a failed test. Mind the difference.
             }
             p += canary_.size();
-            std::generate_n(p, amount, []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+            std::generate_n(p, amount, []() { return getRandomNatural<std::uint8_t>(256U); });
             std::memcpy(p - canary_.size(), canary_.begin(), canary_.size());
             std::memcpy(p + amount, canary_.begin(), canary_.size());
             allocated_.emplace(p, amount);
@@ -103,7 +107,7 @@ public:
         return p;
     }
 
-    void deallocate(void* const user_pointer)
+    void deallocate(void* const user_pointer, const std::size_t amount)
     {
         if (user_pointer != nullptr)
         {
@@ -114,7 +118,12 @@ public:
                 throw std::logic_error("Attempted to deallocate memory that was never allocated; ptr=" +
                                        std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
             }
-            const auto [p, amount] = *it;
+            const auto [p, expected_amount] = *it;
+            if (amount != expected_amount)
+            {
+                throw std::logic_error("Attempted to deallocate wrong size memory at ptr=" +
+                                       std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
+            }
             if ((0 != std::memcmp(p - canary_.size(), canary_.begin(), canary_.size())) ||
                 (0 != std::memcmp(p + amount, canary_.begin(), canary_.size())))
             {
@@ -122,8 +131,8 @@ public:
                                        std::to_string(reinterpret_cast<std::uint64_t>(user_pointer)));
             }
             std::generate_n(p - canary_.size(),  // Damage the memory to make sure it's not used after deallocation.
-                            amount + canary_.size() * 2U,
-                            []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+                            amount + (canary_.size() * 2U),
+                            []() { return getRandomNatural<std::uint8_t>(256U); });
             std::free(p - canary_.size());  // NOLINT we require manual memory management here.
             allocated_.erase(it);
         }
@@ -153,7 +162,7 @@ private:
     static auto makeCanary() -> std::array<std::uint8_t, 256>
     {
         std::array<std::uint8_t, 256> out{};
-        std::generate_n(out.begin(), out.size(), []() { return static_cast<std::uint8_t>(getRandomNatural(256U)); });
+        std::generate_n(out.begin(), out.size(), []() { return getRandomNatural<std::uint8_t>(256U); });
         return out;
     }
 
@@ -165,21 +174,30 @@ private:
 };
 
 /// An enhancing wrapper over the library to remove boilerplate from the tests.
-class Instance
+class Instance final
 {
 public:
-    Instance() { canard_.user_reference = this; }
+    Instance()
+    {
+        canard_.user_reference        = this;
+        canard_.memory.user_reference = this;
+    }
 
-    virtual ~Instance() = default;
+    ~Instance() = default;
 
     Instance(const Instance&)                     = delete;
     Instance(const Instance&&)                    = delete;
     auto operator=(const Instance&) -> Instance&  = delete;
     auto operator=(const Instance&&) -> Instance& = delete;
 
+    [[nodiscard]] auto makeCanardMemoryResource() -> CanardMemoryResource
+    {
+        return {this, trampolineDeallocate, trampolineAllocate};
+    }
+
     [[nodiscard]] auto rxAccept(const CanardMicrosecond      timestamp_usec,
                                 const CanardFrame&           frame,
-                                const uint8_t                redundant_iface_index,
+                                const std::uint8_t           redundant_iface_index,
                                 CanardRxTransfer&            out_transfer,
                                 CanardRxSubscription** const out_subscription)
     {
@@ -234,33 +252,42 @@ public:
     [[nodiscard]] auto getInstance() const -> const CanardInstance& { return canard_; }
 
 private:
-    static auto trampolineAllocate(CanardInstance* const ins, const std::size_t amount) -> void*
+    static auto trampolineAllocate(void* const user_reference, const std::size_t size) -> void*
     {
-        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        return p->allocator_.allocate(amount);
+        auto* p = static_cast<Instance*>(user_reference);
+        return p->allocator_.allocate(size);
     }
 
-    static void trampolineDeallocate(CanardInstance* const ins, void* const pointer)
+    static void trampolineDeallocate(void* const user_reference, const std::size_t size, void* const pointer)
     {
-        auto* p = reinterpret_cast<Instance*>(ins->user_reference);
-        p->allocator_.deallocate(pointer);
+        auto* p = static_cast<Instance*>(user_reference);
+        p->allocator_.deallocate(pointer, size);
     }
 
-    CanardInstance canard_ = canardInit(&Instance::trampolineAllocate, &Instance::trampolineDeallocate);
+    CanardInstance canard_ = canardInit({nullptr, &Instance::trampolineDeallocate, &Instance::trampolineAllocate});
     TestAllocator  allocator_;
 };
 
-class TxQueue
+class TxQueue final
 {
 public:
-    explicit TxQueue(const std::size_t capacity, const std::size_t mtu_bytes) : que_(canardTxInit(capacity, mtu_bytes))
+    TxQueue(const std::size_t capacity, const std::size_t mtu_bytes) :
+        que_(canardTxInit(capacity, mtu_bytes, makeCanardMemoryResource()))
     {
         enforce(que_.user_reference == nullptr, "Incorrect initialization of the user reference in TxQueue");
         enforce(que_.mtu_bytes == mtu_bytes, "Incorrect MTU");
         que_.user_reference = this;  // This is simply to ensure it is not overwritten unexpectedly.
         checkInvariants();
     }
-    virtual ~TxQueue() = default;
+    TxQueue(const std::size_t capacity, const std::size_t mtu_bytes, const CanardMemoryResource memory) :
+        que_(canardTxInit(capacity, mtu_bytes, memory))
+    {
+        enforce(que_.user_reference == nullptr, "Incorrect initialization of the user reference in TxQueue");
+        enforce(que_.mtu_bytes == mtu_bytes, "Incorrect MTU");
+        que_.user_reference = this;  // This is simply to ensure it is not overwritten unexpectedly.
+        checkInvariants();
+    }
+    ~TxQueue() = default;
 
     TxQueue(const TxQueue&)                    = delete;
     TxQueue(TxQueue&&)                         = delete;
@@ -273,29 +300,45 @@ public:
     [[nodiscard]] auto push(CanardInstance* const         ins,
                             const CanardMicrosecond       transmission_deadline_usec,
                             const CanardTransferMetadata& metadata,
-                            const size_t                  payload_size,
-                            const void* const             payload)
+                            const struct CanardPayload    payload,
+                            const CanardMicrosecond       now_usec,
+                            uint64_t&                     frames_expired)
     {
         checkInvariants();
+
         const auto size_before = que_.size;
-        const auto ret         = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload_size, payload);
-        const auto num_added   = static_cast<std::size_t>(ret);
-        enforce((ret < 0) || ((size_before + num_added) == que_.size), "Unexpected size change after push");
+        uint64_t   dropped     = 0;
+
+        const auto ret = canardTxPush(&que_, ins, transmission_deadline_usec, &metadata, payload, now_usec, &dropped);
+        const auto num_added = static_cast<std::size_t>(ret);
+
+        enforce((ret < 0) || ((size_before + num_added - dropped) == que_.size), "Unexpected size change after push");
         checkInvariants();
+
+        frames_expired = dropped;
         return ret;
     }
-
-    [[nodiscard]] auto peek() const -> const exposed::TxItem*
+    [[nodiscard]] auto push(CanardInstance* const         ins,
+                            const CanardMicrosecond       transmission_deadline_usec,
+                            const CanardTransferMetadata& metadata,
+                            const struct CanardPayload    payload,
+                            const CanardMicrosecond       now_usec = 0)
     {
-        checkInvariants();
-        const auto        before = que_.size;
-        const auto* const ret    = canardTxPeek(&que_);
-        enforce(((ret == nullptr) ? (before == 0) : (before > 0)) && (que_.size == before), "Bad peek");
-        checkInvariants();
-        return static_cast<const exposed::TxItem*>(ret);  // NOLINT static downcast
+        uint64_t frames_expired = 0;
+        return push(ins, transmission_deadline_usec, metadata, payload, now_usec, frames_expired);
     }
 
-    [[nodiscard]] auto pop(const CanardTxQueueItem* const which) -> exposed::TxItem*
+    [[nodiscard]] auto peek() const -> exposed::TxItem*
+    {
+        checkInvariants();
+        const auto  before = que_.size;
+        auto* const ret    = canardTxPeek(&que_);
+        enforce(((ret == nullptr) ? (before == 0) : (before > 0)) && (que_.size == before), "Bad peek");
+        checkInvariants();
+        return static_cast<exposed::TxItem*>(ret);  // NOLINT static downcast
+    }
+
+    [[nodiscard]] auto pop(CanardTxQueueItem* const which) -> exposed::TxItem*
     {
         checkInvariants();
         const auto size_before  = que_.size;
@@ -314,13 +357,61 @@ public:
         return static_cast<exposed::TxItem*>(out);  // NOLINT static downcast
     }
 
+    void freeItem(Instance& ins, CanardTxQueueItem* const item) { canardTxFree(&que_, &ins.getInstance(), item); }
+
+    using FrameHandler = std::function<std::int8_t(const CanardMicrosecond, CanardMutableFrame&)>;
+
+    struct PollStats
+    {
+        std::uint64_t frames_expired = 0;
+        std::uint64_t frames_failed  = 0;
+    };
+
+    [[nodiscard]] auto poll(Instance&               ins,
+                            const CanardMicrosecond now_usec,
+                            FrameHandler            frame_handler,
+                            PollStats&              poll_stats)
+    {
+        if (!frame_handler)
+        {
+            return canardTxPoll(&que_,
+                                &ins.getInstance(),
+                                now_usec,
+                                nullptr,
+                                nullptr,
+                                &poll_stats.frames_expired,
+                                &poll_stats.frames_failed);
+        }
+        return canardTxPoll(
+            &que_,
+            &ins.getInstance(),
+            now_usec,
+            &frame_handler,
+            [](auto* user_reference, const auto deadline_usec, auto* const frame) -> std::int8_t {
+                const auto* const handler_ptr = static_cast<FrameHandler*>(user_reference);
+                return (*handler_ptr)(deadline_usec, *frame);
+            },
+            &poll_stats.frames_expired,
+            &poll_stats.frames_failed);
+    }
+    [[nodiscard]] auto poll(Instance& ins, const CanardMicrosecond now_usec, const FrameHandler& frame_handler)
+    {
+        PollStats ps;
+        return poll(ins, now_usec, frame_handler, ps);
+    }
+
     [[nodiscard]] auto getSize() const
     {
         std::size_t out = 0;
-        traverse(que_.root, [&](auto* _) {
-            (void) _;
-            out++;
-        });
+        traverse(que_.priority_root, [&](auto*) { out++; });
+        enforce(que_.size == out, "Size miscalculation");
+        return out;
+    }
+
+    [[nodiscard]] auto getDeadlineQueueSize() const
+    {
+        std::size_t out = 0;
+        traverse(que_.deadline_root, [&](auto*) { out++; });
         enforce(que_.size == out, "Size miscalculation");
         return out;
     }
@@ -328,7 +419,7 @@ public:
     [[nodiscard]] auto linearize() const -> std::vector<const exposed::TxItem*>
     {
         std::vector<const exposed::TxItem*> out;
-        traverse(que_.root, [&](const CanardTreeNode* const item) {
+        traverse(que_.priority_root, [&](const CanardTreeNode* const item) {
             out.push_back(reinterpret_cast<const exposed::TxItem*>(item));
         });
         enforce(out.size() == getSize(), "Internal error");
@@ -338,7 +429,25 @@ public:
     [[nodiscard]] auto getInstance() -> CanardTxQueue& { return que_; }
     [[nodiscard]] auto getInstance() const -> const CanardTxQueue& { return que_; }
 
+    [[nodiscard]] auto getAllocator() -> TestAllocator& { return allocator_; }
+    [[nodiscard]] auto makeCanardMemoryResource() -> CanardMemoryResource
+    {
+        return {this, trampolineDeallocate, trampolineAllocate};
+    }
+
 private:
+    static auto trampolineAllocate(void* const user_reference, const std::size_t size) -> void*
+    {
+        auto* p = static_cast<TxQueue*>(user_reference);
+        return p->allocator_.allocate(size);
+    }
+
+    static void trampolineDeallocate(void* const user_reference, const std::size_t size, void* const pointer)
+    {
+        auto* p = static_cast<TxQueue*>(user_reference);
+        p->allocator_.deallocate(pointer, size);
+    }
+
     static void enforce(const bool expect_true, const std::string& message)
     {
         if (!expect_true)
@@ -351,8 +460,10 @@ private:
     {
         enforce(que_.user_reference == this, "User reference damaged");
         enforce(que_.size == getSize(), "Size miscalculation");
+        enforce(que_.size == getDeadlineQueueSize(), "Deadline queue size miscalculation");
     }
 
+    TestAllocator allocator_;
     CanardTxQueue que_;
 };
 

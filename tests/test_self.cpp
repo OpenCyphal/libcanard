@@ -30,7 +30,7 @@ TEST_CASE("TestAllocator")
     REQUIRE(3 == al.getNumAllocatedFragments());
     REQUIRE(600 == al.getTotalAllocatedAmount());
 
-    al.deallocate(a);
+    al.deallocate(a, 123);
     REQUIRE(2 == al.getNumAllocatedFragments());
     REQUIRE(477 == al.getTotalAllocatedAmount());
 
@@ -38,15 +38,15 @@ TEST_CASE("TestAllocator")
     REQUIRE(3 == al.getNumAllocatedFragments());
     REQUIRE(577 == al.getTotalAllocatedAmount());
 
-    al.deallocate(c);
+    al.deallocate(c, 21);
     REQUIRE(2 == al.getNumAllocatedFragments());
     REQUIRE(556 == al.getTotalAllocatedAmount());
 
-    al.deallocate(d);
+    al.deallocate(d, 100);
     REQUIRE(1 == al.getNumAllocatedFragments());
     REQUIRE(456 == al.getTotalAllocatedAmount());
 
-    al.deallocate(b);
+    al.deallocate(b, 456);
     REQUIRE(0 == al.getNumAllocatedFragments());
     REQUIRE(0 == al.getTotalAllocatedAmount());
 }

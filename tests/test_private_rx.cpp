@@ -6,6 +6,18 @@
 #include "catch.hpp"
 #include <cstring>
 
+namespace
+{
+auto bytes(const CanardPayload& payload)
+{
+    return static_cast<const std::uint8_t*>(payload.data);
+}
+auto bytes(const CanardMutablePayload& payload)
+{
+    return static_cast<std::uint8_t*>(payload.data);
+}
+}  // namespace
+
 TEST_CASE("rxTryParseFrame")
 {
     using exposed::RxFrameModel;
@@ -20,8 +32,7 @@ TEST_CASE("rxTryParseFrame")
         payload_storage = payload;
         CanardFrame frame{};
         frame.extended_can_id = extended_can_id;
-        frame.payload_size    = std::size(payload);
-        frame.payload         = payload_storage.data();
+        frame.payload         = {payload_storage.size(), payload_storage.data()};
         model                 = RxFrameModel{};
         return rxTryParseFrame(timestamp_usec, &frame, &model);
     };
@@ -38,14 +49,14 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(!model.start_of_transfer);
     REQUIRE(!model.end_of_transfer);
     REQUIRE(!model.toggle);
-    REQUIRE(model.payload_size == 7);
-    REQUIRE(model.payload[0] == 0);
-    REQUIRE(model.payload[1] == 1);
-    REQUIRE(model.payload[2] == 2);
-    REQUIRE(model.payload[3] == 3);
-    REQUIRE(model.payload[4] == 4);
-    REQUIRE(model.payload[5] == 5);
-    REQUIRE(model.payload[6] == 6);
+    REQUIRE(model.payload.size == 7);
+    REQUIRE(bytes(model.payload)[0] == 0);
+    REQUIRE(bytes(model.payload)[1] == 1);
+    REQUIRE(bytes(model.payload)[2] == 2);
+    REQUIRE(bytes(model.payload)[3] == 3);
+    REQUIRE(bytes(model.payload)[4] == 4);
+    REQUIRE(bytes(model.payload)[5] == 5);
+    REQUIRE(bytes(model.payload)[6] == 6);
     // SIMILAR BUT INVALID
     REQUIRE(!parse(543210U, 0U, {}));                     // NO TAIL BYTE
     REQUIRE(!parse(543210U, 0U, {0}));                    // MFT FRAMES REQUIRE PAYLOAD
@@ -63,14 +74,14 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(model.start_of_transfer);
     REQUIRE(!model.end_of_transfer);
     REQUIRE(model.toggle);
-    REQUIRE(model.payload_size == 7);
-    REQUIRE(model.payload[0] == 0);
-    REQUIRE(model.payload[1] == 1);
-    REQUIRE(model.payload[2] == 2);
-    REQUIRE(model.payload[3] == 3);
-    REQUIRE(model.payload[4] == 4);
-    REQUIRE(model.payload[5] == 5);
-    REQUIRE(model.payload[6] == 6);
+    REQUIRE(model.payload.size == 7);
+    REQUIRE(bytes(model.payload)[0] == 0);
+    REQUIRE(bytes(model.payload)[1] == 1);
+    REQUIRE(bytes(model.payload)[2] == 2);
+    REQUIRE(bytes(model.payload)[3] == 3);
+    REQUIRE(bytes(model.payload)[4] == 4);
+    REQUIRE(bytes(model.payload)[5] == 5);
+    REQUIRE(bytes(model.payload)[6] == 6);
     // SIMILAR BUT INVALID
     // NO TAIL BYTE
     REQUIRE(!parse(123456U, 0b001'00'0'11'0110011001100'0'0100111U, {}));
@@ -97,7 +108,7 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(model.start_of_transfer);
     REQUIRE(model.end_of_transfer);
     REQUIRE(model.toggle);
-    REQUIRE(model.payload_size == 0);
+    REQUIRE(model.payload.size == 0);
     // SAME BUT RESERVED 21 22 SET (and ignored)
     REQUIRE(parse(12345U, 0b010'01'0'11'0110011001101'0'0100111U, {0b111'00000U | 0U}));
     REQUIRE(model.port_id == 0b0110011001101U);
@@ -120,11 +131,11 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(!model.start_of_transfer);
     REQUIRE(model.end_of_transfer);
     REQUIRE(model.toggle);
-    REQUIRE(model.payload_size == 4);
-    REQUIRE(model.payload[0] == 0);
-    REQUIRE(model.payload[1] == 1);
-    REQUIRE(model.payload[2] == 2);
-    REQUIRE(model.payload[3] == 3);
+    REQUIRE(model.payload.size == 4);
+    REQUIRE(bytes(model.payload)[0] == 0);
+    REQUIRE(bytes(model.payload)[1] == 1);
+    REQUIRE(bytes(model.payload)[2] == 2);
+    REQUIRE(bytes(model.payload)[3] == 3);
     // SIMILAR BUT INVALID
     REQUIRE(!parse(999'999U, 0b011'11'0000110011'0011010'0100111U, {}));                                // NO TAIL BYTE
     REQUIRE(!parse(999'999U, 0b011'11'0000110011'0011010'0100111U, {0, 1, 2, 3, 0b110'00000U | 31U}));  // BAD TOGGLE
@@ -143,8 +154,8 @@ TEST_CASE("rxTryParseFrame")
     REQUIRE(!model.start_of_transfer);
     REQUIRE(model.end_of_transfer);
     REQUIRE(!model.toggle);
-    REQUIRE(model.payload_size == 1);
-    REQUIRE(model.payload[0] == 255);
+    REQUIRE(model.payload.size == 1);
+    REQUIRE(bytes(model.payload)[0] == 255);
     // SIMILAR BUT INVALID
     REQUIRE(!parse(888'888U, 0b100'10'0000110011'0100111'0011010U, {}));                        // NO TAIL BYTE
     REQUIRE(!parse(888'888U, 0b100'10'0000110011'0100111'0011010U, {255, 0b100'00000U | 1U}));  // BAD TOGGLE
@@ -170,70 +181,70 @@ TEST_CASE("rxSessionWritePayload")
     REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 5, "\x00\x01\x02\x03\x04"));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
-    REQUIRE(rxs.payload_size == 5);
-    REQUIRE(rxs.payload != nullptr);
-    REQUIRE(rxs.payload[0] == 0);
-    REQUIRE(rxs.payload[1] == 1);
-    REQUIRE(rxs.payload[2] == 2);
-    REQUIRE(rxs.payload[3] == 3);
-    REQUIRE(rxs.payload[4] == 4);
+    REQUIRE(rxs.payload.size == 5);
+    REQUIRE(rxs.payload.data != nullptr);
+    REQUIRE(bytes(rxs.payload)[0] == 0);
+    REQUIRE(bytes(rxs.payload)[1] == 1);
+    REQUIRE(bytes(rxs.payload)[2] == 2);
+    REQUIRE(bytes(rxs.payload)[3] == 3);
+    REQUIRE(bytes(rxs.payload)[4] == 4);
 
     // Appending the pre-allocated storage.
     REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 4, "\x05\x06\x07\x08"));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
-    REQUIRE(rxs.payload_size == 9);
-    REQUIRE(rxs.payload != nullptr);
-    REQUIRE(rxs.payload[0] == 0);
-    REQUIRE(rxs.payload[1] == 1);
-    REQUIRE(rxs.payload[2] == 2);
-    REQUIRE(rxs.payload[3] == 3);
-    REQUIRE(rxs.payload[4] == 4);
-    REQUIRE(rxs.payload[5] == 5);
-    REQUIRE(rxs.payload[6] == 6);
-    REQUIRE(rxs.payload[7] == 7);
-    REQUIRE(rxs.payload[8] == 8);
+    REQUIRE(rxs.payload.size == 9);
+    REQUIRE(rxs.payload.data != nullptr);
+    REQUIRE(bytes(rxs.payload)[0] == 0);
+    REQUIRE(bytes(rxs.payload)[1] == 1);
+    REQUIRE(bytes(rxs.payload)[2] == 2);
+    REQUIRE(bytes(rxs.payload)[3] == 3);
+    REQUIRE(bytes(rxs.payload)[4] == 4);
+    REQUIRE(bytes(rxs.payload)[5] == 5);
+    REQUIRE(bytes(rxs.payload)[6] == 6);
+    REQUIRE(bytes(rxs.payload)[7] == 7);
+    REQUIRE(bytes(rxs.payload)[8] == 8);
 
     // Implicit truncation -- too much payload, excess ignored.
     REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 3, "\x09\x0A\x0B"));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
-    REQUIRE(rxs.payload_size == 10);
-    REQUIRE(rxs.payload != nullptr);
-    REQUIRE(rxs.payload[0] == 0);
-    REQUIRE(rxs.payload[1] == 1);
-    REQUIRE(rxs.payload[2] == 2);
-    REQUIRE(rxs.payload[3] == 3);
-    REQUIRE(rxs.payload[4] == 4);
-    REQUIRE(rxs.payload[5] == 5);
-    REQUIRE(rxs.payload[6] == 6);
-    REQUIRE(rxs.payload[7] == 7);
-    REQUIRE(rxs.payload[8] == 8);
-    REQUIRE(rxs.payload[9] == 9);
+    REQUIRE(rxs.payload.size == 10);
+    REQUIRE(rxs.payload.data != nullptr);
+    REQUIRE(bytes(rxs.payload)[0] == 0);
+    REQUIRE(bytes(rxs.payload)[1] == 1);
+    REQUIRE(bytes(rxs.payload)[2] == 2);
+    REQUIRE(bytes(rxs.payload)[3] == 3);
+    REQUIRE(bytes(rxs.payload)[4] == 4);
+    REQUIRE(bytes(rxs.payload)[5] == 5);
+    REQUIRE(bytes(rxs.payload)[6] == 6);
+    REQUIRE(bytes(rxs.payload)[7] == 7);
+    REQUIRE(bytes(rxs.payload)[8] == 8);
+    REQUIRE(bytes(rxs.payload)[9] == 9);
 
     // Storage is already full, write ignored.
     REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 3, "\x0C\x0D\x0E"));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 10);
-    REQUIRE(rxs.payload_size == 10);
-    REQUIRE(rxs.payload != nullptr);
-    REQUIRE(rxs.payload[0] == 0);
-    REQUIRE(rxs.payload[1] == 1);
-    REQUIRE(rxs.payload[2] == 2);
-    REQUIRE(rxs.payload[3] == 3);
-    REQUIRE(rxs.payload[4] == 4);
-    REQUIRE(rxs.payload[5] == 5);
-    REQUIRE(rxs.payload[6] == 6);
-    REQUIRE(rxs.payload[7] == 7);
-    REQUIRE(rxs.payload[8] == 8);
-    REQUIRE(rxs.payload[9] == 9);
+    REQUIRE(rxs.payload.size == 10);
+    REQUIRE(rxs.payload.data != nullptr);
+    REQUIRE(bytes(rxs.payload)[0] == 0);
+    REQUIRE(bytes(rxs.payload)[1] == 1);
+    REQUIRE(bytes(rxs.payload)[2] == 2);
+    REQUIRE(bytes(rxs.payload)[3] == 3);
+    REQUIRE(bytes(rxs.payload)[4] == 4);
+    REQUIRE(bytes(rxs.payload)[5] == 5);
+    REQUIRE(bytes(rxs.payload)[6] == 6);
+    REQUIRE(bytes(rxs.payload)[7] == 7);
+    REQUIRE(bytes(rxs.payload)[8] == 8);
+    REQUIRE(bytes(rxs.payload)[9] == 9);
 
     // Restart frees the buffer. The transfer-ID will be incremented, too.
-    rxSessionRestart(&ins.getInstance(), &rxs);
+    rxSessionRestart(&ins.getInstance(), &rxs, 10);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFFU);
     REQUIRE(rxs.transfer_id == 1);
     REQUIRE(rxs.toggle);
@@ -242,11 +253,11 @@ TEST_CASE("rxSessionWritePayload")
     rxs.calculated_crc = 0x1234U;
     rxs.transfer_id    = 23;
     rxs.toggle         = false;
-    rxSessionRestart(&ins.getInstance(), &rxs);
+    rxSessionRestart(&ins.getInstance(), &rxs, 10);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFFU);
     REQUIRE(rxs.transfer_id == 24U);
     REQUIRE(rxs.toggle);
@@ -255,11 +266,11 @@ TEST_CASE("rxSessionWritePayload")
     rxs.calculated_crc = 0x1234U;
     rxs.transfer_id    = 31;
     rxs.toggle         = false;
-    rxSessionRestart(&ins.getInstance(), &rxs);
+    rxSessionRestart(&ins.getInstance(), &rxs, 10);
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFFU);
     REQUIRE(rxs.transfer_id == 0U);
     REQUIRE(rxs.toggle);
@@ -268,16 +279,16 @@ TEST_CASE("rxSessionWritePayload")
     REQUIRE(0 == rxSessionWritePayload(&ins.getInstance(), &rxs, 0, 3, "\x00\x01\x02"));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
 
     // Write with OOM.
     ins.getAllocator().setAllocationCeiling(5);
     REQUIRE(-CANARD_ERROR_OUT_OF_MEMORY == rxSessionWritePayload(&ins.getInstance(), &rxs, 10, 3, "\x00\x01\x02"));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 0);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 0);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
 }
 
 TEST_CASE("rxSessionUpdate")
@@ -302,8 +313,8 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer   = true;
     frame.end_of_transfer     = true;
     frame.toggle              = true;
-    frame.payload_size        = 3;
-    frame.payload             = reinterpret_cast<const uint8_t*>("\x01\x01\x01");
+    frame.payload.size        = 3;
+    frame.payload.data        = reinterpret_cast<const uint8_t*>("\x01\x01\x01");
 
     RxSession rxs;
     rxs.transfer_id           = 31;
@@ -327,8 +338,8 @@ TEST_CASE("rxSessionUpdate")
     // Accept one transfer.
     REQUIRE(1 == update(1, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 10'000'000);
-    REQUIRE(rxs.payload_size == 0);   // Handed over to the output transfer.
-    REQUIRE(rxs.payload == nullptr);  // Handed over to the output transfer.
+    REQUIRE(rxs.payload.size == 0);        // Handed over to the output transfer.
+    REQUIRE(rxs.payload.data == nullptr);  // Handed over to the output transfer.
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);  // Incremented.
     REQUIRE(rxs.toggle);
@@ -339,20 +350,21 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 11);
-    REQUIRE(transfer.payload_size == 3);
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x01\x01\x01", 3));
+    REQUIRE(transfer.payload.size == 3);
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 == std::memcmp(transfer.payload.data, "\x01\x01\x01", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // Valid next transfer, wrong transport.
     frame.timestamp_usec = 10'000'100;
     frame.transfer_id    = 12;
-    frame.payload        = reinterpret_cast<const uint8_t*>("\x02\x02\x02");
+    frame.payload.data   = reinterpret_cast<const uint8_t*>("\x02\x02\x02");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 10'000'000);
-    REQUIRE(rxs.payload_size == 0);   // Handed over to the output transfer.
-    REQUIRE(rxs.payload == nullptr);  // Handed over to the output transfer.
+    REQUIRE(rxs.payload.size == 0);        // Handed over to the output transfer.
+    REQUIRE(rxs.payload.data == nullptr);  // Handed over to the output transfer.
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);  // Incremented.
     REQUIRE(rxs.toggle);
@@ -360,11 +372,11 @@ TEST_CASE("rxSessionUpdate")
 
     // Correct transport.
     frame.timestamp_usec = 10'000'050;
-    frame.payload        = reinterpret_cast<const uint8_t*>("\x03\x03\x03");
+    frame.payload.data   = reinterpret_cast<const uint8_t*>("\x03\x03\x03");
     REQUIRE(1 == update(1, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 10'000'050);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
@@ -375,20 +387,21 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 12);
-    REQUIRE(transfer.payload_size == 3);
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x03\x03\x03", 3));
+    REQUIRE(transfer.payload.size == 3);
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 == std::memcmp(transfer.payload.data, "\x03\x03\x03", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // Same TID.
     frame.timestamp_usec = 10'000'200;
     frame.transfer_id    = 12;
-    frame.payload        = reinterpret_cast<const uint8_t*>("\x04\x04\x04");
+    frame.payload.data   = reinterpret_cast<const uint8_t*>("\x04\x04\x04");
     REQUIRE(0 == update(1, 1'000'200, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 10'000'050);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
@@ -397,11 +410,11 @@ TEST_CASE("rxSessionUpdate")
     // Restart due to TID timeout, same iface.
     frame.timestamp_usec = 15'000'000;
     frame.transfer_id    = 12;
-    frame.payload        = reinterpret_cast<const uint8_t*>("\x05\x05\x05");
+    frame.payload.data   = reinterpret_cast<const uint8_t*>("\x05\x05\x05");
     REQUIRE(1 == update(1, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 15'000'000);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
@@ -412,20 +425,21 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 12);
-    REQUIRE(transfer.payload_size == 3);
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x05\x05\x05", 3));
+    REQUIRE(transfer.payload.size == 3);
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 == std::memcmp(transfer.payload.data, "\x05\x05\x05", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // Restart due to TID timeout, switch iface.
     frame.timestamp_usec = 20'000'000;
     frame.transfer_id    = 11;
-    frame.payload        = reinterpret_cast<const uint8_t*>("\x05\x05\x05");
+    frame.payload.data   = reinterpret_cast<const uint8_t*>("\x05\x05\x05");
     REQUIRE(1 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'000);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 12U);
     REQUIRE(rxs.toggle);
@@ -436,22 +450,23 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 11);
-    REQUIRE(transfer.payload_size == 3);
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x05\x05\x05", 3));
+    REQUIRE(transfer.payload.size == 3);
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 == std::memcmp(transfer.payload.data, "\x05\x05\x05", 3));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // Multi-frame, first.
     frame.timestamp_usec  = 20'000'100;
     frame.transfer_id     = 13;
     frame.end_of_transfer = false;
-    frame.payload_size    = 7;
-    frame.payload         = reinterpret_cast<const uint8_t*>("\x06\x06\x06\x06\x06\x06\x06");
+    frame.payload.size    = 7;
+    frame.payload.data    = reinterpret_cast<const uint8_t*>("\x06\x06\x06\x06\x06\x06\x06");
     REQUIRE(0 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);
-    REQUIRE(rxs.payload_size == 7);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x06\x06\x06\x06\x06\x06\x06", 7));
+    REQUIRE(rxs.payload.size == 7);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x06\x06\x06\x06\x06\x06\x06", 7));
     REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x06\x06\x06"));
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(!rxs.toggle);
@@ -464,11 +479,11 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = false;
     frame.toggle            = false;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x07\x07\x07\x07\x07\x07\x07");
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x07\x07\x07\x07\x07\x07\x07");
     REQUIRE(0 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);
-    REQUIRE(rxs.payload_size == 14);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07", 14));
+    REQUIRE(rxs.payload.size == 14);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07", 14));
     REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07"));
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
@@ -481,11 +496,11 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = true;
     frame.toggle            = false;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x08\x08\x08\x08");
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x08\x08\x08\x08");
     REQUIRE(0 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);
-    REQUIRE(rxs.payload_size == 14);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07", 14));
+    REQUIRE(rxs.payload.size == 14);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07", 14));
     REQUIRE(rxs.calculated_crc == crc("\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07"));
     REQUIRE(rxs.transfer_id == 13U);
     REQUIRE(rxs.toggle);
@@ -498,12 +513,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = true;
     frame.toggle            = true;
-    frame.payload_size      = 6;  // The payload is IMPLICITLY TRUNCATED, and the CRC IS STILL VALIDATED.
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x09\x09\x09\x09\r\x93");
+    frame.payload.size      = 6;  // The payload is IMPLICITLY TRUNCATED, and the CRC IS STILL VALIDATED.
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x09\x09\x09\x09\r\x93");
     REQUIRE(1 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);  // First frame.
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 14U);
     REQUIRE(rxs.toggle);
@@ -514,11 +529,13 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 13);
-    REQUIRE(transfer.payload_size == 16);
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07\x09\x09", 16));
+    REQUIRE(transfer.payload.size == 16);
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 ==
+            std::memcmp(transfer.payload.data, "\x06\x06\x06\x06\x06\x06\x06\x07\x07\x07\x07\x07\x07\x07\x09\x09", 16));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // TID timeout does not occur until SOT; see https://github.com/OpenCyphal/libcanard/issues/212.
     frame.timestamp_usec    = 30'000'000;
@@ -526,8 +543,8 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
-    frame.payload_size      = 7;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A\x0A\x0A\x0A\x0A");
+    frame.payload.size      = 7;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A\x0A\x0A\x0A\x0A");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'100);  // No change.
     REQUIRE(rxs.transfer_id == 14U);                     // No change.
@@ -542,12 +559,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = true;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
-    frame.payload_size      = 7;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A\x0A\x0A\x0A\x0A");
+    frame.payload.size      = 7;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0A\x0A\x0A\x0A\x0A\x0A\x0A");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 30'000'000);  // Updated from the frame.
-    REQUIRE(rxs.payload_size == 7);                      // From the frame.
-    REQUIRE(rxs.payload != nullptr);
+    REQUIRE(rxs.payload.size == 7);                      // From the frame.
+    REQUIRE(rxs.payload.data != nullptr);
     REQUIRE(rxs.calculated_crc == 0x23C7);
     REQUIRE(rxs.transfer_id == 12U);          // Updated from the frame.
     REQUIRE(!rxs.toggle);                     // In anticipation of the next frame.
@@ -561,12 +578,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = true;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
-    frame.payload_size      = 7;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0B\x0B\x0B\x0B\x0B\x0B\x0B");
+    frame.payload.size      = 7;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0B\x0B\x0B\x0B\x0B\x0B\x0B");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'200);
-    REQUIRE(rxs.payload_size == 7);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B", 7));
+    REQUIRE(rxs.payload.size == 7);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B", 7));
     REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B\x0B\x0B\x0B\x0B"));
     REQUIRE(rxs.transfer_id == 10U);
     REQUIRE(!rxs.toggle);
@@ -580,12 +597,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = true;
     frame.end_of_transfer   = true;
     frame.toggle            = true;
-    frame.payload_size      = 7;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0C\x0C\x0C\x0C\x0C\x0C\x0C");
+    frame.payload.size      = 7;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0C\x0C\x0C\x0C\x0C\x0C\x0C");
     REQUIRE(0 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'200);
-    REQUIRE(rxs.payload_size == 7);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B", 7));
+    REQUIRE(rxs.payload.size == 7);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B", 7));
     REQUIRE(rxs.calculated_crc == crc("\x0B\x0B\x0B\x0B\x0B\x0B\x0B"));
     REQUIRE(rxs.transfer_id == 10U);
     REQUIRE(!rxs.toggle);
@@ -599,12 +616,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = true;
     frame.toggle            = false;
-    frame.payload_size      = 5;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0D\x0D\x0DWd");  // CRC at the end.
+    frame.payload.size      = 5;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0D\x0D\x0DWd");  // CRC at the end.
     REQUIRE(1 == update(2, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 20'000'200);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 11U);
     REQUIRE(rxs.toggle);
@@ -615,11 +632,12 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 10);
-    REQUIRE(transfer.payload_size == 10);
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0D\x0D\x0D", 10));
+    REQUIRE(transfer.payload.size == 10);
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 == std::memcmp(transfer.payload.data, "\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0D\x0D\x0D", 10));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // CRC SPLIT -- first frame.
     frame.timestamp_usec    = 30'000'000;
@@ -627,12 +645,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = true;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
-    frame.payload_size      = 8;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7");
+    frame.payload.size      = 8;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7");
     REQUIRE(0 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 30'000'000);
-    REQUIRE(rxs.payload_size == 8);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7", 8));
+    REQUIRE(rxs.payload.size == 8);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7", 8));
     REQUIRE(rxs.calculated_crc == crc("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7"));
     REQUIRE(rxs.transfer_id == 0);
     REQUIRE(!rxs.toggle);
@@ -646,12 +664,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = true;
     frame.toggle            = false;
-    frame.payload_size      = 1;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\xD7");
+    frame.payload.size      = 1;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\xD7");
     REQUIRE(1 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 30'000'000);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 1U);
     REQUIRE(rxs.toggle);
@@ -662,11 +680,12 @@ TEST_CASE("rxSessionUpdate")
     REQUIRE(transfer.metadata.port_id == 2'222);
     REQUIRE(transfer.metadata.remote_node_id == 55);
     REQUIRE(transfer.metadata.transfer_id == 0);
-    REQUIRE(transfer.payload_size == 7);  // ONE CRC BYTE BACKTRACKED!
-    REQUIRE(0 == std::memcmp(transfer.payload, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E", 7));
+    REQUIRE(transfer.payload.size == 7);  // ONE CRC BYTE BACKTRACKED!
+    REQUIRE(transfer.payload.allocated_size == 16);
+    REQUIRE(0 == std::memcmp(transfer.payload.data, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E", 7));
     REQUIRE(ins.getAllocator().getNumAllocatedFragments() == 1);
     REQUIRE(ins.getAllocator().getTotalAllocatedAmount() == 16);
-    ins.getAllocator().deallocate(transfer.payload);
+    ins.getAllocator().deallocate(transfer.payload.data, transfer.payload.allocated_size);
 
     // BAD CRC -- first frame.
     frame.timestamp_usec    = 30'001'000;
@@ -674,12 +693,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = true;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
-    frame.payload_size      = 8;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7");
+    frame.payload.size      = 8;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7");
     REQUIRE(0 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 30'001'000);
-    REQUIRE(rxs.payload_size == 8);
-    REQUIRE(0 == std::memcmp(rxs.payload, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7", 8));
+    REQUIRE(rxs.payload.size == 8);
+    REQUIRE(0 == std::memcmp(rxs.payload.data, "\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7", 8));
     REQUIRE(rxs.calculated_crc == crc("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7"));
     REQUIRE(rxs.transfer_id == 31U);
     REQUIRE(!rxs.toggle);
@@ -693,12 +712,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = false;
     frame.end_of_transfer   = true;
     frame.toggle            = false;
-    frame.payload_size      = 1;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\xD8");
+    frame.payload.size      = 1;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\xD8");
     REQUIRE(0 == update(0, 1'000'000, 16));
     REQUIRE(rxs.transfer_timestamp_usec == 30'001'000);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 0U);
     REQUIRE(rxs.toggle);
@@ -712,12 +731,12 @@ TEST_CASE("rxSessionUpdate")
     frame.start_of_transfer = true;
     frame.end_of_transfer   = false;
     frame.toggle            = true;
-    frame.payload_size      = 8;
-    frame.payload           = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7");
+    frame.payload.size      = 8;
+    frame.payload.data      = reinterpret_cast<const uint8_t*>("\x0E\x0E\x0E\x0E\x0E\x0E\x0E\xF7");
     REQUIRE((-CANARD_ERROR_OUT_OF_MEMORY) == update(2, 1'000'000, 17));  // Exceeds the heap quota.
     REQUIRE(rxs.transfer_timestamp_usec == 40'000'000);
-    REQUIRE(rxs.payload_size == 0);
-    REQUIRE(rxs.payload == nullptr);
+    REQUIRE(rxs.payload.size == 0);
+    REQUIRE(rxs.payload.data == nullptr);
     REQUIRE(rxs.calculated_crc == 0xFFFF);
     REQUIRE(rxs.transfer_id == 31U);  // Reset.
     REQUIRE(rxs.toggle);

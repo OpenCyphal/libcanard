@@ -203,6 +203,12 @@ auto findBrokenBalanceFactor(const Node<T>* const n) -> const Cavl*  // NOLINT r
     }
     return nullptr;
 }
+
+auto getRandomByte()
+{
+    return static_cast<std::uint8_t>((0xFFLL * std::rand()) / RAND_MAX);
+}
+
 }  // namespace
 
 TEST_CASE("CheckAscension")
@@ -1265,11 +1271,6 @@ TEST_CASE("MutationManual")
     REQUIRE(nullptr == findBrokenBalanceFactor(root));
     REQUIRE(nullptr == findBrokenAncestry(root));
     REQUIRE(21 == checkAscension(root));
-}
-
-auto getRandomByte()
-{
-    return static_cast<std::uint8_t>((0xFFLL * std::rand()) / RAND_MAX);
 }
 
 TEST_CASE("MutationRandomized")

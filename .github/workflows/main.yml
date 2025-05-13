@@ -1,7 +1,7 @@
-name: Main Workflow
+name: Verification & Static Analysis
 on: [push, pull_request]
 env:
-  LLVM_VERSION: 15
+  LLVM_VERSION: 19
 jobs:
   debug:
     if: github.event_name == 'push'
@@ -22,7 +22,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
-          sudo apt update -y && sudo apt upgrade -y
+          sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
           clang-tidy --version
@@ -37,12 +37,13 @@ jobs:
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{github.job}}
+          name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
           path: ${{github.workspace}}/**/*
-          retention-days: 2
+          retention-days: 7
+          include-hidden-files: true
 
   optimizations:
     if: github.event_name == 'push'
@@ -61,8 +62,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          sudo apt update -y && sudo apt upgrade -y
-          sudo apt install gcc-multilib g++-multilib
+          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get install gcc-multilib g++-multilib
       - run: >
           cmake
           -B ${{ github.workspace }}/build
@@ -75,12 +76,13 @@ jobs:
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{github.job}}
+          name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
           path: ${{github.workspace}}/**/*
-          retention-days: 2
+          retention-days: 7
+          include-hidden-files: true
 
   avr:
     if: github.event_name == 'push'
@@ -91,8 +93,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          sudo apt update -y && sudo apt upgrade -y
-          sudo apt install gcc-avr avr-libc
+          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get install gcc-avr avr-libc
           avr-gcc --version
       - run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
       - run: avr-gcc libcanard/*.c -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
@@ -107,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: |
-          sudo apt update -y && sudo apt upgrade -y
+          sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
       - run: arm-none-eabi-gcc libcanard/*.c -c -std=c99 ${{ env.flags }}
       - run: arm-none-eabi-gcc libcanard/*.c -c -std=c11 ${{ env.flags }}
@@ -117,7 +119,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: DoozyX/clang-format-lint-action@v0.17
+      - uses: DoozyX/clang-format-lint-action@v0.20
         with:
           source: './libcanard ./tests'
           exclude: './tests/catch'
@@ -144,8 +146,8 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        sudo apt update -y && sudo apt upgrade -y
-        sudo apt install -y gcc-multilib g++-multilib
+        sudo apt-get update -y && sudo apt-get upgrade -y
+        sudo apt-get install -y gcc-multilib g++-multilib
 
     - name: Set up JDK
       uses: actions/setup-java@v4
@@ -195,12 +197,13 @@ jobs:
         --define sonar.sources=libcanard
         --define sonar.exclusions=libcanard/_canard_cavl.h
         --define sonar.cfamily.gcov.reportsPath=.
-        --define sonar.cfamily.build-wrapper-output="${{ env.BUILD_WRAPPER_OUT_DIR }}"
+        --define sonar.cfamily.compile-commands="${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: ${{github.job}}
+        name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
         path: ${{github.workspace}}/**/*
-        retention-days: 2
+        retention-days: 7
+        include-hidden-files: true
