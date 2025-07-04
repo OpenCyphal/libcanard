@@ -87,7 +87,7 @@ static void memFree(void* const user_reference, const size_t size, void* const p
 Init a library instance:
 
 ```c
-const struct CanardMemoryResource memory{nullptr, &memAllocate, &memFree};
+const struct CanardMemoryResource memory = {NULL, memFree, memAllocate};
 struct CanardInstance canard = canardInit(memory);
 canard.node_id = 42;                        // Defaults to anonymous; can be set up later at any point.
 ```
@@ -95,7 +95,7 @@ canard.node_id = 42;                        // Defaults to anonymous; can be set
 In order to be able to send transfers over the network, we will need one transmission queue per redundant CAN interface:
 
 ```c
-const struct CanardMemoryResource tx_memory{nullptr, memAllocate, memFree};
+const struct CanardMemoryResource tx_memory = {NULL, memFree, memAllocate};
 struct CanardTxQueue queue = canardTxInit(
     100,                // Limit the size of the queue at 100 frames.
     CANARD_MTU_CAN_FD,  // Set MTU = 64 bytes. There is also CANARD_MTU_CAN_CLASSIC.
