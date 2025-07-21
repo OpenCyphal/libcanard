@@ -2,7 +2,7 @@
 // Copyright (c) 2016-2020 OpenCyphal Development Team.
 // These tests have been adapted from the Cavl test suite that you can find at https://github.com/pavel-kirienko/cavl
 
-#include <_canard_cavl.h>
+#include <cavl2.h>
 #include "catch.hpp"
 #include <algorithm>
 #include <array>
