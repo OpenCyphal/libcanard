@@ -1244,8 +1244,8 @@ struct CanardTxQueueItem* canardTxPop(struct CanardTxQueue* const que, struct Ca
         //     A pointer to a structure object, suitably converted, points to its initial member, and vice versa.
         // Note that the highest-priority frame is always a leaf node in the AVL tree, which means that it is very
         // cheap to remove.
-        cavlRemove(&que->priority_root, &item->priority_base);
-        cavlRemove(&que->deadline_root, &item->deadline_base);
+        cavl2_remove(&que->priority_root, &item->priority_base);
+        cavl2_remove(&que->deadline_root, &item->deadline_base);
         que->size--;
     }
     return item;
@@ -1432,7 +1432,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
         if (sub_node != NULL)
         {
             struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
-            cavlRemove(&ins->rx_subscriptions[tk], sub_node);
+            cavl2_remove(&ins->rx_subscriptions[tk], sub_node);
             CANARD_ASSERT(sub->port_id == port_id);
             out = 1;
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
