@@ -630,7 +630,7 @@ CANARD_PRIVATE size_t txFlushExpiredTransfers(struct CanardTxQueue* const       
     CANARD_ASSERT(now_usec > 0);
 
     size_t                    count   = 0;
-    struct CanardTreeNode*    tx_node = cavlFindExtremum(que->deadline_root, false);
+    struct CanardTreeNode*    tx_node = cavl2_extremum(que->deadline_root, false);
     struct CanardTxQueueItem* tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
     while (NULL != tx_item)
     {
@@ -640,7 +640,7 @@ CANARD_PRIVATE size_t txFlushExpiredTransfers(struct CanardTxQueue* const       
         }
         count += txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
 
-        tx_node = cavlFindExtremum(que->deadline_root, false);
+        tx_node = cavl2_extremum(que->deadline_root, false);
         tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
     }
     return count;
@@ -1230,7 +1230,7 @@ struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
     struct CanardTxQueueItem* out = NULL;
     if (que != NULL)
     {
-        struct CanardTreeNode* const priority_node = cavlFindExtremum(que->priority_root, false);
+        struct CanardTreeNode* const priority_node = cavl2_extremum(que->priority_root, false);
         out = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
     }
     return out;
