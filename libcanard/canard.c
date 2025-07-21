@@ -1432,7 +1432,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
         if (sub_node != NULL)
         {
             struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
-            cavlRemove(&ins->rx_subscriptions[tk], sub_node);
+            cavl2_remove(&ins->rx_subscriptions[tk], sub_node);
             CANARD_ASSERT(sub->port_id == port_id);
             out = 1;
             for (size_t i = 0; i < RX_SESSIONS_PER_SUBSCRIPTION; i++)
