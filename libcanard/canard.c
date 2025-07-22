@@ -402,13 +402,13 @@ CANARD_PRIVATE int32_t txPushSingleFrame(struct CanardTxQueue* const        que,
 
         // Insert the newly created TX item into the priority queue.
         const struct cavl2_t* const priority_queue_res =
-            cavlSearch(&que->priority_root, &tqi->priority_base, &txAVLPriorityPredicate, &avlTrivialFactory);
+            cavl2_find_or_insert(&que->priority_root, &tqi->priority_base, &txAVLPriorityPredicate, &avlTrivialFactory);
         (void) priority_queue_res;
         CANARD_ASSERT(priority_queue_res == &tqi->priority_base);
 
         // Insert the newly created TX item into the deadline queue.
         const struct cavl2_t* const deadline_queue_res =
-            cavlSearch(&que->deadline_root, &tqi->deadline_base, &txAVLDeadlinePredicate, &avlTrivialFactory);
+            cavl2_find_or_insert(&que->deadline_root, &tqi->deadline_base, &txAVLDeadlinePredicate, &avlTrivialFactory);
         (void) deadline_queue_res;
         CANARD_ASSERT(deadline_queue_res == &tqi->deadline_base);
 
@@ -552,14 +552,18 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
             struct CanardTxQueueItem* next = sq.head;
             do
             {
-                const struct cavl2_t* const priority_queue_res =
-                    cavlSearch(&que->priority_root, &next->priority_base, &txAVLPriorityPredicate, &avlTrivialFactory);
+                const struct cavl2_t* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
+                                                                                      &next->priority_base,
+                                                                                      &txAVLPriorityPredicate,
+                                                                                      &avlTrivialFactory);
                 (void) priority_queue_res;
                 CANARD_ASSERT(priority_queue_res == &next->priority_base);
                 CANARD_ASSERT(que->priority_root != NULL);
 
-                const struct cavl2_t* const deadline_queue_res =
-                    cavlSearch(&que->deadline_root, &next->deadline_base, &txAVLDeadlinePredicate, &avlTrivialFactory);
+                const struct cavl2_t* const deadline_queue_res = cavl2_find_or_insert(&que->deadline_root,
+                                                                                      &next->deadline_base,
+                                                                                      &txAVLDeadlinePredicate,
+                                                                                      &avlTrivialFactory);
                 (void) deadline_queue_res;
                 CANARD_ASSERT(deadline_queue_res == &next->deadline_base);
                 CANARD_ASSERT(que->deadline_root != NULL);
@@ -1341,10 +1345,11 @@ int8_t canardRxAccept(struct CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                struct cavl2_t* const sub_node = cavlSearch(&ins->rx_subscriptions[(size_t) model.transfer_kind],
-                                                            &model.port_id,
-                                                            &rxSubscriptionPredicateOnPortID,
-                                                            NULL);
+                struct cavl2_t* const sub_node =
+                    cavl2_find_or_insert(&ins->rx_subscriptions[(size_t) model.transfer_kind],
+                                         &model.port_id,
+                                         &rxSubscriptionPredicateOnPortID,
+                                         NULL);
                 struct CanardRxSubscription* const sub =
                     MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
                 if (out_subscription != NULL)
@@ -1402,10 +1407,10 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
                 // We could accept an extra argument that would instruct us to pre-allocate sessions here?
                 out_subscription->sessions[i] = NULL;
             }
-            const struct cavl2_t* const res = cavlSearch(&ins->rx_subscriptions[tk],
-                                                         &out_subscription->base,
-                                                         &rxSubscriptionPredicateOnStruct,
-                                                         &avlTrivialFactory);
+            const struct cavl2_t* const res = cavl2_find_or_insert(&ins->rx_subscriptions[tk],
+                                                                   &out_subscription->base,
+                                                                   &rxSubscriptionPredicateOnStruct,
+                                                                   &avlTrivialFactory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
             out = (out > 0) ? 0 : 1;
@@ -1424,7 +1429,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct cavl2_t* const sub_node = cavlSearch(  //
+        struct cavl2_t* const sub_node = cavl2_find_or_insert(  //
             &ins->rx_subscriptions[tk],
             &port_id_mutable,
             &rxSubscriptionPredicateOnPortID,
@@ -1467,7 +1472,7 @@ int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct cavl2_t* const sub_node = cavlSearch(  //
+        struct cavl2_t* const sub_node = cavl2_find_or_insert(  //
             &ins->rx_subscriptions[tk],
             &port_id_mutable,
             &rxSubscriptionPredicateOnPortID,
