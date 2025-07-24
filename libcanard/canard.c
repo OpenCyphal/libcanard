@@ -77,9 +77,9 @@
     ((type*) (((ptr) == NULL) ? NULL : (void*) (((char*) (ptr)) - offsetof(type, member))))
 
 /// Used for inserting new items into AVL trees.
-CANARD_PRIVATE struct cavl2_t* avlTrivialFactory(void* const user_reference)
+CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
 {
-    return (struct cavl2_t*) user_reference;
+    return (struct CanardTreeNode*) user_reference;
 }
 
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
@@ -340,9 +340,9 @@ CANARD_PRIVATE struct CanardTxQueueItem* txAllocateQueueItem(struct CanardTxQueu
 /// Frames with identical CAN ID that are added later always compare greater than their counterparts with same CAN ID.
 /// This ensures that CAN frames with the same CAN ID are transmitted in the FIFO order.
 /// Frames that should be transmitted earlier compare smaller (i.e., put on the left side of the tree).
-CANARD_PRIVATE int8_t txAVLPriorityPredicate(    //
-    void* const                 user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-    const struct cavl2_t* const node)
+CANARD_PRIVATE int8_t txAVLPriorityPredicate(           //
+    void* const                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+    const struct CanardTreeNode* const node)
 {
     typedef struct CanardTxQueueItem TxItem;
 
@@ -356,9 +356,9 @@ CANARD_PRIVATE int8_t txAVLPriorityPredicate(    //
 /// that are added later always compare greater than their counterparts with the same deadline.
 /// This ensures that CAN frames with the same deadline are, when timed out, dropped in the FIFO order.
 /// Frames that should be dropped earlier compare smaller (i.e., put on the left side of the tree).
-CANARD_PRIVATE int8_t txAVLDeadlinePredicate(    //
-    void* const                 user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-    const struct cavl2_t* const node)
+CANARD_PRIVATE int8_t txAVLDeadlinePredicate(           //
+    void* const                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+    const struct CanardTreeNode* const node)
 {
     typedef struct CanardTxQueueItem TxItem;
 
@@ -401,20 +401,20 @@ CANARD_PRIVATE int32_t txPushSingleFrame(struct CanardTxQueue* const        que,
         *(frame_bytes + (frame_payload_size - 1U)) = txMakeTailByte(true, true, true, transfer_id);
 
         // Insert the newly created TX item into the priority queue.
-        const struct cavl2_t* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
-                                                                              &tqi->priority_base,
-                                                                              &txAVLPriorityPredicate,
-                                                                              &tqi->priority_base,
-                                                                              &avlTrivialFactory);
+        const struct CanardTreeNode* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
+                                                                                     &tqi->priority_base,
+                                                                                     &txAVLPriorityPredicate,
+                                                                                     &tqi->priority_base,
+                                                                                     &avlTrivialFactory);
         (void) priority_queue_res;
         CANARD_ASSERT(priority_queue_res == &tqi->priority_base);
 
         // Insert the newly created TX item into the deadline queue.
-        const struct cavl2_t* const deadline_queue_res = cavl2_find_or_insert(&que->priority_root,
-                                                                              &tqi->priority_base,
-                                                                              &txAVLPriorityPredicate,
-                                                                              &tqi->priority_base,
-                                                                              &avlTrivialFactory);
+        const struct CanardTreeNode* const deadline_queue_res = cavl2_find_or_insert(&que->priority_root,
+                                                                                     &tqi->priority_base,
+                                                                                     &txAVLPriorityPredicate,
+                                                                                     &tqi->priority_base,
+                                                                                     &avlTrivialFactory);
         (&que->priority_root, &tqi->priority_base, &txAVLPriorityPredicate, &tqi->priority_base, &avlTrivialFactory);
         (void) deadline_queue_res;
         CANARD_ASSERT(deadline_queue_res == &tqi->deadline_base);
@@ -559,20 +559,20 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
             struct CanardTxQueueItem* next = sq.head;
             do
             {
-                const struct cavl2_t* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
-                                                                                      &next->priority_base,
-                                                                                      &txAVLPriorityPredicate,
-                                                                                      &next->priority_base,
-                                                                                      &avlTrivialFactory);
+                const struct CanardTreeNode* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
+                                                                                             &next->priority_base,
+                                                                                             &txAVLPriorityPredicate,
+                                                                                             &next->priority_base,
+                                                                                             &avlTrivialFactory);
                 (void) priority_queue_res;
                 CANARD_ASSERT(priority_queue_res == &next->priority_base);
                 CANARD_ASSERT(que->priority_root != NULL);
 
-                const struct cavl2_t* const deadline_queue_res = cavl2_find_or_insert(&que->deadline_root,
-                                                                                      &next->deadline_base,
-                                                                                      &txAVLDeadlinePredicate,
-                                                                                      next->priority_base,
-                                                                                      &avlTrivialFactory);
+                const struct CanardTreeNode* const deadline_queue_res = cavl2_find_or_insert(&que->deadline_root,
+                                                                                             &next->deadline_base,
+                                                                                             &txAVLDeadlinePredicate,
+                                                                                             next->priority_base,
+                                                                                             &avlTrivialFactory);
                 (void) deadline_queue_res;
                 CANARD_ASSERT(deadline_queue_res == &next->deadline_base);
                 CANARD_ASSERT(que->deadline_root != NULL);
@@ -643,7 +643,7 @@ CANARD_PRIVATE size_t txFlushExpiredTransfers(struct CanardTxQueue* const       
     CANARD_ASSERT(now_usec > 0);
 
     size_t                    count   = 0;
-    struct cavl2_t*           tx_node = cavl2_extremum(que->deadline_root, false);
+    struct CanardTreeNode*    tx_node = cavl2_extremum(que->deadline_root, false);
     struct CanardTxQueueItem* tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
     while (NULL != tx_item)
     {
@@ -1115,7 +1115,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(struct CanardInstance* const       ins,
 
 CANARD_PRIVATE int8_t
 rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-                                const struct cavl2_t* const node)
+                                const struct CanardTreeNode* const node)
 {
     CANARD_ASSERT((user_reference != NULL) && (node != NULL));
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
@@ -1127,7 +1127,7 @@ rxSubscriptionPredicateOnPortID(void* const user_reference,  // NOSONAR Cavl API
 
 CANARD_PRIVATE int8_t
 rxSubscriptionPredicateOnStruct(void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
-                                const struct cavl2_t* const node)
+                                const struct CanardTreeNode* const node)
 {
     return rxSubscriptionPredicateOnPortID(  //
         &MUTABLE_CONTAINER_OF(struct CanardRxSubscription, user_reference, base)->port_id,
@@ -1243,7 +1243,7 @@ struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
     struct CanardTxQueueItem* out = NULL;
     if (que != NULL)
     {
-        struct cavl2_t* const priority_node = cavl2_extremum(que->priority_root, false);
+        struct CanardTreeNode* const priority_node = cavl2_extremum(que->priority_root, false);
         out = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
     }
     return out;
@@ -1354,7 +1354,7 @@ int8_t canardRxAccept(struct CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                struct cavl2_t* const sub_node =
+                struct CanardTreeNode* const sub_node =
                     cavl2_find_or_insert(&ins->rx_subscriptions[(size_t) model.transfer_kind],
                                          &model.port_id,
                                          &rxSubscriptionPredicateOnPortID,
@@ -1416,10 +1416,10 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
                 // We could accept an extra argument that would instruct us to pre-allocate sessions here?
                 out_subscription->sessions[i] = NULL;
             }
-            const struct cavl2_t* const res = cavl2_find_or_insert(&ins->rx_subscriptions[tk],
-                                                                   &out_subscription->base,
-                                                                   &rxSubscriptionPredicateOnStruct,
-                                                                   &avlTrivialFactory);
+            const struct CanardTreeNode* const res = cavl2_find_or_insert(&ins->rx_subscriptions[tk],
+                                                                          &out_subscription->base,
+                                                                          &rxSubscriptionPredicateOnStruct,
+                                                                          &avlTrivialFactory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
             out = (out > 0) ? 0 : 1;
@@ -1438,7 +1438,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct cavl2_t* const sub_node = cavl2_find_or_insert(  //
+        struct CanardTreeNode* const sub_node = cavl2_find_or_insert(  //
             &ins->rx_subscriptions[tk],
             &port_id_mutable,
             &rxSubscriptionPredicateOnPortID,
@@ -1481,7 +1481,7 @@ int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct cavl2_t* const sub_node = cavl2_find_or_insert(  //
+        struct CanardTreeNode* const sub_node = cavl2_find_or_insert(  //
             &ins->rx_subscriptions[tk],
             &port_id_mutable,
             &rxSubscriptionPredicateOnPortID,
