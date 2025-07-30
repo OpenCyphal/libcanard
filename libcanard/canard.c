@@ -1419,7 +1419,7 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
             const struct CanardTreeNode* const res = cavl2_find_or_insert(&ins->rx_subscriptions[tk],
                                                                           &out_subscription->base,
                                                                           &rxSubscriptionPredicateOnStruct,
-                                                                          (struct CanardTreeNode*) &out_subscription,
+                                                                          out_subscription,
                                                                           avlTrivialFactory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
