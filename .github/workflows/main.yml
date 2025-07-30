@@ -96,10 +96,10 @@ jobs:
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install gcc-avr avr-libc
           avr-gcc --version
-      - run: avr-gcc libcanard/*.c -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
   arm:
     if: github.event_name == 'push'
@@ -111,8 +111,8 @@ jobs:
       - run: |
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
-      - run: arm-none-eabi-gcc libcanard/*.c -c -std=c99 ${{ env.flags }}
-      - run: arm-none-eabi-gcc libcanard/*.c -c -std=c11 ${{ env.flags }}
+      - run: arm-none-eabi-gcc libcanard/*.c -isystem libcanard -c -std=c99 ${{ env.flags }}
+      - run: arm-none-eabi-gcc libcanard/*.c -isystem libcanard -c -std=c11 ${{ env.flags }}
 
   style_check:
     if: github.event_name == 'push'
