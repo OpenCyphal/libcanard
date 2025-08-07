@@ -85,7 +85,7 @@ TEST_CASE("RoundtripSimple")
 
             // Generate random payload. The size may be larger than expected to test the implicit truncation rule.
             const auto payload_size = getRandomNatural<std::size_t>(st.extent + 1024U);
-            PayloadPtr payload{new std::uint8_t[payload_size]};
+            PayloadPtr payload{new std::uint8_t[payload_size]};  // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
             std::generate_n(payload.get(), payload_size, [&]() { return getRandomNatural<std::uint8_t>(256U); });
 
             // Generate the transfer.
