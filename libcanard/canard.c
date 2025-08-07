@@ -404,16 +404,16 @@ CANARD_PRIVATE int32_t txPushSingleFrame(struct CanardTxQueue* const        que,
         const struct CanardTreeNode* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
                                                                                      &tqi->priority_base,
                                                                                      &txAVLPriorityPredicate,
-                                                                                     tqi,
+                                                                                     &tqi->priority_base,
                                                                                      &avlTrivialFactory);
         (void) priority_queue_res;
         CANARD_ASSERT(priority_queue_res == &tqi->priority_base);
 
         // Insert the newly created TX item into the deadline queue.
-        const struct CanardTreeNode* const deadline_queue_res = cavl2_find_or_insert(&que->priority_root,
+        const struct CanardTreeNode* const deadline_queue_res = cavl2_find_or_insert(&que->deadline_root,
                                                                                      &tqi->deadline_base,
                                                                                      &txAVLDeadlinePredicate,
-                                                                                     tqi,
+                                                                                     &tqi->deadline_base,
                                                                                      &avlTrivialFactory);
         (void) deadline_queue_res;
         CANARD_ASSERT(deadline_queue_res == &tqi->deadline_base);
@@ -561,7 +561,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
                 const struct CanardTreeNode* const priority_queue_res = cavl2_find_or_insert(&que->priority_root,
                                                                                              &next->priority_base,
                                                                                              &txAVLPriorityPredicate,
-                                                                                             next,
+                                                                                             &next->priority_base,
                                                                                              &avlTrivialFactory);
                 (void) priority_queue_res;
                 CANARD_ASSERT(priority_queue_res == &next->priority_base);
@@ -570,7 +570,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
                 const struct CanardTreeNode* const deadline_queue_res = cavl2_find_or_insert(&que->deadline_root,
                                                                                              &next->deadline_base,
                                                                                              &txAVLDeadlinePredicate,
-                                                                                             next,
+                                                                                             &next->deadline_base,
                                                                                              &avlTrivialFactory);
                 (void) deadline_queue_res;
                 CANARD_ASSERT(deadline_queue_res == &next->deadline_base);
