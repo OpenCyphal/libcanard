@@ -72,11 +72,6 @@
 
 #define INITIAL_TOGGLE_STATE true
 
-#define CONTAINER_OF(type, ptr, member) \
-    ((const type*) (((ptr) == NULL) ? NULL : (const void*) (((const char*) (ptr)) - offsetof(type, member))))
-#define MUTABLE_CONTAINER_OF(type, ptr, member) \
-    ((type*) (((ptr) == NULL) ? NULL : (void*) (((char*) (ptr)) - offsetof(type, member))))
-
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
 
 typedef uint16_t TransferCRC;
@@ -341,8 +336,8 @@ CANARD_PRIVATE ptrdiff_t txAVLPriorityPredicate(  //
 {
     typedef struct CanardTxQueueItem TxItem;
 
-    const TxItem* const target = CONTAINER_OF(TxItem, user_reference, priority_base);
-    const TxItem* const other  = CONTAINER_OF(TxItem, node, priority_base);
+    const TxItem* const target = CAVL2_TO_OWNER(user_reference, TxItem, priority_base);
+    const TxItem* const other  = CAVL2_TO_OWNER(node, TxItem, priority_base);
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->frame.extended_can_id >= other->frame.extended_can_id) ? +1 : -1;
 }
@@ -357,8 +352,8 @@ CANARD_PRIVATE ptrdiff_t txAVLDeadlinePredicate(        //
 {
     typedef struct CanardTxQueueItem TxItem;
 
-    const TxItem* const target = CONTAINER_OF(TxItem, user_reference, deadline_base);
-    const TxItem* const other  = CONTAINER_OF(TxItem, node, deadline_base);
+    const TxItem* const target = CAVL2_TO_OWNER(user_reference, TxItem, deadline_base);
+    const TxItem* const other  = CAVL2_TO_OWNER(node, TxItem, deadline_base);
     CANARD_ASSERT((target != NULL) && (other != NULL));
     return (target->tx_deadline_usec >= other->tx_deadline_usec) ? +1 : -1;
 }
@@ -638,7 +633,7 @@ CANARD_PRIVATE size_t txFlushExpiredTransfers(struct CanardTxQueue* const       
 
     size_t                    count   = 0;
     struct CanardTreeNode*    tx_node = cavl2_min(que->deadline_root);
-    struct CanardTxQueueItem* tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
+    struct CanardTxQueueItem* tx_item = CAVL2_TO_OWNER(tx_node, struct CanardTxQueueItem, deadline_base);
     while (NULL != tx_item)
     {
         if (now_usec <= tx_item->tx_deadline_usec)
@@ -648,7 +643,7 @@ CANARD_PRIVATE size_t txFlushExpiredTransfers(struct CanardTxQueue* const       
         count += txPopAndFreeTransfer(que, ins, tx_item, true);  // drop the whole transfer
 
         tx_node = cavl2_min(que->deadline_root);
-        tx_item = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, tx_node, deadline_base);
+        tx_item = CAVL2_TO_OWNER(tx_node, struct CanardTxQueueItem, deadline_base);
     }
     return count;
 }
@@ -1113,7 +1108,7 @@ rxSubscriptionPredicateOnPortID(const void* user_reference,  // NOSONAR Cavl API
 {
     CANARD_ASSERT((user_reference != NULL) && (node != NULL));
     const CanardPortID  sought    = *((const CanardPortID*) user_reference);
-    const CanardPortID  other     = CONTAINER_OF(struct CanardRxSubscription, node, base)->port_id;
+    const CanardPortID  other     = CAVL2_TO_OWNER(node, struct CanardRxSubscription, base)->port_id;
     static const int8_t NegPos[2] = {-1, +1};
     // Clang-Tidy mistakenly identifies a narrowing cast to int8_t here, which is incorrect.
     return (sought == other) ? 0 : NegPos[sought > other];  // NOLINT no narrowing conversion is taking place here
@@ -1124,7 +1119,7 @@ rxSubscriptionPredicateOnStruct(const void* user_reference,  // NOSONAR Cavl API
                                 const struct CanardTreeNode* const node)
 {
     return rxSubscriptionPredicateOnPortID(  //
-        &MUTABLE_CONTAINER_OF(struct CanardRxSubscription, user_reference, base)->port_id,
+        &CAVL2_TO_OWNER(user_reference, struct CanardRxSubscription, base)->port_id,
         node);
 }
 
@@ -1238,7 +1233,7 @@ struct CanardTxQueueItem* canardTxPeek(const struct CanardTxQueue* const que)
     if (que != NULL)
     {
         struct CanardTreeNode* const priority_node = cavl2_min(que->priority_root);
-        out = MUTABLE_CONTAINER_OF(struct CanardTxQueueItem, priority_node, priority_base);
+        out = CAVL2_TO_OWNER(priority_node, struct CanardTxQueueItem, priority_base);
     }
     return out;
 }
@@ -1348,11 +1343,10 @@ int8_t canardRxAccept(struct CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                struct CanardTreeNode* const sub_node = cavl2_find(ins->rx_subscriptions[(size_t) model.transfer_kind],
+                struct CanardTreeNode* const sub_node  = cavl2_find(ins->rx_subscriptions[(size_t) model.transfer_kind],
                                                                    &model.port_id,
                                                                    &rxSubscriptionPredicateOnPortID);
-                struct CanardRxSubscription* const sub =
-                    MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
+                struct CanardRxSubscription* const sub = CAVL2_TO_OWNER(sub_node, struct CanardRxSubscription, base);
                 if (out_subscription != NULL)
                 {
                     *out_subscription = sub;  // Expose selected instance to the caller.
@@ -1435,7 +1429,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
             cavl2_find(ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID);
         if (sub_node != NULL)
         {
-            struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
+            struct CanardRxSubscription* const sub = CAVL2_TO_OWNER(sub_node, struct CanardRxSubscription, base);
             cavl2_remove(&ins->rx_subscriptions[tk], sub_node);
             CANARD_ASSERT(sub->port_id == port_id);
             out = 1;
@@ -1475,7 +1469,7 @@ int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
             cavl2_find(ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID);
         if (sub_node != NULL)
         {
-            struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
+            struct CanardRxSubscription* const sub = CAVL2_TO_OWNER(sub_node, struct CanardRxSubscription, base);
             CANARD_ASSERT(sub->port_id == port_id);
             if (out_subscription != NULL)
             {
