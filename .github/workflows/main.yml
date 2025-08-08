@@ -96,10 +96,10 @@ jobs:
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install gcc-avr avr-libc
           avr-gcc --version
-      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem libcanard -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem lib -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem lib -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem lib -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
+      - run: avr-gcc libcanard/*.c -isystem lib -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
 
   arm:
     if: github.event_name == 'push'
@@ -111,8 +111,8 @@ jobs:
       - run: |
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
-      - run: arm-none-eabi-gcc libcanard/*.c -isystem libcanard -c -std=c99 ${{ env.flags }}
-      - run: arm-none-eabi-gcc libcanard/*.c -isystem libcanard -c -std=c11 ${{ env.flags }}
+      - run: arm-none-eabi-gcc libcanard/*.c -isystem lib -c -std=c99 ${{ env.flags }}
+      - run: arm-none-eabi-gcc libcanard/*.c -isystem lib -c -std=c11 ${{ env.flags }}
 
   style_check:
     if: github.event_name == 'push'
@@ -195,7 +195,7 @@ jobs:
         --define sonar.projectName=libcanard
         --define sonar.projectKey=libcanard
         --define sonar.sources=libcanard
-        --define sonar.exclusions=libcanard/cavl2.h
+        --define sonar.exclusions=lib/cavl2/cavl2.h
         --define sonar.cfamily.gcov.reportsPath=.
         --define sonar.cfamily.compile-commands="${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"
         --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"

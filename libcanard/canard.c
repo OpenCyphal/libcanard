@@ -41,7 +41,8 @@
 // --------------------------------------------- INTERNAL INCLUDES ----------------------------------------------
 // The internal includes are placed here after the config header is included and CANARD_ASSERT is defined.
 #define CAVL2_T struct CanardTreeNode
-#include <cavl2.h>
+#define CAVL2_ASSERT(x) CANARD_ASSERT(x)
+#include <../lib/cavl2/cavl2.h>
 
 // --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
 
@@ -75,12 +76,6 @@
     ((const type*) (((ptr) == NULL) ? NULL : (const void*) (((const char*) (ptr)) - offsetof(type, member))))
 #define MUTABLE_CONTAINER_OF(type, ptr, member) \
     ((type*) (((ptr) == NULL) ? NULL : (void*) (((char*) (ptr)) - offsetof(type, member))))
-
-/// Used for inserting new items into AVL trees.
-CANARD_PRIVATE struct CanardTreeNode* avlTrivialFactory(void* const user_reference)
-{
-    return (struct CanardTreeNode*) user_reference;
-}
 
 // --------------------------------------------- TRANSFER CRC ---------------------------------------------
 
@@ -340,8 +335,8 @@ CANARD_PRIVATE struct CanardTxQueueItem* txAllocateQueueItem(struct CanardTxQueu
 /// Frames with identical CAN ID that are added later always compare greater than their counterparts with same CAN ID.
 /// This ensures that CAN frames with the same CAN ID are transmitted in the FIFO order.
 /// Frames that should be transmitted earlier compare smaller (i.e., put on the left side of the tree).
-CANARD_PRIVATE ptrdiff_t txAVLPriorityPredicate(        //
-    const void*                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+CANARD_PRIVATE ptrdiff_t txAVLPriorityPredicate(  //
+    const void* const                  user_reference,
     const struct CanardTreeNode* const node)
 {
     typedef struct CanardTxQueueItem TxItem;
@@ -405,7 +400,7 @@ CANARD_PRIVATE int32_t txPushSingleFrame(struct CanardTxQueue* const        que,
                                                                                      &tqi->priority_base,
                                                                                      &txAVLPriorityPredicate,
                                                                                      &tqi->priority_base,
-                                                                                     &avlTrivialFactory);
+                                                                                     &cavl2_trivial_factory);
         (void) priority_queue_res;
         CANARD_ASSERT(priority_queue_res == &tqi->priority_base);
 
@@ -414,7 +409,7 @@ CANARD_PRIVATE int32_t txPushSingleFrame(struct CanardTxQueue* const        que,
                                                                                      &tqi->deadline_base,
                                                                                      &txAVLDeadlinePredicate,
                                                                                      &tqi->deadline_base,
-                                                                                     &avlTrivialFactory);
+                                                                                     &cavl2_trivial_factory);
         (void) deadline_queue_res;
         CANARD_ASSERT(deadline_queue_res == &tqi->deadline_base);
 
@@ -562,7 +557,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
                                                                                              &next->priority_base,
                                                                                              &txAVLPriorityPredicate,
                                                                                              &next->priority_base,
-                                                                                             &avlTrivialFactory);
+                                                                                             &cavl2_trivial_factory);
                 (void) priority_queue_res;
                 CANARD_ASSERT(priority_queue_res == &next->priority_base);
                 CANARD_ASSERT(que->priority_root != NULL);
@@ -571,7 +566,7 @@ CANARD_PRIVATE int32_t txPushMultiFrame(struct CanardTxQueue* const        que,
                                                                                              &next->deadline_base,
                                                                                              &txAVLDeadlinePredicate,
                                                                                              &next->deadline_base,
-                                                                                             &avlTrivialFactory);
+                                                                                             &cavl2_trivial_factory);
                 (void) deadline_queue_res;
                 CANARD_ASSERT(deadline_queue_res == &next->deadline_base);
                 CANARD_ASSERT(que->deadline_root != NULL);
@@ -1353,12 +1348,9 @@ int8_t canardRxAccept(struct CanardInstance* const        ins,
                 // This is the reason the function has a logarithmic time complexity of the number of subscriptions.
                 // Note also that this one of the two variable-complexity operations in the RX pipeline; the other one
                 // is memcpy(). Excepting these two cases, the entire RX pipeline contains neither loops nor recursion.
-                struct CanardTreeNode* const sub_node =
-                    cavl2_find_or_insert(&ins->rx_subscriptions[(size_t) model.transfer_kind],
-                                         &model.port_id,
-                                         &rxSubscriptionPredicateOnPortID,
-                                         ins,
-                                         NULL);
+                struct CanardTreeNode* const sub_node = cavl2_find(ins->rx_subscriptions[(size_t) model.transfer_kind],
+                                                                   &model.port_id,
+                                                                   &rxSubscriptionPredicateOnPortID);
                 struct CanardRxSubscription* const sub =
                     MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
                 if (out_subscription != NULL)
@@ -1420,7 +1412,7 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
                                                                           &out_subscription->base,
                                                                           &rxSubscriptionPredicateOnStruct,
                                                                           out_subscription,
-                                                                          &avlTrivialFactory);
+                                                                          &cavl2_trivial_factory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
             out = (out > 0) ? 0 : 1;
@@ -1439,12 +1431,8 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct CanardTreeNode* const sub_node = cavl2_find_or_insert(  //
-            &ins->rx_subscriptions[tk],
-            &port_id_mutable,
-            &rxSubscriptionPredicateOnPortID,
-            NULL,
-            NULL);
+        struct CanardTreeNode* const sub_node =
+            cavl2_find(ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID);
         if (sub_node != NULL)
         {
             struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
@@ -1483,11 +1471,8 @@ int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
     {
         CanardPortID port_id_mutable = port_id;
 
-        struct CanardTreeNode* const sub_node = cavl2_find_or_insert(&ins->rx_subscriptions[tk],
-                                                                     &port_id_mutable,
-                                                                     &rxSubscriptionPredicateOnPortID,
-                                                                     NULL,
-                                                                     NULL);
+        struct CanardTreeNode* const sub_node =
+            cavl2_find(ins->rx_subscriptions[tk], &port_id_mutable, &rxSubscriptionPredicateOnPortID);
         if (sub_node != NULL)
         {
             struct CanardRxSubscription* const sub = MUTABLE_CONTAINER_OF(struct CanardRxSubscription, sub_node, base);
