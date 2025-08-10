@@ -347,7 +347,7 @@ CANARD_PRIVATE ptrdiff_t txAVLPriorityPredicate(  //
 /// This ensures that CAN frames with the same deadline are, when timed out, dropped in the FIFO order.
 /// Frames that should be dropped earlier compare smaller (i.e., put on the left side of the tree).
 CANARD_PRIVATE ptrdiff_t txAVLDeadlinePredicate(        //
-    const void*                        user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+    const void* const                  user_reference,  // NOSONAR Cavl API requires pointer to non-const.
     const struct CanardTreeNode* const node)
 {
     typedef struct CanardTxQueueItem TxItem;
@@ -1103,7 +1103,7 @@ CANARD_PRIVATE int8_t rxAcceptFrame(struct CanardInstance* const       ins,
 }
 
 CANARD_PRIVATE ptrdiff_t
-rxSubscriptionPredicateOnPortID(const void* user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+rxSubscriptionPredicateOnPortID(const void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
                                 const struct CanardTreeNode* const node)
 {
     CANARD_ASSERT((user_reference != NULL) && (node != NULL));
@@ -1115,7 +1115,7 @@ rxSubscriptionPredicateOnPortID(const void* user_reference,  // NOSONAR Cavl API
 }
 
 CANARD_PRIVATE ptrdiff_t
-rxSubscriptionPredicateOnStruct(const void* user_reference,  // NOSONAR Cavl API requires pointer to non-const.
+rxSubscriptionPredicateOnStruct(const void* const user_reference,  // NOSONAR Cavl API requires pointer to non-const.
                                 const struct CanardTreeNode* const node)
 {
     return rxSubscriptionPredicateOnPortID(  //
@@ -1405,7 +1405,7 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
             const struct CanardTreeNode* const res = cavl2_find_or_insert(&ins->rx_subscriptions[tk],
                                                                           &out_subscription->base,
                                                                           &rxSubscriptionPredicateOnStruct,
-                                                                          out_subscription,
+                                                                          &out_subscription->base,
                                                                           &cavl2_trivial_factory);
             (void) res;
             CANARD_ASSERT(res == &out_subscription->base);
