@@ -70,6 +70,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wnon-virtual-dtor 
 
 include_directories(${library_dir})
 include_directories(SYSTEM catch)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/../lib/cavl2)
 add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1 -DCATCH_CONFIG_ENABLE_ALL_STRINGMAKERS=1)
 
 set(common_sources ${CMAKE_SOURCE_DIR}/main.cpp ${library_dir}/canard.c)
@@ -108,7 +109,7 @@ endfunction()
 
 # Disable missing declaration warning to allow exposure of private definitions.
 gen_test_matrix(test_private
-        "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;test_private_cavl.cpp;"
+        "test_private_crc.cpp;test_private_rx.cpp;test_private_tx.cpp;"
         "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/canard_config_private.h\""
         "-Wno-missing-declarations ${SANITIZE_FLAG}"
         "${SANITIZE_FLAG}")

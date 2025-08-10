@@ -799,7 +799,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
 ///
 /// The time complexity is logarithmic from the number of current subscriptions under the specified transfer kind.
 /// This function does not allocate new memory.
-int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
+int8_t canardRxGetSubscription(const struct CanardInstance* const  ins,
                                const enum CanardTransferKind       transfer_kind,
                                const CanardPortID                  port_id,
                                struct CanardRxSubscription** const out_subscription);
