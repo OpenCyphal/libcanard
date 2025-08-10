@@ -42,7 +42,7 @@
 // The internal includes are placed here after the config header is included and CANARD_ASSERT is defined.
 #define CAVL2_T struct CanardTreeNode
 #define CAVL2_ASSERT(x) CANARD_ASSERT(x)
-#include <../lib/cavl2/cavl2.h>
+#include <cavl2.h>
 
 // --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
 

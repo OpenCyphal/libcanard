@@ -70,7 +70,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Woverloaded-virtual -Wnon-virtual-dtor 
 
 include_directories(${library_dir})
 include_directories(SYSTEM catch)
-include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/../libcanard)
+include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/../lib/cavl2)
+include_directories(${CMAKE_SOURCE_DIR}/../libcanard)
 add_definitions(-DCATCH_CONFIG_FAST_COMPILE=1 -DCATCH_CONFIG_ENABLE_ALL_STRINGMAKERS=1)
 
 set(common_sources ${CMAKE_SOURCE_DIR}/main.cpp ${library_dir}/canard.c)
