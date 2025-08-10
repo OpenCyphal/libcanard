@@ -41,7 +41,7 @@
 // --------------------------------------------- INTERNAL INCLUDES ----------------------------------------------
 // The internal includes are placed here after the config header is included and CANARD_ASSERT is defined.
 #define CAVL2_T struct CanardTreeNode
-#define CAVL2_ASSERT(x) CANARD_ASSERT(x)
+#define CAVL2_ASSERT(x) CANARD_ASSERT(x)  // NOSONAR
 #include <cavl2.h>
 
 // --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
@@ -1454,7 +1454,7 @@ int8_t canardRxUnsubscribe(struct CanardInstance* const  ins,
     return out;
 }
 
-int8_t canardRxGetSubscription(struct CanardInstance* const        ins,
+int8_t canardRxGetSubscription(const struct CanardInstance* const  ins,
                                const enum CanardTransferKind       transfer_kind,
                                const CanardPortID                  port_id,
                                struct CanardRxSubscription** const out_subscription)
