@@ -43,6 +43,8 @@
 #define CAVL2_T struct CanardTreeNode
 #define CAVL2_ASSERT(x) CANARD_ASSERT(x)  // NOSONAR
 #include <cavl2.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
 
@@ -1384,6 +1386,13 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
 {
     int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
     const size_t tk  = (size_t) transfer_kind;
+
+    assert(port_id >= 49152 && port_id <= 65535);
+    if (port_id < 49152 || port_id > 65535)
+    {
+        fprintf(stderr, "Invalid port: %d. Port should be within 49152 to 65535\n", port_id);
+        exit(EXIT_FAILURE);
+    }
     if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
     {
         // Reset to the initial state. This is absolutely critical because the new payload size limit may be larger
