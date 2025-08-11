@@ -1388,12 +1388,9 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
     int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
     const size_t tk  = (size_t) transfer_kind;
 
-    if (port_id < PORT_ID_MINIMUM)  // port_id can't be over 65535 because it exceeds type unsigned short maximum value.
-    {
-        (void) fprintf(stderr, "Invalid port: %d. Port should be within 49152 to 65535\n", port_id);
-        exit(EXIT_FAILURE);
-    }
-    if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
+    if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS) &&
+        ((transfer_kind == CanardTransferKindMessage && port_id <= CANARD_SUBJECT_ID_MAX) ||
+         (port_id <= CANARD_SERVICE_ID_MAX)))
     {
         // Reset to the initial state. This is absolutely critical because the new payload size limit may be larger
         // than the old value; if there are any payload buffers allocated, we may overrun them because they are shorter
