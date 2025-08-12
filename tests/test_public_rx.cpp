@@ -369,6 +369,10 @@ TEST_CASE("RxSubscriptionErrors")
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxSubscribe(&ins.getInstance(), kind.value, 0, 0, 0, &sub));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
             canardRxSubscribe(&ins.getInstance(), CanardTransferKindMessage, 0, 0, 0, nullptr));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardRxSubscribe(&ins.getInstance(), CanardTransferKindMessage, 8192, 0, 0, &sub));
+    REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT ==
+            canardRxSubscribe(&ins.getInstance(), CanardTransferKindResponse, 512, 0, 0, &sub));
 
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(nullptr, CanardTransferKindMessage, 0));
     REQUIRE(-CANARD_ERROR_INVALID_ARGUMENT == canardRxUnsubscribe(&ins.getInstance(), kind.value, 0));
