@@ -79,7 +79,6 @@ typedef uint16_t TransferCRC;
 #define CRC_INITIAL 0xFFFFU
 #define CRC_RESIDUE 0x0000U
 #define CRC_SIZE_BYTES 2U
-#define PORT_ID_MINIMUM 49152
 
 #if (CANARD_CRC_TABLE != 0)
 static const uint16_t CRCTable[256] = {
@@ -1383,12 +1382,11 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
                          const CanardMicrosecond            transfer_id_timeout_usec,
                          struct CanardRxSubscription* const out_subscription)
 {
-    int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
-    const size_t tk  = (size_t) transfer_kind;
-
-    if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS) &&
-        (((transfer_kind == CanardTransferKindMessage) && (port_id <= CANARD_SUBJECT_ID_MAX)) ||
-         (port_id <= CANARD_SERVICE_ID_MAX)))
+    int8_t       out        = -CANARD_ERROR_INVALID_ARGUMENT;
+    const size_t tk         = (size_t) transfer_kind;
+    const bool   port_id_ok = ((transfer_kind == CanardTransferKindMessage) && (port_id <= CANARD_SUBJECT_ID_MAX)) ||
+                            (port_id <= CANARD_SERVICE_ID_MAX);
+    if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS) && port_id_ok)
     {
         // Reset to the initial state. This is absolutely critical because the new payload size limit may be larger
         // than the old value; if there are any payload buffers allocated, we may overrun them because they are shorter
