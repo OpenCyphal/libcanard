@@ -43,8 +43,6 @@
 #define CAVL2_T struct CanardTreeNode
 #define CAVL2_ASSERT(x) CANARD_ASSERT(x)  // NOSONAR
 #include <cavl2.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 // --------------------------------------------- COMMON DEFINITIONS ---------------------------------------------
 
@@ -1389,7 +1387,7 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
     const size_t tk  = (size_t) transfer_kind;
 
     if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS) &&
-        ((transfer_kind == CanardTransferKindMessage && port_id <= CANARD_SUBJECT_ID_MAX) ||
+        (((transfer_kind == CanardTransferKindMessage) && (port_id <= CANARD_SUBJECT_ID_MAX)) ||
          (port_id <= CANARD_SERVICE_ID_MAX)))
     {
         // Reset to the initial state. This is absolutely critical because the new payload size limit may be larger
