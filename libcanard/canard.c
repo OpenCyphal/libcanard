@@ -1382,9 +1382,11 @@ int8_t canardRxSubscribe(struct CanardInstance* const       ins,
                          const CanardMicrosecond            transfer_id_timeout_usec,
                          struct CanardRxSubscription* const out_subscription)
 {
-    int8_t       out = -CANARD_ERROR_INVALID_ARGUMENT;
-    const size_t tk  = (size_t) transfer_kind;
-    if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS))
+    int8_t       out        = -CANARD_ERROR_INVALID_ARGUMENT;
+    const size_t tk         = (size_t) transfer_kind;
+    const bool   port_id_ok = ((transfer_kind == CanardTransferKindMessage) && (port_id <= CANARD_SUBJECT_ID_MAX)) ||
+                            (port_id <= CANARD_SERVICE_ID_MAX);
+    if ((ins != NULL) && (out_subscription != NULL) && (tk < CANARD_NUM_TRANSFER_KINDS) && port_id_ok)
     {
         // Reset to the initial state. This is absolutely critical because the new payload size limit may be larger
         // than the old value; if there are any payload buffers allocated, we may overrun them because they are shorter
