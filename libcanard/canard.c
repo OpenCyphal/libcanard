@@ -47,7 +47,8 @@
 #define FLAG_ANONYMOUS_MESSAGE    (UINT32_C(1) << 24U)
 #define FLAG_REQUEST_NOT_RESPONSE (UINT32_C(1) << 24U)
 #define FLAG_RESERVED_23          (UINT32_C(1) << 23U)
-#define FLAG_RESERVED_07          (UINT32_C(1) << 7U)
+#define FLAG_VERSION_07           (UINT32_C(1) << 7U)
+#define FLAG_VERSION_08           (UINT32_C(1) << 7U)
 
 #define TAIL_START_OF_TRANSFER 128U
 #define TAIL_END_OF_TRANSFER   64U
@@ -55,8 +56,8 @@
 
 #define INITIAL_TOGGLE_STATE true
 
-const uint8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
-const uint8_t canard_len_to_dlc[65] = {
+static const uint8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
+static const uint8_t canard_len_to_dlc[65] = {
     0,  1,  2,  3,  4,  5,  6,  7,  8,                              // 0-8
     9,  9,  9,  9,                                                  // 9-12
     10, 10, 10, 10,                                                 // 13-16

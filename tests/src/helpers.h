@@ -16,7 +16,7 @@
 #error "Library version not defined"
 #endif
 
-#if !(defined(CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR) && defined(CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR))
+#if !(defined(CANARD_CYPHAL_VERSION_MAJOR) && defined(CANARD_CYPHAL_VERSION_MINOR))
 #error "Cyphal specification version not defined"
 #endif
 
