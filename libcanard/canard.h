@@ -91,14 +91,61 @@
 extern "C" {
 #endif
 
-/// Semantic version of this library (not the Cyphal specification).
-/// API will be backward compatible within the same major version.
-#define CANARD_VERSION_MAJOR 4
+#define CANARD_VERSION_MAJOR 5
 #define CANARD_VERSION_MINOR 0
 
-/// The version number of the Cyphal specification implemented by this library.
 #define CANARD_CYPHAL_SPECIFICATION_VERSION_MAJOR 1
-#define CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR 0
+#define CANARD_CYPHAL_SPECIFICATION_VERSION_MINOR 1
+
+typedef struct canard_bytes_t
+{
+    size_t      size;
+    const void* data;
+} canard_bytes_t;
+
+typedef struct canard_bytes_scattered_t
+{
+    canard_bytes_t                         bytes;
+    const struct canard_bytes_scattered_t* next; ///< NULL in the last fragment.
+} canard_bytes_scattered_t;
+
+/// The semantics are similar to malloc/free.
+/// Consider using O1Heap: https://github.com/pavel-kirienko/o1heap.
+/// The API documentation is written on the assumption that the memory management functions are O(1).
+/// The user pointer is taken from the corresponding field of the memory resource structure.
+typedef void* (*canard_mem_alloc_t)(void* const user, const size_t size);
+typedef void (*canard_mem_free_t)(void* const user, const size_t size, void* const pointer);
+
+/// A kind of memory resource that can only be used to free memory previously allocated by the user.
+typedef struct canard_mem_deleter_t
+{
+    void*             user;
+    canard_mem_free_t free;
+} canard_mem_deleter_t;
+
+typedef struct canard_mem_resource_t
+{
+    void*              user;
+    canard_mem_free_t  free;
+    canard_mem_alloc_t alloc;
+} canard_mem_resource_t;
+
+/// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
+#define CANARD_USER_CONTEXT_PTR_COUNT 6
+
+/// The library carries the user-provided context from inputs to outputs without interpreting it,
+/// allowing the application to associate its own data with various entities inside the library.
+typedef union canard_user_context_t
+{
+    void*         ptr[CANARD_USER_CONTEXT_PTR_COUNT];
+    unsigned char bytes[sizeof(void*) * CANARD_USER_CONTEXT_PTR_COUNT];
+} canard_user_context_t;
+#ifdef __cplusplus
+#define CANARD_USER_CONTEXT_NULL \
+    canard_user_context_t {}
+#else
+#define CANARD_USER_CONTEXT_NULL ((canard_user_context_t){ .ptr = { NULL } })
+#endif
 
 /// These error codes may be returned from the library API calls whose return type is a signed integer in the negated
 /// form (e.g., error code 2 returned as -2). A non-negative return value represents success.
