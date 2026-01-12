@@ -79,7 +79,7 @@ extern "C"
 ///
 /// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request
 /// flag, and cannot be P2P-replied to because only the most significant bits of the topic hash are included in the
-/// P2P header (it is possible to dedicate some bits for the topic hash lsb, but it somewhat complicates the lookup).
+/// P2P header (it is possible to dedicate some bits for the topic hash lsb, but it slightly complicates the lookup).
 #define CANARD_HEADER_MESSAGE_BYTES 3U
 #define CANARD_HEADER_P2P_BYTES     7U
 
@@ -100,14 +100,6 @@ typedef enum canard_prio_t
     canard_prio_optional    = 7,
 } canard_prio_t;
 #define CANARD_PRIO_COUNT 8U
-
-typedef enum canard_transfer_kind_t
-{
-    canard_transfer_kind_message  = 0,
-    canard_transfer_kind_response = 1,
-    canard_transfer_kind_request  = 2,
-} canard_transfer_kind_t;
-#define CANARD_NUM_TRANSFER_KINDS 3
 
 typedef struct canard_tree_t
 {
@@ -226,13 +218,15 @@ struct canard_subscription_t
     canard_tree_t index_port_id; ///< Must be the first member.
 
     canard_us_t transfer_id_timeout;
-    uint64_t    topic_hash;
-    uint32_t    port_id;
+    uint64_t    topic_hash; ///< For v0 legacy subscriptions this is the data type signature.
+    uint32_t    port_id;    ///< Represents subjects, services, and legacy data type IDs of both kinds.
     size_t      extent;
 
     canard_tree_t* index_session_by_node_id;
 
     const canard_subscription_vtable_t* vtable;
+
+    uint_fast8_t index_index_port_id; ///< Which of the subscription trees in canard_rx_t this subscription belongs to.
 
     canard_user_context_t user_context;
 };
@@ -296,7 +290,7 @@ struct canard_t
 
     struct
     {
-        canard_tree_t* subscriptions[CANARD_NUM_TRANSFER_KINDS];
+        canard_tree_t* subscriptions[6];
         canard_list_t  list_session_by_animation; ///< Oldest at the tail.
 
         size_t           filter_count;
@@ -328,10 +322,9 @@ struct canard_t
 /// Notification about the outcome of a reliable transfer previously submitted for transmission.
 typedef struct canard_tx_feedback_t
 {
-    uint64_t               topic_hash;
-    uint32_t               port_id;
-    canard_transfer_kind_t kind;
-    uint_fast8_t           transfer_id;
+    uint64_t     topic_hash;
+    uint32_t     subject_id;
+    uint_fast8_t transfer_id;
 
     /// The number of remote nodes that acknowledged the reception of the transfer.
     /// For P2P transfers, this value is either 0 (failure) or 1 (success).
@@ -428,7 +421,7 @@ bool canard_subscribe(canard_t* const                           self,
 /// This can be used to undo all kinds of subscriptions, incl. all v1.0 ones.
 void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subscription);
 
-// ----------------------------------------   Cyphal v1.0 compatibility API   ----------------------------------------
+// -----------------------------------------   Cyphal v1.0 compatibility API   -----------------------------------------
 
 bool canard_1v0_publish(canard_t* const            self,
                         const canard_us_t          now,
@@ -473,6 +466,61 @@ bool canard_1v0_subscribe_request(canard_t* const                           self
 bool canard_1v0_subscribe_response(canard_t* const                           self,
                                    canard_subscription_t* const              subscription,
                                    const uint16_t                            service_id,
+                                   const size_t                              extent,
+                                   const canard_subscription_vtable_t* const vtable);
+
+// ---------------------------------   UAVCAN v0 & DroneCAN legacy compatibility API   ---------------------------------
+
+/// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained by shifting the 3-bit priority left by 2 bits.
+bool canard_0v1_publish(canard_t* const            self,
+                        const canard_us_t          now,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint16_t             data_type_id,
+                        const uint64_t             data_type_signature,
+                        const uint_fast8_t         transfer_id,
+                        const canard_bytes_chain_t payload);
+
+bool canard_0v1_request(canard_t* const            self,
+                        const canard_us_t          now,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint_fast8_t         data_type_id,
+                        const uint64_t             data_type_signature,
+                        const uint_fast8_t         server_node_id,
+                        const uint_fast8_t         transfer_id,
+                        const canard_bytes_chain_t payload);
+
+bool canard_0v1_respond(canard_t* const            self,
+                        const canard_us_t          now,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint_fast8_t         data_type_id,
+                        const uint64_t             data_type_signature,
+                        const uint_fast8_t         client_node_id,
+                        const uint_fast8_t         transfer_id,
+                        const canard_bytes_chain_t payload);
+
+bool canard_0v1_subscribe(canard_t* const                           self,
+                          canard_subscription_t* const              subscription,
+                          const uint16_t                            data_type_id,
+                          const uint64_t                            data_type_signature,
+                          const size_t                              extent,
+                          const canard_us_t                         transfer_id_timeout,
+                          const canard_subscription_vtable_t* const vtable);
+
+bool canard_0v1_subscribe_request(canard_t* const                           self,
+                                  canard_subscription_t* const              subscription,
+                                  const uint_fast8_t                        data_type_id,
+                                  const uint64_t                            data_type_signature,
+                                  const size_t                              extent,
+                                  const canard_us_t                         transfer_id_timeout,
+                                  const canard_subscription_vtable_t* const vtable);
+
+bool canard_0v1_subscribe_response(canard_t* const                           self,
+                                   canard_subscription_t* const              subscription,
+                                   const uint_fast8_t                        data_type_id,
+                                   const uint64_t                            data_type_signature,
                                    const size_t                              extent,
                                    const canard_subscription_vtable_t* const vtable);
 

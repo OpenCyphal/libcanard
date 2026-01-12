@@ -14,6 +14,7 @@
 -----
 
 Libcanard is a robust implementation of the Cyphal/CAN transport layer in C for high-integrity real-time embedded systems.
+Supports Cyphal v1.1, Cyphal v1.0, and legacy protocols: UAVCAN v0 and DroneCAN; works with Classic CAN and CAN FD.
 
 [Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
 communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
@@ -58,7 +59,8 @@ reused in the target application to speed up the design of the media IO layer (d
 
 ### v5.0 [WORK IN PROGRESS]
 
-Support for Cyphal v1.1 is added.
+- Added support for Cyphal v1.1 alongside v1.0.
+- Added support for legacy protocols: UAVCAN v0 and DroneCAN.
 
 ### v4.0
 
