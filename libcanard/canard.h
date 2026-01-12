@@ -67,18 +67,19 @@ extern "C"
 /// that carry additional metadata pertaining to named topics and P2P traffic. v1.0 transfers have no such headers.
 ///
 /// v1.1 message transfers (only 3 bytes because topics are also discriminated by subject-ID, collisions less likely):
-///     uint1  version          # =0
 ///     bool   reliable         # Set if the sender needs acknowledgment; false for best-effort messages.
-///     uint22 topic_hash_msb   # The most significant bits of the topic hash.
+///     uint23 topic_hash_msb   # The most significant bits of the topic hash for collision detection.
 ///     # Payload follows.
 ///
 /// v1.1 P2P transfers (7 bytes to fit into a single Classic CAN frame):
-///     uint1  version          # =0
-///     uint2  kind             # 0=response reliable, 1=acknowledgment (no unreliable p2p responses currently exist)
+///     uint2  kind             # 0=acknowledgment, 2=response reliable  (no unreliable responses currently exist)
 ///     uint5  transfer_id      # The original transfer-ID this P2P message relates to.
-///     uint48 topic_hash_msb   # The most significant bits of the original topic hash this P2P message relates to.
+///     uint49 topic_hash_msb   # The most significant bits of the original topic hash this P2P message relates to.
 ///     # Payload follows (unless ack).
 ///
+/// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request
+/// flag, and cannot be P2P-replied to because only the most significant bits of the topic hash are included in the
+/// P2P header (it is possible to dedicate some bits for the topic hash lsb, but it somewhat complicates the lookup).
 #define CANARD_HEADER_MESSAGE_BYTES 3U
 #define CANARD_HEADER_P2P_BYTES     7U
 
