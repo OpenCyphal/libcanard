@@ -204,9 +204,10 @@ struct canard_subscription_vtable_t
                        uint_fast8_t           transfer_id,
                        canard_bytes_mut_t     payload);
 
-    /// There is probably another topic using the same subject-ID as this subscription.
-    /// This may need to be signaled to the consensus protocol for a corrective action to be taken.
-    /// This is not needed for v1.0 subscriptions or P2P, in which case it may be NULL.
+    /// A topic hash mismatch is detected on this subject: another node is publishing data under the same
+    /// subject-ID but with a different topic hash. This observation should be reported to the consensus protocol
+    /// for a corrective action to be taken.
+    /// This is not needed for v1.0 or v0 legacy subscriptions, in which case it may be NULL.
     void (*on_collision)(canard_subscription_t* self);
 };
 
@@ -218,8 +219,8 @@ struct canard_subscription_t
     canard_tree_t index_port_id; ///< Must be the first member.
 
     canard_us_t transfer_id_timeout;
-    uint64_t    topic_hash; ///< For v0 legacy subscriptions this is the data type signature.
-    uint32_t    port_id;    ///< Represents subjects, services, and legacy data type IDs of both kinds.
+    uint64_t    topic_hash; ///< For v0 legacy subscriptions this is the CRC seed.
+    uint32_t    port_id;    ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t      extent;
 
     canard_tree_t* index_session_by_node_id;
@@ -263,7 +264,7 @@ typedef struct canard_vtable_t
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
-    /// Returns true on success, false if the filters could not be applied; another attempt may be made later.
+    /// Returns true on success, false if the filters could not be applied; another attempt will be made later.
     bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
 
@@ -342,8 +343,9 @@ typedef void (*canard_on_tx_feedback_t)(canard_t*, canard_tx_feedback_t);
 /// down to 64 bits. The PRNG is used for node-ID allocation, incl. reallocation on collision.
 ///
 /// The application can assign the preferred node-ID immediately after initialization by setting the node_id field.
-/// If a collision is discovered later, the node may be moved to a different node-ID automatically,
-/// since it is mandatory that each online node has a unique node-ID in the network.
+/// If this is not done, the library will choose a free node-ID automatically. Regardless of whether it is assigned
+/// automatically or manually, if a collision is detected, a re-allocation will be done automatically.
+/// The application must not change the node-ID at any time other than immediately after initialization.
 ///
 /// The filter storage is an array of filters that is used by the library to automatically set up the acceptance
 /// filters when the RX pipeline is reconfigured. The number of available filters is limited by the CAN hardware.
@@ -477,7 +479,7 @@ bool canard_0v1_publish(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             data_type_id,
-                        const uint64_t             data_type_signature,
+                        const uint16_t             crc_seed,
                         const uint_fast8_t         transfer_id,
                         const canard_bytes_chain_t payload);
 
@@ -486,7 +488,7 @@ bool canard_0v1_request(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint_fast8_t         data_type_id,
-                        const uint64_t             data_type_signature,
+                        const uint16_t             crc_seed,
                         const uint_fast8_t         server_node_id,
                         const uint_fast8_t         transfer_id,
                         const canard_bytes_chain_t payload);
@@ -496,7 +498,7 @@ bool canard_0v1_respond(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint_fast8_t         data_type_id,
-                        const uint64_t             data_type_signature,
+                        const uint16_t             crc_seed,
                         const uint_fast8_t         client_node_id,
                         const uint_fast8_t         transfer_id,
                         const canard_bytes_chain_t payload);
@@ -504,7 +506,7 @@ bool canard_0v1_respond(canard_t* const            self,
 bool canard_0v1_subscribe(canard_t* const                           self,
                           canard_subscription_t* const              subscription,
                           const uint16_t                            data_type_id,
-                          const uint64_t                            data_type_signature,
+                          const uint16_t                            crc_seed,
                           const size_t                              extent,
                           const canard_us_t                         transfer_id_timeout,
                           const canard_subscription_vtable_t* const vtable);
@@ -512,7 +514,7 @@ bool canard_0v1_subscribe(canard_t* const                           self,
 bool canard_0v1_subscribe_request(canard_t* const                           self,
                                   canard_subscription_t* const              subscription,
                                   const uint_fast8_t                        data_type_id,
-                                  const uint64_t                            data_type_signature,
+                                  const uint16_t                            crc_seed,
                                   const size_t                              extent,
                                   const canard_us_t                         transfer_id_timeout,
                                   const canard_subscription_vtable_t* const vtable);
@@ -520,9 +522,13 @@ bool canard_0v1_subscribe_request(canard_t* const                           self
 bool canard_0v1_subscribe_response(canard_t* const                           self,
                                    canard_subscription_t* const              subscription,
                                    const uint_fast8_t                        data_type_id,
-                                   const uint64_t                            data_type_signature,
+                                   const uint16_t                            crc_seed,
                                    const size_t                              extent,
                                    const canard_subscription_vtable_t* const vtable);
+
+/// Computes the CRC-16/CCITT-FALSE checksum of the data type signature in the little-endian byte order.
+/// This value is then used to seed the transfer CRC for UAVCAN v0 and DroneCAN transfers.
+uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature);
 
 #ifdef __cplusplus
 }
