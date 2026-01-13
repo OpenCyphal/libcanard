@@ -160,7 +160,7 @@ struct canard_mem_t
 /// The library carries the user-provided context from inputs to outputs without interpreting it,
 /// allowing the application to associate its own data with various entities inside the library.
 /// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
-#define CANARD_USER_CONTEXT_PTR_COUNT 6
+#define CANARD_USER_CONTEXT_PTR_COUNT 5
 typedef union canard_user_context_t
 {
     void*         ptr[CANARD_USER_CONTEXT_PTR_COUNT];
@@ -213,7 +213,7 @@ struct canard_subscription_vtable_t
 
 /// Subscription instances must not be moved while in use.
 /// Each subscription is indexed by its port-ID inside the canard instance, and in turn contains a tree of sessions
-/// indexed by remote node-ID. Two tree lookups are thus required to handle an incoming frame.
+/// indexed by remote node-ID. Two log-time lookups are thus required to handle an incoming frame.
 struct canard_subscription_t
 {
     canard_tree_t index_port_id; ///< Must be the first member.
@@ -227,7 +227,9 @@ struct canard_subscription_t
 
     const canard_subscription_vtable_t* vtable;
 
-    uint_fast8_t index_index_port_id; ///< Which of the subscription trees in canard_rx_t this subscription belongs to.
+    uint_fast8_t index_index_port_id; ///< Which of the indexes in canard_rx_t this subscription is part of.
+
+    canard_filter_t filter; ///< Precomputed for quick acceptance filter configuration.
 
     canard_user_context_t user_context;
 };
@@ -252,15 +254,21 @@ typedef struct canard_vtable_t
     /// Submit one CAN frame for transmission via the specified interface. It is guaranteed that now<=deadline.
     /// If the data is empty (size==0), the data pointer may be NULL.
     /// Returns true if the frame was accepted for transmission, false if there is no free mailbox (try again later).
-    /// The callback must not mutate the TX pipeline (no push/cancel/free).
+    /// The callback must not mutate the TX pipeline (no publish/cancel/free/etc).
     /// If the can_data needs to be retained for later retransmission, use canard_refcount_inc()/canard_refcount_dec().
-    bool (*transmit)(canard_t*,
-                     canard_user_context_t,
-                     canard_us_t    now,
-                     canard_us_t    deadline,
-                     uint_fast8_t   iface_index,
-                     uint32_t       extended_can_id,
-                     canard_bytes_t can_data);
+    bool (*tx)(canard_t*,
+               const canard_user_context_t*,
+               canard_us_t    now,
+               canard_us_t    deadline,
+               uint_fast8_t   iface_index,
+               uint32_t       extended_can_id,
+               canard_bytes_t can_data);
+
+    /// Invoked immediately before tx() to obtain the subject-ID for the given transfer.
+    /// The application is expected to rely on the user context to access the topic context for subject-ID derivation.
+    /// This is the same user context that was passed to canard_publish().
+    /// The callback must not mutate the TX pipeline (no publish/cancel/free/etc).
+    uint32_t (*tx_subject_id)(canard_t*, const canard_user_context_t*);
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
@@ -272,7 +280,7 @@ typedef struct canard_vtable_t
 struct canard_t
 {
     uint64_t     node_id_occupancy_bitmap[2];
-    uint_fast8_t node_id;
+    uint_fast8_t node_id; ///< Can be set once immediately after canard_new(); otherwise, it is managed automatically.
 
     struct
     {
@@ -346,6 +354,9 @@ typedef void (*canard_on_tx_feedback_t)(canard_t*, canard_tx_feedback_t);
 /// If this is not done, the library will choose a free node-ID automatically. Regardless of whether it is assigned
 /// automatically or manually, if a collision is detected, a re-allocation will be done automatically.
 /// The application must not change the node-ID at any time other than immediately after initialization.
+/// Even if the node-ID is allocated automatically, it is recommended to save it in non-volatile memory for
+/// faster startup next time and to avoid the risk of unnecessary perturbations to the network.
+/// The same node-ID is used for both v1 and legacy v0 communications.
 ///
 /// The filter storage is an array of filters that is used by the library to automatically set up the acceptance
 /// filters when the RX pipeline is reconfigured. The number of available filters is limited by the CAN hardware.
@@ -368,7 +379,10 @@ void canard_free(canard_t* const self);
 /// The function must be called asap once any of the interfaces for which there are pending outgoing transfers
 /// become writable, and not less frequently than once in a few milliseconds. The invocation rate defines the
 /// resolution of deadline handling.
-void canard_poll(canard_t* const self, const canard_us_t now, const uint16_t iface_bitmap);
+void canard_poll(canard_t* const self, const canard_us_t now, const uint16_t tx_ready_iface_bitmap);
+
+/// Returns a bitmap of interfaces that have pending transmissions. This is useful for IO multiplexing.
+uint16_t canard_pending_ifaces(const canard_t* const self);
 
 /// True if successfully processed, false if any of the arguments are invalid.
 /// A malformed frame is not considered an error; it is simply dropped and the corresponding counter is incremented.
@@ -378,24 +392,30 @@ bool canard_ingest_frame(canard_t* const      self,
                          const uint32_t       extended_can_id,
                          const canard_bytes_t can_data);
 
-/// Returns a bitmap of interfaces that have pending transmissions. This is useful for IO multiplexing.
-uint16_t canard_pending_ifaces(const canard_t* const self);
-
 /// Cancel a pending outgoing message transfer on a subject.
 /// Returns true if a transfer was found and cancelled, false if no such transfer was found.
 /// Cyphal v1.0 service transfers cannot be canceled.
 /// For pinned topics or v1.0 message transfers, pass the subject-ID as the topic_hash.
 bool canard_cancel(canard_t* const self, const uint64_t topic_hash, const uint_fast8_t transfer_id);
 
+/// Like canard_cancel(), but cancels all pending transfers on the given subject.
+/// Returns the number of matched transfers.
+/// This is important to invoke when destroying a topic to ensure no dangling callbacks remain.
+size_t canard_cancel_all(canard_t* const self, const uint64_t topic_hash);
+
 void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(const canard_bytes_t obj);
 
+/// The subject-ID will be obtained using the dedicated vtable function immediately before transmission.
+/// This is because the topic->subject allocation protocol may change the subject-ID for already enqueued messages.
+/// The application is expected to rely on the user context to access the topic context for subject-ID derivation
+/// (e.g., store a topic pointer in there).
 bool canard_publish(canard_t* const               self,
                     const canard_us_t             now,
                     const canard_us_t             deadline,
+                    const uint16_t                iface_bitmap,
                     const canard_prio_t           priority,
                     const uint64_t                topic_hash,
-                    const uint32_t                subject_id,
                     const uint_fast8_t            transfer_id,
                     const canard_bytes_chain_t    payload,
                     const canard_user_context_t   context,
@@ -428,8 +448,9 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 bool canard_1v0_publish(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,
+                        const uint16_t             iface_bitmap,
                         const canard_prio_t        priority,
-                        const uint16_t             subject_id, // Narrower than in v1.1
+                        const uint16_t             subject_id,
                         const uint_fast8_t         transfer_id,
                         const canard_bytes_chain_t payload);
 
@@ -477,6 +498,7 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 bool canard_0v1_publish(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,
+                        const uint16_t             iface_bitmap,
                         const canard_prio_t        priority,
                         const uint16_t             data_type_id,
                         const uint16_t             crc_seed,
