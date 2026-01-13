@@ -160,7 +160,7 @@ struct canard_mem_t
 /// The library carries the user-provided context from inputs to outputs without interpreting it,
 /// allowing the application to associate its own data with various entities inside the library.
 /// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
-#define CANARD_USER_CONTEXT_PTR_COUNT 5
+#define CANARD_USER_CONTEXT_PTR_COUNT 3
 typedef union canard_user_context_t
 {
     void*         ptr[CANARD_USER_CONTEXT_PTR_COUNT];
@@ -268,6 +268,7 @@ typedef struct canard_vtable_t
     /// The application is expected to rely on the user context to access the topic context for subject-ID derivation.
     /// This is the same user context that was passed to canard_publish().
     /// The callback must not mutate the TX pipeline (no publish/cancel/free/etc).
+    /// The transmission will be cancelled if the returned subject-ID exceeds CANARD_SUBJECT_ID_MAX.
     uint32_t (*tx_subject_id)(canard_t*, const canard_user_context_t*);
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
