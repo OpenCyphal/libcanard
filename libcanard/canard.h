@@ -54,8 +54,14 @@ extern "C"
 #define CANARD_TRANSFER_ID_BIT_LENGTH 5U
 #define CANARD_TRANSFER_ID_MAX        ((1U << CANARD_TRANSFER_ID_BIT_LENGTH) - 1U)
 
+/// This is used only with Cyphal v1.0 and legacy v0 protocols to indicate anonymous messages.
+/// Cyphal v1.1 does not support anonymous messages so this value is never used there.
+#define CANARD_NODE_ID_ANONYMOUS 0xFFU
+
 /// This is the recommended transfer-ID timeout value given in the Cyphal Specification. The application may choose
 /// different values per subscription (i.e., per data specifier) depending on its timing requirements.
+/// Within this timeout, the library will refuse to accept a transfer with the same transfer-ID as the last one
+/// received on the same subject from the same source node.
 #define CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us 2000000UL
 
 /// MTU values for the supported protocols.
@@ -66,21 +72,29 @@ extern "C"
 /// All v1.1 transfers have payload headers, handled by the library transparently for the application,
 /// that carry additional metadata pertaining to named topics and P2P traffic. v1.0 transfers have no such headers.
 ///
-/// v1.1 message transfers (only 3 bytes because topics are also discriminated by subject-ID, collisions less likely):
+/// Together, the 17-bit subject-ID plus the 29-bit topic hash MSB provide a total of 46 bits for topic discrimination,
+/// which is sufficient to avoid collisions. CRC seeding is not used because it adds little value in CAN FD, where
+/// multi-frame transfers are relatively rare due to the large MTU.
+///
+/// v1.1 message transfers (smaller hash because topics are also discriminated by subject-ID, collisions less likely):
+///     uint2  version          # =0
 ///     bool   reliable         # Set if the sender needs acknowledgment; false for best-effort messages.
-///     uint23 topic_hash_msb   # The most significant bits of the topic hash for collision detection.
+///     uint29 topic_hash_msb   # The most significant bits of the topic hash for collision detection.
 ///     # Payload follows.
 ///
 /// v1.1 P2P transfers (7 bytes to fit into a single Classic CAN frame):
-///     uint2  kind             # 0=acknowledgment, 2=response reliable  (no unreliable responses currently exist)
+///     uint2  version          # =0
+///     bool   ack              # 1=acknowledgment, 0=response reliable (no unreliable responses currently exist)
 ///     uint5  transfer_id      # The original transfer-ID this P2P message relates to.
-///     uint49 topic_hash_msb   # The most significant bits of the original topic hash this P2P message relates to.
+///     uint48 topic_hash_msb   # The most significant bits of the original topic hash this P2P message relates to.
 ///     # Payload follows (unless ack).
 ///
 /// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request
 /// flag, and cannot be P2P-replied to because only the most significant bits of the topic hash are included in the
 /// P2P header (it is possible to dedicate some bits for the topic hash lsb, but it slightly complicates the lookup).
-#define CANARD_HEADER_MESSAGE_BYTES 3U
+///
+/// A single-frame v1.1 message can carry at most 59 bytes of payload in CAN FD, and at most 3 bytes in Classic CAN.
+#define CANARD_HEADER_MESSAGE_BYTES 4U
 #define CANARD_HEADER_P2P_BYTES     7U
 
 typedef struct canard_t canard_t;
@@ -160,7 +174,7 @@ struct canard_mem_t
 /// The library carries the user-provided context from inputs to outputs without interpreting it,
 /// allowing the application to associate its own data with various entities inside the library.
 /// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
-#define CANARD_USER_CONTEXT_PTR_COUNT 3
+#define CANARD_USER_CONTEXT_PTR_COUNT 4
 typedef union canard_user_context_t
 {
     void*         ptr[CANARD_USER_CONTEXT_PTR_COUNT];
@@ -219,9 +233,10 @@ struct canard_subscription_t
     canard_tree_t index_port_id; ///< Must be the first member.
 
     canard_us_t transfer_id_timeout;
-    uint64_t    topic_hash; ///< For v0 legacy subscriptions this is the CRC seed.
-    uint32_t    port_id;    ///< Represents subjects, services, and legacy message- and service type IDs.
+    uint64_t    topic_hash;
+    uint32_t    port_id; ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t      extent;
+    uint16_t    crc_seed; ///< The default seed for CRC-16/CCITT-FALSE is 0xFFFF.
 
     canard_tree_t* index_session_by_node_id;
 
@@ -280,8 +295,10 @@ typedef struct canard_vtable_t
 /// None of the fields should be mutated by the application unless explicitly allowed.
 struct canard_t
 {
-    uint64_t     node_id_occupancy_bitmap[2];
-    uint_fast8_t node_id; ///< Can be set once immediately after canard_new(); otherwise, it is managed automatically.
+    uint64_t node_id_occupancy_bitmap[2];
+    /// The node-ID can be set once immediately after canard_new(); otherwise, it is managed automatically.
+    /// It shall be in the range [0, CANARD_NODE_ID_MAX].
+    uint_fast8_t node_id;
 
     struct
     {
