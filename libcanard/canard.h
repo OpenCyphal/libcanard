@@ -93,7 +93,7 @@ extern "C"
 /// flag, and cannot be P2P-replied to because only the most significant bits of the topic hash are included in the
 /// P2P header (it is possible to dedicate some bits for the topic hash lsb, but it slightly complicates the lookup).
 ///
-/// A single-frame v1.1 message can carry at most 59 bytes of payload in CAN FD, and at most 3 bytes in Classic CAN.
+/// A single-frame v1.1 transfer can carry at most 59 bytes of payload in CAN FD, and at most 3 bytes in Classic CAN.
 #define CANARD_HEADER_MESSAGE_BYTES 4U
 #define CANARD_HEADER_P2P_BYTES     7U
 
