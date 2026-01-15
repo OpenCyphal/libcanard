@@ -38,23 +38,19 @@
 
 #define PADDING_BYTE_VALUE 0U
 
-#define OFFSET_PRIORITY    26U
-#define OFFSET_SUBJECT_ID  8U
-#define OFFSET_SERVICE_ID  14U
-#define OFFSET_DST_NODE_ID 7U
-
-#define FLAG_SERVICE_NOT_MESSAGE  (UINT32_C(1) << 25U)
-#define FLAG_ANONYMOUS_MESSAGE    (UINT32_C(1) << 24U)
-#define FLAG_REQUEST_NOT_RESPONSE (UINT32_C(1) << 24U)
-#define FLAG_RESERVED_23          (UINT32_C(1) << 23U)
-#define FLAG_VERSION_07           (UINT32_C(1) << 7U)
-#define FLAG_VERSION_08           (UINT32_C(1) << 7U)
-
 #define TAIL_START_OF_TRANSFER 128U
 #define TAIL_END_OF_TRANSFER   64U
 #define TAIL_TOGGLE            32U
 
-#define INITIAL_TOGGLE_STATE true
+typedef enum transfer_kind_t
+{
+    transfer_kind_message     = 0,
+    transfer_kind_request     = 1,
+    transfer_kind_response    = 2,
+    transfer_kind_v0_message  = 3,
+    transfer_kind_v0_request  = 4,
+    transfer_kind_v0_response = 5,
+} transfer_kind_t;
 
 static const uint8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
 static const uint8_t canard_len_to_dlc[65] = {

@@ -292,17 +292,24 @@ typedef struct canard_vtable_t
     bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
 
-/// None of the fields should be mutated by the application unless explicitly allowed.
+/// None of the fields should be mutated by the application (unless explicitly allowed).
 struct canard_t
 {
-    uint64_t node_id_occupancy_bitmap[2];
-    /// The node-ID can be set once immediately after canard_new(); otherwise, it is managed automatically.
-    /// It shall be in the range [0, CANARD_NODE_ID_MAX].
+    uint64_t     node_id_occupancy_bitmap[2];
     uint_fast8_t node_id;
 
     struct
     {
-        bool fd; ///< Change to switch between Classic CAN and CAN FD.
+        /// By default, CAN FD mode is used; this flag can be used to change the mode to Classic CAN if needed;
+        /// for example, if the local CAN controller does not support CAN FD, or if the remote nodes do not support it.
+        /// The flag can be switched at any time.
+        ///
+        /// A valid auto-configuration strategy is to start in FD mode and switch to Classic if a non-FD frame is
+        /// observed on the bus.
+        ///
+        /// The local node can accept both Classic CAN and CAN FD frames regardless of this setting;
+        /// the setting only affects the mode used for outgoing frames.
+        bool fd;
 
         size_t queue_capacity;
         size_t queue_size;
@@ -366,12 +373,12 @@ typedef void (*canard_on_tx_feedback_t)(canard_t*, canard_tx_feedback_t);
 ///
 /// The PRNG seed must be likely to be distinct per node on the network; it may be a constant value.
 /// In the absence of a true RNG, a good way to obtain the seed is to use a unique hardware identifier hashed
-/// down to 64 bits. The PRNG is used for node-ID allocation, incl. reallocation on collision.
+/// down to 64 bits with a good hash, e.g., rapidhash.
 ///
-/// The application can assign the preferred node-ID immediately after initialization by setting the node_id field.
-/// If this is not done, the library will choose a free node-ID automatically. Regardless of whether it is assigned
-/// automatically or manually, if a collision is detected, a re-allocation will be done automatically.
-/// The application must not change the node-ID at any time other than immediately after initialization.
+/// The node_id parameter should be CANARD_NODE_ID_ANONYMOUS to enable automatic stateless allocation;
+/// however, if the application has a preferred node-ID (e.g., restored from a non-volatile memory),
+/// it may be passed here directly. Regardless of whether it is assigned automatically or manually,
+/// if another node with the same node-ID is detected, a re-allocation will be done automatically.
 /// Even if the node-ID is allocated automatically, it is recommended to save it in non-volatile memory for
 /// faster startup next time and to avoid the risk of unnecessary perturbations to the network.
 /// The same node-ID is used for both v1 and legacy v0 communications.
@@ -380,13 +387,14 @@ typedef void (*canard_on_tx_feedback_t)(canard_t*, canard_tx_feedback_t);
 /// filters when the RX pipeline is reconfigured. The number of available filters is limited by the CAN hardware.
 /// Pass zero filters to disable this functionality.
 ///
-/// The node will be configured to emit CAN FD by default. This can be changed by modifying the corresponding field.
+/// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///
 /// Returns true on success, false if any of the parameters are invalid.
 bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
                 const size_t                 tx_queue_capacity,
+                const uint_fast8_t           node_id,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count,
                 canard_filter_t* const       filter_storage);
@@ -404,6 +412,7 @@ uint16_t canard_pending_ifaces(const canard_t* const self);
 
 /// True if successfully processed, false if any of the arguments are invalid.
 /// A malformed frame is not considered an error; it is simply dropped and the corresponding counter is incremented.
+/// The can_data is copied and thus can be discarded by the caller after this function returns.
 bool canard_ingest_frame(canard_t* const      self,
                          const canard_us_t    timestamp,
                          const uint_fast8_t   iface_index,
