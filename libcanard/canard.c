@@ -29,6 +29,8 @@
 #define CAVL2_ASSERT(x) CANARD_ASSERT(x) // NOSONAR
 #include <cavl2.h>
 
+typedef unsigned char byte_t;
+
 #define BITS_PER_BYTE 8U
 #define BYTE_MAX      0xFFU
 
@@ -63,6 +65,54 @@ static const uint8_t canard_len_to_dlc[65] = {
     14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, // 33-48
     15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, // 49-64
 };
+
+static void* mem_alloc(const canard_mem_t memory, const size_t size)
+{
+    return memory.vtable->alloc(memory.context, size);
+}
+
+static void mem_free(const canard_mem_t memory, const size_t size, void* const data)
+{
+    memory.vtable->free(memory.context, size, data);
+}
+
+static byte_t* serialize_u32(byte_t* ptr, const uint32_t value)
+{
+    for (size_t i = 0; i < sizeof(value); i++) {
+        *ptr++ = (byte_t)((byte_t)(value >> (i * 8U)) & 0xFFU);
+    }
+    return ptr;
+}
+
+static byte_t* serialize_u64(byte_t* ptr, const uint64_t value)
+{
+    for (size_t i = 0; i < sizeof(value); i++) {
+        *ptr++ = (byte_t)((byte_t)(value >> (i * 8U)) & 0xFFU);
+    }
+    return ptr;
+}
+
+static const byte_t* deserialize_u32(const byte_t* ptr, uint32_t* const out_value)
+{
+    CANARD_ASSERT((ptr != NULL) && (out_value != NULL));
+    *out_value = 0;
+    for (size_t i = 0; i < sizeof(*out_value); i++) {
+        *out_value |= (uint32_t)((uint32_t)*ptr << (i * 8U)); // NOLINT(google-readability-casting) NOSONAR
+        ptr++;
+    }
+    return ptr;
+}
+
+static const byte_t* deserialize_u64(const byte_t* ptr, uint64_t* const out_value)
+{
+    CANARD_ASSERT((ptr != NULL) && (out_value != NULL));
+    *out_value = 0;
+    for (size_t i = 0; i < sizeof(*out_value); i++) {
+        *out_value |= ((uint64_t)*ptr << (i * 8U));
+        ptr++;
+    }
+    return ptr;
+}
 
 // ---------------------------------------------            CRC            ---------------------------------------------
 
@@ -111,4 +161,152 @@ static uint16_t crc_add(const uint16_t crc, const size_t size, const void* const
     return out;
 }
 
+// ---------------------------------------------      LIST CONTAINER       ---------------------------------------------
+
+static bool is_listed(const canard_list_t* const list, const canard_list_member_t* const member)
+{
+    return (member->next != NULL) || (member->prev != NULL) || (list->head == member);
+}
+
+/// No effect if not in the list.
+static void delist(canard_list_t* const list, canard_list_member_t* const member)
+{
+    if (member->next != NULL) {
+        member->next->prev = member->prev;
+    }
+    if (member->prev != NULL) {
+        member->prev->next = member->next;
+    }
+    if (list->head == member) {
+        list->head = member->next;
+    }
+    if (list->tail == member) {
+        list->tail = member->prev;
+    }
+    member->next = NULL;
+    member->prev = NULL;
+    assert((list->head != NULL) == (list->tail != NULL));
+}
+
+/// If the item is already in the list, it will be delisted first. Can be used for moving to the front.
+static void enlist_head(canard_list_t* const list, canard_list_member_t* const member)
+{
+    delist(list, member);
+    assert((member->next == NULL) && (member->prev == NULL));
+    assert((list->head != NULL) == (list->tail != NULL));
+    member->next = list->head;
+    if (list->head != NULL) {
+        list->head->prev = member;
+    }
+    list->head = member;
+    if (list->tail == NULL) {
+        list->tail = member;
+    }
+    assert((list->head != NULL) && (list->tail != NULL));
+}
+
+#define LIST_MEMBER(ptr, owner_type, owner_field) ((owner_type*)ptr_unbias((ptr), offsetof(owner_type, owner_field)))
+static void* ptr_unbias(const void* const ptr, const size_t offset)
+{
+    return (ptr == NULL) ? NULL : (void*)((char*)ptr - offset);
+}
+#define LIST_TAIL(list, owner_type, owner_field) LIST_MEMBER((list).tail, owner_type, owner_field)
+
 // ---------------------------------------------            TX             ---------------------------------------------
+
+typedef struct tx_frame_t
+{
+    size_t             refcount;
+    size_t*            objcount;
+    canard_mem_t       mem;
+    struct tx_frame_t* next;
+    size_t             size;
+    byte_t             data[];
+} tx_frame_t;
+
+static canard_bytes_t tx_frame_view(const tx_frame_t* const frame)
+{
+    return (canard_bytes_t){ .size = frame->size, .data = frame->data };
+}
+
+static tx_frame_t* tx_frame_from_view(const canard_bytes_t view)
+{
+    return (tx_frame_t*)ptr_unbias(view.data, offsetof(tx_frame_t, data));
+}
+
+static tx_frame_t* tx_frame_new(canard_t* const self, const canard_mem_t mem, const size_t data_size)
+{
+    tx_frame_t* const frame = (tx_frame_t*)mem_alloc(mem, sizeof(tx_frame_t) + data_size);
+    if (frame != NULL) {
+        frame->refcount = 1U;
+        frame->objcount = &self->tx.queue_size;
+        frame->mem      = mem;
+        frame->next     = NULL;
+        frame->size     = data_size;
+        // Update the count; this is decremented when the frame is freed upon refcount reaching zero.
+        self->tx.queue_size++;
+        CANARD_ASSERT(self->tx.queue_size <= self->tx.queue_capacity);
+    }
+    return frame;
+}
+
+/// The ordering is by topic hash first, then by transfer-ID.
+/// Therefore, it orders all transfers by topic hash, allowing quick lookup by topic with an arbitrary transfer-ID.
+typedef struct
+{
+    uint64_t topic_hash;
+    byte_t   transfer_id;
+} tx_transfer_key_t;
+
+/// The CAN ID index only contains transfers that are ready for transmission; the ordering is based not exactly on the
+/// CAN ID, but rather on its approximation called "skeleton" because we don't know v1.1 subject-ID bits until
+/// transmission time.
+///
+/// The staged index contains transfers ordered by readiness for retransmission;
+/// transfers that will no longer be transmitted but are retained waiting for the ack are in neither of these.
+/// The deadline index contains ALL transfers, ordered by their deadlines, used for purging expired transfers.
+/// The transfer index contains ALL transfers, used for lookup by (topic_hash, transfer_id).
+///
+/// The fields are weakly arranged to reduce padding, but logical grouping is prioritized.
+/// If o1heap is used and the platform is 32-bit, a struct up to 240 bytes large fits into a 256-byte block;
+/// reducing the footprint does not bring any benefit until <=112 bytes (which needs a 128-byte block).
+typedef struct tx_transfer_t
+{
+    canard_tree_t        index_staged;       ///< Soonest to be ready on the left. Key: staged_until
+    canard_tree_t        index_deadline;     ///< Soonest to expire on the left. Key: deadline
+    canard_tree_t        index_transfer;     ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
+    canard_tree_t        index_transfer_ack; ///< Only for outgoing ack transfers. Same key but referencing remote_*.
+    canard_tree_t        index_can_id[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission.
+    canard_list_member_t list_agewise;                         ///< Listed when created; oldest at the tail.
+
+    /// We always keep a pointer to the head of the spool, plus a cursor that scans the frames during transmission.
+    /// Both are NULL if the payload is destroyed (i.e., after the last attempt is done and we're waiting for ack).
+    /// The head points to the first frame unless it is known that no (further) retransmissions are needed,
+    /// in which case the old head is deleted and the head points to the next frame to transmit.
+    tx_frame_t* head[CANARD_IFACE_COUNT_MAX];
+
+    /// Mutable transmission state. All other fields, except for the index handles, are immutable.
+    tx_frame_t* cursor[CANARD_IFACE_COUNT_MAX];
+    canard_us_t staged_until; ///< When the transfer becomes eligible for retransmission.
+    byte_t      epoch;        ///< Does not overflow due to exponential backoff; e.g. 1us with epoch=48 => 9 years.
+
+    /// Constant transfer properties supplied by the client.
+    /// The remote_* fields are identical to the local ones except in the case of P2P transfers, where
+    /// they contain the values encoded in the P2P header. This is needed to find pending acks (to minimize duplicates),
+    /// and to report the correct values via the feedback callback for P2P transfers.
+    /// By default, upon construction, the remote_* fields equal the local ones, which is valid for ordinary messages.
+    uint16_t    iface_bitmap;    ///< Guaranteed to have at least one bit set within CANARD_IFACE_COUNT_MAX.
+    byte_t      p2p_destination; ///< Only for P2P transfers.
+    bool        reliable;
+    bool        subject_id_unresolved; ///< If subject-ID is to be resolved before transmission.
+    byte_t      transfer_id;
+    byte_t      remote_transfer_id;
+    uint32_t    can_id; ///< For v1.1 messages, the subject-ID bits are zeroed (resolved at tx time).
+    canard_us_t deadline;
+    uint64_t    topic_hash;
+    uint64_t    remote_topic_hash;
+
+    /// Application closure.
+    canard_user_context_t user;
+    void (*feedback)(canard_t*, canard_tx_feedback_t);
+} tx_transfer_t;

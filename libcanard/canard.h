@@ -162,8 +162,8 @@ typedef struct canard_mem_t        canard_mem_t;
 typedef struct canard_mem_vtable_t canard_mem_vtable_t;
 struct canard_mem_vtable_t
 {
-    void* (*alloc)(canard_mem_t*, size_t);
     void (*free)(canard_mem_t*, size_t, void*);
+    void* (*alloc)(canard_mem_t*, size_t);
 };
 struct canard_mem_t
 {
@@ -314,12 +314,12 @@ struct canard_t
         size_t queue_capacity;
         size_t queue_size;
 
-        canard_tree_t* index_priority;     ///< Lowest CAN ID on the left.
-        canard_tree_t* index_deadline;     ///< Soonest deadline on the left.
-        canard_tree_t* index_staged;       ///< Soonest retry time on the left.
-        canard_tree_t* index_transfer;     ///<
-        canard_tree_t* index_transfer_ack; ///< Lexicographical (topic hash, transfer-ID).
-        canard_list_t  list_agewise;       ///< Oldest transfer at the tail.
+        canard_tree_t* index_staged;                         ///< Soonest retry time on the left.
+        canard_tree_t* index_deadline;                       ///< Soonest deadline on the left.
+        canard_tree_t* index_transfer;                       ///< Ordered by (topic hash, transfer-ID).
+        canard_tree_t* index_transfer_ack;                   ///< Ordered by (remote topic hash, remote transfer-ID).
+        canard_tree_t* index_can_id[CANARD_IFACE_COUNT_MAX]; ///< Lowest CAN ID on the left.
+        canard_list_t  list_agewise;                         ///< Oldest transfer at the tail.
     } tx;
 
     struct

@@ -2,8 +2,10 @@
   <dictionary name="project">
     <words>
       <w>Libcanard</w>
+      <w>acks</w>
       <w>cyphal</w>
       <w>ifaces</w>
+      <w>objcount</w>
       <w>uavcan</w>
     </words>
   </dictionary>
