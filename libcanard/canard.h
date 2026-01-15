@@ -307,7 +307,7 @@ struct canard_t
     {
         /// By default, CAN FD mode is used; this flag can be used to change the mode to Classic CAN if needed;
         /// for example, if the local CAN controller does not support CAN FD, or if the remote nodes do not support it.
-        /// The flag can be switched at any time.
+        /// The flag can be switched at any time. All redundant interfaces share the same mode.
         ///
         /// A valid auto-configuration strategy that could be implemented in the application is to start in FD mode
         /// and switch to Classic if a non-FD frame is observed on the bus.

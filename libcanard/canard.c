@@ -525,3 +525,12 @@ static tx_frame_t* tx_spool_v0(const canard_mem_t         mem,
     }
     return head;
 }
+
+static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mtu)
+{
+    const size_t bytes_per_frame = mtu - 1U; // 1 byte is used for the tail byte
+    if (transfer_size <= bytes_per_frame) {
+        return 1U; // single-frame transfer
+    }
+    return ((transfer_size + CRC_SIZE_BYTES + bytes_per_frame) - 1U) / bytes_per_frame; // rounding up
+}
