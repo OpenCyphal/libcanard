@@ -276,6 +276,7 @@ typedef struct canard_vtable_t
                canard_us_t    now,
                canard_us_t    deadline,
                uint_fast8_t   iface_index,
+               bool           fd,
                uint32_t       extended_can_id,
                canard_bytes_t can_data);
 
@@ -304,11 +305,14 @@ struct canard_t
         /// for example, if the local CAN controller does not support CAN FD, or if the remote nodes do not support it.
         /// The flag can be switched at any time.
         ///
-        /// A valid auto-configuration strategy is to start in FD mode and switch to Classic if a non-FD frame is
-        /// observed on the bus.
+        /// A valid auto-configuration strategy that could be implemented in the application is to start in FD mode
+        /// and switch to Classic if a non-FD frame is observed on the bus.
         ///
         /// The local node can accept both Classic CAN and CAN FD frames regardless of this setting;
         /// the setting only affects the mode used for outgoing frames.
+        ///
+        /// Legacy v0 transfers (UAVCAN/DroneCAN) are always sent in Classic CAN mode regardless of this flag,
+        /// because UAVCAN v0 does not define CAN FD support.
         bool fd;
 
         size_t queue_capacity;

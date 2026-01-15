@@ -66,6 +66,13 @@ static const uint8_t canard_len_to_dlc[65] = {
     15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, // 49-64
 };
 
+static size_t      smaller(const size_t a, const size_t b) { return (a < b) ? a : b; }
+static size_t      larger(const size_t a, const size_t b) { return (a > b) ? a : b; }
+static int64_t     min_i64(const int64_t a, const int64_t b) { return (a < b) ? a : b; }
+static int64_t     max_i64(const int64_t a, const int64_t b) { return (a > b) ? a : b; }
+static canard_us_t earlier(const canard_us_t a, const canard_us_t b) { return min_i64(a, b); }
+static canard_us_t later(const canard_us_t a, const canard_us_t b) { return max_i64(a, b); }
+
 static void* mem_alloc(const canard_mem_t memory, const size_t size)
 {
     return memory.vtable->alloc(memory.context, size);
@@ -212,6 +219,51 @@ static void* ptr_unbias(const void* const ptr, const size_t offset)
 }
 #define LIST_TAIL(list, owner_type, owner_field) LIST_MEMBER((list).tail, owner_type, owner_field)
 
+// ---------------------------------------------  SCATTERED BYTES READER   ---------------------------------------------
+
+typedef struct
+{
+    const canard_bytes_chain_t* cursor;   ///< Initially points at the head.
+    size_t                      position; ///< Position within the current fragment, initially zero.
+} bytes_chain_reader_t;
+
+/// Sequentially reads data from a scattered byte array into a contiguous destination buffer.
+/// Requires that the total amount of read data does not exceed the total size of the scattered array.
+static void bytes_chain_read(bytes_chain_reader_t* const reader, const size_t size, void* const destination)
+{
+    CANARD_ASSERT((reader != NULL) && (reader->cursor != NULL) && (destination != NULL));
+    byte_t* ptr       = (byte_t*)destination;
+    size_t  remaining = size;
+    while (remaining > 0U) {
+        CANARD_ASSERT(reader->position <= reader->cursor->bytes.size);
+        while (reader->position == reader->cursor->bytes.size) { // Advance while skipping empty fragments.
+            reader->position = 0U;
+            reader->cursor   = reader->cursor->next;
+            CANARD_ASSERT(reader->cursor != NULL);
+        }
+        CANARD_ASSERT(reader->position < reader->cursor->bytes.size);
+        const size_t progress = smaller(remaining, reader->cursor->bytes.size - reader->position);
+        CANARD_ASSERT((progress > 0U) && (progress <= remaining));
+        CANARD_ASSERT((reader->position + progress) <= reader->cursor->bytes.size);
+        // NOLINTNEXTLINE(*DeprecatedOrUnsafeBufferHandling)
+        (void)memcpy(ptr, ((const byte_t*)reader->cursor->bytes.data) + reader->position, progress);
+        ptr += progress;
+        remaining -= progress;
+        reader->position += progress;
+    }
+}
+
+static size_t bytes_chain_size(const canard_bytes_chain_t head)
+{
+    size_t                      size    = head.bytes.size;
+    const canard_bytes_chain_t* current = head.next;
+    while (current != NULL) {
+        size += current->bytes.size;
+        current = current->next;
+    }
+    return size;
+}
+
 // ---------------------------------------------            TX             ---------------------------------------------
 
 typedef struct tx_frame_t
@@ -234,18 +286,17 @@ static tx_frame_t* tx_frame_from_view(const canard_bytes_t view)
     return (tx_frame_t*)ptr_unbias(view.data, offsetof(tx_frame_t, data));
 }
 
-static tx_frame_t* tx_frame_new(canard_t* const self, const canard_mem_t mem, const size_t data_size)
+static tx_frame_t* tx_frame_new(const canard_mem_t mem, size_t* const queue_size, const size_t data_size)
 {
     tx_frame_t* const frame = (tx_frame_t*)mem_alloc(mem, sizeof(tx_frame_t) + data_size);
     if (frame != NULL) {
         frame->refcount = 1U;
-        frame->objcount = &self->tx.queue_size;
+        frame->objcount = queue_size;
         frame->mem      = mem;
         frame->next     = NULL;
         frame->size     = data_size;
         // Update the count; this is decremented when the frame is freed upon refcount reaching zero.
-        self->tx.queue_size++;
-        CANARD_ASSERT(self->tx.queue_size <= self->tx.queue_capacity);
+        ++*queue_size;
     }
     return frame;
 }
@@ -272,6 +323,7 @@ typedef struct
 /// reducing the footprint does not bring any benefit until <=112 bytes (which needs a 128-byte block).
 typedef struct tx_transfer_t
 {
+    // Index handles.
     canard_tree_t        index_staged;       ///< Soonest to be ready on the left. Key: staged_until
     canard_tree_t        index_deadline;     ///< Soonest to expire on the left. Key: deadline
     canard_tree_t        index_transfer;     ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
@@ -282,7 +334,7 @@ typedef struct tx_transfer_t
     /// We always keep a pointer to the head of the spool, plus a cursor that scans the frames during transmission.
     /// Both are NULL if the payload is destroyed (i.e., after the last attempt is done and we're waiting for ack).
     /// The head points to the first frame unless it is known that no (further) retransmissions are needed,
-    /// in which case the old head is deleted and the head points to the next frame to transmit.
+    /// in which case the old head is dereferenced and the head points to the next frame to transmit.
     tx_frame_t* head[CANARD_IFACE_COUNT_MAX];
 
     /// Mutable transmission state. All other fields, except for the index handles, are immutable.
@@ -299,6 +351,7 @@ typedef struct tx_transfer_t
     byte_t      p2p_destination; ///< Only for P2P transfers.
     bool        reliable;
     bool        subject_id_unresolved; ///< If subject-ID is to be resolved before transmission.
+    bool        fd;
     byte_t      transfer_id;
     byte_t      remote_transfer_id;
     uint32_t    can_id; ///< For v1.1 messages, the subject-ID bits are zeroed (resolved at tx time).
@@ -310,3 +363,92 @@ typedef struct tx_transfer_t
     canard_user_context_t user;
     void (*feedback)(canard_t*, canard_tx_feedback_t);
 } tx_transfer_t;
+
+static byte_t tx_make_tail_byte(const bool sot, const bool eot, const bool toggle, const byte_t transfer_id)
+{
+    return (byte_t)((sot ? TAIL_START_OF_TRANSFER : 0U) | (eot ? TAIL_END_OF_TRANSFER : 0U) |
+                    (toggle ? TAIL_TOGGLE : 0U) | (transfer_id & CANARD_TRANSFER_ID_MAX));
+}
+
+/// Takes a frame payload size, returns a new size that is >=x and is rounded up to the nearest valid DLC.
+static size_t tx_ceil_frame_payload_size(const size_t x)
+{
+    CANARD_ASSERT(x < (sizeof(canard_len_to_dlc) / sizeof(canard_len_to_dlc[0])));
+    return canard_dlc_to_len[canard_len_to_dlc[x]];
+}
+
+/// Builds a chain of tx_frame_t instances, or NULL if OOM.
+/// This version works with Cyphal/CAN transfers. Legacy transfers require a different layout, see dedicated function.
+static tx_frame_t* tx_spool(const canard_mem_t         mem,
+                            size_t* const              queue_size,
+                            const size_t               mtu_pure, // Payload bytes per frame (excl. tail byte): 7, 63
+                            const byte_t               transfer_id,
+                            const canard_bytes_chain_t payload)
+{
+    CANARD_ASSERT(queue_size != NULL);
+    bytes_chain_reader_t reader        = { .cursor = &payload, .position = 0U };
+    tx_frame_t*          head          = NULL;
+    tx_frame_t*          tail          = NULL;
+    const size_t         size          = bytes_chain_size(payload);
+    const size_t         size_with_crc = size + CRC_SIZE_BYTES;
+    size_t               offset        = 0U;
+    uint16_t             crc           = CRC_INITIAL; // Cyphal transfers have a constant CRC seed
+    bool                 toggle        = true;        // Cyphal transfers start with toggle==1, unlike legacy
+    while (offset < size_with_crc) {
+        const size_t frame_size_with_tail =
+          ((size_with_crc - offset) < mtu_pure)
+            ? tx_ceil_frame_payload_size((size_with_crc - offset) + 1U) // padding last frame only
+            : (mtu_pure + 1U);
+        tx_frame_t* const item = tx_frame_new(mem, queue_size, frame_size_with_tail);
+        if (NULL == head) {
+            head = item;
+        } else {
+            tail->next = item;
+        }
+        tail = item;
+        // On OOM, deallocate the entire chain and quit.
+        if (NULL == tail) {
+            while (head != NULL) {
+                tx_frame_t* const next = head->next;
+                canard_refcount_dec(tx_frame_view(head));
+                head = next;
+            }
+            break;
+        }
+        // Populate the frame contents.
+        const size_t frame_size   = frame_size_with_tail - 1U;
+        size_t       frame_offset = 0U;
+        if (offset < size) {
+            const size_t move_size = smaller(size - offset, frame_size);
+            bytes_chain_read(&reader, move_size, tail->data);
+            crc = crc_add(crc, move_size, tail->data);
+            frame_offset += move_size;
+            offset += move_size;
+        }
+        // Handle the last frame of the transfer: it is special because it also contains padding and CRC.
+        if (offset >= size) {
+            // Insert padding -- only in the last frame. Include the padding bytes into the CRC.
+            while ((frame_offset + CRC_SIZE_BYTES) < frame_size) {
+                tail->data[frame_offset] = PADDING_BYTE_VALUE;
+                ++frame_offset;
+                crc = crc_add_byte(crc, PADDING_BYTE_VALUE);
+            }
+            // Insert the CRC.
+            if ((frame_offset < frame_size) && (offset == size)) {
+                tail->data[frame_offset] = (byte_t)(crc >> BITS_PER_BYTE); // NOSONAR
+                ++frame_offset;
+                ++offset;
+            }
+            if ((frame_offset < frame_size) && (offset > size)) {
+                tail->data[frame_offset] = (byte_t)(crc & BYTE_MAX);
+                ++frame_offset;
+                ++offset;
+            }
+        }
+        // Finalize the frame.
+        CANARD_ASSERT((frame_offset + 1U) == tail->size);
+        tail->data[frame_offset] = tx_make_tail_byte(head == tail, offset >= size_with_crc, toggle, transfer_id);
+        toggle                   = !toggle;
+    }
+    return head;
+}
