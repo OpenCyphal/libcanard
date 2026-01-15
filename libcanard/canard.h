@@ -102,6 +102,10 @@ typedef struct canard_t canard_t;
 /// Monotonic time in microseconds; the current time is never negative.
 typedef int64_t canard_us_t;
 
+/// Length to DLC rounds up.
+extern const uint_fast8_t canard_dlc_to_len[16];
+extern const uint_fast8_t canard_len_to_dlc[65];
+
 typedef enum canard_prio_t
 {
     canard_prio_exceptional = 0,

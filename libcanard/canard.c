@@ -53,8 +53,8 @@ typedef enum transfer_kind_t
     transfer_kind_v0_response = 5,
 } transfer_kind_t;
 
-static const uint8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
-static const uint8_t canard_len_to_dlc[65] = {
+const uint_fast8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
+const uint_fast8_t canard_len_to_dlc[65] = {
     0,  1,  2,  3,  4,  5,  6,  7,  8,                              // 0-8
     9,  9,  9,  9,                                                  // 9-12
     10, 10, 10, 10,                                                 // 13-16
@@ -149,7 +149,7 @@ static const uint16_t crc_table[256] = {
     0x9FF8U, 0x6E17U, 0x7E36U, 0x4E55U, 0x5E74U, 0x2E93U, 0x3EB2U, 0x0ED1U, 0x1EF0U,
 };
 
-static uint16_t crc_add_byte(const uint16_t crc, const uint8_t byte)
+static uint16_t crc_add_byte(const uint16_t crc, const byte_t byte)
 {
     return (uint16_t)((uint16_t)(crc << 8U) ^ crc_table[(uint16_t)((uint16_t)(crc >> 8U) ^ byte) & BYTE_MAX]);
 }
@@ -157,8 +157,8 @@ static uint16_t crc_add_byte(const uint16_t crc, const uint8_t byte)
 static uint16_t crc_add(const uint16_t crc, const size_t size, const void* const data)
 {
     CANARD_ASSERT((data != NULL) || (size == 0U));
-    uint16_t       out = crc;
-    const uint8_t* p   = (const uint8_t*)data;
+    uint16_t      out = crc;
+    const byte_t* p   = (const byte_t*)data;
     for (size_t i = 0; i < size; i++) {
         out = crc_add_byte(out, *p);
         ++p;
@@ -292,6 +292,7 @@ static tx_frame_t* tx_frame_from_view(const canard_bytes_t view)
 
 static tx_frame_t* tx_frame_new(const canard_mem_t mem, size_t* const queue_size, const size_t data_size)
 {
+    assert(data_size == canard_dlc_to_len[canard_len_to_dlc[data_size]]);
     tx_frame_t* const frame = (tx_frame_t*)mem_alloc(mem, sizeof(tx_frame_t) + data_size);
     if (frame != NULL) {
         frame->refcount = 1U;
@@ -390,70 +391,79 @@ static tx_frame_t* tx_spool(const canard_mem_t         mem,
                             const canard_bytes_chain_t payload)
 {
     CANARD_ASSERT(queue_size != NULL);
-    bytes_chain_reader_t reader        = { .cursor = &payload, .position = 0U };
-    tx_frame_t*          head          = NULL;
-    tx_frame_t*          tail          = NULL;
-    const size_t         size          = bytes_chain_size(payload);
-    const size_t         size_with_crc = size + CRC_SIZE_BYTES;
-    size_t               offset        = 0U;
-    uint16_t             crc           = CRC_INITIAL; // Cyphal transfers have a constant CRC seed
-    bool                 toggle        = true;        // Cyphal transfers start with toggle==1, unlike legacy
-    // TODO: handle single-frame without CRC
-    while (offset < size_with_crc) {
-        const size_t frame_size_with_tail =
-          ((size_with_crc - offset) < (mtu - 1U))
-            ? tx_ceil_frame_payload_size((size_with_crc - offset) + 1U) // padding last frame only
-            : mtu;
-        tx_frame_t* const item = tx_frame_new(mem, queue_size, frame_size_with_tail);
-        if (NULL == head) {
-            head = item;
-        } else {
-            tail->next = item;
+    bytes_chain_reader_t reader = { .cursor = &payload, .position = 0U };
+    tx_frame_t*          head   = NULL;
+    const size_t         size   = bytes_chain_size(payload);
+    bool                 toggle = true; // Cyphal transfers start with toggle==1, unlike legacy
+    if (size < mtu) {                   // Single-frame transfer; no CRC required -- easy case.
+        const size_t frame_size = tx_ceil_frame_payload_size(size + 1U);
+        head                    = tx_frame_new(mem, queue_size, frame_size);
+        if (head != NULL) {
+            bytes_chain_read(&reader, size, head->data);
+            memset(&head->data[size], PADDING_BYTE_VALUE, frame_size - size - 1U);
+            head->data[frame_size - 1U] = tx_make_tail_byte(true, true, toggle, transfer_id);
         }
-        tail = item;
-        // On OOM, deallocate the entire chain and quit.
-        if (NULL == tail) {
-            while (head != NULL) {
-                tx_frame_t* const next = head->next;
-                canard_refcount_dec(tx_frame_view(head));
-                head = next;
+    } else {
+        const size_t size_with_crc = size + CRC_SIZE_BYTES;
+        size_t       offset        = 0U;
+        uint16_t     crc           = CRC_INITIAL;
+        tx_frame_t*  tail          = NULL;
+        while (offset < size_with_crc) {
+            const size_t frame_size_with_tail =
+              ((size_with_crc - offset) < (mtu - 1U))
+                ? tx_ceil_frame_payload_size((size_with_crc - offset) + 1U) // padding last frame only
+                : mtu;
+            tx_frame_t* const item = tx_frame_new(mem, queue_size, frame_size_with_tail);
+            if (NULL == head) {
+                head = item;
+            } else {
+                tail->next = item;
             }
-            break;
+            tail = item;
+            // On OOM, deallocate the entire chain and quit.
+            if (NULL == tail) {
+                while (head != NULL) {
+                    tx_frame_t* const next = head->next;
+                    canard_refcount_dec(tx_frame_view(head));
+                    head = next;
+                }
+                break;
+            }
+            // Populate the frame contents.
+            const size_t frame_size   = frame_size_with_tail - 1U;
+            size_t       frame_offset = 0U;
+            if (offset < size) {
+                const size_t move_size = smaller(size - offset, frame_size);
+                bytes_chain_read(&reader, move_size, tail->data);
+                crc = crc_add(crc, move_size, tail->data);
+                frame_offset += move_size;
+                offset += move_size;
+            }
+            // Handle the last frame of the transfer: it is special because it also contains padding and CRC.
+            if (offset >= size) {
+                // Insert padding -- only in the last frame. Include the padding bytes into the CRC.
+                while ((frame_offset + CRC_SIZE_BYTES) < frame_size) {
+                    tail->data[frame_offset] = PADDING_BYTE_VALUE;
+                    ++frame_offset;
+                    crc = crc_add_byte(crc, PADDING_BYTE_VALUE);
+                }
+                // Insert the CRC.
+                if ((frame_offset < frame_size) && (offset == size)) {
+                    tail->data[frame_offset] = (byte_t)((crc >> 8U) & BYTE_MAX);
+                    ++frame_offset;
+                    ++offset;
+                }
+                if ((frame_offset < frame_size) && (offset > size)) {
+                    tail->data[frame_offset] = (byte_t)(crc & BYTE_MAX);
+                    ++frame_offset;
+                    ++offset;
+                }
+            }
+            // Finalize the frame.
+            CANARD_ASSERT((frame_offset + 1U) == tail->size);
+            tail->data[frame_offset] = tx_make_tail_byte(head == tail, offset >= size_with_crc, toggle, transfer_id);
+            toggle                   = !toggle;
         }
-        // Populate the frame contents.
-        const size_t frame_size   = frame_size_with_tail - 1U;
-        size_t       frame_offset = 0U;
-        if (offset < size) {
-            const size_t move_size = smaller(size - offset, frame_size);
-            bytes_chain_read(&reader, move_size, tail->data);
-            crc = crc_add(crc, move_size, tail->data);
-            frame_offset += move_size;
-            offset += move_size;
-        }
-        // Handle the last frame of the transfer: it is special because it also contains padding and CRC.
-        if (offset >= size) {
-            // Insert padding -- only in the last frame. Include the padding bytes into the CRC.
-            while ((frame_offset + CRC_SIZE_BYTES) < frame_size) {
-                tail->data[frame_offset] = PADDING_BYTE_VALUE;
-                ++frame_offset;
-                crc = crc_add_byte(crc, PADDING_BYTE_VALUE);
-            }
-            // Insert the CRC.
-            if ((frame_offset < frame_size) && (offset == size)) {
-                tail->data[frame_offset] = (byte_t)((crc >> 8U) & BYTE_MAX);
-                ++frame_offset;
-                ++offset;
-            }
-            if ((frame_offset < frame_size) && (offset > size)) {
-                tail->data[frame_offset] = (byte_t)(crc & BYTE_MAX);
-                ++frame_offset;
-                ++offset;
-            }
-        }
-        // Finalize the frame.
-        CANARD_ASSERT((frame_offset + 1U) == tail->size);
-        tail->data[frame_offset] = tx_make_tail_byte(head == tail, offset >= size_with_crc, toggle, transfer_id);
-        toggle                   = !toggle;
     }
     return head;
 }
@@ -468,7 +478,7 @@ static tx_frame_t* tx_spool_v0(const canard_mem_t         mem,
     CANARD_ASSERT(queue_size != NULL);
     bool         toggle    = false; // in v0, toggle starts with zero; that's how v0/v1 can be distinguished
     const size_t size_pure = bytes_chain_size(payload_pure);
-    if ((size_pure + 1U) <= CANARD_MTU_CAN_CLASSIC) { // single-frame transfer
+    if (size_pure < CANARD_MTU_CAN_CLASSIC) { // single-frame transfer
         tx_frame_t* const item = tx_frame_new(mem, queue_size, size_pure + 1U);
         if (item != NULL) {
             bytes_chain_reader_t reader = { .cursor = &payload_pure, .position = 0U };
