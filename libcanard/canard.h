@@ -240,13 +240,12 @@ struct canard_subscription_t
     uint64_t    topic_hash;
     uint32_t    port_id; ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t      extent;
-    uint16_t    crc_seed; ///< The default seed for CRC-16/CCITT-FALSE is 0xFFFF.
 
     canard_tree_t* index_session_by_node_id;
 
     const canard_subscription_vtable_t* vtable;
 
-    uint_fast8_t index_index_port_id; ///< Which of the indexes in canard_rx_t this subscription is part of.
+    uint_fast8_t kind; ///< Which of the indexes in canard_rx_t this subscription is part of.
 
     canard_filter_t filter; ///< Precomputed for quick acceptance filter configuration.
 
@@ -365,7 +364,6 @@ struct canard_t
 typedef struct canard_tx_feedback_t
 {
     uint64_t     topic_hash;
-    uint32_t     subject_id;
     uint_fast8_t transfer_id;
 
     /// The number of remote nodes that acknowledged the reception of the transfer.

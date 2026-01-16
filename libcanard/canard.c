@@ -21,6 +21,11 @@
 #define CANARD_ASSERT(x) assert(x) // NOSONAR
 #endif
 
+/// Allow usage of known compiler intrinsics for performance optimization.
+#ifndef CANARD_USE_INTRINSICS
+#define CANARD_USE_INTRINSICS 0
+#endif
+
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
 #error "Unsupported language: ISO C99 or a newer version is required."
 #endif
@@ -40,9 +45,9 @@ typedef unsigned char byte_t;
 
 #define PADDING_BYTE_VALUE 0U
 
-#define TAIL_START_OF_TRANSFER 128U
-#define TAIL_END_OF_TRANSFER   64U
-#define TAIL_TOGGLE            32U
+#define TAIL_SOT    128U
+#define TAIL_EOT    64U
+#define TAIL_TOGGLE 32U
 
 typedef enum transfer_kind_t
 {
@@ -53,6 +58,13 @@ typedef enum transfer_kind_t
     transfer_kind_v0_request  = 4,
     transfer_kind_v0_response = 5,
 } transfer_kind_t;
+
+static bool transfer_kind_is_v0(const transfer_kind_t kind)
+{
+    return (kind == transfer_kind_v0_message) || //
+           (kind == transfer_kind_v0_request) || //
+           (kind == transfer_kind_v0_response);
+}
 
 const uint_fast8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
 const uint_fast8_t canard_len_to_dlc[65] = {
@@ -74,10 +86,32 @@ static canard_us_t earlier(const canard_us_t a, const canard_us_t b) { return mi
 static canard_us_t later(const canard_us_t a, const canard_us_t b) { return max_i64(a, b); }
 
 static void* mem_alloc(const canard_mem_t memory, const size_t size) { return memory.vtable->alloc(memory, size); }
+static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
+{
+    void* const ptr = mem_alloc(memory, size);
+    if (ptr != NULL) {
+        (void)memset(ptr, 0, size);
+    }
+    return ptr;
+}
 
 static void mem_free(const canard_mem_t memory, const size_t size, void* const data)
 {
     memory.vtable->free(memory, size, data);
+}
+
+static byte_t popcount(uint64_t x)
+{
+#if CANARD_USE_INTRINSICS && (defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM))
+    return (byte_t)__builtin_popcountll(x);
+#else
+    byte_t count = 0;
+    while (x != 0) {
+        count += (byte_t)(x & 1U);
+        x >>= 1U;
+    }
+    return count;
+#endif
 }
 
 static byte_t* serialize_u32(byte_t* ptr, const uint32_t value)
@@ -373,27 +407,66 @@ typedef struct tx_transfer_t
     /// they contain the values encoded in the P2P header. This is needed to find pending acks (to minimize duplicates),
     /// and to report the correct values via the feedback callback for P2P transfers.
     /// By default, upon construction, the remote_* fields equal the local ones, which is valid for ordinary messages.
-    uint16_t    iface_bitmap;    ///< Guaranteed to have at least one bit set within CANARD_IFACE_COUNT_MAX.
-    byte_t      p2p_destination; ///< Only for P2P transfers.
-    bool        reliable;
-    bool        subject_id_unresolved; ///< If subject-ID is to be resolved before transmission.
-    bool        fd;
-    byte_t      transfer_id;
-    byte_t      remote_transfer_id;
-    uint32_t    can_id; ///< For v1.1 messages, the subject-ID bits are zeroed (resolved at tx time).
-    canard_us_t deadline;
-    uint64_t    topic_hash;
-    uint64_t    remote_topic_hash;
+    uint16_t        iface_bitmap; ///< Guaranteed to have at least one bit set within CANARD_IFACE_COUNT_MAX.
+    bool            reliable;
+    bool            fd;
+    byte_t          transfer_id;
+    byte_t          remote_transfer_id;
+    transfer_kind_t kind;
+    uint32_t        can_id; ///< For v1.1 messages, the subject-ID bits are zeroed (resolved at tx time).
+    canard_us_t     deadline;
+    uint64_t        topic_hash;
+    uint64_t        remote_topic_hash;
 
     /// Application closure.
-    canard_user_context_t user;
-    void (*feedback)(canard_t*, canard_tx_feedback_t);
+    canard_user_context_t   user_context;
+    canard_on_tx_feedback_t feedback;
 } tx_transfer_t;
 
-static byte_t tx_make_tail_byte(const bool sot, const bool eot, const bool toggle, const byte_t transfer_id)
+static tx_transfer_t* tx_transfer_new(const canard_mem_t            mem,
+                                      const canard_us_t             now,
+                                      const canard_us_t             deadline,
+                                      const uint16_t                iface_bitmap,
+                                      const uint32_t                can_id,
+                                      const byte_t                  transfer_id,
+                                      const bool                    reliable,
+                                      const bool                    fd,
+                                      const transfer_kind_t         kind,
+                                      const uint64_t                topic_hash,
+                                      const canard_user_context_t   user_context,
+                                      const canard_on_tx_feedback_t feedback)
 {
-    return (byte_t)((sot ? TAIL_START_OF_TRANSFER : 0U) | (eot ? TAIL_END_OF_TRANSFER : 0U) |
-                    (toggle ? TAIL_TOGGLE : 0U) | (transfer_id & CANARD_TRANSFER_ID_MAX));
+    CANARD_ASSERT(now <= deadline);
+    CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
+    CANARD_ASSERT((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0);
+    CANARD_ASSERT((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap);
+    tx_transfer_t* const tr = mem_alloc_zero(mem, sizeof(tx_transfer_t));
+    if (tr != NULL) {
+        tr->staged_until       = now;
+        tr->epoch              = 0;
+        tr->iface_bitmap       = iface_bitmap;
+        tr->reliable           = reliable;
+        tr->fd                 = fd;
+        tr->transfer_id        = transfer_id;
+        tr->remote_transfer_id = transfer_id;
+        tr->kind               = kind;
+        tr->can_id             = can_id;
+        tr->deadline           = deadline;
+        tr->topic_hash         = topic_hash;
+        tr->remote_topic_hash  = topic_hash;
+        tr->user_context       = user_context;
+        tr->feedback           = feedback;
+        for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
+            tr->head[i] = tr->cursor[i] = NULL;
+        }
+    }
+    return tr;
+}
+
+static byte_t tx_make_tail_byte(const bool sot, const bool eot, const bool tog, const byte_t transfer_id)
+{
+    return (byte_t)((sot ? TAIL_SOT : 0U) | (eot ? TAIL_EOT : 0U) | (tog ? TAIL_TOGGLE : 0U) |
+                    (transfer_id & CANARD_TRANSFER_ID_MAX));
 }
 
 /// Takes a frame payload size, returns a new size that is >=x and is rounded up to the nearest valid DLC.
@@ -407,6 +480,7 @@ static size_t tx_ceil_frame_payload_size(const size_t x)
 /// This version works with Cyphal/CAN transfers. Legacy transfers require a different layout, see dedicated function.
 static tx_frame_t* tx_spool(const canard_mem_t         mem,
                             size_t* const              queue_size,
+                            const uint16_t             crc_seed,
                             const size_t               mtu,
                             const byte_t               transfer_id,
                             const canard_bytes_chain_t payload)
@@ -427,7 +501,7 @@ static tx_frame_t* tx_spool(const canard_mem_t         mem,
     } else {
         const size_t size_with_crc = size + CRC_SIZE_BYTES;
         size_t       offset        = 0U;
-        uint16_t     crc           = CRC_INITIAL;
+        uint16_t     crc           = crc_seed;
         tx_frame_t*  tail          = NULL;
         while (offset < size_with_crc) {
             const size_t frame_size_with_tail =
@@ -495,32 +569,33 @@ static tx_frame_t* tx_spool_v0(const canard_mem_t         mem,
                                size_t* const              queue_size,
                                const uint16_t             crc_seed,
                                const byte_t               transfer_id,
-                               const canard_bytes_chain_t payload_pure)
+                               const canard_bytes_chain_t payload)
 {
     CANARD_ASSERT(queue_size != NULL);
-    bool         toggle    = false; // in v0, toggle starts with zero; that's how v0/v1 can be distinguished
-    const size_t size_pure = bytes_chain_size(payload_pure);
-    if (size_pure < CANARD_MTU_CAN_CLASSIC) { // single-frame transfer
-        tx_frame_t* const item = tx_frame_new(mem, queue_size, size_pure + 1U);
+    bool         toggle = false; // in v0, toggle starts with zero; that's how v0/v1 can be distinguished
+    const size_t size   = bytes_chain_size(payload);
+    if (size < CANARD_MTU_CAN_CLASSIC) { // single-frame transfer
+        tx_frame_t* const item = tx_frame_new(mem, queue_size, size + 1U);
         if (item != NULL) {
-            bytes_chain_reader_t reader = { .cursor = &payload_pure, .position = 0U };
-            bytes_chain_read(&reader, size_pure, item->data);
-            item->data[size_pure] = tx_make_tail_byte(true, true, toggle, transfer_id);
+            bytes_chain_reader_t reader = { .cursor = &payload, .position = 0U };
+            bytes_chain_read(&reader, size, item->data);
+            item->data[size] = tx_make_tail_byte(true, true, toggle, transfer_id);
         }
         return item;
     }
-    const uint16_t crc                       = crc_add_chain(crc_seed, payload_pure);
-    const byte_t   crc_bytes[CRC_SIZE_BYTES] = { (byte_t)((crc >> 0U) & BYTE_MAX), // v0 uses little-endian CRC
-                                                 (byte_t)((crc >> 8U) & BYTE_MAX) };
-    const size_t   size                      = size_pure + CRC_SIZE_BYTES;
-    const canard_bytes_chain_t payload       = { .bytes = { .size = CRC_SIZE_BYTES, .data = crc_bytes },
-                                                 .next  = &payload_pure };
-    bytes_chain_reader_t       reader        = { .cursor = &payload, .position = 0U };
-    tx_frame_t*                head          = NULL;
-    tx_frame_t*                tail          = NULL;
-    size_t                     offset        = 0U;
-    while (offset < size) {
-        tx_frame_t* const item = tx_frame_new(mem, queue_size, smaller((size - offset) + 1U, CANARD_MTU_CAN_CLASSIC));
+    const uint16_t             crc                       = crc_add_chain(crc_seed, payload);
+    const byte_t               crc_bytes[CRC_SIZE_BYTES] = { (byte_t)((crc >> 0U) & BYTE_MAX), // v0 little-endian CRC
+                                                             (byte_t)((crc >> 8U) & BYTE_MAX) };
+    const size_t               size_total                = size + CRC_SIZE_BYTES;
+    const canard_bytes_chain_t payload_total             = { .bytes = { .size = CRC_SIZE_BYTES, .data = crc_bytes },
+                                                             .next  = &payload };
+    bytes_chain_reader_t       reader                    = { .cursor = &payload_total, .position = 0U };
+    tx_frame_t*                head                      = NULL;
+    tx_frame_t*                tail                      = NULL;
+    size_t                     offset                    = 0U;
+    while (offset < size_total) {
+        tx_frame_t* const item =
+          tx_frame_new(mem, queue_size, smaller((size_total - offset) + 1U, CANARD_MTU_CAN_CLASSIC));
         if (NULL == head) {
             head = item;
         } else {
@@ -537,15 +612,104 @@ static tx_frame_t* tx_spool_v0(const canard_mem_t         mem,
             break;
         }
         // Populate the frame contents.
-        const size_t progress = smaller(size - offset, tail->size - 1U);
+        const size_t progress = smaller(size_total - offset, tail->size - 1U);
         bytes_chain_read(&reader, progress, tail->data);
         offset += progress;
         CANARD_ASSERT((progress + 1U) == tail->size);
-        CANARD_ASSERT(offset <= size);
-        tail->data[progress] = tx_make_tail_byte(head == tail, offset == size, toggle, transfer_id);
+        CANARD_ASSERT(offset <= size_total);
+        tail->data[progress] = tx_make_tail_byte(head == tail, offset == size_total, toggle, transfer_id);
         toggle               = !toggle;
     }
     return head;
+}
+
+static void tx_transfer_free_payload(tx_transfer_t* const tr)
+{
+    CANARD_ASSERT(tr != NULL);
+    for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
+        const tx_frame_t* frame = tr->head[i];
+        while (frame != NULL) {
+            const tx_frame_t* const next = frame->next;
+            canard_refcount_dec(tx_frame_view(frame));
+            frame = next;
+        }
+        tr->head[i]   = NULL;
+        tr->cursor[i] = NULL;
+    }
+}
+
+/// Currently, we use a very simple implementation that ceases delivery attempts after the first acknowledgment
+/// is received, similar to the CAN bus itself. Such mode of reliability is useful in the following scenarios:
+///
+/// - With topics with a single subscriber, or sent via P2P transport (responses to published messages).
+///   With a single recipient, a single acknowledgement is sufficient to guarantee delivery.
+///
+/// - The application only cares about one acknowledgement (anycast), e.g., with modular redundant nodes.
+///
+/// - The application assumes that if one copy was delivered successfully, then other copies have likely
+///   succeeded as well (depends on the required reliability guarantees), similar to the CAN bus.
+///
+/// TODO In the future, there are plans to extend this mechanism to track the number of acknowledgements per topic,
+/// such that we can retain transfers until a specified number of acknowledgements have been received. A remote
+/// node can be considered to have disappeared if it failed to acknowledge a transfer after the maximum number
+/// of attempts have been made. This is somewhat similar in principle to the connection-oriented DDS/RTPS approach,
+/// where pub/sub associations are established and removed automatically, transparently to the application.
+static void tx_transfer_retire(canard_t* const self, tx_transfer_t* const tr, const bool success)
+{
+    const canard_tx_feedback_t fb = {
+        .topic_hash       = tr->remote_topic_hash,
+        .transfer_id      = tr->remote_transfer_id,
+        .acknowledgements = success ? 1 : 0,
+        .user_context     = tr->user_context,
+    };
+    CANARD_ASSERT(tr->reliable == (tr->feedback != NULL));
+    const canard_on_tx_feedback_t feedback = tr->feedback;
+
+    // Remove from all indexes and lists.
+    for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
+        cavl2_remove_if(&self->tx.index_can_id[i], &tr->index_can_id[i]);
+    }
+    delist(&self->tx.list_agewise, &tr->list_agewise);
+    (void)cavl2_remove_if(&self->tx.index_staged, &tr->index_staged);
+    cavl2_remove(&self->tx.index_deadline, &tr->index_deadline);
+    cavl2_remove(&self->tx.index_transfer, &tr->index_transfer);
+    (void)cavl2_remove_if(&self->tx.index_transfer_ack, &tr->index_transfer_ack);
+
+    // Free the memory. The payload memory may already be empty depending on where we were invoked from.
+    tx_transfer_free_payload(tr);
+    mem_free(self->mem.tx_transfer, sizeof(tx_transfer_t), tr);
+
+    // Finally, when the internal state is updated and consistent, invoke the feedback callback if any.
+    if (feedback != NULL) {
+        feedback(self, fb);
+    }
+}
+
+/// When the queue is exhausted, finds a transfer to sacrifice using simple heuristics and returns it.
+/// Will return NULL if there are no transfers worth sacrificing (no queue space can be reclaimed).
+/// We cannot simply stop accepting new transfers when the queue is full, because it may be caused by a single
+/// stalled interface holding back progress for all transfers.
+/// The heuristics are subject to review and improvement.
+static tx_transfer_t* tx_sacrifice(canard_t* const self)
+{
+    return LIST_TAIL(self->tx.list_agewise, tx_transfer_t, list_agewise);
+}
+
+/// True on success, false if not possible to reclaim enough space.
+static bool tx_ensure_queue_space(canard_t* const self, const size_t total_frames_needed)
+{
+    if (total_frames_needed > self->tx.queue_capacity) {
+        return false; // not gonna happen
+    }
+    while (total_frames_needed > (self->tx.queue_capacity - self->tx.queue_size)) {
+        tx_transfer_t* const tr = tx_sacrifice(self);
+        if (tr == NULL) {
+            break; // We may have no transfers anymore but the CAN driver could still be holding some pending frames.
+        }
+        tx_transfer_retire(self, tr, false);
+        self->err.tx_sacrifice++;
+    }
+    return total_frames_needed <= (self->tx.queue_capacity - self->tx.queue_size);
 }
 
 static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mtu)
@@ -556,3 +720,73 @@ static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mt
     }
     return ((transfer_size + CRC_SIZE_BYTES + bytes_per_frame) - 1U) / bytes_per_frame; // rounding up
 }
+
+#if 0
+
+/// For v1.1 messages, the subject-ID resolution is postponed until transmission time, and the corresponding bits
+/// of the CAN ID are zeroed here.
+static bool tx_push(canard_t* const            self,
+                    tx_transfer_t* const       tr,
+                    const canard_bytes_chain_t payload,
+                    const uint16_t             crc_seed)
+{
+    // Ensure the queue has enough space.
+    const size_t mtu      = tr->fd ? CANARD_MTU_CAN_FD : CANARD_MTU_CAN_CLASSIC;
+    const size_t size     = bytes_chain_size(payload); // TODO: pass the precomputed size into spool functions
+    const size_t n_frames = tx_predict_frame_count(size, mtu);
+    CANARD_ASSERT(n_frames > 0);
+    if (!tx_ensure_queue_space(self, n_frames)) {
+        mem_free(self->mem.tx_transfer, sizeof(tx_transfer_t), tr);
+        self->err.tx_capacity++;
+        return false;
+    }
+
+    // Make a shared frame spool. Unlike the Cyphal/UDP implementation, we require all ifaces to use the same MTU.
+    const size_t      queue_size_before = self->tx.queue_size;
+    tx_frame_t* const spool =
+      transfer_kind_is_v0(tr->kind)
+        ? tx_spool_v0(self->mem.tx_frame, &self->tx.queue_size, crc_seed, tr->transfer_id, payload)
+        : tx_spool(self->mem.tx_frame, &self->tx.queue_size, crc_seed, mtu, tr->transfer_id, payload);
+    if (spool == NULL) {
+        mem_free(self->mem.tx_transfer, sizeof(tx_transfer_t), tr);
+        self->err.oom++;
+        return false;
+    }
+    CANARD_ASSERT((self->tx.queue_size - queue_size_before) == n_frames);
+    CANARD_ASSERT(self->tx.queue_size <= self->tx.queue_capacity);
+    (void)queue_size_before;
+    const size_t frame_refcount_inc = popcount(tr->iface_bitmap) - 1U;
+    CANARD_ASSERT(frame_refcount_inc < CANARD_IFACE_COUNT_MAX);
+    if (frame_refcount_inc > 0) {
+        tx_frame_t* frame = spool;
+        while (frame != NULL) {
+            frame->refcount += frame_refcount_inc;
+            frame = frame->next;
+        }
+    }
+
+    // Enqueue for transmission immediately.
+    for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
+        if ((tr->iface_bitmap & (1U << i)) != 0) {
+            enlist_head(&tx->queue[i][tr->priority], &tr->queue[i]);
+        }
+    }
+    // Add to the staged index so that it is repeatedly re-enqueued later until acknowledged or expired.
+    if (tr->reliable) {
+        tx_stage_if(tx, tr);
+    }
+    // Add to the deadline index for expiration management.
+    (void)cavl2_find_or_insert(
+      &tx->index_deadline, &tr->deadline, tx_cavl_compare_deadline, &tr->index_deadline, cavl2_trivial_factory);
+    // Add to the transfer index for incoming ack management.
+    const tx_transfer_key_t    key           = { .topic_hash = tr->topic_hash, .transfer_id = tr->transfer_id };
+    const udpard_tree_t* const tree_transfer = cavl2_find_or_insert(
+      &tx->index_transfer, &key, tx_cavl_compare_transfer, &tr->index_transfer, cavl2_trivial_factory);
+    CANARD_ASSERT(tree_transfer == &tr->index_transfer); // ensure no duplicates; checked at the API level
+    (void)tree_transfer;
+    // Add to the agewise list for sacrifice management on queue exhaustion.
+    enlist_head(&tx->agewise, &tr->list_agewise);
+    return true;
+}
+
+#endif

@@ -10,6 +10,7 @@
       <w>nolintend</w>
       <w>nosonar</w>
       <w>objcount</w>
+      <w>popcount</w>
       <w>uavcan</w>
     </words>
   </dictionary>
