@@ -489,7 +489,8 @@ static tx_frame_t* tx_spool(const canard_mem_t         mem,
     return head;
 }
 
-/// The legacy counterpart of tx_spool() for UAVCAN v0 transfers. Always uses Classic CAN MTU.
+/// The legacy counterpart of tx_spool() for UAVCAN v0 transfers.
+/// Always uses Classic CAN MTU because UAVCAN v0 does not support CAN FD.
 static tx_frame_t* tx_spool_v0(const canard_mem_t         mem,
                                size_t* const              queue_size,
                                const uint16_t             crc_seed,

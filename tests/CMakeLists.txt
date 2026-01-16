@@ -78,3 +78,4 @@ add_compile_options(-Wno-unused-function)
 # Intrusive tests directly #include <canard.c> to access the internals.
 gen_test_matrix(test_helpers        "src/test_helpers.c")
 gen_test_matrix(test_intrusive_util "src/test_intrusive_util.c")
+gen_test_matrix(test_intrusive_tx   "src/test_intrusive_tx.c")
