@@ -38,7 +38,7 @@ static void test_tx_spool_single_frame_empty(void)
     const canard_bytes_chain_t payload    = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
 
     // Empty payload, MTU=8 (Classic CAN). Expect 1 frame with just tail byte.
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 5, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 5, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(1, count_frames(head));
     TEST_ASSERT_EQUAL_size_t(1, queue_size);
@@ -61,7 +61,7 @@ static void test_tx_spool_single_frame_small(void)
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
     // 4 bytes payload, MTU=8. Fits in single frame (4 < 7).
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 17, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 17, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(1, count_frames(head));
     // Frame size: ceil(4+1)=5 bytes.
@@ -87,7 +87,7 @@ static void test_tx_spool_single_frame_max_classic(void)
     const uint8_t        data[]     = { 1, 2, 3, 4, 5, 6, 7 }; // 7 bytes, max single-frame for Classic CAN.
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(1, count_frames(head));
     // Frame size: 7 payload + 1 tail = 8 bytes.
@@ -114,7 +114,7 @@ static void test_tx_spool_single_multi_boundary(void)
     const uint8_t        data[]     = { 0, 1, 2, 3, 4, 5, 6, 7 }; // Exactly 8 bytes.
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NOT_NULL(head);
     // 8 bytes + 2 CRC = 10 bytes. At 7 bytes/frame: ceil(10/7) = 2 frames.
     TEST_ASSERT_EQUAL_size_t(2, count_frames(head));
@@ -152,7 +152,7 @@ static void test_tx_spool_single_frame_fd(void)
     const uint8_t        data[20]   = { 0 }; // 20 bytes payload, MTU=64. Single frame.
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 31, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 31, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(1, count_frames(head));
     // Frame size: ceil(20+1)=21 -> rounded to 24.
@@ -180,7 +180,7 @@ static void test_tx_spool_fd_dlc_rounding(void)
         size_t               queue_size = 0;
         const uint8_t        data[9]    = { 0 };
         canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-        tx_frame_t*          head       = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 0, payload);
+        tx_frame_t*          head       = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 0, payload);
         TEST_ASSERT_NOT_NULL(head);
         TEST_ASSERT_EQUAL_size_t(12, head->size);
         // Tail at position 11.
@@ -193,7 +193,7 @@ static void test_tx_spool_fd_dlc_rounding(void)
         size_t               queue_size = 0;
         const uint8_t        data[13]   = { 0 };
         canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-        tx_frame_t*          head       = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 0, payload);
+        tx_frame_t*          head       = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 0, payload);
         TEST_ASSERT_NOT_NULL(head);
         TEST_ASSERT_EQUAL_size_t(16, head->size);
         TEST_ASSERT_EQUAL_HEX8(0xE0, head->data[15]);
@@ -205,7 +205,7 @@ static void test_tx_spool_fd_dlc_rounding(void)
         size_t               queue_size = 0;
         const uint8_t        data[25]   = { 0 };
         canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-        tx_frame_t*          head       = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 0, payload);
+        tx_frame_t*          head       = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 0, payload);
         TEST_ASSERT_NOT_NULL(head);
         TEST_ASSERT_EQUAL_size_t(32, head->size);
         TEST_ASSERT_EQUAL_HEX8(0xE0, head->data[31]);
@@ -217,7 +217,7 @@ static void test_tx_spool_fd_dlc_rounding(void)
         size_t               queue_size = 0;
         const uint8_t        data[33]   = { 0 };
         canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-        tx_frame_t*          head       = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 0, payload);
+        tx_frame_t*          head       = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 0, payload);
         TEST_ASSERT_NOT_NULL(head);
         TEST_ASSERT_EQUAL_size_t(48, head->size);
         TEST_ASSERT_EQUAL_HEX8(0xE0, head->data[47]);
@@ -229,7 +229,7 @@ static void test_tx_spool_fd_dlc_rounding(void)
         size_t               queue_size = 0;
         const uint8_t        data[49]   = { 0 };
         canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-        tx_frame_t*          head       = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 0, payload);
+        tx_frame_t*          head       = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 0, payload);
         TEST_ASSERT_NOT_NULL(head);
         TEST_ASSERT_EQUAL_size_t(64, head->size);
         TEST_ASSERT_EQUAL_HEX8(0xE0, head->data[63]);
@@ -250,7 +250,7 @@ static void test_tx_spool_multi_frame_classic(void)
     const uint8_t        data[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 7, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 7, payload);
     TEST_ASSERT_NOT_NULL(head);
     // 10 bytes + 2 CRC = 12 bytes. At 7 bytes/frame: ceil(12/7) = 2 frames.
     TEST_ASSERT_EQUAL_size_t(2, count_frames(head));
@@ -292,7 +292,7 @@ static void test_tx_spool_multi_frame_three_frames(void)
     const uint8_t        data[20] = { 0 };
     canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(4, count_frames(head));
 
@@ -328,7 +328,7 @@ static void test_tx_spool_multi_frame_fd(void)
     }
     canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_FD, 15, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_FD, 15, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(2, count_frames(head));
 
@@ -377,7 +377,7 @@ static void test_tx_spool_fragmented_payload(void)
     canard_bytes_chain_t c2         = { .bytes = { .size = sizeof(f2), .data = f2 }, .next = NULL };
     canard_bytes_chain_t c1         = { .bytes = { .size = sizeof(f1), .data = f1 }, .next = &c2 };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 3, c1);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 3, c1);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(1, count_frames(head));
     // 5 bytes payload + 1 tail = 6 bytes.
@@ -409,7 +409,7 @@ static void test_tx_spool_crc_split(void)
     const uint8_t        data[13]   = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(3, count_frames(head));
 
@@ -462,7 +462,7 @@ static void test_tx_spool_crc_only_last_frame(void)
     const uint8_t        data[14]   = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(3, count_frames(head));
 
@@ -511,7 +511,7 @@ static void test_tx_spool_oom(void)
     const uint8_t        data[]     = { 1, 2, 3 };
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(0, queue_size);
 }
@@ -528,7 +528,7 @@ static void test_tx_spool_oom_mid_chain(void)
     const uint8_t        data[20]   = { 0 };
     canard_bytes_chain_t payload    = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* head = tx_spool(mem, &queue_size, CANARD_MTU_CAN_CLASSIC, 0, payload);
+    tx_frame_t* head = tx_spool(mem, &queue_size, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 0, payload);
     TEST_ASSERT_NULL(head);
     // Verify that all allocated frames were properly freed.
     TEST_ASSERT_EQUAL_size_t(0, queue_size);
