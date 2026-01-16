@@ -5,9 +5,250 @@
 #include "helpers.h"
 #include <unity.h>
 
-static void test_crc(void)
+// ==============================================  CRC TESTS  ==============================================
+
+static void test_crc_add(void)
 {
-    //
+    // Empty input returns initial CRC unchanged.
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, crc_add(CRC_INITIAL, 0, NULL));
+
+    // Single bytes.
+    uint8_t data = 0x00;
+    TEST_ASSERT_EQUAL_HEX16(0xE1F0, crc_add(CRC_INITIAL, 1, &data));
+    data = 0xFF;
+    TEST_ASSERT_EQUAL_HEX16(0xFF00, crc_add(CRC_INITIAL, 1, &data));
+    data = 'A';
+    TEST_ASSERT_EQUAL_HEX16(0xB915, crc_add(CRC_INITIAL, 1, &data));
+
+    // Standard test vector: "123456789" yields 0x29B1.
+    const uint8_t vec[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_add(CRC_INITIAL, sizeof(vec), vec));
+
+    // Multi-byte patterns.
+    const uint8_t zeros[8] = { 0 };
+    TEST_ASSERT_EQUAL_HEX16(0x313E, crc_add(CRC_INITIAL, sizeof(zeros), zeros));
+    const uint8_t ones[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+    TEST_ASSERT_EQUAL_HEX16(0x97DF, crc_add(CRC_INITIAL, sizeof(ones), ones));
+
+    // Incremental computation must match full computation.
+    uint16_t crc_inc = CRC_INITIAL;
+    for (size_t i = 0; i < sizeof(vec); i++) {
+        crc_inc = crc_add(crc_inc, 1, &vec[i]);
+    }
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_inc);
+
+    // Two-chunk computation.
+    uint16_t crc_chunks = crc_add(CRC_INITIAL, 5, vec);
+    crc_chunks          = crc_add(crc_chunks, 4, &vec[5]);
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_chunks);
+}
+
+static void test_crc_add_chain(void)
+{
+    // Single fragment.
+    const uint8_t              data[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+    const canard_bytes_chain_t single = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_add_chain(CRC_INITIAL, single));
+
+    // Multiple fragments: "123" + "45" + "6789".
+    const uint8_t              f1[] = { '1', '2', '3' };
+    const uint8_t              f2[] = { '4', '5' };
+    const uint8_t              f3[] = { '6', '7', '8', '9' };
+    const canard_bytes_chain_t c3   = { .bytes = { .size = sizeof(f3), .data = f3 }, .next = NULL };
+    const canard_bytes_chain_t c2   = { .bytes = { .size = sizeof(f2), .data = f2 }, .next = &c3 };
+    const canard_bytes_chain_t c1   = { .bytes = { .size = sizeof(f1), .data = f1 }, .next = &c2 };
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_add_chain(CRC_INITIAL, c1));
+
+    // Empty fragments interspersed.
+    const uint8_t              fa[] = { '1', '2', '3', '4', '5' };
+    const uint8_t              fb[] = { '6', '7', '8', '9' };
+    const canard_bytes_chain_t e4   = { .bytes = { .size = sizeof(fb), .data = fb }, .next = NULL };
+    const canard_bytes_chain_t e3   = { .bytes = { .size = 0, .data = NULL }, .next = &e4 };
+    const canard_bytes_chain_t e2   = { .bytes = { .size = 0, .data = NULL }, .next = &e3 };
+    const canard_bytes_chain_t e1   = { .bytes = { .size = sizeof(fa), .data = fa }, .next = &e2 };
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_add_chain(CRC_INITIAL, e1));
+
+    // Single-byte fragments.
+    const uint8_t              b1 = '1';
+    const uint8_t              b2 = '2';
+    const uint8_t              b3 = '3';
+    const uint8_t              b4 = '4';
+    const uint8_t              b5 = '5';
+    const uint8_t              b6 = '6';
+    const uint8_t              b7 = '7';
+    const uint8_t              b8 = '8';
+    const uint8_t              b9 = '9';
+    const canard_bytes_chain_t s9 = { .bytes = { .size = 1, .data = &b9 }, .next = NULL };
+    const canard_bytes_chain_t s8 = { .bytes = { .size = 1, .data = &b8 }, .next = &s9 };
+    const canard_bytes_chain_t s7 = { .bytes = { .size = 1, .data = &b7 }, .next = &s8 };
+    const canard_bytes_chain_t s6 = { .bytes = { .size = 1, .data = &b6 }, .next = &s7 };
+    const canard_bytes_chain_t s5 = { .bytes = { .size = 1, .data = &b5 }, .next = &s6 };
+    const canard_bytes_chain_t s4 = { .bytes = { .size = 1, .data = &b4 }, .next = &s5 };
+    const canard_bytes_chain_t s3 = { .bytes = { .size = 1, .data = &b3 }, .next = &s4 };
+    const canard_bytes_chain_t s2 = { .bytes = { .size = 1, .data = &b2 }, .next = &s3 };
+    const canard_bytes_chain_t s1 = { .bytes = { .size = 1, .data = &b1 }, .next = &s2 };
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc_add_chain(CRC_INITIAL, s1));
+}
+
+// ==========================================  BYTES CHAIN TESTS  ==========================================
+
+static void test_bytes_chain(void)
+{
+    // Single fragment.
+    const uint8_t              data[] = { 'H', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd', '!' };
+    const canard_bytes_chain_t single = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    TEST_ASSERT_EQUAL_size_t(13, bytes_chain_size(single));
+
+    // Read entire single fragment.
+    uint8_t              buf[16] = { 0 };
+    bytes_chain_reader_t reader  = { .cursor = &single, .position = 0 };
+    bytes_chain_read(&reader, sizeof(data), buf);
+    TEST_ASSERT_EQUAL_MEMORY(data, buf, sizeof(data));
+
+    // Multiple fragments: "Hello" + ", " + "world!".
+    const uint8_t              f1[] = { 'H', 'e', 'l', 'l', 'o' };
+    const uint8_t              f2[] = { ',', ' ' };
+    const uint8_t              f3[] = { 'w', 'o', 'r', 'l', 'd', '!' };
+    const canard_bytes_chain_t c3   = { .bytes = { .size = sizeof(f3), .data = f3 }, .next = NULL };
+    const canard_bytes_chain_t c2   = { .bytes = { .size = sizeof(f2), .data = f2 }, .next = &c3 };
+    const canard_bytes_chain_t c1   = { .bytes = { .size = sizeof(f1), .data = f1 }, .next = &c2 };
+    TEST_ASSERT_EQUAL_size_t(13, bytes_chain_size(c1));
+
+    // Read all at once across fragments.
+    memset(buf, 0, sizeof(buf));
+    reader = (bytes_chain_reader_t){ .cursor = &c1, .position = 0 };
+    bytes_chain_read(&reader, 13, buf);
+    TEST_ASSERT_EQUAL_MEMORY(data, buf, 13);
+
+    // Read in chunks crossing fragment boundaries.
+    memset(buf, 0, sizeof(buf));
+    reader = (bytes_chain_reader_t){ .cursor = &c1, .position = 0 };
+    bytes_chain_read(&reader, 3, buf);     // "Hel"
+    bytes_chain_read(&reader, 4, buf + 3); // "lo, "
+    bytes_chain_read(&reader, 6, buf + 7); // "world!"
+    TEST_ASSERT_EQUAL_MEMORY(data, buf, 13);
+
+    // Empty fragments interspersed.
+    const uint8_t              fa[] = { 'A', 'B', 'C' };
+    const uint8_t              fb[] = { 'D', 'E' };
+    const canard_bytes_chain_t e5   = { .bytes = { .size = sizeof(fb), .data = fb }, .next = NULL };
+    const canard_bytes_chain_t e4   = { .bytes = { .size = 0, .data = NULL }, .next = &e5 };
+    const canard_bytes_chain_t e3   = { .bytes = { .size = 0, .data = NULL }, .next = &e4 };
+    const canard_bytes_chain_t e2   = { .bytes = { .size = sizeof(fa), .data = fa }, .next = &e3 };
+    const canard_bytes_chain_t e1   = { .bytes = { .size = 0, .data = NULL }, .next = &e2 };
+    TEST_ASSERT_EQUAL_size_t(5, bytes_chain_size(e1));
+
+    // Read skipping empty fragments.
+    memset(buf, 0, sizeof(buf));
+    reader = (bytes_chain_reader_t){ .cursor = &e1, .position = 0 };
+    bytes_chain_read(&reader, 5, buf);
+    TEST_ASSERT_EQUAL_UINT8('A', buf[0]);
+    TEST_ASSERT_EQUAL_UINT8('B', buf[1]);
+    TEST_ASSERT_EQUAL_UINT8('C', buf[2]);
+    TEST_ASSERT_EQUAL_UINT8('D', buf[3]);
+    TEST_ASSERT_EQUAL_UINT8('E', buf[4]);
+
+    // Single-byte reads.
+    reader = (bytes_chain_reader_t){ .cursor = &c1, .position = 0 };
+    for (size_t i = 0; i < 13; i++) {
+        uint8_t b = 0;
+        bytes_chain_read(&reader, 1, &b);
+        TEST_ASSERT_EQUAL_UINT8(data[i], b);
+    }
+
+    // Empty chain (single empty fragment).
+    const canard_bytes_chain_t empty = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
+    TEST_ASSERT_EQUAL_size_t(0, bytes_chain_size(empty));
+}
+
+// ==============================================  LIST TESTS  ==============================================
+
+typedef struct test_node_t
+{
+    int                  value;
+    canard_list_member_t member;
+} test_node_t;
+
+static void test_list(void)
+{
+    canard_list_t list  = { .head = NULL, .tail = NULL };
+    test_node_t   node1 = { .value = 1, .member = { .next = NULL, .prev = NULL } };
+    test_node_t   node2 = { .value = 2, .member = { .next = NULL, .prev = NULL } };
+    test_node_t   node3 = { .value = 3, .member = { .next = NULL, .prev = NULL } };
+
+    // Empty list.
+    TEST_ASSERT_NULL(list.head);
+    TEST_ASSERT_NULL(list.tail);
+    TEST_ASSERT_FALSE(is_listed(&list, &node1.member));
+
+    // Delist on empty list is a no-op.
+    delist(&list, &node1.member);
+    TEST_ASSERT_NULL(list.head);
+
+    // is_listed returns true when member is the sole element (next=NULL, prev=NULL, but head==member).
+    list.head = list.tail = &node1.member;
+    TEST_ASSERT_TRUE(is_listed(&list, &node1.member));
+    list.head = list.tail = NULL;
+
+    // Add single element.
+    enlist_head(&list, &node1.member);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+    TEST_ASSERT_TRUE(is_listed(&list, &node1.member));
+    TEST_ASSERT_NULL(node1.member.next);
+    TEST_ASSERT_NULL(node1.member.prev);
+
+    // Add second element at head.
+    enlist_head(&list, &node2.member);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, node2.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, node1.member.prev);
+
+    // Add third element at head. Order: node3 -> node2 -> node1.
+    enlist_head(&list, &node3.member);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+
+    // Delist middle.
+    delist(&list, &node2.member);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, node3.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, node1.member.prev);
+    TEST_ASSERT_FALSE(is_listed(&list, &node2.member));
+
+    // Re-add node2, then delist head.
+    enlist_head(&list, &node2.member); // Order: node2 -> node3 -> node1.
+    delist(&list, &node2.member);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.head);
+    TEST_ASSERT_NULL(node3.member.prev);
+
+    // Delist tail.
+    delist(&list, &node1.member);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.tail);
+
+    // Delist last element.
+    delist(&list, &node3.member);
+    TEST_ASSERT_NULL(list.head);
+    TEST_ASSERT_NULL(list.tail);
+
+    // Re-enlist moves element to front.
+    enlist_head(&list, &node1.member);
+    enlist_head(&list, &node2.member);
+    enlist_head(&list, &node3.member); // Order: node3 -> node2 -> node1.
+    enlist_head(&list, &node1.member); // Move tail to head. Order: node1 -> node3 -> node2.
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, node1.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, node3.member.next);
+
+    // Test LIST_MEMBER and LIST_TAIL macros.
+    test_node_t* head = LIST_MEMBER(list.head, test_node_t, member);
+    test_node_t* tail = LIST_TAIL(list, test_node_t, member);
+    TEST_ASSERT_EQUAL_INT(1, head->value);
+    TEST_ASSERT_EQUAL_INT(2, tail->value);
 }
 
 void setUp(void) {}
@@ -17,6 +258,9 @@ void tearDown(void) {}
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_crc);
+    RUN_TEST(test_crc_add);
+    RUN_TEST(test_crc_add_chain);
+    RUN_TEST(test_bytes_chain);
+    RUN_TEST(test_list);
     return UNITY_END();
 }
