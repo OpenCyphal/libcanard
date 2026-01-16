@@ -1,10 +1,13 @@
 <component name="ProjectDictionaryState">
   <dictionary name="project">
     <words>
+      <w>Kirienko</w>
       <w>Libcanard</w>
       <w>acks</w>
       <w>cyphal</w>
       <w>ifaces</w>
+      <w>nolintbegin</w>
+      <w>nolintend</w>
       <w>nosonar</w>
       <w>objcount</w>
       <w>uavcan</w>

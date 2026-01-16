@@ -1,6 +1,7 @@
 /// This software is distributed under the terms of the MIT License.
 /// Copyright (c) OpenCyphal.
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
+/// Contributors: https://github.com/OpenCyphal/libcanard/contributors
 
 #include "canard.h"
 #include <stddef.h>
@@ -72,14 +73,11 @@ static int64_t     max_i64(const int64_t a, const int64_t b) { return (a > b) ? 
 static canard_us_t earlier(const canard_us_t a, const canard_us_t b) { return min_i64(a, b); }
 static canard_us_t later(const canard_us_t a, const canard_us_t b) { return max_i64(a, b); }
 
-static void* mem_alloc(const canard_mem_t memory, const size_t size)
-{
-    return memory.vtable->alloc(memory.context, size);
-}
+static void* mem_alloc(const canard_mem_t memory, const size_t size) { return memory.vtable->alloc(memory, size); }
 
 static void mem_free(const canard_mem_t memory, const size_t size, void* const data)
 {
-    memory.vtable->free(memory.context, size, data);
+    memory.vtable->free(memory, size, data);
 }
 
 static byte_t* serialize_u32(byte_t* ptr, const uint32_t value)

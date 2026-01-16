@@ -1,42 +1,28 @@
-# Object files
 *.o
 *.ko
 *.obj
 *.elf
-
-# Precompiled Headers
 *.gch
 *.pch
-
-# Libraries
 *.lib
 *.a
 *.la
 *.lo
-
-# Shared objects (inc. Windows DLLs)
 *.dll
 *.so
 *.so.*
 *.dylib
-
-# Executables
 *.exe
 *.out
 *.app
 *.i*86
 *.x86_64
 *.hex
-
-# Debug files
 *.dSYM/
-
-# CMake build directory
 build/
 cmake-build-*/
 build-avr/
-
-# IDE and tools
+.cache*/
 .metadata
 .settings
 .project
@@ -47,10 +33,6 @@ build-avr/
 **/.idea/*
 !**/.idea/dictionaries
 !**/.idea/dictionaries/*
-
-# Pycache
 __pycache__/
-
-# OS stuff
 .DS_Store
 *.bak

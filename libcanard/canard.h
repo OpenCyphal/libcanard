@@ -21,7 +21,7 @@
 /// This software is distributed under the terms of the MIT License.
 /// Copyright (c) OpenCyphal.
 /// Author: Pavel Kirienko <pavel@opencyphal.org>
-/// Contributors: https://github.com/OpenCyphal/libcanard/contributors.
+/// Contributors: https://github.com/OpenCyphal/libcanard/contributors
 
 #ifndef CANARD_H_INCLUDED
 #define CANARD_H_INCLUDED
@@ -166,8 +166,8 @@ typedef struct canard_mem_t        canard_mem_t;
 typedef struct canard_mem_vtable_t canard_mem_vtable_t;
 struct canard_mem_vtable_t
 {
-    void (*free)(canard_mem_t*, size_t, void*);
-    void* (*alloc)(canard_mem_t*, size_t);
+    void (*free)(canard_mem_t, size_t, void*);
+    void* (*alloc)(canard_mem_t, size_t);
 };
 struct canard_mem_t
 {

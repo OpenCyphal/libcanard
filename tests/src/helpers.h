@@ -1,5 +1,5 @@
 // This software is distributed under the terms of the MIT License.
-// Copyright (c) 2016 Cyphal Development Team.
+// Copyright (c) Cyphal Development Team.
 
 // ReSharper disable CppRedundantInlineSpecifier
 // NOLINTBEGIN(*-unchecked-string-to-number-conversion,*-deprecated-headers,*-designated-initializers,*-loop-convert)
@@ -53,16 +53,6 @@ static inline void dummy_free(void* const user, const size_t size, void* const p
     TEST_PANIC_UNLESS(pointer == NULL);
 }
 
-// Single-fragment scatter helper.
-static inline canard_bytes_scattered_t make_scattered(const void* const data, const size_t size)
-{
-    canard_bytes_scattered_t out;
-    out.bytes.size = size;
-    out.bytes.data = data;
-    out.next       = NULL;
-    return out;
-}
-
 // Wraps an application pointer for user context plumbing.
 static inline canard_user_context_t make_user_context(void* const obj)
 {
@@ -90,9 +80,9 @@ typedef struct
     uint64_t count_free;
 } instrumented_allocator_t;
 
-static inline void* instrumented_allocator_alloc(void* const user_reference, const size_t size)
+static inline void* instrumented_allocator_alloc(const canard_mem_t mem, const size_t size)
 {
-    instrumented_allocator_t* const self   = (instrumented_allocator_t*)user_reference;
+    instrumented_allocator_t* const self   = (instrumented_allocator_t*)mem.context;
     void*                           result = NULL; // NOLINT(*-const-correctness)
     self->count_alloc++;
     if ((size > 0U) &&                                           //
@@ -122,9 +112,9 @@ static inline void* instrumented_allocator_alloc(void* const user_reference, con
     return result;
 }
 
-static inline void instrumented_allocator_free(void* const user_reference, const size_t size, void* const pointer)
+static inline void instrumented_allocator_free(const canard_mem_t mem, const size_t size, void* const pointer)
 {
-    instrumented_allocator_t* const self = (instrumented_allocator_t*)user_reference;
+    instrumented_allocator_t* const self = (instrumented_allocator_t*)mem.context;
     self->count_free++;
     if (pointer != NULL) { // NOLINTNEXTLINE(*-const-correctness)
         uint_least8_t* p         = ((uint_least8_t*)pointer) - INSTRUMENTED_ALLOCATOR_CANARY_SIZE;
@@ -152,6 +142,9 @@ static inline void instrumented_allocator_free(void* const user_reference, const
     }
 }
 
+static const canard_mem_vtable_t instrumented_allocator_vtable = { .free  = instrumented_allocator_free,
+                                                                   .alloc = instrumented_allocator_alloc };
+
 /// By default, the limit is unrestricted (set to the maximum possible value).
 static inline void instrumented_allocator_new(instrumented_allocator_t* const self)
 {
@@ -175,15 +168,9 @@ static inline void instrumented_allocator_reset(instrumented_allocator_t* const 
     instrumented_allocator_new(self);
 }
 
-static inline canard_mem_resource_t instrumented_allocator_make_resource(const instrumented_allocator_t* const self)
+static inline canard_mem_t instrumented_allocator_make_resource(instrumented_allocator_t* const self)
 {
-    const canard_mem_resource_t result = { (void*)self, &instrumented_allocator_free, &instrumented_allocator_alloc };
-    return result;
-}
-
-static inline canard_mem_deleter_t instrumented_allocator_make_deleter(const instrumented_allocator_t* const self)
-{
-    const canard_mem_deleter_t result = { (void*)self, &instrumented_allocator_free };
+    const canard_mem_t result = { &instrumented_allocator_vtable, self };
     return result;
 }
 

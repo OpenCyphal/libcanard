@@ -72,4 +72,5 @@ function(gen_test_single name files) # When the full matrix is not needed, to ke
 endfunction()
 
 # Add the test targets.
-gen_test_matrix(test_helpers "src/test_helpers.c")
+gen_test_matrix(test_helpers        "src/test_helpers.c")
+gen_test_matrix(test_intrusive_util "src/test_intrusive_util.c")
