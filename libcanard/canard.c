@@ -105,12 +105,15 @@ static byte_t popcount(uint64_t x)
 #if CANARD_USE_INTRINSICS && (defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM))
     return (byte_t)__builtin_popcountll(x);
 #else
-    byte_t count = 0;
-    while (x != 0) {
-        count += (byte_t)(x & 1U);
-        x >>= 1U;
-    }
-    return count;
+    // http://en.wikipedia.org/wiki/Hamming_weight#Efficient_implementation
+    const uint64_t m1  = 0x5555555555555555ULL;
+    const uint64_t m2  = 0x3333333333333333ULL;
+    const uint64_t m4  = 0x0F0F0F0F0F0F0F0FULL;
+    const uint64_t h01 = 0x0101010101010101ULL;
+    x -= (x >> 1U) & m1;
+    x = (x & m2) + ((x >> 2U) & m2);
+    x = (x + (x >> 4U)) & m4;
+    return (byte_t)((x * h01) >> 56U);
 #endif
 }
 
