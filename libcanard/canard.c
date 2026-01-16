@@ -21,6 +21,14 @@
 #define CANARD_ASSERT(x) assert(x) // NOSONAR
 #endif
 
+#if __STDC_VERSION__ < 201112L
+// Intentional violation of MISRA: static assertion macro cannot be replaced with a function definition.
+#define static_assert(x, ...)   typedef char _static_assert_gl(_static_assertion_, __LINE__)[(x) ? 1 : -1] // NOSONAR
+#define _static_assert_gl(a, b) _static_assert_gl_impl(a, b)                                               // NOSONAR
+// Intentional violation of MISRA: the paste operator ## cannot be avoided in this context.
+#define _static_assert_gl_impl(a, b) a##b // NOSONAR
+#endif
+
 /// Allow usage of known compiler intrinsics for performance optimization.
 #ifndef CANARD_USE_INTRINSICS
 #define CANARD_USE_INTRINSICS 0
@@ -32,6 +40,7 @@
 
 // The internal includes are placed here after the config header is included and CANARD_ASSERT is defined.
 #define CAVL2_T         canard_tree_t
+#define CAVL2_RELATION  int32_t
 #define CAVL2_ASSERT(x) CANARD_ASSERT(x) // NOSONAR
 #include <cavl2.h>
 
@@ -393,12 +402,12 @@ typedef struct
 typedef struct tx_transfer_t
 {
     // Index handles.
-    canard_tree_t        index_staged;       ///< Soonest to be ready on the left. Key: staged_until
-    canard_tree_t        index_deadline;     ///< Soonest to expire on the left. Key: deadline
-    canard_tree_t        index_transfer;     ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
-    canard_tree_t        index_transfer_ack; ///< Only for outgoing ack transfers. Same key but referencing remote_*.
-    canard_tree_t        index_can_id[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission.
-    canard_list_member_t list_agewise;                         ///< Listed when created; oldest at the tail.
+    canard_tree_t index_can_id[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission. Must be the first!
+    canard_tree_t index_staged;                         ///< Soonest to be ready on the left. Key: staged_until
+    canard_tree_t index_deadline;                       ///< Soonest to expire on the left. Key: deadline
+    canard_tree_t index_transfer;      ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
+    canard_tree_t index_transfer_ack;  ///< Only for outgoing ack transfers. Same key but referencing remote_*.
+    canard_list_member_t list_agewise; ///< Listed when created; oldest at the tail.
 
     /// We always keep a pointer to the head of the spool, plus a cursor that scans the frames during transmission.
     /// Both are NULL if the payload is destroyed (i.e., after the last attempt is done and we're waiting for ack).
@@ -456,8 +465,8 @@ static tx_transfer_t* tx_transfer_new(const canard_mem_t            mem,
         tr->iface_bitmap       = iface_bitmap;
         tr->reliable           = reliable;
         tr->fd                 = fd;
-        tr->transfer_id        = transfer_id;
-        tr->remote_transfer_id = transfer_id;
+        tr->transfer_id        = transfer_id & CANARD_TRANSFER_ID_MAX;
+        tr->remote_transfer_id = tr->transfer_id;
         tr->kind               = kind;
         tr->can_id             = can_id;
         tr->deadline           = deadline;
@@ -470,6 +479,53 @@ static tx_transfer_t* tx_transfer_new(const canard_mem_t            mem,
         }
     }
     return tr;
+}
+
+typedef struct
+{
+    uint32_t can_id;
+    byte_t   iface_index;
+} tx_cavl_compare_can_id_user_t;
+
+/// We may have multiple transfers inserted with the same CAN ID, so this comparator never returns zero.
+static int32_t tx_cavl_compare_can_id(const void* const user, const canard_tree_t* const node)
+{
+    const tx_cavl_compare_can_id_user_t* const params = (const tx_cavl_compare_can_id_user_t*)user;
+    static_assert(offsetof(tx_transfer_t, index_can_id) == 0, "");
+    const tx_transfer_t* const tr = ptr_unbias(node, params->iface_index * sizeof(canard_tree_t));
+    return (params->can_id >= tr->can_id) ? +1 : -1;
+}
+
+static int32_t tx_cavl_compare_staged(const void* const user, const canard_tree_t* const node)
+{
+    return ((*(const canard_us_t*)user) >= CAVL2_TO_OWNER(node, tx_transfer_t, index_staged)->staged_until) ? +1 : -1;
+}
+
+static int32_t tx_cavl_compare_deadline(const void* const user, const canard_tree_t* const node)
+{
+    return ((*(const canard_us_t*)user) >= CAVL2_TO_OWNER(node, tx_transfer_t, index_deadline)->deadline) ? +1 : -1;
+}
+
+static int32_t tx_cavl_compare_transfer(const void* const user, const canard_tree_t* const node)
+{
+    const tx_transfer_key_t* const key = (const tx_transfer_key_t*)user;
+    const tx_transfer_t* const tr = CAVL2_TO_OWNER(node, tx_transfer_t, index_transfer); // clang-format off
+    if (key->topic_hash  < tr->topic_hash)  { return -1; }
+    if (key->topic_hash  > tr->topic_hash)  { return +1; }
+    if (key->transfer_id < tr->transfer_id) { return -1; }
+    if (key->transfer_id > tr->transfer_id) { return +1; }
+    return 0; // clang-format on
+}
+
+static int32_t tx_cavl_compare_transfer_remote(const void* const user, const canard_tree_t* const node)
+{
+    const tx_transfer_key_t* const key = (const tx_transfer_key_t*)user;
+    const tx_transfer_t* const tr = CAVL2_TO_OWNER(node, tx_transfer_t, index_transfer_ack); // clang-format off
+    if (key->topic_hash  < tr->remote_topic_hash)  { return -1; }
+    if (key->topic_hash  > tr->remote_topic_hash)  { return +1; }
+    if (key->transfer_id < tr->remote_transfer_id) { return -1; }
+    if (key->transfer_id > tr->remote_transfer_id) { return +1; }
+    return 0; // clang-format on
 }
 
 static byte_t tx_make_tail_byte(const bool sot, const bool eot, const bool tog, const byte_t transfer_id)
@@ -694,6 +750,17 @@ static void tx_transfer_retire(canard_t* const self, tx_transfer_t* const tr, co
     }
 }
 
+/// True iff listed in at least one pending priority index.
+static bool tx_is_pending(const canard_t* const self, const tx_transfer_t* const tr)
+{
+    for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
+        if (cavl2_is_inserted(self->tx.index_can_id[i], &tr->index_can_id[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /// When the queue is exhausted, finds a transfer to sacrifice using simple heuristics and returns it.
 /// Will return NULL if there are no transfers worth sacrificing (no queue space can be reclaimed).
 /// We cannot simply stop accepting new transfers when the queue is full, because it may be caused by a single
@@ -721,6 +788,48 @@ static bool tx_ensure_queue_space(canard_t* const self, const size_t total_frame
     return total_frames_needed <= (self->tx.queue_capacity - self->tx.queue_size);
 }
 
+static tx_transfer_t* tx_transfer_find(canard_t* const self, const uint64_t topic_hash, const byte_t transfer_id)
+{
+    const tx_transfer_key_t key = { .topic_hash = topic_hash, .transfer_id = transfer_id };
+    return CAVL2_TO_OWNER(
+      cavl2_find(self->tx.index_transfer, &key, &tx_cavl_compare_transfer), tx_transfer_t, index_transfer);
+}
+
+/// Derives the ack timeout for an outgoing transfer.
+static canard_us_t tx_ack_timeout(const canard_us_t baseline, const uint32_t can_id, const byte_t attempts)
+{
+    CANARD_ASSERT(baseline > 0);
+    // What matters is the actual CAN arbitration priority, not the nominal one.
+    // They are equal, but we prefer first-principles derivation here.
+    const byte_t prio = (can_id & CAN_EXT_ID_MASK) >> 26U;
+    CANARD_ASSERT(prio < 8);
+    return baseline * (1LL << smaller((size_t)prio + (size_t)attempts, 62)); // NOLINT(*-signed-bitwise)
+}
+
+/// Updates the next attempt time and inserts the transfer into the staged index, unless the next scheduled
+/// transmission time is too close to the deadline, in which case no further attempts will be made.
+/// When invoking for the first time, staged_until must be set to the time of the first attempt (usually now).
+/// Once can deduce whether further attempts are planned by checking if the transfer is in the staged index.
+///
+/// The idea is that retransmitting the transfer too close to the deadline is pointless, because
+/// the ack may arrive just after the deadline and the transfer would be considered failed anyway.
+/// The solution is to add a small margin before the deadline. The margin is derived using a simple heuristic,
+/// which is subject to review and improvement later on (this is not an API-visible trait).
+static void tx_stage_if(canard_t* const self, tx_transfer_t* const tr)
+{
+    CANARD_ASSERT(!cavl2_is_inserted(self->tx.index_staged, &tr->index_staged));
+    const byte_t      epoch   = tr->epoch++;
+    const canard_us_t timeout = tx_ack_timeout(self->ack_baseline_timeout, tr->can_id, epoch);
+    tr->staged_until += timeout;
+    if ((tr->deadline - timeout) >= tr->staged_until) {
+        (void)cavl2_find_or_insert(&self->tx.index_staged, //
+                                   &tr->staged_until,
+                                   tx_cavl_compare_staged,
+                                   &tr->index_staged,
+                                   cavl2_trivial_factory);
+    }
+}
+
 static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mtu)
 {
     const size_t bytes_per_frame = mtu - 1U; // 1 byte is used for the tail byte
@@ -730,8 +839,7 @@ static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mt
     return ((transfer_size + CRC_SIZE_BYTES + bytes_per_frame) - 1U) / bytes_per_frame; // rounding up
 }
 
-#if 0
-
+/// Enqueues a transfer for transmission.
 /// For v1.1 messages, the subject-ID resolution is postponed until transmission time, and the corresponding bits
 /// of the CAN ID are zeroed here.
 static bool tx_push(canard_t* const            self,
@@ -777,25 +885,40 @@ static bool tx_push(canard_t* const            self,
     // Enqueue for transmission immediately.
     for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
         if ((tr->iface_bitmap & (1U << i)) != 0) {
-            enlist_head(&tx->queue[i][tr->priority], &tr->queue[i]);
+            const tx_cavl_compare_can_id_user_t user = { .can_id = tr->can_id, .iface_index = (byte_t)i };
+            (void)cavl2_find_or_insert(&self->tx.index_can_id[i], //
+                                       &user,
+                                       tx_cavl_compare_can_id,
+                                       &tr->index_can_id[i],
+                                       cavl2_trivial_factory);
+            tr->head[i]   = spool;
+            tr->cursor[i] = spool;
         }
     }
+
     // Add to the staged index so that it is repeatedly re-enqueued later until acknowledged or expired.
     if (tr->reliable) {
-        tx_stage_if(tx, tr);
+        tx_stage_if(self, tr);
     }
+
     // Add to the deadline index for expiration management.
-    (void)cavl2_find_or_insert(
-      &tx->index_deadline, &tr->deadline, tx_cavl_compare_deadline, &tr->index_deadline, cavl2_trivial_factory);
-    // Add to the transfer index for incoming ack management.
+    (void)cavl2_find_or_insert(&self->tx.index_deadline, //
+                               &tr->deadline,
+                               tx_cavl_compare_deadline,
+                               &tr->index_deadline,
+                               cavl2_trivial_factory);
+
+    // Add to the transfer index for incoming ack management and transfer-ID reuse detection.
     const tx_transfer_key_t    key           = { .topic_hash = tr->topic_hash, .transfer_id = tr->transfer_id };
-    const udpard_tree_t* const tree_transfer = cavl2_find_or_insert(
-      &tx->index_transfer, &key, tx_cavl_compare_transfer, &tr->index_transfer, cavl2_trivial_factory);
+    const canard_tree_t* const tree_transfer = cavl2_find_or_insert(&self->tx.index_transfer, //
+                                                                    &key,
+                                                                    tx_cavl_compare_transfer,
+                                                                    &tr->index_transfer,
+                                                                    cavl2_trivial_factory);
     CANARD_ASSERT(tree_transfer == &tr->index_transfer); // ensure no duplicates; checked at the API level
     (void)tree_transfer;
-    // Add to the agewise list for sacrifice management on queue exhaustion.
-    enlist_head(&tx->agewise, &tr->list_agewise);
+
+    // Add to the agewise list for sacrifice management on queue exhaustion. The oldest transfer will be at the tail.
+    enlist_head(&self->tx.list_agewise, &tr->list_agewise);
     return true;
 }
-
-#endif
