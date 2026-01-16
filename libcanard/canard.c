@@ -923,3 +923,12 @@ static bool tx_push(canard_t* const            self,
     enlist_head(&self->tx.list_agewise, &tr->list_agewise);
     return true;
 }
+
+/// Handle an ACK received from a remote node.
+static void tx_receive_ack(canard_t* const self, const uint64_t topic_hash, const byte_t transfer_id)
+{
+    tx_transfer_t* const tr = tx_transfer_find(self, topic_hash, transfer_id);
+    if ((tr != NULL) && tr->reliable) {
+        tx_transfer_retire(self, tr, true);
+    }
+}
