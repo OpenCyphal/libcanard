@@ -1,6 +1,7 @@
 // This software is distributed under the terms of the MIT License.
 // Copyright (c) OpenCyphal Development Team.
 
+#include "canard.c" // NOLINT(bugprone-suspicious-include)
 #include "helpers.h"
 #include <unity.h>
 

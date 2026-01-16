@@ -304,6 +304,29 @@ static tx_frame_t* tx_frame_new(const canard_mem_t mem, size_t* const queue_size
     return frame;
 }
 
+void canard_refcount_inc(const canard_bytes_t obj)
+{
+    if (obj.data != NULL) {
+        tx_frame_t* const frame = tx_frame_from_view(obj);
+        CANARD_ASSERT(frame->refcount > 0U);
+        ++frame->refcount; // TODO: if C11 is enabled, use stdatomic here
+    }
+}
+
+void canard_refcount_dec(const canard_bytes_t obj)
+{
+    if (obj.data != NULL) {
+        tx_frame_t* const frame = tx_frame_from_view(obj);
+        CANARD_ASSERT(frame->refcount > 0U);
+        --frame->refcount; // TODO: if C11 is enabled, use stdatomic here
+        if (frame->refcount == 0U) {
+            CANARD_ASSERT(*frame->objcount > 0U);
+            --*frame->objcount;
+            mem_free(frame->mem, sizeof(tx_frame_t) + frame->size, frame);
+        }
+    }
+}
+
 /// The ordering is by topic hash first, then by transfer-ID.
 /// Therefore, it orders all transfers by topic hash, allowing quick lookup by topic with an arbitrary transfer-ID.
 typedef struct
