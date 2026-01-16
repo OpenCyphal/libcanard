@@ -487,12 +487,12 @@ typedef struct
     byte_t   iface_index;
 } tx_cavl_compare_can_id_user_t;
 
+static_assert(offsetof(tx_transfer_t, index_can_id) == 0, "index_can_id must be the first field");
 /// We may have multiple transfers inserted with the same CAN ID, so this comparator never returns zero.
 static int32_t tx_cavl_compare_can_id(const void* const user, const canard_tree_t* const node)
 {
     const tx_cavl_compare_can_id_user_t* const params = (const tx_cavl_compare_can_id_user_t*)user;
-    static_assert(offsetof(tx_transfer_t, index_can_id) == 0, "");
-    const tx_transfer_t* const tr = ptr_unbias(node, params->iface_index * sizeof(canard_tree_t));
+    const tx_transfer_t* const                 tr     = ptr_unbias(node, params->iface_index * sizeof(canard_tree_t));
     return (params->can_id >= tr->can_id) ? +1 : -1;
 }
 
@@ -847,8 +847,9 @@ static bool tx_push(canard_t* const            self,
                     const canard_bytes_chain_t payload,
                     const uint16_t             crc_seed)
 {
-    // Ensure the queue has enough space.
-    const size_t mtu      = tr->fd ? CANARD_MTU_CAN_FD : CANARD_MTU_CAN_CLASSIC;
+    // Ensure the queue has enough space. v0 transfers always use Classic CAN regardless of tr->fd.
+    const bool   use_fd   = tr->fd && !transfer_kind_is_v0(tr->kind);
+    const size_t mtu      = use_fd ? CANARD_MTU_CAN_FD : CANARD_MTU_CAN_CLASSIC;
     const size_t size     = bytes_chain_size(payload); // TODO: pass the precomputed size into spool functions
     const size_t n_frames = tx_predict_frame_count(size, mtu);
     CANARD_ASSERT(n_frames > 0);
