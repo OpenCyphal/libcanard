@@ -7,80 +7,83 @@
 
 // ============================================  POPCOUNT TESTS  ============================================
 
-static void test_popcount(void)
+static void test_popcount(byte_t (*const popcnt)(uint64_t))
 {
     // Zero.
-    TEST_ASSERT_EQUAL_UINT8(0, popcount(0));
+    TEST_ASSERT_EQUAL_UINT8(0, popcnt(0));
 
     // Single bits at each nibble boundary.
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL << 4U));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL << 8U));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL << 16U));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL << 32U));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL << 48U));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1ULL << 63U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL << 4U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL << 8U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL << 16U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL << 32U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL << 48U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1ULL << 63U));
 
     // All bits set in progressively larger ranges.
-    TEST_ASSERT_EQUAL_UINT8(4, popcount(0xF));
-    TEST_ASSERT_EQUAL_UINT8(8, popcount(0xFF));
-    TEST_ASSERT_EQUAL_UINT8(12, popcount(0xFFF));
-    TEST_ASSERT_EQUAL_UINT8(16, popcount(0xFFFF));
-    TEST_ASSERT_EQUAL_UINT8(24, popcount(0xFFFFFF));
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0xFFFFFFFF));
-    TEST_ASSERT_EQUAL_UINT8(48, popcount(0xFFFFFFFFFFFFULL));
-    TEST_ASSERT_EQUAL_UINT8(64, popcount(0xFFFFFFFFFFFFFFFFULL));
+    TEST_ASSERT_EQUAL_UINT8(4, popcnt(0xF));
+    TEST_ASSERT_EQUAL_UINT8(8, popcnt(0xFF));
+    TEST_ASSERT_EQUAL_UINT8(12, popcnt(0xFFF));
+    TEST_ASSERT_EQUAL_UINT8(16, popcnt(0xFFFF));
+    TEST_ASSERT_EQUAL_UINT8(24, popcnt(0xFFFFFF));
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0xFFFFFFFF));
+    TEST_ASSERT_EQUAL_UINT8(48, popcnt(0xFFFFFFFFFFFFULL));
+    TEST_ASSERT_EQUAL_UINT8(64, popcnt(0xFFFFFFFFFFFFFFFFULL));
 
     // Alternating bit patterns.
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0xAAAAAAAAAAAAAAAAULL)); // 10101010...
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0x5555555555555555ULL)); // 01010101...
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0xCCCCCCCCCCCCCCCCULL)); // 11001100...
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0x3333333333333333ULL)); // 00110011...
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0xF0F0F0F0F0F0F0F0ULL)); // 11110000...
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0x0F0F0F0F0F0F0F0FULL)); // 00001111...
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0xAAAAAAAAAAAAAAAAULL)); // 10101010...
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0x5555555555555555ULL)); // 01010101...
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0xCCCCCCCCCCCCCCCCULL)); // 11001100...
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0x3333333333333333ULL)); // 00110011...
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0xF0F0F0F0F0F0F0F0ULL)); // 11110000...
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0x0F0F0F0F0F0F0F0FULL)); // 00001111...
 
     // Byte patterns repeated.
-    TEST_ASSERT_EQUAL_UINT8(8, popcount(0x0101010101010101ULL));  // One bit per byte.
-    TEST_ASSERT_EQUAL_UINT8(16, popcount(0x0303030303030303ULL)); // Two bits per byte.
-    TEST_ASSERT_EQUAL_UINT8(24, popcount(0x0707070707070707ULL)); // Three bits per byte.
-    TEST_ASSERT_EQUAL_UINT8(32, popcount(0x0F0F0F0F0F0F0F0FULL)); // Four bits per byte.
-    TEST_ASSERT_EQUAL_UINT8(56, popcount(0x7F7F7F7F7F7F7F7FULL)); // Seven bits per byte.
+    TEST_ASSERT_EQUAL_UINT8(8, popcnt(0x0101010101010101ULL));  // One bit per byte.
+    TEST_ASSERT_EQUAL_UINT8(16, popcnt(0x0303030303030303ULL)); // Two bits per byte.
+    TEST_ASSERT_EQUAL_UINT8(24, popcnt(0x0707070707070707ULL)); // Three bits per byte.
+    TEST_ASSERT_EQUAL_UINT8(32, popcnt(0x0F0F0F0F0F0F0F0FULL)); // Four bits per byte.
+    TEST_ASSERT_EQUAL_UINT8(56, popcnt(0x7F7F7F7F7F7F7F7FULL)); // Seven bits per byte.
 
     // Sparse patterns (few bits set).
-    TEST_ASSERT_EQUAL_UINT8(2, popcount(0x8000000000000001ULL)); // Endpoints only.
-    TEST_ASSERT_EQUAL_UINT8(2, popcount(0x0000000180000000ULL)); // Middle bits.
-    TEST_ASSERT_EQUAL_UINT8(4, popcount(0x8000000180000001ULL)); // Corners.
+    TEST_ASSERT_EQUAL_UINT8(2, popcnt(0x8000000000000001ULL)); // Endpoints only.
+    TEST_ASSERT_EQUAL_UINT8(2, popcnt(0x0000000180000000ULL)); // Middle bits.
+    TEST_ASSERT_EQUAL_UINT8(4, popcnt(0x8000000180000001ULL)); // Corners.
 
     // Dense patterns (few bits clear).
-    TEST_ASSERT_EQUAL_UINT8(63, popcount(0xFFFFFFFFFFFFFFFEULL)); // All but LSB.
-    TEST_ASSERT_EQUAL_UINT8(63, popcount(0x7FFFFFFFFFFFFFFFULL)); // All but MSB.
-    TEST_ASSERT_EQUAL_UINT8(62, popcount(0x7FFFFFFFFFFFFFFEULL)); // All but both ends.
+    TEST_ASSERT_EQUAL_UINT8(63, popcnt(0xFFFFFFFFFFFFFFFEULL)); // All but LSB.
+    TEST_ASSERT_EQUAL_UINT8(63, popcnt(0x7FFFFFFFFFFFFFFFULL)); // All but MSB.
+    TEST_ASSERT_EQUAL_UINT8(62, popcnt(0x7FFFFFFFFFFFFFFEULL)); // All but both ends.
 
     // Powers of two minus one (all lower bits set).
-    TEST_ASSERT_EQUAL_UINT8(1, popcount((1ULL << 1U) - 1U));
-    TEST_ASSERT_EQUAL_UINT8(7, popcount((1ULL << 7U) - 1U));
-    TEST_ASSERT_EQUAL_UINT8(15, popcount((1ULL << 15U) - 1U));
-    TEST_ASSERT_EQUAL_UINT8(31, popcount((1ULL << 31U) - 1U));
-    TEST_ASSERT_EQUAL_UINT8(63, popcount((1ULL << 63U) - 1U));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt((1ULL << 1U) - 1U));
+    TEST_ASSERT_EQUAL_UINT8(7, popcnt((1ULL << 7U) - 1U));
+    TEST_ASSERT_EQUAL_UINT8(15, popcnt((1ULL << 15U) - 1U));
+    TEST_ASSERT_EQUAL_UINT8(31, popcnt((1ULL << 31U) - 1U));
+    TEST_ASSERT_EQUAL_UINT8(63, popcnt((1ULL << 63U) - 1U));
 
     // Small values.
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(1));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(2));
-    TEST_ASSERT_EQUAL_UINT8(2, popcount(3));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(4));
-    TEST_ASSERT_EQUAL_UINT8(2, popcount(5));
-    TEST_ASSERT_EQUAL_UINT8(2, popcount(6));
-    TEST_ASSERT_EQUAL_UINT8(3, popcount(7));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(8));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(1));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(2));
+    TEST_ASSERT_EQUAL_UINT8(2, popcnt(3));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(4));
+    TEST_ASSERT_EQUAL_UINT8(2, popcnt(5));
+    TEST_ASSERT_EQUAL_UINT8(2, popcnt(6));
+    TEST_ASSERT_EQUAL_UINT8(3, popcnt(7));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(8));
 
     // Specific known values.
-    TEST_ASSERT_EQUAL_UINT8(6, popcount(63));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(64));
-    TEST_ASSERT_EQUAL_UINT8(7, popcount(127));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(128));
-    TEST_ASSERT_EQUAL_UINT8(8, popcount(255));
-    TEST_ASSERT_EQUAL_UINT8(1, popcount(256));
+    TEST_ASSERT_EQUAL_UINT8(6, popcnt(63));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(64));
+    TEST_ASSERT_EQUAL_UINT8(7, popcnt(127));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(128));
+    TEST_ASSERT_EQUAL_UINT8(8, popcnt(255));
+    TEST_ASSERT_EQUAL_UINT8(1, popcnt(256));
 }
+
+static void test_popcount_emulated(void) { test_popcount(popcount_emulated); }
+static void test_popcount_intrinsics(void) { test_popcount(popcount); }
 
 // ==============================================  CRC TESTS  ==============================================
 
@@ -335,7 +338,8 @@ void tearDown(void) {}
 int main(void)
 {
     UNITY_BEGIN();
-    RUN_TEST(test_popcount);
+    RUN_TEST(test_popcount_emulated);
+    RUN_TEST(test_popcount_intrinsics);
     RUN_TEST(test_crc_add);
     RUN_TEST(test_crc_add_chain);
     RUN_TEST(test_bytes_chain);

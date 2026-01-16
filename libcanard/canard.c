@@ -85,6 +85,29 @@ static int64_t     max_i64(const int64_t a, const int64_t b) { return (a > b) ? 
 static canard_us_t earlier(const canard_us_t a, const canard_us_t b) { return min_i64(a, b); }
 static canard_us_t later(const canard_us_t a, const canard_us_t b) { return max_i64(a, b); }
 
+/// Used if intrinsics are not available.
+/// http://en.wikipedia.org/wiki/Hamming_weight#Efficient_implementation
+static byte_t popcount_emulated(uint64_t x)
+{
+    const uint64_t m1  = 0x5555555555555555ULL;
+    const uint64_t m2  = 0x3333333333333333ULL;
+    const uint64_t m4  = 0x0F0F0F0F0F0F0F0FULL;
+    const uint64_t h01 = 0x0101010101010101ULL;
+    x -= (x >> 1U) & m1;
+    x = (x & m2) + ((x >> 2U) & m2);
+    x = (x + (x >> 4U)) & m4;
+    return (byte_t)((x * h01) >> 56U);
+}
+
+static byte_t popcount(const uint64_t x)
+{
+#if CANARD_USE_INTRINSICS && (defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM))
+    return (byte_t)__builtin_popcountll(x);
+#else
+    return popcount_emulated(x);
+#endif
+}
+
 static void* mem_alloc(const canard_mem_t memory, const size_t size) { return memory.vtable->alloc(memory, size); }
 static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 {
@@ -98,23 +121,6 @@ static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 static void mem_free(const canard_mem_t memory, const size_t size, void* const data)
 {
     memory.vtable->free(memory, size, data);
-}
-
-static byte_t popcount(uint64_t x)
-{
-#if CANARD_USE_INTRINSICS && (defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM))
-    return (byte_t)__builtin_popcountll(x);
-#else
-    // http://en.wikipedia.org/wiki/Hamming_weight#Efficient_implementation
-    const uint64_t m1  = 0x5555555555555555ULL;
-    const uint64_t m2  = 0x3333333333333333ULL;
-    const uint64_t m4  = 0x0F0F0F0F0F0F0F0FULL;
-    const uint64_t h01 = 0x0101010101010101ULL;
-    x -= (x >> 1U) & m1;
-    x = (x & m2) + ((x >> 2U) & m2);
-    x = (x + (x >> 4U)) & m4;
-    return (byte_t)((x * h01) >> 56U);
-#endif
 }
 
 static byte_t* serialize_u32(byte_t* ptr, const uint32_t value)
