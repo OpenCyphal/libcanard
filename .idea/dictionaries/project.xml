@@ -11,6 +11,7 @@
       <w>nosonar</w>
       <w>objcount</w>
       <w>popcount</w>
+      <w>stdatomic</w>
       <w>uavcan</w>
       <w>unrespond</w>
     </words>

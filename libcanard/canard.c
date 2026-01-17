@@ -132,7 +132,7 @@ static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 {
     void* const ptr = mem_alloc(memory, size);
     if (ptr != NULL) {
-        (void)memset(ptr, 0, size);
+        (void)memset(ptr, 0, size); // NOLINT(*-security.insecureAPI.DeprecatedOrUnsafeBufferHandling)
     }
     return ptr;
 }
@@ -226,7 +226,7 @@ static uint16_t crc_add(const uint16_t crc, const size_t size, const void* const
     return out;
 }
 
-static uint16_t crc_add_chain(uint16_t crc, const canard_bytes_chain_t chain)
+static uint16_t crc_add_chain(uint16_t crc, const canard_bytes_chain_t chain) // NOLINT(*-no-recursion)
 {
     crc = crc_add(crc, chain.bytes.size, chain.bytes.data);
     return (chain.next == NULL) ? crc : crc_add_chain(crc, *chain.next);
@@ -272,6 +272,23 @@ static void enlist_head(canard_list_t* const list, canard_list_member_t* const m
     list->head = member;
     if (list->tail == NULL) {
         list->tail = member;
+    }
+    assert((list->head != NULL) && (list->tail != NULL));
+}
+
+/// If the item is already in the list, it will be delisted first. Can be used for moving to the back.
+static void enlist_tail(canard_list_t* const list, canard_list_member_t* const member)
+{
+    delist(list, member);
+    assert((member->next == NULL) && (member->prev == NULL));
+    assert((list->head != NULL) == (list->tail != NULL));
+    member->prev = list->tail;
+    if (list->tail != NULL) {
+        list->tail->next = member;
+    }
+    list->tail = member;
+    if (list->head == NULL) {
+        list->head = member;
     }
     assert((list->head != NULL) && (list->tail != NULL));
 }
@@ -358,7 +375,8 @@ static tx_frame_t* tx_frame_from_view(const canard_bytes_t view)
 
 static tx_frame_t* tx_frame_new(const canard_mem_t mem, size_t* const queue_size, const size_t data_size)
 {
-    assert(data_size == canard_dlc_to_len[canard_len_to_dlc[data_size]]);
+    CANARD_ASSERT(data_size <= CANARD_MTU_CAN_FD);
+    CANARD_ASSERT(data_size == canard_dlc_to_len[canard_len_to_dlc[data_size]]); // NOLINT(*-security.ArrayBound)
     tx_frame_t* const frame = (tx_frame_t*)mem_alloc(mem, sizeof(tx_frame_t) + data_size);
     if (frame != NULL) {
         frame->refcount = 1U;
@@ -385,8 +403,8 @@ void canard_refcount_dec(const canard_bytes_t obj)
 {
     if (obj.data != NULL) {
         tx_frame_t* const frame = tx_frame_from_view(obj);
-        CANARD_ASSERT(frame->refcount > 0U);
-        --frame->refcount; // TODO: if C11 is enabled, use stdatomic here
+        CANARD_ASSERT(frame->refcount > 0U); // NOLINT(*-security.ArrayBound)
+        --frame->refcount;                   // TODO: if C11 is enabled, use stdatomic here
         if (frame->refcount == 0U) {
             CANARD_ASSERT(*frame->objcount > 0U);
             --*frame->objcount;
@@ -576,6 +594,7 @@ static tx_frame_t* tx_spool(const canard_mem_t         mem,
         head                    = tx_frame_new(mem, queue_size, frame_size);
         if (head != NULL) {
             bytes_chain_read(&reader, size, head->data);
+            // NOLINTNEXTLINE(*-security.insecureAPI.DeprecatedOrUnsafeBufferHandling)
             memset(&head->data[size], PADDING_BYTE_VALUE, frame_size - size - 1U);
             head->data[frame_size - 1U] = tx_make_tail_byte(true, true, toggle, transfer_id);
         }
@@ -1002,15 +1021,6 @@ static void tx_receive_ack(canard_t* const self, const uint64_t topic_hash, cons
     }
 }
 
-static uint32_t tx_can_id_skeleton(const canard_t* const self, const canard_prio_t priority)
-{
-    return (((uint32_t)priority) << 26U) | (self->node_id & CANARD_NODE_ID_MAX);
-}
-static uint32_t tx_can_id_skeleton_v0(const canard_t* const self, const canard_prio_t priority)
-{
-    return tx_can_id_skeleton(self, priority) | (3UL << 24U); // Set priority LSb to 1 for v0
-}
-
 bool canard_publish(canard_t* const               self,
                     const canard_us_t             now,
                     const canard_us_t             deadline,
@@ -1030,7 +1040,7 @@ bool canard_publish(canard_t* const               self,
         const bool reliable = feedback != NULL;
         const bool pinned   = topic_hash <= CANARD_SUBJECT_ID_MAX_1v0;
         const bool use_1v0  = pinned && !reliable; // fallback to v1.0 whenever possible to maximize interoperability
-        uint32_t   can_id   = tx_can_id_skeleton(self, priority);
+        uint32_t   can_id   = ((uint32_t)priority) << 26U; // node-ID will be assigned at transmission time
         if (use_1v0) {
             can_id |= (3UL << 21U) | (uint32_t)(topic_hash << 8U); // set reserved bits 21 and 22
         } else {
@@ -1044,10 +1054,7 @@ bool canard_publish(canard_t* const               self,
                                        .next  = &payload,
         };
         if (!use_1v0) {
-            uint32_t header = (uint32_t)((topic_hash >> 32U) & 0xFFFFFFF8UL);
-            if (reliable) {
-                header |= 4U;
-            }
+            const uint32_t header = (uint32_t)(((topic_hash >> 32U) & 0xFFFFFFFCUL) | (reliable ? 1U : 0U));
             (void)serialize_u32(header_bytes, header);
         }
         const canard_bytes_chain_t final_payload = use_1v0 ? payload : headed_payload;
@@ -1113,20 +1120,20 @@ bool canard_0v1_publish(canard_t* const            self,
       (self != NULL) && (now <= deadline) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap));
     if (ok) {
-        tx_transfer_t* const tr =
-          tx_transfer_new(self->mem.tx_transfer,
-                          now,
-                          deadline,
-                          iface_bitmap,
-                          tx_can_id_skeleton_v0(self, priority) | ((uint32_t)data_type_id << 8U),
-                          transfer_id,
-                          false, // best-effort
-                          false, // Classic CAN
-                          transfer_kind_v0_message,
-                          TOPIC_HASH_MSb_v0_MESSAGE | data_type_id,
-                          CANARD_USER_CONTEXT_NULL,
-                          NULL);
-        ok = (tr != NULL) && tx_push(self, now, tr, payload, crc_seed);
+        const uint32_t can_id   = (((uint32_t)priority) << 26U) | (3UL << 24U) | ((uint32_t)data_type_id << 8U); // --
+        tx_transfer_t* const tr = tx_transfer_new(self->mem.tx_transfer,
+                                                  now,
+                                                  deadline,
+                                                  iface_bitmap,
+                                                  can_id,
+                                                  transfer_id,
+                                                  false, // best-effort
+                                                  false, // CAN FD is not supported with v0
+                                                  transfer_kind_v0_message,
+                                                  TOPIC_HASH_MSb_v0_MESSAGE | data_type_id,
+                                                  CANARD_USER_CONTEXT_NULL,
+                                                  NULL);
+        ok                      = (tr != NULL) && tx_push(self, now, tr, payload, crc_seed);
     }
     return ok;
 }

@@ -72,30 +72,32 @@ extern "C"
 /// All v1.1 transfers have payload headers, handled by the library transparently for the application,
 /// that carry additional metadata pertaining to named topics and P2P traffic. v1.0 transfers have no such headers.
 ///
-/// Together, the 17-bit subject-ID plus the 29-bit topic hash MSB provide a total of 46 bits for topic discrimination,
+/// Together, the 17-bit subject-ID plus the 30-bit topic hash MSB provide a total of 47 bits for topic discrimination,
 /// which is sufficient to avoid collisions. CRC seeding is not used because it adds little value in CAN FD, where
-/// multi-frame transfers are relatively rare due to the large MTU.
+/// multi-frame transfers are relatively rare due to the large MTU. With 47 bits, the probability of a collision
+/// given 1000 topics is less than one in 200 million.
 ///
 /// v1.1 message transfers (smaller hash because topics are also discriminated by subject-ID, collisions less likely):
-///     uint2  version          # =0
-///     bool   reliable         # Set if the sender needs acknowledgment; false for best-effort messages.
-///     uint29 topic_hash_msb   # The most significant bits of the topic hash for collision detection.
+///     uint2  kind             # 0=best-effort, 1=reliable, rest reserved.
+///     uint30 topic_hash_msb   # The most significant bits of the topic hash for collision detection.
 ///     # Payload follows.
 ///
 /// v1.1 P2P transfers (7 bytes to fit into a single Classic CAN frame):
-///     uint2  version          # =0
-///     bool   ack              # 1=acknowledgment, 0=response reliable (no unreliable responses currently exist)
+///     uint2  kind             # 0=acknowledgment, 1=response reliable, rest reserved.
 ///     uint5  transfer_id      # The original transfer-ID this P2P message relates to.
-///     uint48 topic_hash_msb   # The most significant bits of the original topic hash this P2P message relates to.
+///     uint13 topic_hash_lsb   # The least significant bits of the original topic hash this P2P message relates to.
+///     uint36 topic_hash_msb   # The most significant bits equal the subject-ID for pinned topics.
 ///     # Payload follows (unless ack).
 ///
-/// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request
-/// flag, and cannot be P2P-replied to because only the most significant bits of the topic hash are included in the
-/// P2P header (it is possible to dedicate some bits for the topic hash lsb, but it slightly complicates the lookup).
+/// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request.
+/// The P2P header includes the least significant bits as well as the most significant bits of the topic hash to
+/// allow replying to pinned topics, where all topic hash bits are zeros except for the 13 LSb.
 ///
 /// A single-frame v1.1 transfer can carry at most 59 bytes of payload in CAN FD, and at most 3 bytes in Classic CAN.
 #define CANARD_HEADER_MESSAGE_BYTES 4U
 #define CANARD_HEADER_P2P_BYTES     7U
+
+#define CANARD_P2P_TOPIC_HASH_MSb_COUNT 36U
 
 /// See canard_t::ack_baseline_timeout.
 /// This default value might be a good starting point for many applications.
@@ -263,9 +265,10 @@ typedef struct canard_vtable_t
 {
     /// A new P2P message is received.
     ///
-    /// The topic hash is left-aligned, i.e., all bits are on their right positions within the 64-bit field,
-    /// and the absent least significant bits are zeroed. This enables easy lookup using lower bounds.
-    /// In other words, the topic hash lower bound is slightly less than or equal the true topic hash of the message.
+    /// The topic hash bound is less than or equal the true topic hash, which enables easy lookup using lower bounds.
+    /// The CANARD_P2P_TOPIC_HASH_MSb_COUNT MSb and 13 LSb of the topic hash are provided in the lower bound,
+    /// with the intermediate bits zeroed.
+    /// For pinned topics, the lower bound does not exceed CANARD_SUBJECT_ID_MAX_1v0 and exactly equals the subject-ID.
     ///
     /// The handler takes ownership of the payload; it must free it after use using the corresponding memory resource.
     void (*on_p2p)(canard_t*,

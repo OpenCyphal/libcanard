@@ -331,6 +331,63 @@ static void test_list(void)
     TEST_ASSERT_EQUAL_INT(2, tail->value);
 }
 
+static void test_list_enlist_tail(void)
+{
+    canard_list_t list  = { .head = NULL, .tail = NULL };
+    test_node_t   node1 = { .value = 1, .member = { .next = NULL, .prev = NULL } };
+    test_node_t   node2 = { .value = 2, .member = { .next = NULL, .prev = NULL } };
+    test_node_t   node3 = { .value = 3, .member = { .next = NULL, .prev = NULL } };
+
+    // Add single element at tail.
+    enlist_tail(&list, &node1.member);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+    TEST_ASSERT_NULL(node1.member.next);
+    TEST_ASSERT_NULL(node1.member.prev);
+
+    // Add second element at tail. Order: node1 -> node2.
+    enlist_tail(&list, &node2.member);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, node1.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, node2.member.prev);
+
+    // Add third element at tail. Order: node1 -> node2 -> node3.
+    enlist_tail(&list, &node3.member);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, node1.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, node2.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, node3.member.prev);
+
+    // Re-enlist moves element to back.
+    enlist_tail(&list, &node1.member); // Move head to tail. Order: node2 -> node3 -> node1.
+    TEST_ASSERT_EQUAL_PTR(&node2.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, node2.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, node3.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, node1.member.prev);
+    TEST_ASSERT_NULL(node2.member.prev);
+    TEST_ASSERT_NULL(node1.member.next);
+
+    // Re-enlist tail is a no-op on ordering.
+    enlist_tail(&list, &node1.member); // Order unchanged: node2 -> node3 -> node1.
+    TEST_ASSERT_EQUAL_PTR(&node2.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
+
+    // Mix enlist_head and enlist_tail.
+    delist(&list, &node1.member);
+    delist(&list, &node2.member);
+    delist(&list, &node3.member);
+    enlist_head(&list, &node2.member);
+    enlist_tail(&list, &node3.member); // Order: node2 -> node3.
+    enlist_head(&list, &node1.member); // Order: node1 -> node2 -> node3.
+    TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&node2.member, node1.member.next);
+    TEST_ASSERT_EQUAL_PTR(&node3.member, node2.member.next);
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -344,5 +401,6 @@ int main(void)
     RUN_TEST(test_crc_add_chain);
     RUN_TEST(test_bytes_chain);
     RUN_TEST(test_list);
+    RUN_TEST(test_list_enlist_tail);
     return UNITY_END();
 }
