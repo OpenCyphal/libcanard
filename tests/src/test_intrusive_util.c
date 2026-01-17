@@ -245,7 +245,7 @@ static void test_bytes_chain(void)
 
 typedef struct test_node_t
 {
-    int                  value;
+    int             value;
     canard_listed_t member;
 } test_node_t;
 
