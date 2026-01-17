@@ -29,11 +29,6 @@
 #define _static_assert_gl_impl(a, b) a##b // NOSONAR
 #endif
 
-/// Allow usage of known compiler intrinsics for performance optimization.
-#ifndef CANARD_USE_INTRINSICS
-#define CANARD_USE_INTRINSICS 0
-#endif
-
 #if !defined(__STDC_VERSION__) || (__STDC_VERSION__ < 199901L)
 #error "Unsupported language: ISO C99 or a newer version is required."
 #endif
@@ -120,7 +115,7 @@ static byte_t popcount_emulated(uint64_t x)
 
 static byte_t popcount(const uint64_t x)
 {
-#if CANARD_USE_INTRINSICS && (defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM))
+#if defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM)
     return (byte_t)__builtin_popcountll(x);
 #else
     return popcount_emulated(x);
