@@ -54,8 +54,8 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
             LINK_FLAGS "${link_flags}"
             C_STANDARD "${c_standard}"
             C_EXTENSIONS OFF
-            C_CLANG_TIDY "${clang_tidy}"
-            CXX_CLANG_TIDY "${clang_tidy}"
+            C_CLANG_TIDY "${use_clang_tidy}"
+            CXX_CLANG_TIDY "${use_clang_tidy}"
     )
     add_test("run_${name}" "${name}")
 endfunction()
@@ -79,3 +79,5 @@ add_compile_options(-Wno-unused-function)
 gen_test_matrix(test_helpers        "src/test_helpers.c")
 gen_test_matrix(test_intrusive_util "src/test_intrusive_util.c")
 gen_test_matrix(test_intrusive_tx   "src/test_intrusive_tx.c")
+# API tests.
+gen_test_single(test_api_tx "${library_dir}/canard.c;src/test_api_tx.cpp")
