@@ -15,4 +15,17 @@ container for development.
 
 Refer to the CI pipelines to see how to run tests locally.
 
+## Coverage
+
+To run tests with coverage measurement (requires `lcov` and `genhtml`):
+
+```bash
+cmake -B build -DENABLE_COVERAGE=ON     # Optionally, add  -DNO_STATIC_ANALYSIS=ON
+cmake --build build -j$(nproc)
+cd build && ctest && make coverage
+xdg-open coverage-html/index.html
+```
+
+## Releasing
+
 To release a new version, simply create a new release on GitHub: <https://github.com/OpenCyphal/libcanard/releases/new>
