@@ -423,7 +423,8 @@ typedef struct
 
 /// The CAN ID index only contains transfers that are ready for transmission; the ordering is based not exactly on the
 /// CAN ID, but rather on its approximation called "skeleton" because we don't know v1.1 subject-ID bits until
-/// transmission time.
+/// transmission time. The local node-ID is also added to the CAN ID at the transmission time in case it is changed
+/// to avoid collisions on the bus.
 ///
 /// The staged index contains transfers ordered by readiness for retransmission;
 /// transfers that will no longer be transmitted but are retained waiting for the ack are in neither of these.
@@ -465,7 +466,7 @@ typedef struct tx_transfer_t
     byte_t          transfer_id;
     byte_t          remote_transfer_id;
     transfer_kind_t kind;
-    uint32_t        can_id; ///< For v1.1 messages, the subject-ID bits are zeroed (resolved at tx time).
+    uint32_t        can_id; ///< For v1.1 messages, the subject-ID bits are zeroed. Node-ID is always zeroed.
     canard_us_t     deadline;
     uint64_t        topic_hash;
     uint64_t        remote_topic_hash;
