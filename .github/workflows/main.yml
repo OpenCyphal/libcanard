@@ -88,6 +88,35 @@ jobs:
           retention-days: 7
           include-hidden-files: true
 
+  coverage:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - run: |
+          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get install -y gcc-multilib g++-multilib lcov
+      - run: >
+          cmake
+          -B ${{ github.workspace }}/build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DNO_STATIC_ANALYSIS=ON
+          -DENABLE_COVERAGE=ON
+          .
+      - working-directory: ${{ github.workspace }}/build
+        run: |
+          make -j$(nproc)
+          make test
+          make coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ github.job }}-coverage-report
+          path: ${{ github.workspace }}/build/coverage-html
+          retention-days: 30
+
   avr:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
