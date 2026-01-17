@@ -86,7 +86,7 @@ extern "C"
 ///     uint2  kind             # 0=acknowledgment, 1=response reliable, rest reserved.
 ///     uint5  transfer_id      # The original transfer-ID this P2P message relates to.
 ///     uint13 topic_hash_lsb   # The least significant bits of the original topic hash this P2P message relates to.
-///     uint36 topic_hash_msb   # The most significant bits equal the subject-ID for pinned topics.
+///     uint36 topic_hash_msb   # The most significant bits. The LSb equal the subject-ID for pinned topics, rest zero.
 ///     # Payload follows (unless ack).
 ///
 /// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request.
@@ -104,7 +104,7 @@ extern "C"
 /// The baseline timeout should be greater than the expected round-trip time (RTT) for a message at the highest
 /// priority level.
 /// The actual timeout is derived as a function of the retransmit attempt count and other message parameters.
-#define CANARD_TX_ACK_BASELINE_TIMEOUT_DEFAULT_us 8000LL
+#define CANARD_TX_ACK_BASELINE_TIMEOUT_DEFAULT_us 4000LL
 
 typedef struct canard_t canard_t;
 
@@ -135,17 +135,17 @@ typedef struct canard_tree_t
     int_fast8_t           bf;
 } canard_tree_t;
 
-typedef struct canard_list_member_t canard_list_member_t;
-typedef struct canard_list_t        canard_list_t;
-struct canard_list_member_t
+typedef struct canard_listed_t canard_listed_t;
+typedef struct canard_list_t   canard_list_t;
+struct canard_listed_t
 {
-    canard_list_member_t* next;
-    canard_list_member_t* prev;
+    canard_listed_t* next;
+    canard_listed_t* prev;
 };
 struct canard_list_t
 {
-    canard_list_member_t* head; ///< NULL if list empty
-    canard_list_member_t* tail; ///< NULL if list empty
+    canard_listed_t* head; ///< NULL if list empty
+    canard_listed_t* tail; ///< NULL if list empty
 };
 
 typedef struct canard_bytes_t       canard_bytes_t;

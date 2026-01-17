@@ -229,13 +229,13 @@ static uint16_t crc_add_chain(uint16_t crc, const canard_bytes_chain_t chain) //
 
 // ---------------------------------------------      LIST CONTAINER       ---------------------------------------------
 
-static bool is_listed(const canard_list_t* const list, const canard_list_member_t* const member)
+static bool is_listed(const canard_list_t* const list, const canard_listed_t* const member)
 {
     return (member->next != NULL) || (member->prev != NULL) || (list->head == member);
 }
 
 /// No effect if not in the list.
-static void delist(canard_list_t* const list, canard_list_member_t* const member)
+static void delist(canard_list_t* const list, canard_listed_t* const member)
 {
     if (member->next != NULL) {
         member->next->prev = member->prev;
@@ -255,7 +255,7 @@ static void delist(canard_list_t* const list, canard_list_member_t* const member
 }
 
 /// If the item is already in the list, it will be delisted first. Can be used for moving to the front.
-static void enlist_head(canard_list_t* const list, canard_list_member_t* const member)
+static void enlist_head(canard_list_t* const list, canard_listed_t* const member)
 {
     delist(list, member);
     assert((member->next == NULL) && (member->prev == NULL));
@@ -272,7 +272,7 @@ static void enlist_head(canard_list_t* const list, canard_list_member_t* const m
 }
 
 /// If the item is already in the list, it will be delisted first. Can be used for moving to the back.
-static void enlist_tail(canard_list_t* const list, canard_list_member_t* const member)
+static void enlist_tail(canard_list_t* const list, canard_listed_t* const member)
 {
     delist(list, member);
     assert((member->next == NULL) && (member->prev == NULL));
@@ -432,12 +432,12 @@ typedef struct
 typedef struct tx_transfer_t
 {
     // Index handles.
-    canard_tree_t index_queue[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission. Must be the first!
-    canard_tree_t index_staged;                        ///< Soonest to be ready on the left. Key: staged_until
-    canard_tree_t index_deadline;                      ///< Soonest to expire on the left. Key: deadline
-    canard_tree_t index_transfer;      ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
-    canard_tree_t index_transfer_ack;  ///< Only for outgoing ack transfers. Same key but referencing remote_*.
-    canard_list_member_t list_agewise; ///< Listed when created; oldest at the tail.
+    canard_tree_t   index_queue[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission. Must be the first!
+    canard_tree_t   index_staged;                        ///< Soonest to be ready on the left. Key: staged_until
+    canard_tree_t   index_deadline;                      ///< Soonest to expire on the left. Key: deadline
+    canard_tree_t   index_transfer;     ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
+    canard_tree_t   index_transfer_ack; ///< Only for outgoing ack transfers. Same key but referencing remote_*.
+    canard_listed_t list_agewise;       ///< Listed when created; oldest at the tail.
 
     /// We always keep a pointer to the head of the spool, plus a cursor that scans the frames during transmission.
     /// Both are NULL if the payload is destroyed (i.e., after the last attempt is done and we're waiting for ack).
