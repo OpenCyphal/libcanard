@@ -306,9 +306,12 @@ typedef struct canard_vtable_t
     bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
 
-/// None of the fields should be mutated by the application (unless explicitly allowed).
+/// None of the fields should be mutated by the application, unless explicitly allowed.
 struct canard_t
 {
+    /// If automatic allocation is used, libcanard will avoid picking a node-ID of zero to ensure compatibility with
+    /// legacy v0 nodes, where node-ID zero is reserved for anonymous nodes. Zero can be assigned manually,
+    /// but it is only a good idea in networks where no legacy v0 nodes are present.
     uint64_t      node_id_occupancy_bitmap[2];
     uint_least8_t node_id;
 

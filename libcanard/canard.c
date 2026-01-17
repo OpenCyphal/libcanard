@@ -1109,7 +1109,8 @@ bool canard_0v1_publish(canard_t* const            self,
 {
     bool ok =
       (self != NULL) && (now <= deadline) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
-      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap));
+      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
+      (self->node_id != 0);
     if (ok) {
         const uint32_t can_id   = (((uint32_t)priority) << 26U) | (3UL << 24U) | ((uint32_t)data_type_id << 8U); // --
         tx_transfer_t* const tr = tx_transfer_new(self->mem.tx_transfer,
