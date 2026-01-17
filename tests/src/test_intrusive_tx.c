@@ -814,7 +814,7 @@ static tx_transfer_t* make_test_transfer(const canard_mem_t    mem,
                                          const transfer_kind_t kind,
                                          const bool            fd,
                                          const bool            reliable,
-                                         const uint_fast8_t    iface_bitmap,
+                                         const uint_least8_t   iface_bitmap,
                                          const uint32_t        can_id,
                                          const byte_t          transfer_id)
 {

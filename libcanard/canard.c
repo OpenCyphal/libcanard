@@ -85,8 +85,8 @@ static bool transfer_kind_is_v0(const transfer_kind_t kind)
            (kind == transfer_kind_v0_response);
 }
 
-const uint_fast8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
-const uint_fast8_t canard_len_to_dlc[65] = {
+const uint_least8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
+const uint_least8_t canard_len_to_dlc[65] = {
     0,  1,  2,  3,  4,  5,  6,  7,  8,                              // 0-8
     9,  9,  9,  9,                                                  // 9-12
     10, 10, 10, 10,                                                 // 13-16
@@ -1017,7 +1017,7 @@ bool canard_publish(canard_t* const               self,
                     const uint16_t                iface_bitmap,
                     const canard_prio_t           priority,
                     const uint64_t                topic_hash,
-                    const uint_fast8_t            transfer_id,
+                    const uint_least8_t           transfer_id,
                     const canard_bytes_chain_t    payload,
                     const canard_user_context_t   context,
                     const canard_on_tx_feedback_t feedback)
@@ -1073,10 +1073,10 @@ bool canard_publish(canard_t* const               self,
 bool canard_respond(canard_t* const               self,
                     const canard_us_t             now,
                     const canard_us_t             deadline,
-                    const uint_fast8_t            destination_node_id,
+                    const uint_least8_t           destination_node_id,
                     const canard_prio_t           priority,
                     const uint64_t                request_topic_hash,
-                    const uint_fast8_t            request_transfer_id,
+                    const uint_least8_t           request_transfer_id,
                     const canard_bytes_chain_t    payload,
                     const canard_user_context_t   context,
                     const canard_on_tx_feedback_t feedback);
@@ -1086,8 +1086,8 @@ bool canard_1v0_request(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             service_id,
-                        const uint_fast8_t         server_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        server_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_1v0_respond(canard_t* const            self,
@@ -1095,8 +1095,8 @@ bool canard_1v0_respond(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             service_id,
-                        const uint_fast8_t         client_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        client_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_publish(canard_t* const            self,
@@ -1106,7 +1106,7 @@ bool canard_0v1_publish(canard_t* const            self,
                         const canard_prio_t        priority,
                         const uint16_t             data_type_id,
                         const uint16_t             crc_seed,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload)
 {
     bool ok =
@@ -1135,18 +1135,18 @@ bool canard_0v1_request(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
-                        const uint_fast8_t         data_type_id,
+                        const uint_least8_t        data_type_id,
                         const uint16_t             crc_seed,
-                        const uint_fast8_t         server_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        server_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_respond(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
-                        const uint_fast8_t         data_type_id,
+                        const uint_least8_t        data_type_id,
                         const uint16_t             crc_seed,
-                        const uint_fast8_t         client_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        client_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);

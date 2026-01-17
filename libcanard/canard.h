@@ -110,8 +110,8 @@ typedef struct canard_t canard_t;
 typedef int64_t canard_us_t;
 
 /// Length to DLC rounds up.
-extern const uint_fast8_t canard_dlc_to_len[16];
-extern const uint_fast8_t canard_len_to_dlc[65];
+extern const uint_least8_t canard_dlc_to_len[16];
+extern const uint_least8_t canard_len_to_dlc[65];
 
 typedef enum canard_prio_t
 {
@@ -225,8 +225,8 @@ struct canard_subscription_vtable_t
     void (*on_message)(canard_subscription_t* self,
                        canard_us_t            timestamp,
                        canard_prio_t          priority,
-                       uint_fast8_t           source_node_id,
-                       uint_fast8_t           transfer_id,
+                       uint_least8_t          source_node_id,
+                       uint_least8_t          transfer_id,
                        canard_bytes_mut_t     payload);
 
     /// A topic hash mismatch is detected on this subject: another node is publishing data under the same
@@ -252,7 +252,7 @@ struct canard_subscription_t
 
     const canard_subscription_vtable_t* vtable;
 
-    uint_fast8_t kind; ///< Which of the indexes in canard_rx_t this subscription is part of.
+    uint_least8_t kind; ///< Which of the indexes in canard_rx_t this subscription is part of.
 
     canard_filter_t filter; ///< Precomputed for quick acceptance filter configuration.
 
@@ -271,9 +271,9 @@ typedef struct canard_vtable_t
     void (*on_p2p)(canard_t*,
                    canard_us_t        timestamp,
                    canard_prio_t      priority,
-                   uint_fast8_t       source_node_id,
+                   uint_least8_t      source_node_id,
                    uint64_t           topic_hash_lower_bound,
-                   uint_fast8_t       transfer_id,
+                   uint_least8_t      transfer_id,
                    canard_bytes_mut_t payload);
 
     /// Submit one CAN frame for transmission via the specified interface. It is guaranteed that now<=deadline.
@@ -285,7 +285,7 @@ typedef struct canard_vtable_t
                const canard_user_context_t*,
                canard_us_t    now,
                canard_us_t    deadline,
-               uint_fast8_t   iface_index,
+               uint_least8_t  iface_index,
                bool           fd,
                uint32_t       extended_can_id,
                canard_bytes_t can_data);
@@ -306,8 +306,8 @@ typedef struct canard_vtable_t
 /// None of the fields should be mutated by the application (unless explicitly allowed).
 struct canard_t
 {
-    uint64_t     node_id_occupancy_bitmap[2];
-    uint_fast8_t node_id;
+    uint64_t      node_id_occupancy_bitmap[2];
+    uint_least8_t node_id;
 
     /// This duration is used to derive the acknowledgment timeout for reliable transfers in tx_ack_timeout().
     /// It must be a positive number of microseconds.
@@ -381,12 +381,12 @@ struct canard_t
 /// Notification about the outcome of a reliable transfer previously submitted for transmission.
 typedef struct canard_tx_feedback_t
 {
-    uint64_t     topic_hash;
-    uint_fast8_t transfer_id;
+    uint64_t      topic_hash;
+    uint_least8_t transfer_id;
 
     /// The number of remote nodes that acknowledged the reception of the transfer.
     /// For P2P transfers, this value is either 0 (failure) or 1 (success).
-    uint_fast8_t acknowledgements;
+    uint_least8_t acknowledgements;
 
     canard_user_context_t user_context;
 } canard_tx_feedback_t;
@@ -418,7 +418,7 @@ bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
                 const size_t                 tx_queue_capacity,
-                const uint_fast8_t           node_id,
+                const uint_least8_t          node_id,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count,
                 canard_filter_t* const       filter_storage);
@@ -439,7 +439,7 @@ uint16_t canard_pending_ifaces(const canard_t* const self);
 /// The can_data is copied and thus can be discarded by the caller after this function returns.
 bool canard_ingest_frame(canard_t* const      self,
                          const canard_us_t    timestamp,
-                         const uint_fast8_t   iface_index,
+                         const uint_least8_t  iface_index,
                          const uint32_t       extended_can_id,
                          const canard_bytes_t can_data);
 
@@ -449,8 +449,8 @@ void canard_refcount_dec(const canard_bytes_t obj);
 /// Cancel a pending outgoing message transfer on a subject, or an outgoing P2P transfer to a node.
 /// Returns true if a transfer was found and cancelled, false if no such transfer was found.
 /// For pinned topics or v1.0 message transfers, pass the subject-ID as the topic_hash.
-bool canard_unpublish(canard_t* const self, const uint64_t topic_hash, const uint_fast8_t transfer_id);
-bool canard_unrespond(canard_t* const self, const uint_fast8_t destination_node_id, const uint_fast8_t transfer_id);
+bool canard_unpublish(canard_t* const self, const uint64_t topic_hash, const uint_least8_t transfer_id);
+bool canard_unrespond(canard_t* const self, const uint_least8_t destination_node_id, const uint_least8_t transfer_id);
 
 /// Unless pinned, the subject-ID will be obtained using the dedicated vtable function immediately before transmission.
 /// This is because the topic->subject allocation protocol may change the subject-ID for already enqueued messages.
@@ -463,7 +463,7 @@ bool canard_publish(canard_t* const               self,
                     const uint16_t                iface_bitmap,
                     const canard_prio_t           priority,
                     const uint64_t                topic_hash,
-                    const uint_fast8_t            transfer_id,
+                    const uint_least8_t           transfer_id,
                     const canard_bytes_chain_t    payload,
                     const canard_user_context_t   context,
                     const canard_on_tx_feedback_t feedback);
@@ -471,10 +471,10 @@ bool canard_publish(canard_t* const               self,
 bool canard_respond(canard_t* const               self,
                     const canard_us_t             now,
                     const canard_us_t             deadline,
-                    const uint_fast8_t            destination_node_id,
+                    const uint_least8_t           destination_node_id,
                     const canard_prio_t           priority,
                     const uint64_t                request_topic_hash,
-                    const uint_fast8_t            request_transfer_id,
+                    const uint_least8_t           request_transfer_id,
                     const canard_bytes_chain_t    payload,
                     const canard_user_context_t   context,
                     const canard_on_tx_feedback_t feedback);
@@ -499,7 +499,7 @@ static inline bool canard_1v0_publish(canard_t* const            self,
                                       const uint16_t             iface_bitmap,
                                       const canard_prio_t        priority,
                                       const uint16_t             subject_id,
-                                      const uint_fast8_t         transfer_id,
+                                      const uint_least8_t        transfer_id,
                                       const canard_bytes_chain_t payload)
 {
     return (subject_id <= CANARD_SUBJECT_ID_MAX_1v0) && canard_publish(self,
@@ -519,8 +519,8 @@ bool canard_1v0_request(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             service_id,
-                        const uint_fast8_t         server_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        server_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_1v0_respond(canard_t* const            self,
@@ -528,8 +528,8 @@ bool canard_1v0_respond(canard_t* const            self,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             service_id,
-                        const uint_fast8_t         client_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        client_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_1v0_subscribe(canard_t* const                           self,
@@ -564,27 +564,27 @@ bool canard_0v1_publish(canard_t* const            self,
                         const canard_prio_t        priority,
                         const uint16_t             data_type_id,
                         const uint16_t             crc_seed,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_request(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
-                        const uint_fast8_t         data_type_id,
+                        const uint_least8_t        data_type_id,
                         const uint16_t             crc_seed,
-                        const uint_fast8_t         server_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        server_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_respond(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
-                        const uint_fast8_t         data_type_id,
+                        const uint_least8_t        data_type_id,
                         const uint16_t             crc_seed,
-                        const uint_fast8_t         client_node_id,
-                        const uint_fast8_t         transfer_id,
+                        const uint_least8_t        client_node_id,
+                        const uint_least8_t        transfer_id,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_subscribe(canard_t* const                           self,
@@ -597,7 +597,7 @@ bool canard_0v1_subscribe(canard_t* const                           self,
 
 bool canard_0v1_subscribe_request(canard_t* const                           self,
                                   canard_subscription_t* const              subscription,
-                                  const uint_fast8_t                        data_type_id,
+                                  const uint_least8_t                       data_type_id,
                                   const uint16_t                            crc_seed,
                                   const size_t                              extent,
                                   const canard_us_t                         transfer_id_timeout,
@@ -605,7 +605,7 @@ bool canard_0v1_subscribe_request(canard_t* const                           self
 
 bool canard_0v1_subscribe_response(canard_t* const                           self,
                                    canard_subscription_t* const              subscription,
-                                   const uint_fast8_t                        data_type_id,
+                                   const uint_least8_t                       data_type_id,
                                    const uint16_t                            crc_seed,
                                    const size_t                              extent,
                                    const canard_subscription_vtable_t* const vtable);
