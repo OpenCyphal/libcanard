@@ -854,7 +854,7 @@ static void test_tx_push_basic_v1_classic(void)
     TEST_ASSERT_EQUAL_UINT64(0, self.err.tx_capacity);
 
     // Verify the transfer is indexed.
-    TEST_ASSERT_NOT_NULL(self.tx.index_can_id[0]);
+    TEST_ASSERT_NOT_NULL(self.tx.index_queue[0]);
     TEST_ASSERT_NOT_NULL(self.tx.index_deadline);
 
     // Clean up via tx_transfer_retire.
@@ -1099,9 +1099,9 @@ static void test_tx_push_multi_iface_refcount(void)
     TEST_ASSERT_EQUAL_UINT8(3, tr->head[0]->refcount);
 
     // Verify indexed in all 3 iface trees.
-    TEST_ASSERT_NOT_NULL(self.tx.index_can_id[0]);
-    TEST_ASSERT_NOT_NULL(self.tx.index_can_id[1]);
-    TEST_ASSERT_NOT_NULL(self.tx.index_can_id[2]);
+    TEST_ASSERT_NOT_NULL(self.tx.index_queue[0]);
+    TEST_ASSERT_NOT_NULL(self.tx.index_queue[1]);
+    TEST_ASSERT_NOT_NULL(self.tx.index_queue[2]);
 
     tx_transfer_retire(&self, tr, true);
     TEST_ASSERT_EQUAL_size_t(0, alloc_fr.allocated_fragments);
@@ -1130,9 +1130,9 @@ static void test_tx_push_single_iface_refcount(void)
     TEST_ASSERT_EQUAL_UINT8(1, tr->head[1]->refcount);
 
     // Only iface 1 should be indexed.
-    TEST_ASSERT_NULL(self.tx.index_can_id[0]);
-    TEST_ASSERT_NOT_NULL(self.tx.index_can_id[1]);
-    TEST_ASSERT_NULL(self.tx.index_can_id[2]);
+    TEST_ASSERT_NULL(self.tx.index_queue[0]);
+    TEST_ASSERT_NOT_NULL(self.tx.index_queue[1]);
+    TEST_ASSERT_NULL(self.tx.index_queue[2]);
 
     tx_transfer_retire(&self, tr, true);
 }

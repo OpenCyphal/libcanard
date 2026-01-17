@@ -432,9 +432,9 @@ typedef struct
 typedef struct tx_transfer_t
 {
     // Index handles.
-    canard_tree_t index_can_id[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission. Must be the first!
-    canard_tree_t index_staged;                         ///< Soonest to be ready on the left. Key: staged_until
-    canard_tree_t index_deadline;                       ///< Soonest to expire on the left. Key: deadline
+    canard_tree_t index_queue[CANARD_IFACE_COUNT_MAX]; ///< Inserted when ready for transmission. Must be the first!
+    canard_tree_t index_staged;                        ///< Soonest to be ready on the left. Key: staged_until
+    canard_tree_t index_deadline;                      ///< Soonest to expire on the left. Key: deadline
     canard_tree_t index_transfer;      ///< Specific transfer lookup for ack management. Key: tx_transfer_key_t
     canard_tree_t index_transfer_ack;  ///< Only for outgoing ack transfers. Same key but referencing remote_*.
     canard_list_member_t list_agewise; ///< Listed when created; oldest at the tail.
@@ -517,13 +517,12 @@ typedef struct
     byte_t   iface_index;
 } tx_cavl_compare_can_id_user_t;
 
-static_assert(offsetof(tx_transfer_t, index_can_id) == 0, "index_can_id must be the first field");
-/// We may have multiple transfers inserted with the same CAN ID, so this comparator never returns zero.
-static int32_t tx_cavl_compare_can_id(const void* const user, const canard_tree_t* const node)
+static_assert(offsetof(tx_transfer_t, index_queue) == 0, "index_queue must be the first field");
+static int32_t tx_cavl_compare_queue(const void* const user, const canard_tree_t* const node)
 {
     const tx_cavl_compare_can_id_user_t* const params = (const tx_cavl_compare_can_id_user_t*)user;
     const tx_transfer_t* const                 tr     = ptr_unbias(node, params->iface_index * sizeof(canard_tree_t));
-    return (params->can_id >= tr->can_id) ? +1 : -1;
+    return (params->can_id >= tr->can_id) ? +1 : -1; // allow non-unique CAN ID in FIFO order
 }
 
 static int32_t tx_cavl_compare_staged(const void* const user, const canard_tree_t* const node)
@@ -540,11 +539,9 @@ static int32_t tx_cavl_compare_transfer(const void* const user, const canard_tre
 {
     const tx_transfer_key_t* const key = (const tx_transfer_key_t*)user;
     const tx_transfer_t* const tr = CAVL2_TO_OWNER(node, tx_transfer_t, index_transfer); // clang-format off
-    if (key->topic_hash  < tr->topic_hash)  { return -1; }
-    if (key->topic_hash  > tr->topic_hash)  { return +1; }
-    if (key->transfer_id < tr->transfer_id) { return -1; }
-    if (key->transfer_id > tr->transfer_id) { return +1; }
-    return 0; // clang-format on
+    if (key->topic_hash < tr->topic_hash)  { return -1; }
+    if (key->topic_hash > tr->topic_hash)  { return +1; } // clang-format on
+    return ((int32_t)key->transfer_id) - ((int32_t)tr->transfer_id);
 }
 
 static int32_t tx_cavl_compare_transfer_remote(const void* const user, const canard_tree_t* const node)
@@ -553,9 +550,7 @@ static int32_t tx_cavl_compare_transfer_remote(const void* const user, const can
     const tx_transfer_t* const tr = CAVL2_TO_OWNER(node, tx_transfer_t, index_transfer_ack); // clang-format off
     if (key->topic_hash  < tr->remote_topic_hash)  { return -1; }
     if (key->topic_hash  > tr->remote_topic_hash)  { return +1; }
-    if (key->transfer_id < tr->remote_transfer_id) { return -1; }
-    if (key->transfer_id > tr->remote_transfer_id) { return +1; }
-    return 0; // clang-format on
+    return ((int32_t)key->transfer_id) - ((int32_t)tr->transfer_id);
 }
 
 static byte_t tx_make_tail_byte(const bool sot, const bool eot, const bool tog, const byte_t transfer_id)
@@ -763,7 +758,7 @@ static void tx_transfer_retire(canard_t* const self, tx_transfer_t* const tr, co
 
     // Remove from all indexes and lists.
     for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
-        cavl2_remove_if(&self->tx.index_can_id[i], &tr->index_can_id[i]);
+        cavl2_remove_if(&self->tx.index_queue[i], &tr->index_queue[i]);
     }
     delist(&self->tx.list_agewise, &tr->list_agewise);
     (void)cavl2_remove_if(&self->tx.index_staged, &tr->index_staged);
@@ -785,7 +780,7 @@ static void tx_transfer_retire(canard_t* const self, tx_transfer_t* const tr, co
 static bool tx_is_pending(const canard_t* const self, const tx_transfer_t* const tr)
 {
     for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
-        if (cavl2_is_inserted(self->tx.index_can_id[i], &tr->index_can_id[i])) {
+        if (cavl2_is_inserted(self->tx.index_queue[i], &tr->index_queue[i])) {
             return true;
         }
     }
@@ -887,14 +882,14 @@ static void tx_promote_staged_transfers(canard_t* const self, const canard_us_t 
             // Enqueue for transmission unless it's been there since the last attempt (stalled interface?)
             for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
                 if (((tr->iface_bitmap & (1U << i)) != 0) &&
-                    !cavl2_is_inserted(self->tx.index_can_id[i], &tr->index_can_id[i])) {
+                    !cavl2_is_inserted(self->tx.index_queue[i], &tr->index_queue[i])) {
                     CANARD_ASSERT(tr->head[i] != NULL);          // cannot stage without payload, doesn't make sense
                     CANARD_ASSERT(tr->cursor[i] == tr->head[i]); // must have been rewound after last attempt
                     const tx_cavl_compare_can_id_user_t user = { .can_id = tr->can_id, .iface_index = (byte_t)i };
-                    (void)cavl2_find_or_insert(&self->tx.index_can_id[i], //
+                    (void)cavl2_find_or_insert(&self->tx.index_queue[i], //
                                                &user,
-                                               tx_cavl_compare_can_id,
-                                               &tr->index_can_id[i],
+                                               tx_cavl_compare_queue,
+                                               &tr->index_queue[i],
                                                cavl2_trivial_factory);
                 }
             }
@@ -971,10 +966,10 @@ static bool tx_push(canard_t* const            self,
     for (size_t i = 0; i < CANARD_IFACE_COUNT_MAX; i++) {
         if ((tr->iface_bitmap & (1U << i)) != 0) {
             const tx_cavl_compare_can_id_user_t user = { .can_id = tr->can_id, .iface_index = (byte_t)i };
-            (void)cavl2_find_or_insert(&self->tx.index_can_id[i], //
+            (void)cavl2_find_or_insert(&self->tx.index_queue[i], //
                                        &user,
-                                       tx_cavl_compare_can_id,
-                                       &tr->index_can_id[i],
+                                       tx_cavl_compare_queue,
+                                       &tr->index_queue[i],
                                        cavl2_trivial_factory);
             tr->head[i]   = spool;
             tr->cursor[i] = spool;
