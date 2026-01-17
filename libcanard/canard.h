@@ -443,24 +443,20 @@ bool canard_ingest_frame(canard_t* const      self,
                          const uint32_t       extended_can_id,
                          const canard_bytes_t can_data);
 
-/// Cancel a pending outgoing message transfer on a subject.
-/// Returns true if a transfer was found and cancelled, false if no such transfer was found.
-/// Cyphal v1.0 service transfers cannot be canceled.
-/// For pinned topics or v1.0 message transfers, pass the subject-ID as the topic_hash.
-bool canard_cancel(canard_t* const self, const uint64_t topic_hash, const uint_fast8_t transfer_id);
-
-/// Like canard_cancel(), but cancels all pending transfers on the given subject.
-/// Returns the number of matched transfers.
-/// This is important to invoke when destroying a topic to ensure no dangling callbacks remain.
-size_t canard_cancel_all(canard_t* const self, const uint64_t topic_hash);
-
 void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(const canard_bytes_t obj);
 
-/// The subject-ID will be obtained using the dedicated vtable function immediately before transmission.
+/// Cancel a pending outgoing message transfer on a subject, or an outgoing P2P transfer to a node.
+/// Returns true if a transfer was found and cancelled, false if no such transfer was found.
+/// For pinned topics or v1.0 message transfers, pass the subject-ID as the topic_hash.
+bool canard_unpublish(canard_t* const self, const uint64_t topic_hash, const uint_fast8_t transfer_id);
+bool canard_unrespond(canard_t* const self, const uint_fast8_t destination_node_id, const uint_fast8_t transfer_id);
+
+/// Unless pinned, the subject-ID will be obtained using the dedicated vtable function immediately before transmission.
 /// This is because the topic->subject allocation protocol may change the subject-ID for already enqueued messages.
 /// The application is expected to rely on the user context to access the topic context for subject-ID derivation
 /// (e.g., store a topic pointer in there).
+/// Pinned subject-IDs equal the topic hash and as such do not require postponed resolution.
 bool canard_publish(canard_t* const               self,
                     const canard_us_t             now,
                     const canard_us_t             deadline,
@@ -496,14 +492,27 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 
 // -----------------------------------------   Cyphal v1.0 compatibility API   -----------------------------------------
 
-bool canard_1v0_publish(canard_t* const            self,
-                        const canard_us_t          now,
-                        const canard_us_t          deadline,
-                        const uint16_t             iface_bitmap,
-                        const canard_prio_t        priority,
-                        const uint16_t             subject_id,
-                        const uint_fast8_t         transfer_id,
-                        const canard_bytes_chain_t payload);
+/// Sugar: a v1.0 message is just a pinned best-effort v1.1 message.
+static inline bool canard_1v0_publish(canard_t* const            self,
+                                      const canard_us_t          now,
+                                      const canard_us_t          deadline,
+                                      const uint16_t             iface_bitmap,
+                                      const canard_prio_t        priority,
+                                      const uint16_t             subject_id,
+                                      const uint_fast8_t         transfer_id,
+                                      const canard_bytes_chain_t payload)
+{
+    return (subject_id <= CANARD_SUBJECT_ID_MAX_1v0) && canard_publish(self,
+                                                                       now,
+                                                                       deadline,
+                                                                       iface_bitmap,
+                                                                       priority,
+                                                                       subject_id, // topic hash
+                                                                       transfer_id,
+                                                                       payload,
+                                                                       CANARD_USER_CONTEXT_NULL,
+                                                                       NULL);
+}
 
 bool canard_1v0_request(canard_t* const            self,
                         const canard_us_t          now,
@@ -545,7 +554,9 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 
 // ---------------------------------   UAVCAN v0 & DroneCAN legacy compatibility API   ---------------------------------
 
-/// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained by shifting the 3-bit priority left by 2 bits.
+/// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained from 3-bit priority by left-shifting
+/// and setting the two least significant bits to 1: prio_v0=(prio<<2)|3.
+/// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
 bool canard_0v1_publish(canard_t* const            self,
                         const canard_us_t          now,
                         const canard_us_t          deadline,

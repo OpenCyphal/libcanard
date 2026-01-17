@@ -847,7 +847,7 @@ static void test_tx_push_basic_v1_classic(void)
     const uint8_t              data[]  = { 0xDE, 0xAD, 0xBE, 0xEF };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
     TEST_ASSERT_EQUAL_UINT64(0, self.err.oom);
@@ -880,7 +880,7 @@ static void test_tx_push_basic_v1_fd(void)
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
 
@@ -904,7 +904,7 @@ static void test_tx_push_v1_multi_frame(void)
     const uint8_t              data[20] = { 0 };
     const canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(4, self.tx.queue_size);
 
@@ -912,17 +912,19 @@ static void test_tx_push_v1_multi_frame(void)
     TEST_ASSERT_EQUAL_size_t(0, alloc_fr.allocated_fragments);
 }
 
-// This test verifies the bug fix: v0 transfers with fd=true must use Classic CAN MTU.
+// This test verifies that v0 transfers must not have fd flag set.
+// tx_push() ensures the fd flag is not set on v0 transfers via assertion.
 static void test_tx_push_v0_always_classic_mtu(void)
 {
     canard_t                 self;
     instrumented_allocator_t alloc_tr;
     instrumented_allocator_t alloc_fr;
     setup_canard_for_tx_push(&self, &alloc_tr, &alloc_fr);
-    // Global FD mode is on, but v0 should ignore it.
+    // Global FD mode is on, but v0 should not use it.
 
+    // v0 transfer must have fd=false (this is enforced by tx_push assertion).
     tx_transfer_t* tr =
-      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_message, true, false, 1, 0x12345678, 0);
+      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_message, false, false, 1, 0x12345678, 0);
     TEST_ASSERT_NOT_NULL(tr);
 
     // 10 bytes payload. For v0: 2 CRC + 10 = 12. At 7 bytes/frame => 2 frames.
@@ -930,7 +932,7 @@ static void test_tx_push_v0_always_classic_mtu(void)
     const uint8_t              data[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     const canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, 0x1234);
+    const bool ok = tx_push(&self, 0, tr, payload, 0x1234);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(2, self.tx.queue_size); // Must be 2, not 1.
 
@@ -945,15 +947,16 @@ static void test_tx_push_v0_request(void)
     instrumented_allocator_t alloc_fr;
     setup_canard_for_tx_push(&self, &alloc_tr, &alloc_fr);
 
+    // v0 transfer must have fd=false.
     tx_transfer_t* tr =
-      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_request, true, false, 1, 0xABCDEF00, 15);
+      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_request, false, false, 1, 0xABCDEF00, 15);
     TEST_ASSERT_NOT_NULL(tr);
 
     // Single-frame v0: 5 bytes < 8.
     const uint8_t              data[]  = { 1, 2, 3, 4, 5 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, 0xFFFF);
+    const bool ok = tx_push(&self, 0, tr, payload, 0xFFFF);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
 
@@ -968,15 +971,16 @@ static void test_tx_push_v0_response(void)
     instrumented_allocator_t alloc_fr;
     setup_canard_for_tx_push(&self, &alloc_tr, &alloc_fr);
 
+    // v0 transfer must have fd=false.
     tx_transfer_t* tr =
-      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_response, true, false, 1, 0xABCDEF00, 31);
+      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_response, false, false, 1, 0xABCDEF00, 31);
     TEST_ASSERT_NOT_NULL(tr);
 
     // Multi-frame v0: 20 bytes. 2 CRC + 20 = 22. At 7 bytes/frame => 4 frames.
     const uint8_t              data[20] = { 0 };
     const canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, 0xFFFF);
+    const bool ok = tx_push(&self, 0, tr, payload, 0xFFFF);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(4, self.tx.queue_size);
 
@@ -998,7 +1002,7 @@ static void test_tx_push_oom_frame_alloc(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_size_t(0, self.tx.queue_size);
     TEST_ASSERT_EQUAL_UINT64(1, self.err.oom);
@@ -1021,7 +1025,7 @@ static void test_tx_push_oom_mid_spool(void)
     const uint8_t              data[20] = { 0 };
     const canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_size_t(0, self.tx.queue_size);
     TEST_ASSERT_EQUAL_UINT64(1, self.err.oom);
@@ -1044,7 +1048,7 @@ static void test_tx_push_queue_capacity_exceeded(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_UINT64(1, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_size_t(0, alloc_tr.allocated_fragments); // Transfer freed.
@@ -1065,7 +1069,7 @@ static void test_tx_push_queue_capacity_too_small(void)
     const uint8_t              data[20] = { 0 };
     const canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_FALSE(ok);
     TEST_ASSERT_EQUAL_UINT64(1, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_size_t(0, alloc_tr.allocated_fragments);
@@ -1086,7 +1090,7 @@ static void test_tx_push_multi_iface_refcount(void)
     const uint8_t              data[]  = { 1, 2, 3, 4 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
 
@@ -1118,7 +1122,7 @@ static void test_tx_push_single_iface_refcount(void)
     const uint8_t              data[]  = { 1, 2, 3, 4 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
 
     // Single interface => refcount = 1.
@@ -1150,7 +1154,7 @@ static void test_tx_push_multi_frame_multi_iface(void)
     const uint8_t              data[10] = { 0 };
     const canard_bytes_chain_t payload  = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(2, self.tx.queue_size);
 
@@ -1180,7 +1184,7 @@ static void test_tx_push_reliable_staged(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
 
     // Check that it's in the staged index.
@@ -1203,7 +1207,7 @@ static void test_tx_push_unreliable_not_staged(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
 
     // Staged index should be empty for unreliable transfers.
@@ -1225,7 +1229,7 @@ static void test_tx_push_empty_payload(void)
     // Empty payload.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
 
@@ -1240,14 +1244,15 @@ static void test_tx_push_v0_empty_payload(void)
     instrumented_allocator_t alloc_fr;
     setup_canard_for_tx_push(&self, &alloc_tr, &alloc_fr);
 
+    // v0 transfer must have fd=false.
     tx_transfer_t* tr =
-      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_message, true, false, 1, 0x12345678, 0);
+      make_test_transfer(self.mem.tx_transfer, transfer_kind_v0_message, false, false, 1, 0x12345678, 0);
     TEST_ASSERT_NOT_NULL(tr);
 
     // Empty v0 payload.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, 0xFFFF);
+    const bool ok = tx_push(&self, 0, tr, payload, 0xFFFF);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
 
@@ -1269,7 +1274,7 @@ static void test_tx_push_deadline_indexed(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
 
     // Deadline index should contain the transfer.
@@ -1292,7 +1297,7 @@ static void test_tx_push_transfer_indexed(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
 
     // Transfer index should contain the transfer.
@@ -1318,7 +1323,7 @@ static void test_tx_push_agewise_list(void)
     const uint8_t              data[]  = { 1, 2, 3 };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
 
     // Agewise list should contain the transfer.
@@ -1344,7 +1349,7 @@ static void test_tx_push_fragmented_payload(void)
     canard_bytes_chain_t c2   = { .bytes = { .size = sizeof(f2), .data = f2 }, .next = NULL };
     canard_bytes_chain_t c1   = { .bytes = { .size = sizeof(f1), .data = f1 }, .next = &c2 };
 
-    const bool ok = tx_push(&self, tr, c1, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, c1, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(1, self.tx.queue_size);
 
@@ -1369,7 +1374,7 @@ static void test_tx_push_large_payload_fd(void)
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    const bool ok = tx_push(&self, tr, payload, CRC_INITIAL);
+    const bool ok = tx_push(&self, 0, tr, payload, CRC_INITIAL);
     TEST_ASSERT_TRUE(ok);
     TEST_ASSERT_EQUAL_size_t(4, self.tx.queue_size);
 
