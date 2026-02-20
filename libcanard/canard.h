@@ -520,7 +520,6 @@ struct CanardTxQueue canardTxInit(const size_t                      capacity,
 /// The library compares (now>deadline) to determine which frames timed out, and so could
 /// be dropped (incrementing frames_expired, unless NULL).
 /// If this timeout behavior is not needed, pass now_usec=0 to canardTxPush()/canardTxPoll().
-/// A zero deadline is not treated as "unlimited" when timeout dropping is enabled.
 ///
 /// The described above automatic dropping of timed-out frames was added in the v4 of the library as an optional
 /// feature. It is applied only to the frames that are already in the TX queue (not the new ones that are being pushed
