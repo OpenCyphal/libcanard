@@ -116,7 +116,7 @@ const struct CanardTransferMetadata transfer_metadata = {
 ++my_message_transfer_id;  // The transfer-ID shall be incremented after every transmission on this subject.
 int32_t result = canardTxPush(&queue,               // Call this once per redundant CAN interface (queue).
                               &canard,
-                              tx_deadline_usec,     // Zero if transmission deadline is not limited.
+                              tx_deadline_usec,     // Transmission deadline (absolute monotonic time in usec).
                               &transfer_metadata,
                               47,                   // Size of the message payload (see Nunavut transpiler).
                               "\x2D\x00" "Sancho, it strikes me thou art in great fear.",
@@ -153,6 +153,9 @@ for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;) 
 ```
 
 💡 New in v4.0: optionally, you can now use `canardTxPoll()` that automates the above for you.
+
+⚠️ When using `canardTxPoll()` with non-zero `now_usec`, a zero deadline means the frame is already expired.
+Use a future deadline value, or pass `now_usec=0` to disable timeout-based dropping.
 
 Transfer reception is done by feeding frames into the transfer reassembly state machine
 from any of the redundant interfaces.
