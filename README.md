@@ -154,7 +154,6 @@ for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;) 
 
 💡 New in v4.0: optionally, you can now use `canardTxPoll()` that automates the above for you.
 
-
 Transfer reception is done by feeding frames into the transfer reassembly state machine
 from any of the redundant interfaces.
 But first, we need to subscribe:
