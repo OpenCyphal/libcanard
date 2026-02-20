@@ -154,8 +154,6 @@ for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;) 
 
 💡 New in v4.0: optionally, you can now use `canardTxPoll()` that automates the above for you.
 
-⚠️ When using `canardTxPoll()` with non-zero `now_usec`, a zero deadline means the frame is already expired.
-Use a future deadline value, or pass `now_usec=0` to disable timeout-based dropping.
 
 Transfer reception is done by feeding frames into the transfer reassembly state machine
 from any of the redundant interfaces.
