@@ -20,12 +20,11 @@ static void test_canard_publish_validation(void)
 
     // Invalid interface bitmap.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(canard_publish(&self, 0, 0, canard_prio_nominal, 0, 0, payload, CANARD_USER_CONTEXT_NULL, false));
+    TEST_ASSERT_FALSE(canard_publish(&self, 0, 0, canard_prio_nominal, 0, 0, payload, CANARD_USER_CONTEXT_NULL));
 
     // Invalid payload.
     const canard_bytes_chain_t bad_payload = { .bytes = { .size = 1, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(
-      canard_publish(&self, 0, 1, canard_prio_nominal, 0, 0, bad_payload, CANARD_USER_CONTEXT_NULL, false));
+    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, 0, bad_payload, CANARD_USER_CONTEXT_NULL));
 }
 
 static void test_canard_publish_oom(void)
@@ -39,7 +38,7 @@ static void test_canard_publish_oom(void)
 
     // Allocation failure in txfer_new should return false.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, 0, payload, CANARD_USER_CONTEXT_NULL, false));
+    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, 0, payload, CANARD_USER_CONTEXT_NULL));
 }
 
 static void test_canard_0v1_publish_requires_node_id(void)
@@ -51,26 +50,12 @@ static void test_canard_0v1_publish_requires_node_id(void)
     TEST_ASSERT_FALSE(canard_0v1_publish(&self, 0, 1, canard_prio_nominal, 1, 0xFFFF, 0, payload));
 }
 
-// Provide a subject-ID that is out of range.
-static uint32_t bad_subject_id(canard_t* const self, const canard_user_context_t context)
-{
-    (void)self;
-    (void)context;
-    return CANARD_SUBJECT_ID_MAX + 1U;
-}
-
-// Reject unpinned publish when subject-ID resolution fails.
 static void test_canard_publish_subject_id_out_of_range(void)
 {
-    canard_t        self   = {};
-    canard_vtable_t vtable = {};
-    vtable.tx_subject_id   = bad_subject_id;
-    self.vtable            = &vtable;
-
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = NULL }, .next = NULL };
-    const uint64_t             topic   = (uint64_t)CANARD_SUBJECT_ID_MAX_1v0 + 1U;
-    TEST_ASSERT_FALSE(
-      canard_publish(&self, 0, 1, canard_prio_nominal, topic, 0, payload, CANARD_USER_CONTEXT_NULL, false));
+    canard_t                   self    = {};
+    TEST_ASSERT_FALSE(canard_publish(
+      &self, 0, 1, canard_prio_nominal, CANARD_SUBJECT_ID_MAX + 1U, 0, payload, CANARD_USER_CONTEXT_NULL));
 }
 
 extern "C" void setUp() {}

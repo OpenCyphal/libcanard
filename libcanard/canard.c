@@ -15,7 +15,7 @@
 /// Define this macro to include build configuration header.
 /// Usage example with CMake: "-DCANARD_CONFIG_HEADER=\"${CMAKE_CURRENT_SOURCE_DIR}/my_canard_config.h\""
 #ifdef CANARD_CONFIG_HEADER
-#include CANARD_CONFIG_HEADER
+#include CANARD_CONFIG_HEADER // cppcheck suppress "preprocessorErrorDirective"
 #endif
 
 /// By default, this macro resolves to the standard assert().
@@ -58,16 +58,6 @@ typedef unsigned char byte_t;
 
 #define PRIO_SHIFT 26U
 #define PRIO_MASK  7U
-
-/// The MSb of the topic hash is set to this value for P2P transfers to allow distinguishing them from messages.
-/// The LSb contain: (can_id & ((1<<26)-1)) >> 7.
-#define TOPIC_HASH_MSb_SERVICE 0xFFFFFFFF00000000ULL
-
-/// The MSb of the topic hash is set to this value for v0 transfers to allow distinguishing them from v1 transfers.
-/// For v0 messages, LSb contain the data type ID == can_id[24:8].
-/// For v0 services, LSb contain the service ID, request-not-response, and destination node-ID == can_id[24:8].
-#define TOPIC_HASH_MSb_v0_MESSAGE 0xDEADCACA00000000ULL
-#define TOPIC_HASH_MSb_v0_SERVICE 0xDEADCACB00000000ULL
 
 #define TAIL_SOT    128U
 #define TAIL_EOT    64U
@@ -138,32 +128,6 @@ static byte_t popcount(const uint64_t x)
 #endif
 }
 
-/// See ctz().
-static byte_t ctz_emulated(uint32_t x)
-{
-    CANARD_ASSERT(x != 0U);
-    byte_t v = 0;
-    while ((x & 1U) == 0U) {
-        x >>= 1U;
-        ++v;
-    }
-    return v;
-}
-
-/// Count trailing zeros (ctz), aka find first set (ffs), aka the index of the least-significant set bit.
-/// Undefined for zero argument.
-static byte_t ctz(const uint32_t x)
-{
-    CANARD_ASSERT(x != 0U);
-#ifdef stdc_trailing_zeros
-    return (byte_t)stdc_trailing_zeros(x); // C23 feature
-#elif defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM)
-    return (byte_t)__builtin_ctzl(x);
-#else
-    return ctz_emulated(x);
-#endif
-}
-
 static void* mem_alloc(const canard_mem_t memory, const size_t size) { return memory.vtable->alloc(memory, size); }
 static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 {
@@ -177,44 +141,6 @@ static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 static void mem_free(const canard_mem_t memory, const size_t size, void* const data)
 {
     memory.vtable->free(memory, size, data);
-}
-
-static byte_t* serialize_u32(byte_t* ptr, const uint32_t value)
-{
-    for (size_t i = 0; i < sizeof(value); i++) {
-        *ptr++ = (byte_t)((byte_t)(value >> (i * 8U)) & 0xFFU);
-    }
-    return ptr;
-}
-
-static byte_t* serialize_u64(byte_t* ptr, const uint64_t value)
-{
-    for (size_t i = 0; i < sizeof(value); i++) {
-        *ptr++ = (byte_t)((byte_t)(value >> (i * 8U)) & 0xFFU);
-    }
-    return ptr;
-}
-
-static const byte_t* deserialize_u32(const byte_t* ptr, uint32_t* const out_value)
-{
-    CANARD_ASSERT((ptr != NULL) && (out_value != NULL));
-    *out_value = 0;
-    for (size_t i = 0; i < sizeof(*out_value); i++) {
-        *out_value |= (uint32_t)((uint32_t)*ptr << (i * 8U)); // NOLINT(google-readability-casting) NOSONAR
-        ptr++;
-    }
-    return ptr;
-}
-
-static const byte_t* deserialize_u64(const byte_t* ptr, uint64_t* const out_value)
-{
-    CANARD_ASSERT((ptr != NULL) && (out_value != NULL));
-    *out_value = 0;
-    for (size_t i = 0; i < sizeof(*out_value); i++) {
-        *out_value |= ((uint64_t)*ptr << (i * 8U));
-        ptr++;
-    }
-    return ptr;
 }
 
 // ---------------------------------------------            CRC            ---------------------------------------------
@@ -334,14 +260,6 @@ static void enlist_tail(canard_list_t* const list, canard_listed_t* const member
 #define LIST_NEXT(member, owner_type, owner_field) LIST_MEMBER((member)->owner_field.next, owner_type, owner_field)
 #define LIST_PREV(member, owner_type, owner_field) LIST_MEMBER((member)->owner_field.prev, owner_type, owner_field)
 
-/// Finds the first element from the head that satisfies the given predicate.
-#define LIST_FIND_FIRST(list, owner_type, owner_field, result, predicate) \
-    owner_type* result = LIST_HEAD(list, owner_type, owner_field);        \
-    while ((result != NULL) && !(predicate)) {                            \
-        result = LIST_NEXT(result, owner_type, owner_field);              \
-    }                                                                     \
-    (void)0
-
 #define LIST_MEMBER(ptr, owner_type, owner_field) ((owner_type*)ptr_unbias((ptr), offsetof(owner_type, owner_field)))
 static void* ptr_unbias(const void* const ptr, const size_t offset)
 {
@@ -404,14 +322,6 @@ static bool bytes_chain_valid(const canard_bytes_chain_t head)
 
 // ---------------------------------------------            TX             ---------------------------------------------
 
-/// Derives the ack timeout for an outgoing transfer.
-static canard_us_t tx_ack_timeout(const canard_us_t baseline, const canard_prio_t prio, const byte_t attempts)
-{
-    CANARD_ASSERT(baseline > 0);
-    CANARD_ASSERT(((int)prio) < 8);
-    return baseline * (1LL << smaller((size_t)prio + (size_t)attempts, 62)); // NOLINT(*-signed-bitwise)
-}
-
 /// On a 32-bit platform, o1heap has a per-block overhead of sizeof(void*)*2=8 bytes, meaning that the available
 /// allocation sizes are 8 B (16 B block) 24 B (32 B block), 56 B (64 B block), 120 B (128 B block), etc.
 /// Size optimization is very important for Classic CAN because of its low MTU.
@@ -420,7 +330,7 @@ typedef struct tx_frame_t
 {
     struct tx_frame_t* next;
     size_t refcount : (sizeof(size_t) * CHAR_BIT) - DLC_BITS; ///< 268+ million ought to be enough for anybody
-    size_t dlc : DLC_BITS;                                    ///< use canard_len_to_dlc[] and canard_dlc_to_len[]
+    size_t dlc      : DLC_BITS;                               ///< use canard_len_to_dlc[] and canard_dlc_to_len[]
     byte_t data[];
 } tx_frame_t;
 static_assert((sizeof(void*) > 4) || ((sizeof(tx_frame_t) + CANARD_MTU_CAN_CLASSIC) <= 24),
@@ -477,14 +387,6 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj)
     }
 }
 
-#define EPOCH_BITS 6U /// More doesn't make sense due to exponential backoff and left shift saturation.
-#define EPOCH_MAX  ((1U << EPOCH_BITS) - 1U)
-
-/// Max delta: 2**29*1e-6 = 536.87 seconds
-/// This is kept narrow because the transfer state has to be kept compact to conserve heap memory.
-#define STAGED_UNTIL_DELTA_BITS 29U
-#define STAGED_UNTIL_DELTA_MAX  ((1ULL << STAGED_UNTIL_DELTA_BITS) - 1ULL)
-
 /// Everything except the local node-ID. The node-ID is not needed because it may be changed while the transfer
 /// is enqueued if a collision is detected; also, it is easy to add, and it is the same for all enqueued transfers,
 /// hence it would not affect the ordering.
@@ -493,29 +395,16 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj)
 /// The struct is manually packed to ensure it fits into a 128-byte O1Heap block in common embedded configurations.
 struct canard_txfer_t
 {
-    /// Lookup and ordering indexes.
     canard_tree_t   index_pending[CANARD_IFACE_COUNT];
-    canard_tree_t   index_staged;
-    canard_tree_t   index_reliable;
     canard_listed_t list_agewise;
 
     /// Constant transfer properties supplied by the client.
     canard_us_t deadline;
-    uint64_t    topic_hash;
-    uint64_t    can_id_msb : CAN_ID_MSb_BITS;
+    uint64_t    can_id_msb  : CAN_ID_MSb_BITS;
     uint64_t    transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
-    uint64_t    is_1v1_message : 1; ///< Needs delayed subject-ID resolution.
-    uint64_t    fd             : 1;
+    uint64_t    fd          : 1;
 
     /// Mutable transmission state. All other fields, except for the index handles, are immutable.
-    ///
-    /// We keep a pointer to the head of the spool, plus a cursor that scans the frames during transmission.
-    /// Both are NULL if the payload is destroyed (i.e., after the last attempt is done and we're waiting for ack).
-    /// The head points to the first frame unless it is known that no (further) retransmissions are needed,
-    /// in which case the old head is dereferenced and the head points to the next frame to transmit.
-    /// The head is NULL for ifaces where transmission is not needed (anymore).
-    uint64_t    epoch : EPOCH_BITS; ///< No overflow due to exponential backoff; e.g. 1us @ epoch=48 => 9 years.
-    uint64_t    staged_until_delta : STAGED_UNTIL_DELTA_BITS; /// staged_until = deadline - staged_until_delta
     tx_frame_t* head[CANARD_IFACE_COUNT];
     tx_frame_t* cursor[CANARD_IFACE_COUNT];
 
@@ -528,9 +417,7 @@ static_assert((CANARD_IFACE_COUNT > 2) || (sizeof(void*) > 4) || (sizeof(void (*
 
 static canard_txfer_t* txfer_new(const canard_mem_t          mem,
                                  const canard_us_t           deadline,
-                                 const uint64_t              topic_hash,
                                  const byte_t                transfer_id,
-                                 const transfer_kind_t       kind,
                                  const uint32_t              can_id_template,
                                  const bool                  fd,
                                  const canard_user_context_t user_context)
@@ -540,19 +427,11 @@ static canard_txfer_t* txfer_new(const canard_mem_t          mem,
         FOREACH_IFACE (i) {
             tr->index_pending[i] = TREE_NULL;
         }
-        tr->index_staged   = TREE_NULL;
-        tr->index_reliable = TREE_NULL;
-        tr->list_agewise   = LIST_NULL;
-        //
-        tr->deadline       = deadline;
-        tr->topic_hash     = topic_hash;
-        tr->transfer_id    = transfer_id & CANARD_TRANSFER_ID_MAX;
-        tr->can_id_msb     = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
-        tr->is_1v1_message = (kind == transfer_kind_message);
-        tr->fd             = fd ? 1U : 0U;
-        //
-        tr->epoch              = 0;
-        tr->staged_until_delta = 0;
+        tr->list_agewise = LIST_NULL;
+        tr->deadline     = deadline;
+        tr->transfer_id  = transfer_id & CANARD_TRANSFER_ID_MAX;
+        tr->can_id_msb   = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
+        tr->fd           = fd ? 1U : 0U;
         FOREACH_IFACE (i) {
             tr->head[i]   = NULL;
             tr->cursor[i] = NULL;
@@ -562,19 +441,9 @@ static canard_txfer_t* txfer_new(const canard_mem_t          mem,
     return tr;
 }
 
-static bool txfer_is_reliable(const canard_t* const self, const canard_txfer_t* const tr)
-{
-    return cavl2_is_inserted(self->tx.reliable, &tr->index_reliable);
-}
-
 static canard_prio_t txfer_prio(const canard_txfer_t* const tr)
 {
     return (canard_prio_t)((((unsigned)tr->can_id_msb) >> (CAN_ID_MSb_BITS - 3U)) & 7U);
-}
-
-static canard_us_t txfer_staged_until(const canard_txfer_t* const tr)
-{
-    return tr->deadline - (canard_us_t)tr->staged_until_delta;
 }
 
 static bool txfer_is_pending(const canard_t* const self, const canard_txfer_t* const tr)
@@ -604,64 +473,6 @@ static void txfer_free_payload(canard_t* const self, canard_txfer_t* const tr)
     }
 }
 
-// Key for the staged index ordering.
-typedef struct
-{
-    canard_us_t           when;
-    const canard_txfer_t* tr;
-} tx_staged_key_t;
-
-static int32_t tx_cavl_compare_staged_until(const void* const user, const canard_tree_t* const node)
-{
-    // Use the transfer pointer as a stable tiebreaker for equal timestamps.
-    const canard_txfer_t* const  rhs      = CAVL2_TO_OWNER(node, canard_txfer_t, index_staged);
-    const canard_us_t            rhs_when = txfer_staged_until(rhs);
-    const tx_staged_key_t* const key      = (const tx_staged_key_t*)user;
-    if (key->when < rhs_when) {
-        return -1;
-    }
-    if (key->when > rhs_when) {
-        return +1;
-    }
-    if (key->tr < rhs) {
-        return -1;
-    }
-    return (key->tr > rhs) ? +1 : 0;
-}
-
-/// Updates the next attempt time and inserts the transfer into the staged index, unless the next scheduled
-/// transmission time is too close to the deadline, in which case no further attempts will be made.
-/// The idea is that retransmitting the transfer too close to the deadline is pointless, because
-/// the ack may arrive just after the deadline and the transfer would be considered failed anyway.
-/// The solution is to add a small margin before the deadline. The margin is derived using a simple heuristic,
-/// which is subject to review and improvement later on (this is not an API-visible trait).
-static void tx_stage_reliable_if(canard_t* const self, canard_txfer_t* const tr)
-{
-    CANARD_ASSERT(txfer_is_reliable(self, tr));
-    const byte_t      epoch            = tr->epoch++;
-    const canard_us_t timeout          = tx_ack_timeout(self->ack_baseline_timeout, txfer_prio(tr), epoch);
-    canard_us_t       new_staged_until = txfer_staged_until(tr);
-    if (new_staged_until == tr->deadline) {
-        CANARD_ASSERT(!cavl2_is_inserted(self->tx.staged, &tr->index_staged));
-        new_staged_until = self->vtable->now(self); // this is the first attempt
-    } else {
-        CANARD_ASSERT(cavl2_is_inserted(self->tx.staged, &tr->index_staged));
-        cavl2_remove(&self->tx.staged, &tr->index_staged);
-    }
-    new_staged_until += timeout;
-    if ((tr->deadline - timeout) >= new_staged_until) {
-        const canard_us_t delta = min_i64(tr->deadline - new_staged_until, (canard_us_t)STAGED_UNTIL_DELTA_MAX);
-        CANARD_ASSERT(delta > 0);
-        tr->staged_until_delta = ((uint64_t)delta) & STAGED_UNTIL_DELTA_MAX;
-        // Composite key ensures equal timestamps are ordered deterministically.
-        const tx_staged_key_t      key  = { .when = new_staged_until, .tr = tr };
-        const canard_tree_t* const tree = cavl2_find_or_insert(
-          &self->tx.staged, &key, tx_cavl_compare_staged_until, &tr->index_staged, cavl2_trivial_factory);
-        CANARD_ASSERT(tree == &tr->index_staged);
-        (void)tree;
-    }
-}
-
 // Compare transfer-ID with wraparound support (5-bit, +/-16).
 static int_least8_t tx_compare_transfer_id(const byte_t lhs, const byte_t rhs)
 {
@@ -677,35 +488,22 @@ static int32_t tx_cavl_compare_pending_order(const void* const user, const canar
 {
     const canard_txfer_t* const lhs = (const canard_txfer_t*)user;
     const canard_txfer_t* const rhs = CAVL2_TO_OWNER(node, canard_txfer_t, index_pending[0]);
-    // Same topic hash: order by priority then FIFO by transfer-ID (wraparound), then by deadline.
-    if (lhs->topic_hash == rhs->topic_hash) {
-        const canard_prio_t lhs_prio = txfer_prio(lhs);
-        const canard_prio_t rhs_prio = txfer_prio(rhs);
-        if (lhs_prio < rhs_prio) {
-            return -1;
-        }
-        if (lhs_prio > rhs_prio) {
-            return +1;
-        }
-        const int_least8_t tid_diff = tx_compare_transfer_id((byte_t)lhs->transfer_id, (byte_t)rhs->transfer_id);
-        if (tid_diff != 0) {
-            return (tid_diff < 0) ? -1 : +1;
-        }
-        // Best-effort transfers may reuse transfer-ID; use deadline as a tiebreaker.
-        if (lhs->deadline < rhs->deadline) {
-            return -1;
-        }
-        if (lhs->deadline > rhs->deadline) {
-            return +1;
-        }
-    } else {
-        // Different topic hash: sooner deadline first.
-        if (lhs->deadline < rhs->deadline) {
-            return -1;
-        }
-        if (lhs->deadline > rhs->deadline) {
-            return +1;
-        }
+    if (lhs->can_id_msb < rhs->can_id_msb) {
+        return -1;
+    }
+    if (lhs->can_id_msb > rhs->can_id_msb) {
+        return +1;
+    }
+    // TODO: tiebreak by insertion order instead!
+    const int_least8_t tid_diff = tx_compare_transfer_id((byte_t)lhs->transfer_id, (byte_t)rhs->transfer_id);
+    if (tid_diff != 0) {
+        return (tid_diff < 0) ? -1 : +1;
+    }
+    if (lhs->deadline < rhs->deadline) {
+        return -1;
+    }
+    if (lhs->deadline > rhs->deadline) {
+        return +1;
     }
     // Final arbitrary tiebreaker to enforce strict ordering.
     if (lhs < rhs) {
@@ -727,49 +525,20 @@ static void tx_make_pending(canard_t* const self, canard_txfer_t* const tr)
     }
 }
 
-/// Currently, we use a very simple implementation that ceases delivery attempts after the first acknowledgment
-/// is received, similar to the CAN bus itself. Such mode of reliability is useful in the following scenarios:
-///
-/// - With topics with a single subscriber, or sent via P2P transport (responses to published messages).
-///   With a single recipient, a single acknowledgement is sufficient to guarantee delivery.
-///
-/// - The application only cares about one acknowledgement (anycast), e.g., with modular redundant nodes.
-///
-/// - The application assumes that if one copy was delivered successfully, then other copies have likely
-///   succeeded as well (depends on the required reliability guarantees), similar to the CAN bus.
-///
-/// TODO In the future, there are plans to extend this mechanism to track the number of acknowledgements per topic,
-/// such that we can retain transfers until a specified number of acknowledgements have been received. A remote
-/// node can be considered to have disappeared if it failed to acknowledge a transfer after the maximum number
-/// of attempts have been made. This is somewhat similar in principle to the connection-oriented DDS/RTPS approach,
-/// where pub/sub associations are established and removed automatically, transparently to the application.
-static void txfer_retire(canard_t* const self, canard_txfer_t* const tr, const bool success)
+/// Retire one transfer and release its resources.
+static void txfer_retire(canard_t* const self, canard_txfer_t* const tr)
 {
-    const canard_user_context_t user_context = tr->user_context;
-    const bool                  reliable     = txfer_is_reliable(self, tr);
-
-    // Delist everywhere. Remember that delisting a non-listed entity is a safe no-op.
     if (self->tx.iter == tr) {
         self->tx.iter = LIST_NEXT(tr, canard_txfer_t, list_agewise); // May be NULL, is OK.
     }
     FOREACH_IFACE (i) {
         (void)cavl2_remove_if(&self->tx.pending[i], &tr->index_pending[i]);
     }
-    (void)cavl2_remove_if(&self->tx.staged, &tr->index_staged);
-    if (reliable) {
-        CANARD_ASSERT(cavl2_is_inserted(self->tx.reliable, &tr->index_reliable));
-        cavl2_remove(&self->tx.reliable, &tr->index_reliable);
-    }
     delist(&self->tx.agewise, &tr->list_agewise);
 
     // Free the memory. The payload memory may already be empty depending on where we were invoked from.
     txfer_free_payload(self, tr);
     mem_free(self->mem.tx_transfer, sizeof(canard_txfer_t), tr);
-
-    // Finally, when the internal state is updated and consistent, invoke the feedback callback if any.
-    if (reliable) {
-        self->vtable->feedback(self, user_context, success ? 1 : 0);
-    }
 }
 
 static byte_t tx_make_tail_byte(const bool sot, const bool eot, const bool tog, const byte_t transfer_id)
@@ -928,24 +697,6 @@ static tx_frame_t* tx_spool_v0(canard_t* const            self,
     return head;
 }
 
-/// To check all transfers under a specific topic hash, use lower bound lookup with transfer_id=0 and
-/// then iterate until the topic hash changes.
-/// This is O(log n) because the number of distinct transfer-ID in Cyphal/CAN is bounded at a low value.
-typedef struct
-{
-    uint64_t topic_hash;
-    byte_t   transfer_id;
-} txfer_key_t;
-
-static int32_t tx_cavl_compare_reliable(const void* const user, const canard_tree_t* const node)
-{
-    const txfer_key_t* const key = (const txfer_key_t*)user;
-    const canard_txfer_t* const tr = CAVL2_TO_OWNER(node, canard_txfer_t, index_reliable); // clang-format off
-    if (key->topic_hash < tr->topic_hash) { return -1; }
-    if (key->topic_hash > tr->topic_hash) { return +1; } // clang-format on
-    return (int32_t)key->transfer_id - (int32_t)tr->transfer_id;
-}
-
 /// When the queue is exhausted, finds a transfer to sacrifice using simple heuristics and returns it.
 /// Will return NULL if there are no transfers worth sacrificing (no queue space can be reclaimed).
 /// We cannot simply stop accepting new transfers when the queue is full, because it may be caused by a single
@@ -967,22 +718,10 @@ static bool tx_ensure_queue_space(canard_t* const self, const size_t total_frame
         if (tr == NULL) {
             break; // We may have no transfers anymore but the CAN driver could still be holding some pending frames.
         }
-        txfer_retire(self, tr, false);
+        txfer_retire(self, tr);
         self->err.tx_sacrifice++;
     }
     return total_frames_needed <= (self->tx.queue_capacity - self->tx.queue_size);
-}
-
-static void tx_promote_staged(canard_t* const self, const canard_us_t now)
-{
-    canard_txfer_t* tr = CAVL2_TO_OWNER(cavl2_min(self->tx.staged), canard_txfer_t, index_staged);
-    while ((tr != NULL) && (now >= txfer_staged_until(tr))) {
-        canard_txfer_t* const next =
-          CAVL2_TO_OWNER(cavl2_next_greater(&tr->index_staged), canard_txfer_t, index_staged);
-        tx_stage_reliable_if(self, tr);
-        tx_make_pending(self, tr);
-        tr = next;
-    }
 }
 
 static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mtu)
@@ -997,7 +736,6 @@ static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mt
 /// Enqueues a transfer for transmission.
 static bool tx_push(canard_t* const            self,
                     canard_txfer_t* const      tr,
-                    const bool                 reliable,
                     const bool                 v0,
                     const byte_t               iface_bitmap,
                     const canard_bytes_chain_t payload,
@@ -1005,30 +743,6 @@ static bool tx_push(canard_t* const            self,
 {
     CANARD_ASSERT(tr != NULL);
     CANARD_ASSERT((!tr->fd) || !v0); // The caller must ensure this.
-    const canard_us_t now = self->vtable->now(self);
-
-    // Promote staged transfers that have become eligible for retransmission to ensure fairness:
-    // if they have the same arbitration priority as the new transfer, they should get a chance to go first.
-    tx_promote_staged(self, now);
-
-    // Ensure there are no duplicate reliable transfers with the same local (topic hash, transfer-ID) to avoid
-    // ack ambiguity. A delayed ack can still cause issues but tracking that is too expensive for CAN.
-    // This does not affect outgoing acks since they are not reliable. This may affect the application if it is
-    // trying to push too many reliable transfers on the same topic too quickly.
-    // Insert at the same time to avoid double tree walk.
-    if (reliable) {
-        const txfer_key_t           key = { .topic_hash = tr->topic_hash, .transfer_id = tr->transfer_id };
-        const canard_txfer_t* const rel = CAVL2_TO_OWNER(
-          cavl2_find_or_insert(
-            &self->tx.reliable, &key, tx_cavl_compare_reliable, &tr->index_reliable, cavl2_trivial_factory),
-          canard_txfer_t,
-          index_reliable);
-        if (rel != tr) { // Duplicate found.
-            mem_free(self->mem.tx_transfer, sizeof(canard_txfer_t), tr);
-            self->err.tx_duplicate++;
-            return false;
-        }
-    }
 
     // Ensure the queue has enough space. v0 transfers always use Classic CAN regardless of tr->fd.
     const size_t mtu      = tr->fd ? CANARD_MTU_CAN_FD : CANARD_MTU_CAN_CLASSIC;
@@ -1037,10 +751,6 @@ static bool tx_push(canard_t* const            self,
     CANARD_ASSERT(n_frames > 0);
     if (!tx_ensure_queue_space(self, n_frames)) {
         self->err.tx_capacity++;
-        if (reliable) {
-            CANARD_ASSERT(cavl2_is_inserted(self->tx.reliable, &tr->index_reliable));
-            cavl2_remove(&self->tx.reliable, &tr->index_reliable);
-        }
         mem_free(self->mem.tx_transfer, sizeof(canard_txfer_t), tr);
         return false;
     }
@@ -1051,10 +761,6 @@ static bool tx_push(canard_t* const            self,
                                              : tx_spool(self, crc_seed, mtu, tr->transfer_id, payload);
     if (spool == NULL) {
         self->err.oom++;
-        if (reliable) {
-            CANARD_ASSERT(cavl2_is_inserted(self->tx.reliable, &tr->index_reliable));
-            cavl2_remove(&self->tx.reliable, &tr->index_reliable);
-        }
         mem_free(self->mem.tx_transfer, sizeof(canard_txfer_t), tr);
         return false;
     }
@@ -1084,89 +790,48 @@ static bool tx_push(canard_t* const            self,
     // Register the transfer and schedule for transmission.
     enlist_tail(&self->tx.agewise, &tr->list_agewise);
     tx_make_pending(self, tr);
-    // tx_arm_delay_if is NOT called here; the retransmission timer is armed after transmission, not before.
-    // For reliable transfers, the retransmission will be scheduled once the first transmission attempt completes.
     return true;
-}
-
-/// We only have 64 bits - 8 bits tail byte - 5 bits transfer-ID = 51 bits for topic hash lower bound.
-#define ACK_TOPIC_HASH_LOWER_BOUND_MASK 0xFFFFFFFFFFFFE000ULL
-
-/// Handle an ACK received from a remote node.
-/// Note an important design decision: acks are identified by topic hash, not subject-ID, because the subject-ID may be
-/// changed by the consensus protocol at any moment while the transfer is pending.
-static void tx_receive_ack(canard_t* const self, const uint64_t topic_hash_lower_bound, const byte_t transfer_id)
-{
-    // We use lower bound lookup simply because we don't have the 13 least significant bits.
-    // We don't really need them for a unique lookup because the collision probability is negligible.
-    const txfer_key_t     key = { .topic_hash  = topic_hash_lower_bound & ACK_TOPIC_HASH_LOWER_BOUND_MASK,
-                                  .transfer_id = transfer_id };
-    canard_txfer_t* const tr = CAVL2_TO_OWNER(cavl2_lower_bound(self->tx.reliable, &key, tx_cavl_compare_reliable), //--
-                                              canard_txfer_t,
-                                              index_reliable);
-    if ((tr != NULL) && ((tr->topic_hash & ACK_TOPIC_HASH_LOWER_BOUND_MASK) == topic_hash_lower_bound) &&
-        (tr->transfer_id == transfer_id)) {
-        txfer_retire(self, tr, true);
-    } else {
-        self->err.ack_orphans++;
-    }
 }
 
 bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         iface_bitmap,
                     const canard_prio_t         priority,
-                    const uint64_t              topic_hash,
+                    const uint32_t              subject_id,
                     const uint_least8_t         transfer_id,
                     const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context,
-                    const bool                  reliable)
+                    const canard_user_context_t context)
 {
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
-      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap));
+      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
+      (subject_id <= CANARD_SUBJECT_ID_MAX);
     if (ok) {
-        // Compose the CAN ID.
-        const bool pinned  = topic_hash <= CANARD_SUBJECT_ID_MAX_1v0;
-        const bool use_1v0 = pinned && !reliable; // fallback to v1.0 whenever possible to maximize interoperability
-        uint32_t   can_id  = ((uint32_t)priority) << PRIO_SHIFT; // node-ID will be assigned at transmission time
-        if (use_1v0) {
-            can_id |= (3UL << 21U) | (uint32_t)(topic_hash << 8U); // set reserved bits 21 and 22
-        } else {
-            // The subject-ID may change before the transfer makes it to the transmission queue output,
-            // so we could leave the corresponding bits zeroed, but we instead set them using the current best-guess
-            // topic allocation data to improve arbitration order predictability; this makes sense because topic
-            // allocation collisions are exceedingly rare; i.e., the subject-ID obtained here is very likely to be
-            // the same as the one that will be used at transmission time.
-            const uint32_t subject_id = self->vtable->tx_subject_id(self, context);
-            ok                        = ok && (subject_id <= CANARD_SUBJECT_ID_MAX);
-            if (ok) {
-                can_id |= (subject_id << 8U) | (1UL << 7U); // reserved bit 7 indicates v1.1 message
-            }
-        }
+        const uint32_t        can_id = (((uint32_t)priority) << PRIO_SHIFT) | (subject_id << 8U) | (1UL << 7U);
+        canard_txfer_t* const tr =
+          txfer_new(self->mem.tx_transfer, deadline, transfer_id, can_id, self->tx.fd, context);
+        ok = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, payload, CRC_INITIAL);
+    }
+    return ok;
+}
 
-        // Compose the message header, unless v1.0 -- those have no header. See docs for CANARD_HEADER_MESSAGE_BYTES.
-        byte_t                     header_bytes[CANARD_HEADER_BYTES] = { 0 };
-        const canard_bytes_chain_t headed_payload = { .bytes = { .size = CANARD_HEADER_BYTES, .data = header_bytes },
-                                                      .next  = &payload };
-        if (!use_1v0) {
-            const uint32_t header = (uint32_t)(((topic_hash >> 32U) & 0xFFFFFFFCUL) | (reliable ? 1U : 0U));
-            (void)serialize_u32(header_bytes, header);
-        }
-        const canard_bytes_chain_t final_payload = use_1v0 ? payload : headed_payload;
-
-        // Create and push the transfer.
-        if (ok) {
-            canard_txfer_t* const tr = txfer_new(self->mem.tx_transfer,
-                                                 deadline,
-                                                 topic_hash,
-                                                 transfer_id,
-                                                 transfer_kind_message,
-                                                 can_id,
-                                                 self->tx.fd,
-                                                 context);
-            ok = (tr != NULL) && tx_push(self, tr, reliable, false, iface_bitmap, final_payload, CRC_INITIAL);
-        }
+bool canard_1v0_publish(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             subject_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload)
+{
+    bool ok =
+      (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
+      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
+      (subject_id <= CANARD_SUBJECT_ID_MAX_1v0);
+    if (ok) {
+        const uint32_t can_id = (((uint32_t)priority) << PRIO_SHIFT) | (3UL << 21U) | (((uint32_t)subject_id) << 8U);
+        canard_txfer_t* const tr =
+          txfer_new(self->mem.tx_transfer, deadline, transfer_id, can_id, self->tx.fd, CANARD_USER_CONTEXT_NULL);
+        ok = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, payload, CRC_INITIAL);
     }
     return ok;
 }
@@ -1185,16 +850,10 @@ bool canard_0v1_publish(canard_t* const            self,
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
       (self->node_id != 0);
     if (ok) {
-        const uint32_t can_id    = (((uint32_t)priority) << PRIO_SHIFT) | (3UL << 24U) | ((uint32_t)data_type_id << 8U);
-        canard_txfer_t* const tr = txfer_new(self->mem.tx_transfer,
-                                             deadline,
-                                             TOPIC_HASH_MSb_v0_MESSAGE | data_type_id,
-                                             transfer_id,
-                                             transfer_kind_v0_message,
-                                             can_id,
-                                             false, // CAN FD is not supported with v0
-                                             CANARD_USER_CONTEXT_NULL);
-        ok                       = (tr != NULL) && tx_push(self, tr, false, true, iface_bitmap, payload, crc_seed);
+        const uint32_t can_id = (((uint32_t)priority) << PRIO_SHIFT) | (3UL << 24U) | ((uint32_t)data_type_id << 8U);
+        canard_txfer_t* const tr =
+          txfer_new(self->mem.tx_transfer, deadline, transfer_id, can_id, false, CANARD_USER_CONTEXT_NULL);
+        ok = (tr != NULL) && tx_push(self, tr, true, iface_bitmap, payload, crc_seed);
     }
     return ok;
 }
