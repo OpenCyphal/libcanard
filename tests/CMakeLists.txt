@@ -27,7 +27,27 @@ if (NOT NO_STATIC_ANALYSIS)
         message(FATAL_ERROR "Could not locate clang-tidy")
     endif ()
     message(STATUS "Using clang-tidy: ${clang_tidy}")
-endif()
+endif ()
+
+# Fail the build if poisoned identifiers are present.
+# Poison fixed-length 8-bit integer types to maximize portability across DSP cores that may not support them.
+set(POISON_REGEXP "\\b(int8_t|uint8_t)\\b")
+if (NOT NO_STATIC_ANALYSIS)
+    find_program(grep NAMES grep REQUIRED)
+    execute_process(
+            COMMAND "${grep}" -nE "${POISON_REGEXP}" "${library_dir}/canard.c" "${library_dir}/canard.h"
+            RESULT_VARIABLE grep_result
+            OUTPUT_VARIABLE grep_stdout
+            ERROR_VARIABLE grep_stderr
+    )
+    if (grep_result EQUAL 0)
+        message(FATAL_ERROR "Poisoned identifiers found:\n${grep_stdout}${grep_stderr}")
+    elseif (grep_result EQUAL 1)
+        message(STATUS "Poisoned identifiers not detected.")
+    else ()
+        message(FATAL_ERROR "Error occurred while searching for poisoned identifiers:\n${grep_stderr}")
+    endif ()
+endif ()
 
 function(gen_test name files compile_definitions compile_flags link_flags c_standard)
     # Unity
@@ -52,7 +72,7 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
         target_compile_options(${name} PRIVATE --coverage -fprofile-arcs -ftest-coverage)
         target_link_options(${name} PRIVATE --coverage -fprofile-arcs)
         target_compile_definitions(${name} PRIVATE NDEBUG=1)  # Remove assertion checks as they interfere with coverage.
-    endif()
+    endif ()
     set_target_properties(
             ${name}
             PROPERTIES
@@ -83,9 +103,9 @@ add_compile_options(-Wno-unused-function)
 
 # Add the test targets.
 # Intrusive tests directly #include <canard.c> to access the internals.
-gen_test_matrix(test_helpers        "src/test_helpers.c")
+gen_test_matrix(test_helpers "src/test_helpers.c")
 gen_test_matrix(test_intrusive_util "src/test_intrusive_util.c")
-gen_test_matrix(test_intrusive_tx   "src/test_intrusive_tx.c")
+gen_test_matrix(test_intrusive_tx "src/test_intrusive_tx.c")
 # API tests.
 gen_test_single(test_api_tx "${library_dir}/canard.c;src/test_api_tx.cpp")
 
@@ -99,30 +119,30 @@ if (ENABLE_COVERAGE)
 
     # Reset coverage counters.
     add_custom_target(coverage-reset
-        COMMAND ${LCOV_PATH} --zerocounters --directory .
-        COMMAND ${LCOV_PATH} --capture --initial --directory . --output-file coverage-base.info
-                             --rc branch_coverage=1
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Resetting coverage counters"
+            COMMAND ${LCOV_PATH} --zerocounters --directory .
+            COMMAND ${LCOV_PATH} --capture --initial --directory . --output-file coverage-base.info
+            --rc branch_coverage=1
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Resetting coverage counters"
     )
 
     # Generate coverage report.
     add_custom_target(coverage
-        COMMAND ${LCOV_PATH} --capture --directory . --output-file coverage-total.info --rc branch_coverage=1
-        COMMAND ${LCOV_PATH} --extract coverage-total.info '*/libcanard/canard.c' --output-file coverage-canard.info
-                             --rc branch_coverage=1
+            COMMAND ${LCOV_PATH} --capture --directory . --output-file coverage-total.info --rc branch_coverage=1
+            COMMAND ${LCOV_PATH} --extract coverage-total.info '*/libcanard/canard.c' --output-file coverage-canard.info
+            --rc branch_coverage=1
 
-        COMMAND ${CMAKE_COMMAND} -E echo ""
-        COMMAND ${CMAKE_COMMAND} -E echo "=== COVERAGE SUMMARY ==="
-        COMMAND ${LCOV_PATH} --list coverage-canard.info --rc branch_coverage=1
-        COMMAND ${CMAKE_COMMAND} -E echo "========================"
-        COMMAND ${CMAKE_COMMAND} -E echo ""
+            COMMAND ${CMAKE_COMMAND} -E echo ""
+            COMMAND ${CMAKE_COMMAND} -E echo "=== COVERAGE SUMMARY ==="
+            COMMAND ${LCOV_PATH} --list coverage-canard.info --rc branch_coverage=1
+            COMMAND ${CMAKE_COMMAND} -E echo "========================"
+            COMMAND ${CMAKE_COMMAND} -E echo ""
 
-        COMMAND ${GENHTML_PATH} coverage-canard.info --output-directory coverage-html --title "libcanard coverage"
-                                --legend --demangle-cpp --branch-coverage
-        COMMAND ${CMAKE_COMMAND} -E echo "Coverage report: file://${CMAKE_BINARY_DIR}/coverage-html/index.html"
+            COMMAND ${GENHTML_PATH} coverage-canard.info --output-directory coverage-html --title "libcanard coverage"
+            --legend --demangle-cpp --branch-coverage
+            COMMAND ${CMAKE_COMMAND} -E echo "Coverage report: file://${CMAKE_BINARY_DIR}/coverage-html/index.html"
 
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Generating coverage HTML report"
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Generating coverage HTML report"
     )
-endif()
+endif ()

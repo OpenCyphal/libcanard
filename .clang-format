@@ -15,3 +15,5 @@ AlignConsecutiveShortCaseStatements: { Enabled: true }
 AlignEscapedNewlines: LeftWithLastLine
 AlignTrailingComments: true
 SortIncludes: false
+ForEachMacros:
+  - FOREACH_IFACE

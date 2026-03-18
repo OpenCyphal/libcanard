@@ -10,7 +10,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(canard)
 enable_testing()
-
+set(CMAKE_CTEST_ARGUMENTS "-V")  # Enable test outputs when running `make test`
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Shared Clang-Format target for all subprojects.

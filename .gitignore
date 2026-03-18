@@ -29,9 +29,11 @@ cmake-build-*/
 .pydevproject
 .gdbinit
 .vscode/
+.sisyphys/
 **/.idea/*
 !**/.idea/dictionaries
 !**/.idea/dictionaries/*
 __pycache__/
 .DS_Store
 *.bak
+Testing/

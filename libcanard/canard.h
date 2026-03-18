@@ -41,9 +41,16 @@ extern "C"
 #define CANARD_CYPHAL_VERSION_MAJOR 1
 #define CANARD_CYPHAL_VERSION_MINOR 1
 
-/// The library supports at most this many local redundant network interfaces.
-#define CANARD_IFACE_COUNT_MAX  3U
-#define CANARD_IFACE_BITMAP_ALL ((1U << CANARD_IFACE_COUNT_MAX) - 1U)
+/// The library will support at most this many local redundant network interfaces.
+/// This parameter affects the size of several heap-allocated structures.
+/// It is safe to pick any large value but the heap memory footprint will increase accordingly.
+#ifndef CANARD_IFACE_COUNT
+#define CANARD_IFACE_COUNT 2U
+#endif
+#if (CANARD_IFACE_COUNT < 1) || (CANARD_IFACE_COUNT > 8)
+#error "CANARD_IFACE_COUNT must be in the range [1, 8]"
+#endif
+#define CANARD_IFACE_BITMAP_ALL ((1U << CANARD_IFACE_COUNT) - 1U)
 
 /// Parameter ranges are inclusive; the lower bound is zero for all.
 #define CANARD_SUBJECT_ID_MAX         0x1FFFFUL
@@ -58,6 +65,27 @@ extern "C"
 /// Cyphal v1.1 does not support anonymous messages so this value is never used there.
 #define CANARD_NODE_ID_ANONYMOUS 0xFFU
 
+/// Cyphal/CAN v1.1 uses dedicated service-IDs for P2P messages and for reliable delivery acks.
+///
+/// Reliable P2P messages (delivery acknowledgement required) are sent with the request-not-response bit set,
+/// while best-effort P2P messages are sent with that bit cleared; that bit can be called "reliable P2P bit".
+/// This sets the best-effort arbitration priority above all reliable P2P messages within the same priority level.
+/// There is no header inserted for P2P messages; the transport just delivers the blob to the specified remote as-is.
+///
+/// Reliable delivery acks are sent as 7-byte transfers with the request-not-response bit cleared.
+/// The acks are sent at the same priority level as the transfer being acknowledged.
+/// The ack payload format is as follows, in DSDL format (fits in a single-frame Classic CAN transfer):
+///
+///     uint5  transfer_id      # The transfer-ID of the acknowledged transfer.
+///     uint51 topic_hash_msb   # The most significant bits of the topic hash of the acknowledged transfer.
+///
+/// The following service-IDs are currently in use in Cyphal v1.0 and must be avoided:
+/// 384, 385, 390, 391, 405, 406, 407, 408, 409, 430, 434, 435, 500, 510.
+/// Due to CAN arbitration rules, lower service-IDs take precedence given the same priority level and the same
+/// request-not-response bit.
+#define CANARD_SERVICE_ID_P2P 511U
+#define CANARD_SERVICE_ID_ACK 504U
+
 /// This is the recommended transfer-ID timeout value given in the Cyphal Specification. The application may choose
 /// different values per subscription (i.e., per data specifier) depending on its timing requirements.
 /// Within this timeout, the library will refuse to accept a transfer with the same transfer-ID as the last one
@@ -69,10 +97,10 @@ extern "C"
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD      64U
 
-/// All v1.1 transfers have payload headers, handled by the library transparently for the application,
-/// that carry additional metadata pertaining to named topics and P2P traffic. v1.0 transfers have no such headers.
+/// All v1.1 message transfers have payload headers, handled by the library transparently for the application,
+/// that carry additional metadata pertaining to named topics. v1.0 transfers have no such headers.
 ///
-/// Together, the 17-bit subject-ID plus the 30-bit topic hash MSB provide a total of 47 bits for topic discrimination,
+/// Together, the 17-bit subject-ID plus the 30-bit topic hash MSb provide a total of 47 bits for topic discrimination,
 /// which is sufficient to avoid collisions. CRC seeding is not used because it adds little value in CAN FD, where
 /// multi-frame transfers are relatively rare due to the large MTU. With 47 bits, the probability of a collision
 /// given 1000 topics is less than one in 200 million.
@@ -82,22 +110,9 @@ extern "C"
 ///     uint30 topic_hash_msb   # The most significant bits of the topic hash for collision detection.
 ///     # Payload follows.
 ///
-/// v1.1 P2P transfers (7 bytes to fit into a single Classic CAN frame):
-///     uint2  kind             # 0=acknowledgment, 1=response reliable, rest reserved.
-///     uint5  transfer_id      # The original transfer-ID this P2P message relates to.
-///     uint13 topic_hash_lsb   # The least significant bits of the original topic hash this P2P message relates to.
-///     uint36 topic_hash_msb   # The most significant bits. The LSb equal the subject-ID for pinned topics, rest zero.
-///     # Payload follows (unless ack).
-///
-/// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request.
-/// The P2P header includes the least significant bits as well as the most significant bits of the topic hash to
-/// allow replying to pinned topics, where all topic hash bits are zeros except for the 13 LSb.
-///
 /// A single-frame v1.1 transfer can carry at most 59 bytes of payload in CAN FD, and at most 3 bytes in Classic CAN.
-#define CANARD_HEADER_MESSAGE_BYTES 4U
-#define CANARD_HEADER_P2P_BYTES     7U
-
-#define CANARD_P2P_TOPIC_HASH_MSb_COUNT 36U
+/// v1.0 messages are always best-effort (no delivery ack) because there is no header to communicate the ack request.
+#define CANARD_HEADER_BYTES 4U
 
 /// See canard_t::ack_baseline_timeout.
 /// This default value might be a good starting point for many applications.
@@ -187,7 +202,7 @@ struct canard_mem_t
 /// The library carries the user-provided context from inputs to outputs without interpreting it,
 /// allowing the application to associate its own data with various entities inside the library.
 /// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
-#define CANARD_USER_CONTEXT_PTR_COUNT 4
+#define CANARD_USER_CONTEXT_PTR_COUNT 2
 typedef union canard_user_context_t
 {
     void*         ptr[CANARD_USER_CONTEXT_PTR_COUNT];
@@ -217,6 +232,8 @@ typedef struct canard_mem_set_t
     canard_mem_t rx_session;
     canard_mem_t rx_payload;
 } canard_mem_set_t;
+
+typedef struct canard_txfer_t canard_txfer_t;
 
 typedef struct canard_subscription_t        canard_subscription_t;
 typedef struct canard_subscription_vtable_t canard_subscription_vtable_t;
@@ -263,11 +280,14 @@ struct canard_subscription_t
 
 typedef struct canard_vtable_t
 {
+    /// The current monotonic time in microseconds. Must be a non-negative non-decreasing value.
+    canard_us_t (*now)(canard_t*);
+
     /// A new P2P message is received.
     ///
     /// The topic hash bound is less than or equal the true topic hash, which enables easy lookup using lower bounds.
-    /// The CANARD_P2P_TOPIC_HASH_MSb_COUNT MSb and 13 LSb of the topic hash are provided in the lower bound,
-    /// with the intermediate bits zeroed.
+    /// Use CANARD_P2P_TOPIC_HASH_LOWER_BOUND_MASK when comparing the lower bound to extract the relevant bits;
+    /// the irrelevant bits are guaranteed to be zero (hence why it is a lower bound).
     /// For pinned topics, the lower bound does not exceed CANARD_SUBJECT_ID_MAX_1v0 and exactly equals the subject-ID.
     ///
     /// The handler takes ownership of the payload; it must free it after use using the corresponding memory resource.
@@ -279,26 +299,33 @@ typedef struct canard_vtable_t
                    uint_least8_t      transfer_id,
                    canard_bytes_mut_t payload);
 
-    /// Submit one CAN frame for transmission via the specified interface. It is guaranteed that now<=deadline.
+    /// Submit one CAN frame for transmission via the specified interface.
     /// If the data is empty (size==0), the data pointer may be NULL.
     /// Returns true if the frame was accepted for transmission, false if there is no free mailbox (try again later).
     /// The callback must not mutate the TX pipeline (no publish/cancel/free/etc).
     /// If the can_data needs to be retained for later retransmission, use canard_refcount_inc()/canard_refcount_dec().
     bool (*tx)(canard_t*,
-               const canard_user_context_t*,
-               canard_us_t    now,
+               canard_user_context_t,
                canard_us_t    deadline,
                uint_least8_t  iface_index,
                bool           fd,
                uint32_t       extended_can_id,
                canard_bytes_t can_data);
 
+    /// Notification about the outcome of a reliable transfer previously submitted for transmission.
+    /// This is always invoked for reliable transfers either at successful delivery or at deadline expiration.
+    /// This is not used with best-effort transfers.
+    ///
+    /// The number of remote nodes that acknowledged the reception of the transfer is provided.
+    /// For P2P transfers, this value is either 0 (failure) or 1 (success).
+    void (*feedback)(canard_t*, canard_user_context_t, uint_least8_t acknowledgements);
+
     /// Invoked immediately before tx() to obtain the subject-ID for the given transfer.
     /// The application is expected to rely on the user context to access the topic context for subject-ID derivation.
     /// This is the same user context that was passed to canard_publish().
     /// The callback must not mutate the TX pipeline (no publish/cancel/free/etc).
     /// The transmission will be cancelled if the returned subject-ID exceeds CANARD_SUBJECT_ID_MAX.
-    uint32_t (*tx_subject_id)(canard_t*, const canard_user_context_t*);
+    uint32_t (*tx_subject_id)(canard_t*, canard_user_context_t);
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
@@ -342,15 +369,18 @@ struct canard_t
         /// because UAVCAN v0 does not define CAN FD support.
         bool fd;
 
+        /// Queue size and capacity are measured in CAN frames for convenience, but the TX pipeline actually operates
+        /// on whole transfers for efficiency. The number if enqueued frames is a pretty much synthetic metric for
+        /// convenience, that is derived from the number of enqueued transfers and their sizes.
         size_t queue_capacity;
         size_t queue_size;
 
-        canard_tree_t* index_queue[CANARD_IFACE_COUNT_MAX]; ///< Next to transmit on the left.
-        canard_tree_t* index_staged;                        ///< Soonest retry time on the left.
-        canard_tree_t* index_deadline;                      ///< Soonest deadline on the left.
-        canard_tree_t* index_transfer;                      ///< Ordered by (topic hash, transfer-ID).
-        canard_tree_t* index_transfer_ack;                  ///< Ordered by (remote topic hash, remote transfer-ID).
-        canard_list_t  list_agewise;                        ///< Oldest transfer at the tail.
+        canard_tree_t* pending[CANARD_IFACE_COUNT]; ///< Next to transmit at the head.
+        canard_tree_t* staged;   ///< Transfers staged for retransmission, ordered by next transmission time.
+        canard_tree_t* reliable; ///< Reliable ordered by (topic hash, transfer-ID) for dup detection and ack.
+        canard_list_t  agewise;  ///< ALL transfers FIFO, oldest at the head.
+
+        canard_txfer_t* iter; ///< For iterative poll() scanning; NULL to restart.
     } tx;
 
     struct
@@ -367,10 +397,12 @@ struct canard_t
     struct
     {
         uint64_t oom;           ///< Out of memory; a transfer could have been lost.
-        uint64_t ack;           ///< An ack could not be enqueued. Other counters may provide more details.
+        uint64_t ack_failed;    ///< An ack could not be enqueued. Other counters may provide more details.
+        uint64_t ack_orphans;   ///< An ack was received for a non-existent transfer.
         uint64_t tx_capacity;   ///< A transfer could not be enqueued due to queue capacity limit.
-        uint64_t tx_sacrifice;  ///< A transfer had to be sacrificed to make room for a new transfer.
+        uint64_t tx_sacrifice;  ///< An old pending transfer had to be sacrificed to make room for a new transfer.
         uint64_t tx_expiration; ///< A transfer had to be dequeued due to deadline expiration.
+        uint64_t tx_duplicate;  ///< A transfer with the same topic hash and transfer-ID is already pending.
         uint64_t rx_frame;      ///< A received frame was malformed and thus dropped.
         uint64_t rx_transfer;   ///< A transfer could not be reassembled correctly.
     } err;
@@ -378,25 +410,18 @@ struct canard_t
     canard_mem_set_t mem;
     uint64_t         prng_state;
 
-    canard_subscription_t p2p_subscription;
-    uint_least8_t         p2p_transfer_id[CANARD_NODE_ID_CAPACITY];
+    /// P2P message subscriptions, reliable and best-effort.
+    canard_subscription_t p2p_rel_sub;
+    canard_subscription_t p2p_bef_sub;
+
+    /// P2P transfer-ID tracking for transmission per remote node.
+    uint_least8_t p2p_rel_transfer_id[CANARD_NODE_ID_CAPACITY];
+    uint_least8_t p2p_bef_transfer_id[CANARD_NODE_ID_CAPACITY];
 
     const canard_vtable_t* vtable;
+
+    void* user_context;
 };
-
-/// Notification about the outcome of a reliable transfer previously submitted for transmission.
-typedef struct canard_tx_feedback_t
-{
-    uint64_t      topic_hash;
-    uint_least8_t transfer_id;
-
-    /// The number of remote nodes that acknowledged the reception of the transfer.
-    /// For P2P transfers, this value is either 0 (failure) or 1 (success).
-    uint_least8_t acknowledgements;
-
-    canard_user_context_t user_context;
-} canard_tx_feedback_t;
-typedef void (*canard_on_tx_feedback_t)(canard_t*, canard_tx_feedback_t);
 
 /// The TX queue is shared between all redundant interfaces with deduplication (each frame is enqueued only once).
 /// The capacity set here is therefore the total capacity across all interfaces.
@@ -435,10 +460,10 @@ void canard_free(canard_t* const self);
 /// The function must be called asap once any of the interfaces for which there are pending outgoing transfers
 /// become writable, and not less frequently than once in a few milliseconds. The invocation rate defines the
 /// resolution of deadline handling.
-void canard_poll(canard_t* const self, const canard_us_t now, const uint16_t tx_ready_iface_bitmap);
+void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap);
 
 /// Returns a bitmap of interfaces that have pending transmissions. This is useful for IO multiplexing.
-uint16_t canard_pending_ifaces(const canard_t* const self);
+uint_least8_t canard_pending_ifaces(const canard_t* const self);
 
 /// True if successfully processed, false if any of the arguments are invalid.
 /// A malformed frame is not considered an error; it is simply dropped and the corresponding counter is incremented.
@@ -450,7 +475,7 @@ bool canard_ingest_frame(canard_t* const      self,
                          const canard_bytes_t can_data);
 
 void canard_refcount_inc(const canard_bytes_t obj);
-void canard_refcount_dec(const canard_bytes_t obj);
+void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 
 /// Cancel a pending outgoing message transfer on a subject, or an outgoing P2P transfer to a node.
 /// Returns true if a transfer was found and cancelled, false if no such transfer was found.
@@ -458,32 +483,33 @@ void canard_refcount_dec(const canard_bytes_t obj);
 bool canard_unpublish(canard_t* const self, const uint64_t topic_hash, const uint_least8_t transfer_id);
 bool canard_unrespond(canard_t* const self, const uint_least8_t destination_node_id, const uint_least8_t transfer_id);
 
-/// Unless pinned, the subject-ID will be obtained using the dedicated vtable function immediately before transmission.
-/// This is because the topic->subject allocation protocol may change the subject-ID for already enqueued messages.
-/// The application is expected to rely on the user context to access the topic context for subject-ID derivation
-/// (e.g., store a topic pointer in there).
+/// Message ordering observed on the bus is guaranteed per topic as long as best-effort transfers are used and the
+/// priority of later messages is not higher (numerically not lower) than that of earlier messages. Reliable delivery
+/// may distort message ordering due to potential retransmissions. Receivers may restore the ordering depending on the
+/// application requirements.
+///
+/// Unless pinned, the subject-ID will be obtained using the dedicated vtable function immediately before transmission,
+/// and also at the moment of enqueuing the transfer. This is because the topic->subject allocation protocol may change
+/// the subject-ID for already enqueued messages. The application is expected to rely on the user context to access
+/// the topic context for subject-ID derivation (e.g., store a topic pointer in there).
 /// Pinned subject-IDs equal the topic hash and as such do not require postponed resolution.
-bool canard_publish(canard_t* const               self,
-                    const canard_us_t             now,
-                    const canard_us_t             deadline,
-                    const uint16_t                iface_bitmap,
-                    const canard_prio_t           priority,
-                    const uint64_t                topic_hash,
-                    const uint_least8_t           transfer_id,
-                    const canard_bytes_chain_t    payload,
-                    const canard_user_context_t   context,
-                    const canard_on_tx_feedback_t feedback);
+bool canard_publish(canard_t* const             self,
+                    const canard_us_t           deadline,
+                    const uint_least8_t         iface_bitmap,
+                    const canard_prio_t         priority,
+                    const uint64_t              topic_hash,
+                    const uint_least8_t         transfer_id,
+                    const canard_bytes_chain_t  payload,
+                    const canard_user_context_t context,
+                    const bool                  reliable);
 
-bool canard_respond(canard_t* const               self,
-                    const canard_us_t             now,
-                    const canard_us_t             deadline,
-                    const uint_least8_t           destination_node_id,
-                    const canard_prio_t           priority,
-                    const uint64_t                request_topic_hash,
-                    const uint_least8_t           request_transfer_id,
-                    const canard_bytes_chain_t    payload,
-                    const canard_user_context_t   context,
-                    const canard_on_tx_feedback_t feedback);
+bool canard_p2p(canard_t* const             self,
+                const canard_us_t           deadline,
+                const uint_least8_t         destination_node_id,
+                const canard_prio_t         priority,
+                const canard_bytes_chain_t  payload,
+                const canard_user_context_t context,
+                const bool                  reliable);
 
 bool canard_subscribe(canard_t* const                           self,
                       canard_subscription_t* const              subscription,
@@ -500,16 +526,14 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 
 /// Sugar: a v1.0 message is just a pinned best-effort v1.1 message.
 static inline bool canard_1v0_publish(canard_t* const            self,
-                                      const canard_us_t          now,
                                       const canard_us_t          deadline,
-                                      const uint16_t             iface_bitmap,
+                                      const uint_least8_t        iface_bitmap,
                                       const canard_prio_t        priority,
                                       const uint16_t             subject_id,
                                       const uint_least8_t        transfer_id,
                                       const canard_bytes_chain_t payload)
 {
     return (subject_id <= CANARD_SUBJECT_ID_MAX_1v0) && canard_publish(self,
-                                                                       now,
                                                                        deadline,
                                                                        iface_bitmap,
                                                                        priority,
@@ -517,11 +541,10 @@ static inline bool canard_1v0_publish(canard_t* const            self,
                                                                        transfer_id,
                                                                        payload,
                                                                        CANARD_USER_CONTEXT_NULL,
-                                                                       NULL);
+                                                                       false);
 }
 
 bool canard_1v0_request(canard_t* const            self,
-                        const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             service_id,
@@ -530,7 +553,6 @@ bool canard_1v0_request(canard_t* const            self,
                         const canard_bytes_chain_t payload);
 
 bool canard_1v0_respond(canard_t* const            self,
-                        const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint16_t             service_id,
@@ -564,9 +586,8 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 /// and setting the two least significant bits to 1: prio_v0=(prio<<2)|3.
 /// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
 bool canard_0v1_publish(canard_t* const            self,
-                        const canard_us_t          now,
                         const canard_us_t          deadline,
-                        const uint16_t             iface_bitmap,
+                        const uint_least8_t        iface_bitmap,
                         const canard_prio_t        priority,
                         const uint16_t             data_type_id,
                         const uint16_t             crc_seed,
@@ -574,7 +595,6 @@ bool canard_0v1_publish(canard_t* const            self,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_request(canard_t* const            self,
-                        const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint_least8_t        data_type_id,
@@ -584,7 +604,6 @@ bool canard_0v1_request(canard_t* const            self,
                         const canard_bytes_chain_t payload);
 
 bool canard_0v1_respond(canard_t* const            self,
-                        const canard_us_t          now,
                         const canard_us_t          deadline,
                         const canard_prio_t        priority,
                         const uint_least8_t        data_type_id,

@@ -12,6 +12,7 @@
       <w>objcount</w>
       <w>popcount</w>
       <w>stdatomic</w>
+      <w>txfer</w>
       <w>uavcan</w>
       <w>unrespond</w>
     </words>

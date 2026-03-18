@@ -85,6 +85,45 @@ static void test_popcount(byte_t (*const popcnt)(uint64_t))
 static void test_popcount_emulated(void) { test_popcount(popcount_emulated); }
 static void test_popcount_intrinsics(void) { test_popcount(popcount); }
 
+// =============================================  MATH/CTZ TESTS  =============================================
+
+static void test_math_helpers(void)
+{
+    // Simple comparisons.
+    TEST_ASSERT_EQUAL_size_t(3, smaller(3, 5));
+    TEST_ASSERT_EQUAL_size_t(5, larger(3, 5));
+    TEST_ASSERT_EQUAL_INT64(-4, min_i64(-4, 2));
+    TEST_ASSERT_EQUAL_INT64(-4, earlier(-4, 2));
+}
+
+static void test_ctz_helpers(void)
+{
+    // Known trailing zero counts.
+    TEST_ASSERT_EQUAL_UINT8(4, ctz_emulated(0x10U));
+    TEST_ASSERT_EQUAL_UINT8(0, ctz(0x01U));
+    TEST_ASSERT_EQUAL_UINT8(3, ctz(0x08U));
+}
+
+// ============================================  SERDE TESTS  ============================================
+
+static void test_serialize_deserialize(void)
+{
+    // Serialize and deserialize fixed values.
+    byte_t  buf[8] = { 0 };
+    byte_t* end    = serialize_u64(buf, 0x1122334455667788ULL);
+    TEST_ASSERT_EQUAL_PTR(&buf[8], end);
+
+    uint32_t      out32 = 0;
+    const byte_t* p32   = deserialize_u32(buf, &out32);
+    TEST_ASSERT_EQUAL_HEX32(0x55667788U, out32);
+    TEST_ASSERT_EQUAL_PTR(&buf[4], p32);
+
+    uint64_t      out64 = 0;
+    const byte_t* p64   = deserialize_u64(buf, &out64);
+    TEST_ASSERT_EQUAL_HEX64(0x1122334455667788ULL, out64);
+    TEST_ASSERT_EQUAL_PTR(&buf[8], p64);
+}
+
 // ==============================================  CRC TESTS  ==============================================
 
 static void test_crc_add(void)
@@ -249,6 +288,17 @@ typedef struct test_node_t
     canard_listed_t member;
 } test_node_t;
 
+// Minimal local helpers for list insertion shortcuts.
+static void enlist_head(canard_list_t* const list, canard_listed_t* const member)
+{
+    enlist_before(list, list->head, member);
+}
+
+static void enlist_after(canard_list_t* const list, canard_listed_t* const anchor, canard_listed_t* const member)
+{
+    enlist_before(list, (anchor != NULL) ? anchor->next : NULL, member);
+}
+
 static void test_list(void)
 {
     canard_list_t list  = { .head = NULL, .tail = NULL };
@@ -388,6 +438,64 @@ static void test_list_enlist_tail(void)
     TEST_ASSERT_EQUAL_PTR(&node3.member, node2.member.next);
 }
 
+static void test_list_enlist_after_before(void)
+{
+    canard_list_t list = { .head = NULL, .tail = NULL };
+    test_node_t   a    = { .value = 1, .member = LIST_NULL };
+    test_node_t   b    = { .value = 2, .member = LIST_NULL };
+    test_node_t   c    = { .value = 3, .member = LIST_NULL };
+    test_node_t   d    = { .value = 4, .member = LIST_NULL };
+    test_node_t   e    = { .value = 5, .member = LIST_NULL };
+    test_node_t   f    = { .value = 6, .member = LIST_NULL };
+
+    // Build a -> b and insert c after a (anchor->next != NULL).
+    enlist_tail(&list, &a.member);
+    enlist_tail(&list, &b.member);
+    enlist_after(&list, &a.member, &c.member);
+    TEST_ASSERT_EQUAL_PTR(&a.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&b.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&c.member, a.member.next);
+    TEST_ASSERT_EQUAL_PTR(&c.member, b.member.prev);
+
+    // Insert d after b (anchor->next == NULL).
+    enlist_after(&list, &b.member, &d.member);
+    TEST_ASSERT_EQUAL_PTR(&d.member, list.tail);
+    TEST_ASSERT_EQUAL_PTR(&d.member, b.member.next);
+
+    // Insert e before c (anchor->prev != NULL).
+    enlist_before(&list, &c.member, &e.member);
+    TEST_ASSERT_EQUAL_PTR(&e.member, a.member.next);
+    TEST_ASSERT_EQUAL_PTR(&e.member, c.member.prev);
+
+    // Insert f before head (anchor->prev == NULL).
+    enlist_before(&list, &a.member, &f.member);
+    TEST_ASSERT_EQUAL_PTR(&f.member, list.head);
+    TEST_ASSERT_EQUAL_PTR(&f.member, a.member.prev);
+}
+
+// ============================================  REFCOUNT TESTS  ============================================
+
+static void test_refcount_inc(void)
+{
+    canard_t                 self  = { 0 };
+    instrumented_allocator_t alloc = { 0 };
+    instrumented_allocator_new(&alloc);
+    self.mem.tx_frame = instrumented_allocator_make_resource(&alloc);
+
+    // Create a frame and bump the refcount.
+    tx_frame_t* const frame = tx_frame_new(&self, 1);
+    TEST_ASSERT_NOT_NULL(frame);
+    const canard_bytes_t view = tx_frame_view(frame);
+    canard_refcount_inc(view);
+    TEST_ASSERT_EQUAL_size_t(2, frame->refcount);
+
+    // Drop the references.
+    canard_refcount_dec(&self, view);
+    canard_refcount_dec(&self, view);
+    TEST_ASSERT_EQUAL_size_t(0, self.tx.queue_size);
+    TEST_ASSERT_EQUAL_size_t(0, alloc.allocated_fragments);
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -397,10 +505,15 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_popcount_emulated);
     RUN_TEST(test_popcount_intrinsics);
+    RUN_TEST(test_math_helpers);
+    RUN_TEST(test_ctz_helpers);
+    RUN_TEST(test_serialize_deserialize);
     RUN_TEST(test_crc_add);
     RUN_TEST(test_crc_add_chain);
     RUN_TEST(test_bytes_chain);
     RUN_TEST(test_list);
     RUN_TEST(test_list_enlist_tail);
+    RUN_TEST(test_list_enlist_after_before);
+    RUN_TEST(test_refcount_inc);
     return UNITY_END();
 }

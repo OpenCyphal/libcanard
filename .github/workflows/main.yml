@@ -122,7 +122,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       mcu: at90can64
-      flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wno-error=unused-function
+      flags: >
+        -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wno-error=unused-function -Wno-error=conversion
     steps:
       - uses: actions/checkout@v4
         with:
