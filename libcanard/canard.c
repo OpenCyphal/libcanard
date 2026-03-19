@@ -538,11 +538,11 @@ static tx_frame_t* tx_spool(canard_t* const            self,
                             const uint16_t             crc_seed,
                             const size_t               mtu,
                             const byte_t               transfer_id,
+                            const size_t               size,
                             const canard_bytes_chain_t payload)
 {
     bytes_chain_reader_t reader = { .cursor = &payload, .position = 0U };
     tx_frame_t*          head   = NULL;
-    const size_t         size   = bytes_chain_size(payload);
     bool                 toggle = true; // Cyphal transfers start with toggle==1, unlike legacy
     if (size < mtu) {                   // Single-frame transfer; no CRC required -- easy case.
         const size_t frame_size = tx_ceil_frame_payload_size(size + 1U);
@@ -623,10 +623,10 @@ static tx_frame_t* tx_spool(canard_t* const            self,
 static tx_frame_t* tx_spool_v0(canard_t* const            self,
                                const uint16_t             crc_seed,
                                const byte_t               transfer_id,
+                               const size_t               size,
                                const canard_bytes_chain_t payload)
 {
-    bool         toggle = false; // in v0, toggle starts with zero; that's how v0/v1 can be distinguished
-    const size_t size   = bytes_chain_size(payload);
+    bool toggle = false;                 // in v0, toggle starts with zero; that's how v0/v1 can be distinguished
     if (size < CANARD_MTU_CAN_CLASSIC) { // single-frame transfer
         tx_frame_t* const item = tx_frame_new(self, size + 1U);
         if (item != NULL) {
@@ -723,10 +723,11 @@ static bool tx_push(canard_t* const            self,
 {
     CANARD_ASSERT(tr != NULL);
     CANARD_ASSERT((!tr->fd) || !v0); // The caller must ensure this.
+    CANARD_ASSERT(iface_bitmap != 0);
 
     // Ensure the queue has enough space. v0 transfers always use Classic CAN regardless of tr->fd.
     const size_t mtu      = tr->fd ? CANARD_MTU_CAN_FD : CANARD_MTU_CAN_CLASSIC;
-    const size_t size     = bytes_chain_size(payload); // TODO: pass the precomputed size into spool functions
+    const size_t size     = bytes_chain_size(payload);
     const size_t n_frames = tx_predict_frame_count(size, mtu);
     CANARD_ASSERT(n_frames > 0);
     if (!tx_ensure_queue_space(self, n_frames)) {
@@ -737,8 +738,8 @@ static bool tx_push(canard_t* const            self,
 
     // Make a shared frame spool. Unlike the Cyphal/UDP implementation, we require all ifaces to use the same MTU.
     const size_t      queue_size_before = self->tx.queue_size;
-    tx_frame_t* const spool             = v0 ? tx_spool_v0(self, crc_seed, tr->transfer_id, payload)
-                                             : tx_spool(self, crc_seed, mtu, tr->transfer_id, payload);
+    tx_frame_t* const spool             = v0 ? tx_spool_v0(self, crc_seed, tr->transfer_id, size, payload)
+                                             : tx_spool(self, crc_seed, mtu, tr->transfer_id, size, payload);
     if (spool == NULL) {
         self->err.oom++;
         mem_free(self->mem.tx_transfer, sizeof(canard_txfer_t), tr);

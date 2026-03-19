@@ -73,7 +73,7 @@ static void test_tx_spool_single_frame(void)
     const byte_t               data[]  = { 1U, 2U, 3U, 4U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 7U, payload);
+    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 7U, sizeof(data), payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
     TEST_ASSERT_EQUAL_size_t(5U, canard_dlc_to_len[head->dlc]);
@@ -97,7 +97,7 @@ static void test_tx_spool_multi_frame(void)
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 3U, payload);
+    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, CANARD_MTU_CAN_CLASSIC, 3U, sizeof(data), payload);
     TEST_ASSERT_NOT_NULL(head);
     TEST_ASSERT_EQUAL_size_t(2U, count_frames(head));
     TEST_ASSERT_EQUAL_HEX8(0xA3, head->data[7]);

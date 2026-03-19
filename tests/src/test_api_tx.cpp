@@ -34,15 +34,12 @@ static bool        mock_tx(canard_t* const,
 static bool mock_filter(canard_t* const, const size_t, const canard_filter_t*) { return true; }
 
 // Shared vtable and memory resources used by canard_new() tests.
-static const canard_vtable_t kTestVtable = { .now        = mock_now,
+static const canard_vtable_t test_vtable = { .now        = mock_now,
                                              .on_unicast = nullptr,
                                              .tx         = mock_tx,
                                              .filter     = mock_filter };
 
-static const canard_mem_vtable_t kStdMemVtable = {
-    .free  = std_free_mem,
-    .alloc = std_alloc_mem,
-};
+static const canard_mem_vtable_t std_mem_vtable = { .free = std_free_mem, .alloc = std_alloc_mem };
 
 // Captures outgoing TX callback invocations for API-level poll/unicast checks.
 struct tx_record_t
@@ -93,7 +90,7 @@ static bool capture_tx(canard_t* const self,
     return cap->accept_tx;
 }
 
-static const canard_vtable_t kCaptureVtable = {
+static const canard_vtable_t capture_vtable = {
     .now        = capture_now,
     .on_unicast = nullptr,
     .tx         = capture_tx,
@@ -102,7 +99,7 @@ static const canard_vtable_t kCaptureVtable = {
 
 static canard_mem_set_t make_std_memory()
 {
-    const canard_mem_t r = { .vtable = &kStdMemVtable, .context = nullptr };
+    const canard_mem_t r = { .vtable = &std_mem_vtable, .context = nullptr };
     return canard_mem_set_t{
         .tx_transfer = r,
         .tx_frame    = r,
@@ -117,7 +114,7 @@ static void init_with_capture_node_id(canard_t* const self, tx_capture_t* const 
     capture->now       = 0;
     capture->accept_tx = true;
     capture->count     = 0;
-    TEST_ASSERT_TRUE(canard_new(self, &kCaptureVtable, make_std_memory(), 16U, node_id, 1234U, 0U, nullptr));
+    TEST_ASSERT_TRUE(canard_new(self, &capture_vtable, make_std_memory(), 16U, node_id, 1234U, 0U, nullptr));
     self->user_context = capture;
 }
 
@@ -141,13 +138,13 @@ static void test_canard_new_validation()
            .rx_payload  = bad_mr,
     };
 
-    TEST_ASSERT_FALSE(canard_new(nullptr, &kTestVtable, mem, 16, 1, 1234, 0, nullptr)); // Invalid self.
+    TEST_ASSERT_FALSE(canard_new(nullptr, &test_vtable, mem, 16, 1, 1234, 0, nullptr)); // Invalid self.
     TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, 16, 1, 1234, 0, nullptr));        // Invalid vtable.
     TEST_ASSERT_FALSE(
-      canard_new(&self, &kTestVtable, mem, 16, CANARD_NODE_ID_MAX + 1U, 1234, 0, nullptr)); // Invalid node-ID.
-    TEST_ASSERT_FALSE(canard_new(&self, &kTestVtable, mem, 16, 1, 1234, 1, nullptr));       // Missing filter storage.
-    TEST_ASSERT_FALSE(canard_new(&self, &kTestVtable, bad_mem, 16, 1, 1234, 0, nullptr));   // Invalid memory callbacks.
-    TEST_ASSERT_TRUE(canard_new(&self, &kTestVtable, mem, 16, 1, 1234, 1, &filters));       // Valid constructor call.
+      canard_new(&self, &test_vtable, mem, 16, CANARD_NODE_ID_MAX + 1U, 1234, 0, nullptr)); // Invalid node-ID.
+    TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, mem, 16, 1, 1234, 1, nullptr));       // Missing filter storage.
+    TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16, 1, 1234, 0, nullptr));   // Invalid memory callbacks.
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16, 1, 1234, 1, &filters));       // Valid constructor call.
     canard_destroy(&self);
 }
 
@@ -156,7 +153,7 @@ static void test_canard_new_and_destroy()
 {
     canard_t               self = {};
     const canard_mem_set_t mem  = make_std_memory();
-    TEST_ASSERT_TRUE(canard_new(&self, &kTestVtable, mem, 16, 42, 0x0123456789ABCDEFULL, 0, nullptr));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16, 42, 0x0123456789ABCDEFULL, 0, nullptr));
     TEST_ASSERT_EQUAL_UINT8(42U, (uint8_t)self.node_id);
     TEST_ASSERT_TRUE(self.tx.fd);
     TEST_ASSERT_EQUAL_size_t(16U, self.tx.queue_capacity);
@@ -179,7 +176,7 @@ static void test_canard_pending_ifaces()
 {
     canard_t               self = {};
     const canard_mem_set_t mem  = make_std_memory();
-    TEST_ASSERT_TRUE(canard_new(&self, &kTestVtable, mem, 16, 1, 1234, 0, nullptr));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16, 1, 1234, 0, nullptr));
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
     TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
