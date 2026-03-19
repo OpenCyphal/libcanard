@@ -648,14 +648,8 @@ static tx_frame_t* tx_spool_v0(canard_t* const            self,
     size_t                     offset        = 0U;
     while (offset < size_total) {
         tx_frame_t* const item = tx_frame_new(self, smaller((size_total - offset) + 1U, CANARD_MTU_CAN_CLASSIC));
-        if (NULL == head) {
-            head = item;
-        } else {
-            tail->next = item;
-        }
-        tail = item;
         // On OOM, deallocate the entire chain and quit.
-        if (NULL == tail) {
+        if (NULL == item) {
             while (head != NULL) {
                 tx_frame_t* const next = head->next;
                 canard_refcount_dec(self, tx_frame_view(head));
@@ -663,6 +657,14 @@ static tx_frame_t* tx_spool_v0(canard_t* const            self,
             }
             break;
         }
+        // Append the new item.
+        if (NULL == head) {
+            head = item;
+        } else {
+            CANARD_ASSERT(NULL != tail);
+            tail->next = item;
+        }
+        tail = item;
         // Populate the frame contents.
         const size_t progress = smaller(size_total - offset, canard_dlc_to_len[tail->dlc] - 1U);
         bytes_chain_read(&reader, progress, tail->data);
