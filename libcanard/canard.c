@@ -771,6 +771,66 @@ static bool tx_push(canard_t* const            self,
     return true;
 }
 
+static canard_txfer_t* tx_pending_node_to_transfer(const canard_tree_t* const node, const byte_t iface_index)
+{
+    return (canard_txfer_t*)ptr_unbias(
+      node, offsetof(canard_txfer_t, index_pending) + (((size_t)iface_index) * sizeof(canard_tree_t)));
+}
+
+static void tx_expire_iterative(canard_t* const self, const canard_us_t now)
+{
+    if (self->tx.iter == NULL) {
+        self->tx.iter = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
+    }
+    if (self->tx.iter != NULL) {
+        canard_txfer_t* const tr = self->tx.iter;
+        self->tx.iter            = LIST_NEXT(tr, canard_txfer_t, list_agewise);
+        if (now > tr->deadline) {
+            txfer_retire(self, tr);
+            self->err.tx_expiration++;
+        }
+    }
+}
+
+static void tx_eject_pending(canard_t* const self, const byte_t iface_index)
+{
+    while (true) {
+        const canard_tree_t* const pending = cavl2_min(self->tx.pending[iface_index]);
+        if (pending == NULL) {
+            break;
+        }
+        canard_txfer_t* const tr = tx_pending_node_to_transfer(pending, iface_index);
+        CANARD_ASSERT((tr->head[iface_index] != NULL) && (tr->cursor[iface_index] != NULL));
+
+        // Try to eject one frame.
+        tx_frame_t* const frame      = tr->cursor[iface_index];
+        tx_frame_t* const frame_next = frame->next;
+        const bool        ejected    = self->vtable->tx(self,
+                                              tr->user_context,
+                                              tr->deadline,
+                                              iface_index,
+                                              tr->fd != 0U,
+                                              (((uint32_t)tr->can_id_msb) << 7U) | self->node_id,
+                                              tx_frame_view(frame));
+        if (!ejected) {
+            break;
+        }
+
+        // Commit successful ejection by advancing this interface cursor.
+        tr->head[iface_index]   = frame_next;
+        tr->cursor[iface_index] = frame_next;
+        canard_refcount_dec(self, tx_frame_view(frame));
+
+        // If this interface is done with the transfer, remove it from this pending tree.
+        if (frame_next == NULL) {
+            (void)cavl2_remove_if(&self->tx.pending[iface_index], &tr->index_pending[iface_index]);
+            if (!txfer_is_pending(self, tr)) {
+                txfer_retire(self, tr);
+            }
+        }
+    }
+}
+
 bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
@@ -815,6 +875,18 @@ void canard_destroy(canard_t* const self)
     (void)memset(self, 0, sizeof(*self));
 }
 
+void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap)
+{
+    if (self != NULL) {
+        tx_expire_iterative(self, self->vtable->now(self)); // deadline maintenance first to keep queue pressure bounded
+        FOREACH_IFACE (i) { // submit queued frames through all currently writable interfaces
+            if ((tx_ready_iface_bitmap & (1U << i)) != 0U) {
+                tx_eject_pending(self, (byte_t)i);
+            }
+        }
+    }
+}
+
 uint_least8_t canard_pending_ifaces(const canard_t* const self)
 {
     uint_least8_t out = 0;
@@ -843,6 +915,27 @@ bool canard_publish(canard_t* const             self,
         const uint32_t        can_id = (((uint32_t)priority) << PRIO_SHIFT) | (subject_id << 8U) | (1UL << 7U);
         canard_txfer_t* const tr     = txfer_new(self, deadline, transfer_id, can_id, self->tx.fd, context);
         ok                           = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, payload, CRC_INITIAL);
+    }
+    return ok;
+}
+
+bool canard_unicast(canard_t* const             self,
+                    const canard_us_t           deadline,
+                    const uint_least8_t         destination_node_id,
+                    const canard_prio_t         priority,
+                    const canard_bytes_chain_t  payload,
+                    const canard_user_context_t context)
+{
+    bool ok = (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
+              (destination_node_id <= CANARD_NODE_ID_MAX);
+    if (ok) {
+        const byte_t   tr_id  = (byte_t)self->unicast_transfer_id[destination_node_id]++;
+        const uint32_t can_id = (((uint32_t)priority) << PRIO_SHIFT) |
+                                (((uint32_t)CANARD_SERVICE_ID_UNICAST) << 14U) | //
+                                (1UL << 23U) |                                   // request
+                                (((uint32_t)destination_node_id) << 7U);
+        canard_txfer_t* const tr = txfer_new(self, deadline, tr_id, can_id, self->tx.fd, context);
+        ok = (tr != NULL) && tx_push(self, tr, false, CANARD_IFACE_BITMAP_ALL, payload, CRC_INITIAL);
     }
     return ok;
 }

@@ -3,6 +3,7 @@
 
 #include "helpers.h"
 #include <unity.h>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
@@ -45,6 +46,62 @@ static const canard_mem_vtable_t kStdMemVtable = {
     .alloc = std_alloc_mem,
 };
 
+// Captures outgoing TX callback invocations for API-level poll/unicast checks.
+struct tx_record_t
+{
+    canard_us_t   deadline;
+    uint_least8_t iface_index;
+    bool          fd;
+    uint32_t      can_id;
+    uint_least8_t tail;
+};
+
+struct tx_capture_t
+{
+    canard_us_t                 now;
+    bool                        accept_tx;
+    size_t                      count;
+    std::array<tx_record_t, 32> records;
+};
+
+static tx_capture_t* capture_from(canard_t* const self) { return static_cast<tx_capture_t*>(self->user_context); }
+
+static canard_us_t capture_now(canard_t* const self) { return capture_from(self)->now; }
+
+static bool capture_tx(canard_t* const self,
+                       const canard_user_context_t,
+                       const canard_us_t    deadline,
+                       const uint_least8_t  iface_index,
+                       const bool           fd,
+                       const uint32_t       extended_can_id,
+                       const canard_bytes_t can_data)
+{
+    tx_capture_t* const cap = capture_from(self);
+    TEST_ASSERT_NOT_NULL(cap);
+    if (cap->count < cap->records.size()) {
+        cap->records[cap->count] = tx_record_t{
+            .deadline    = deadline,
+            .iface_index = iface_index,
+            .fd          = fd,
+            .can_id      = extended_can_id,
+            .tail        = 0U,
+        };
+        if ((can_data.size > 0U) && (can_data.data != nullptr)) {
+            const auto* const bytes       = static_cast<const uint_least8_t*>(can_data.data);
+            cap->records[cap->count].tail = bytes[can_data.size - 1U];
+        }
+    }
+    cap->count++;
+    return cap->accept_tx;
+}
+
+static const canard_vtable_t kCaptureVtable = {
+    .now    = capture_now,
+    .on_p2p = nullptr,
+    .tx     = capture_tx,
+    .filter = mock_filter,
+};
+
 static canard_mem_set_t make_std_memory()
 {
     const canard_mem_t r = { .vtable = &kStdMemVtable, .context = nullptr };
@@ -54,6 +111,16 @@ static canard_mem_set_t make_std_memory()
         .rx_session  = r,
         .rx_payload  = r,
     };
+}
+
+static void init_with_capture(canard_t* const self, tx_capture_t* const capture)
+{
+    *capture           = tx_capture_t{};
+    capture->now       = 0;
+    capture->accept_tx = true;
+    capture->count     = 0;
+    TEST_ASSERT_TRUE(canard_new(self, &kCaptureVtable, make_std_memory(), 16U, 42U, 1234U, 0U, nullptr));
+    self->user_context = capture;
 }
 
 // Basic constructor argument validation.
@@ -216,6 +283,129 @@ static void test_canard_publish_subject_id_out_of_range()
       &self, 0, 1, canard_prio_nominal, CANARD_SUBJECT_ID_MAX + 1U, 0, payload, CANARD_USER_CONTEXT_NULL));
 }
 
+// Poll only drives interfaces marked writable in the provided bitmap.
+static void test_canard_poll_ready_bitmap()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 3U, canard_prio_nominal, 10U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(0U, cap.records[0].iface_index);
+    TEST_ASSERT_EQUAL_UINT8(2U, canard_pending_ifaces(&self));
+
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(2U, canard_pending_ifaces(&self));
+
+    canard_poll(&self, 2U);
+    TEST_ASSERT_EQUAL_size_t(2U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(1U, cap.records[1].iface_index);
+    TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
+
+    canard_destroy(&self);
+}
+
+// Poll keeps pending frames if TX callback reports temporary backpressure.
+static void test_canard_poll_backpressure()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_nominal, 10U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+
+    cap.accept_tx = false;
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(1U, canard_pending_ifaces(&self));
+
+    if (cap.count > 0U) {
+        cap.accept_tx = true;
+    }
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(2U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
+
+    canard_destroy(&self);
+}
+
+// Poll retires expired transfers before attempting to transmit.
+static void test_canard_poll_expiration()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_publish(&self, 10, 1U, canard_prio_nominal, 10U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+
+    cap.now = 11;
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(0U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_expiration);
+
+    canard_destroy(&self);
+}
+
+// Validate unicast argument checking.
+static void test_canard_unicast_validation()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_FALSE(canard_unicast(nullptr, 0, 1U, canard_prio_nominal, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(
+      canard_unicast(&self, 0, CANARD_NODE_ID_MAX + 1U, canard_prio_nominal, payload, CANARD_USER_CONTEXT_NULL));
+    const canard_bytes_chain_t bad_payload = { .bytes = { .size = 1, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_FALSE(canard_unicast(&self, 0, 1U, canard_prio_nominal, bad_payload, CANARD_USER_CONTEXT_NULL));
+
+    canard_destroy(&self);
+}
+
+// Validate unicast CAN-ID encoding and per-destination transfer-ID tracking.
+static void test_canard_unicast_encoding_and_transfer_id()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+
+    self.unicast_transfer_id[10]       = CANARD_TRANSFER_ID_MAX;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_unicast(&self, 1000, 10U, canard_prio_high, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_unicast(&self, 1000, 10U, canard_prio_high, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_unicast(&self, 1000, 11U, canard_prio_high, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_EQUAL_UINT8(1U, self.unicast_transfer_id[10] & CANARD_TRANSFER_ID_MAX);
+    TEST_ASSERT_EQUAL_UINT8(1U, self.unicast_transfer_id[11]);
+
+    canard_poll(&self, 1U);
+    canard_poll(&self, 1U);
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(3U, cap.count);
+
+    const uint_least8_t expected_dest[] = { 10U, 10U, 11U };
+    const uint_least8_t expected_tid[]  = { CANARD_TRANSFER_ID_MAX, 0U, 0U };
+    for (size_t i = 0; i < 3U; i++) {
+        const uint32_t can_id = cap.records[i].can_id;
+        TEST_ASSERT_EQUAL_UINT8((uint8_t)canard_prio_high, (uint8_t)((can_id >> 26U) & 7U));
+        TEST_ASSERT_EQUAL_UINT32(CANARD_SERVICE_ID_UNICAST, (can_id >> 14U) & CANARD_SERVICE_ID_MAX);
+        TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)((can_id >> 23U) & 1U));
+        TEST_ASSERT_EQUAL_UINT8(expected_dest[i], (uint8_t)((can_id >> 7U) & CANARD_NODE_ID_MAX));
+        TEST_ASSERT_EQUAL_UINT8(42U, (uint8_t)(can_id & CANARD_NODE_ID_MAX));
+        TEST_ASSERT_EQUAL_UINT8(expected_tid[i], (uint8_t)(cap.records[i].tail & CANARD_TRANSFER_ID_MAX));
+    }
+
+    canard_destroy(&self);
+}
+
 extern "C" void setUp() {}
 extern "C" void tearDown() {}
 
@@ -234,6 +424,11 @@ int main()
     RUN_TEST(test_canard_publish_oom);
     RUN_TEST(test_canard_0v1_publish_requires_node_id);
     RUN_TEST(test_canard_publish_subject_id_out_of_range);
+    RUN_TEST(test_canard_poll_ready_bitmap);
+    RUN_TEST(test_canard_poll_backpressure);
+    RUN_TEST(test_canard_poll_expiration);
+    RUN_TEST(test_canard_unicast_validation);
+    RUN_TEST(test_canard_unicast_encoding_and_transfer_id);
 
     return UNITY_END();
 }
