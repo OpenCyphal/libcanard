@@ -293,6 +293,9 @@ struct canard_t
         size_t queue_capacity;
         size_t queue_size;
 
+        /// Incremented with every enqueued transfer. Used internally but also works as a stats counter.
+        uint64_t seqno;
+
         canard_tree_t* pending[CANARD_IFACE_COUNT]; ///< Next to transmit at the head.
         canard_list_t  agewise;                     ///< ALL transfers FIFO, oldest at the head.
 
@@ -418,29 +421,32 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 
 // -----------------------------------------   Cyphal v1.0 compatibility API   -----------------------------------------
 
-bool canard_1v0_publish(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const uint_least8_t        iface_bitmap,
-                        const canard_prio_t        priority,
-                        const uint16_t             subject_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload);
+bool canard_1v0_publish(canard_t* const             self,
+                        const canard_us_t           deadline,
+                        const uint_least8_t         iface_bitmap,
+                        const canard_prio_t         priority,
+                        const uint16_t              subject_id,
+                        const uint_least8_t         transfer_id,
+                        const canard_bytes_chain_t  payload,
+                        const canard_user_context_t context);
 
-bool canard_1v0_request(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint16_t             service_id,
-                        const uint_least8_t        server_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload);
+bool canard_1v0_request(canard_t* const             self,
+                        const canard_us_t           deadline,
+                        const canard_prio_t         priority,
+                        const uint16_t              service_id,
+                        const uint_least8_t         server_node_id,
+                        const uint_least8_t         transfer_id,
+                        const canard_bytes_chain_t  payload,
+                        const canard_user_context_t context);
 
-bool canard_1v0_respond(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint16_t             service_id,
-                        const uint_least8_t        client_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload);
+bool canard_1v0_respond(canard_t* const             self,
+                        const canard_us_t           deadline,
+                        const canard_prio_t         priority,
+                        const uint16_t              service_id,
+                        const uint_least8_t         client_node_id,
+                        const uint_least8_t         transfer_id,
+                        const canard_bytes_chain_t  payload,
+                        const canard_user_context_t context);
 
 bool canard_1v0_subscribe(canard_t* const                           self,
                           canard_subscription_t* const              subscription,
@@ -467,32 +473,35 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 /// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained from 3-bit priority by left-shifting
 /// and setting the two least significant bits to 1: prio_v0=(prio<<2)|3.
 /// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
-bool canard_0v1_publish(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const uint_least8_t        iface_bitmap,
-                        const canard_prio_t        priority,
-                        const uint16_t             data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload);
+bool canard_0v1_publish(canard_t* const             self,
+                        const canard_us_t           deadline,
+                        const uint_least8_t         iface_bitmap,
+                        const canard_prio_t         priority,
+                        const uint16_t              data_type_id,
+                        const uint16_t              crc_seed,
+                        const uint_least8_t         transfer_id,
+                        const canard_bytes_chain_t  payload,
+                        const canard_user_context_t context);
 
-bool canard_0v1_request(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint_least8_t        data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        server_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload);
+bool canard_0v1_request(canard_t* const             self,
+                        const canard_us_t           deadline,
+                        const canard_prio_t         priority,
+                        const uint_least8_t         data_type_id,
+                        const uint16_t              crc_seed,
+                        const uint_least8_t         server_node_id,
+                        const uint_least8_t         transfer_id,
+                        const canard_bytes_chain_t  payload,
+                        const canard_user_context_t context);
 
-bool canard_0v1_respond(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint_least8_t        data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        client_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload);
+bool canard_0v1_respond(canard_t* const             self,
+                        const canard_us_t           deadline,
+                        const canard_prio_t         priority,
+                        const uint_least8_t         data_type_id,
+                        const uint16_t              crc_seed,
+                        const uint_least8_t         client_node_id,
+                        const uint_least8_t         transfer_id,
+                        const canard_bytes_chain_t  payload,
+                        const canard_user_context_t context);
 
 bool canard_0v1_subscribe(canard_t* const                           self,
                           canard_subscription_t* const              subscription,
