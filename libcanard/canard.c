@@ -67,21 +67,22 @@ typedef unsigned char byte_t;
 
 #define TREE_NULL (canard_tree_t){ NULL, { NULL, NULL }, 0 }
 
-typedef enum transfer_kind_t
+typedef enum format_t
 {
-    transfer_kind_message     = 0,
-    transfer_kind_response    = 1,
-    transfer_kind_request     = 2,
-    transfer_kind_v0_message  = 3,
-    transfer_kind_v0_response = 4,
-    transfer_kind_v0_request  = 5,
-} transfer_kind_t;
+    format_1v1_message  = 0,
+    format_1v0_message  = 1,
+    format_1v0_response = 2,
+    format_1v0_request  = 3,
+    // v0.1
+    format_0v1_message  = 4,
+    format_0v1_response = 5,
+    format_0v1_request  = 6,
+} format_t;
+static_assert(CANARD_FORMAT_COUNT == format_0v1_request + 1, "");
 
-static bool transfer_kind_is_v0(const transfer_kind_t kind)
+static bool format_is_v0(const format_t kind)
 {
-    return (kind == transfer_kind_v0_message) || //
-           (kind == transfer_kind_v0_request) || //
-           (kind == transfer_kind_v0_response);
+    return (kind == format_0v1_message) || (kind == format_0v1_request) || (kind == format_0v1_response);
 }
 
 #define DLC_BITS 4U
@@ -834,49 +835,6 @@ static void tx_eject_pending(canard_t* const self, const byte_t iface_index)
     }
 }
 
-bool canard_new(canard_t* const              self,
-                const canard_vtable_t* const vtable,
-                const canard_mem_set_t       memory,
-                const size_t                 tx_queue_capacity,
-                const uint_least8_t          node_id,
-                const uint64_t               prng_seed,
-                const size_t                 filter_count,
-                canard_filter_t* const       filter_storage)
-{
-    bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
-              (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
-              mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
-              ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
-    if (ok) {
-        (void)memset(self, 0, sizeof(*self));
-        self->node_id                   = (node_id <= CANARD_NODE_ID_MAX) ? node_id : CANARD_NODE_ID_ANONYMOUS;
-        self->tx.fd                     = true;
-        self->tx.queue_capacity         = tx_queue_capacity;
-        self->rx.filter_count           = filter_count;
-        self->rx.filters                = filter_storage;
-        self->mem                       = memory;
-        self->prng_state                = prng_seed;
-        self->vtable                    = vtable;
-        self->unicast_sub.index_port_id = TREE_NULL;
-    }
-    return ok;
-}
-
-void canard_destroy(canard_t* const self)
-{
-    CANARD_ASSERT(self != NULL);
-    for (size_t i = 0; i < (sizeof(self->rx.subscriptions) / sizeof(self->rx.subscriptions[0])); i++) {
-        CANARD_ASSERT(self->rx.subscriptions[i] == NULL);
-    }
-    CANARD_ASSERT(self->rx.list_session_by_animation.head == NULL);
-    CANARD_ASSERT(self->rx.list_session_by_animation.tail == NULL);
-    while (self->tx.agewise.head != NULL) {
-        canard_txfer_t* const tr = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
-        txfer_retire(self, tr);
-    }
-    (void)memset(self, 0, sizeof(*self));
-}
-
 void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap)
 {
     if (self != NULL) {
@@ -1081,6 +1039,70 @@ bool canard_0v1_respond(canard_t* const             self,
 {
     return tx_0v1_service(
       self, deadline, priority, data_type_id, crc_seed, client_node_id, false, transfer_id, payload, context);
+}
+
+// ---------------------------------------------            RX             ---------------------------------------------
+
+/*
+typedef struct
+{
+    canard_prio_t priority;
+    format_t      format;
+    uint32_t      port_id;
+    uint_least8_t dst;
+    uint_least8_t src;
+    uint_least8_t transfer_id;
+    bool          start;
+    bool          end;
+    bool          toggle;
+} frame_t;
+*/
+
+// TODO rx impl
+
+// ---------------------------------------------           MISC            ---------------------------------------------
+
+bool canard_new(canard_t* const              self,
+                const canard_vtable_t* const vtable,
+                const canard_mem_set_t       memory,
+                const size_t                 tx_queue_capacity,
+                const uint_least8_t          node_id,
+                const uint64_t               prng_seed,
+                const size_t                 filter_count,
+                canard_filter_t* const       filter_storage)
+{
+    bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
+              (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
+              mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
+              ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
+    if (ok) {
+        (void)memset(self, 0, sizeof(*self));
+        self->node_id                   = (node_id <= CANARD_NODE_ID_MAX) ? node_id : CANARD_NODE_ID_ANONYMOUS;
+        self->tx.fd                     = true;
+        self->tx.queue_capacity         = tx_queue_capacity;
+        self->rx.filter_count           = filter_count;
+        self->rx.filters                = filter_storage;
+        self->mem                       = memory;
+        self->prng_state                = prng_seed;
+        self->vtable                    = vtable;
+        self->unicast_sub.index_port_id = TREE_NULL;
+    }
+    return ok;
+}
+
+void canard_destroy(canard_t* const self)
+{
+    CANARD_ASSERT(self != NULL);
+    for (size_t i = 0; i < (sizeof(self->rx.subscriptions) / sizeof(self->rx.subscriptions[0])); i++) {
+        CANARD_ASSERT(self->rx.subscriptions[i] == NULL);
+    }
+    CANARD_ASSERT(self->rx.list_session_by_animation.head == NULL);
+    CANARD_ASSERT(self->rx.list_session_by_animation.tail == NULL);
+    while (self->tx.agewise.head != NULL) {
+        canard_txfer_t* const tr = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
+        txfer_retire(self, tr);
+    }
+    (void)memset(self, 0, sizeof(*self));
 }
 
 uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature)
