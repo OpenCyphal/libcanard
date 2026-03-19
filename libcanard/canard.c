@@ -1083,12 +1083,12 @@ static byte_t rx_parse(const uint32_t       can_id,
     CANARD_ASSERT(can_id < (UINT32_C(1) << 29U));
     CANARD_ASSERT(out_v0 != NULL);
     CANARD_ASSERT(out_v1 != NULL);
+    memset(out_v0, 0, sizeof(*out_v0));
+    memset(out_v1, 0, sizeof(*out_v1));
     if (payload.size < 1) {
         return 0;
     }
     CANARD_ASSERT(payload.data != NULL);
-    memset(out_v0, 0, sizeof(*out_v0));
-    memset(out_v1, 0, sizeof(*out_v1));
 
     // Common items.
     const canard_prio_t priority = (canard_prio_t)(can_id >> PRIO_SHIFT);
