@@ -16,7 +16,8 @@ void tearDown(void) {}
 // Test 1: Empty payload returns 0 and zeroes both outputs.
 static void test_rx_parse_empty_payload(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     memset(&v0, 0xA5, sizeof(v0));
     memset(&v1, 0xA5, sizeof(v1));
     const canard_bytes_t pl  = { 0, NULL };
@@ -34,7 +35,8 @@ static void test_rx_parse_empty_payload(void)
 // v1.1 message CAN ID: (prio << 26) | (subject << 8) | (1 << 7) | src
 static void test_rx_parse_v1_1_message_golden(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Mid: prio=3, subject=1234, src=42. CAN ID = 0x0C04D2AA.
     {
         const byte_t         d[] = { 0x11, 0x22, 0xE7 }; // v1 single-frame tail: SOT=1 EOT=1 toggle=1 tid=7
@@ -84,7 +86,8 @@ static void test_rx_parse_v1_1_message_golden(void)
 // v1.0 message CAN ID: (prio << 26) | (reserved22:21 << 21) | (subject << 8) | src   [bit7=0, bit25=0]
 static void test_rx_parse_v1_0_message_golden(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Normal: prio=4, subject=42, src=11, reserved=11b. CAN ID = 0x10602A0B.
     {
         const byte_t         d[] = { 0xAA, 0xE5 }; // v1 single, tid=5
@@ -122,7 +125,8 @@ static void test_rx_parse_v1_0_message_golden(void)
 // v1.0 service CAN ID: (prio << 26) | (1 << 25) | (req?1:0 << 24) | (svc_id << 14) | (dst << 7) | src
 static void test_rx_parse_v1_0_service_golden(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Request: prio=4, svc_id=430, dst=24, src=11. CAN ID = 0x136B8C0B.
     {
         const byte_t         d[] = { 0xBB, 0xE1 }; // v1 single, tid=1
@@ -163,7 +167,8 @@ static void test_rx_parse_v1_0_service_golden(void)
 // v0 message CAN ID: (prio << 26) | (3 << 24) | (type_id << 8) | src   [bit7=0]
 static void test_rx_parse_v0_message_golden(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Normal: prio=4, type_id=0x040A, src=1. CAN ID = 0x13040A01.
     {
         const byte_t         d[] = { 0x55, 0xC2 }; // v0 single: SOT=1 EOT=1 toggle=0 tid=2
@@ -201,7 +206,8 @@ static void test_rx_parse_v0_message_golden(void)
 // v0 service CAN ID: (((prio<<2)|3) << 24) | (type_id << 16) | (req?1<<15:0) | (dst << 8) | (1 << 7) | src
 static void test_rx_parse_v0_service_golden(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Request: prio=4, type_id=0x37, dst=24, src=11. CAN ID = 0x1337988B.
     {
         const byte_t         d[] = { 0x42, 0xC4 }; // v0 single, tid=4
@@ -230,7 +236,8 @@ static void test_rx_parse_v0_service_golden(void)
 // Test 7: v1.0 frames with reserved bit 23 set are rejected.
 static void test_rx_parse_v1_0_reserved_bit23_reject(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // v1.0 service: 0x136B8C0B | 0x00800000 = 0x13EB8C0B. v1 tail → is_v0=false. bit23 → is_v1=false.
     {
         const byte_t         d[] = { 0xE0 };
@@ -249,7 +256,8 @@ static void test_rx_parse_v1_0_reserved_bit23_reject(void)
 // Test 8: v0 service with src=0 or dst=0 is rejected (0 reserved for anonymous/broadcast in v0).
 static void test_rx_parse_v0_service_zero_node_reject(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // src=0: CAN ID 0x13379880 → v0 service with src=0 → rejected. v0 tail → is_v1=false. Return=0.
     {
         const byte_t         d[] = { 0xC0 };
@@ -268,7 +276,8 @@ static void test_rx_parse_v0_service_zero_node_reject(void)
 // Test 9: Version detection via SOT+toggle in the tail byte.
 static void test_rx_parse_version_detection(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // CAN ID valid for both versions: v1.0 message / v0 message (bit7=0, bit25=0, bit23=0).
     const uint32_t can_id = 0x00002A01UL; // prio=0, subject=42 (v1.0), type_id=42 (v0), src=1
     // SOT=1 toggle=1 → v1 only
@@ -301,7 +310,8 @@ static void test_rx_parse_version_detection(void)
 // Test 10: Payload pointer and size are forwarded correctly.
 static void test_rx_parse_payload_handling(void)
 {
-    frame_t        v0, v1;
+    frame_t        v0;
+    frame_t        v1;
     const uint32_t can_id = 0x00000080UL; // v1.1 message, prio=0, subject=0, src=0
     // Size 1 (tail byte only → effective payload is 0 bytes)
     {
@@ -343,7 +353,8 @@ static void test_rx_parse_payload_handling(void)
 // Test 11: Exhaustive tail-byte field mapping for all SOT/EOT/toggle combinations and TID boundary values.
 static void test_rx_parse_tail_byte_exhaustive(void)
 {
-    frame_t        v0, v1;
+    frame_t        v0;
+    frame_t        v1;
     const uint32_t can_id = 0x00002A01UL; // valid for both versions (message, bit7=0)
 
     // All 8 SOT/EOT/toggle combinations. Pick the correct output depending on version detection.
@@ -438,7 +449,8 @@ static void test_rx_parse_tail_byte_exhaustive(void)
 // Test 12: Non-first frames where the same CAN ID produces valid but different results for v0 and v1.
 static void test_rx_parse_cross_version_ambiguity(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Non-first tail: SOT=0 → both versions attempted.
     const byte_t nf = 0x05; // SOT=0 EOT=0 toggle=0 tid=5
 
@@ -490,7 +502,8 @@ static void test_rx_parse_cross_version_ambiguity(void)
 // Test 13: Adjacent bit fields do not bleed into each other.
 static void test_rx_parse_bit_field_boundaries(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // v1.0 service: max svc_id=511 with dst=0 and src=0 → verify dst and src read 0.
     // CAN ID: (0<<26)|(1<<25)|(0<<24)|(511<<14)|(0<<7)|0 = 0x027FC000
     {
@@ -530,7 +543,8 @@ static void test_rx_parse_bit_field_boundaries(void)
 // Test 14: v1.1 does NOT reject bit 23 (unlike v1.0).
 static void test_rx_parse_v1_1_accepts_bit23(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // Subject 0x18000: bit 23 of CAN ID is set because (0x18000 << 8) sets bit 23.
     // CAN ID: (0<<26) | (0x18000<<8) | (1<<7) | 0 = 0x01800080
     {
@@ -557,7 +571,8 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
 // Test 15: v1.0 message reserved bits 22:21 are masked out and do not affect the extracted subject-ID.
 static void test_rx_parse_v1_0_message_ignores_reserved_bits_22_21(void)
 {
-    frame_t              v0, v1;
+    frame_t              v0;
+    frame_t              v1;
     const byte_t         d[] = { 0xE0 };
     const canard_bytes_t pl  = { sizeof(d), d };
     // bits 22:21 = 00: CAN ID = (0<<26)|(0<<21)|(42<<8)|1 = 0x00002A01
@@ -574,7 +589,8 @@ static void test_rx_parse_v1_0_message_ignores_reserved_bits_22_21(void)
 // Test 16: Non-first frame produces valid distinct results for both v0 and v1 simultaneously.
 static void test_rx_parse_non_first_dual_output(void)
 {
-    frame_t v0, v1;
+    frame_t v0;
+    frame_t v1;
     // CAN ID 0x0C04D2AA: v1.1 message (bit7=1) / v0 service (bit7=1).
     // Non-first tail: SOT=0 EOT=0 toggle=0 tid=5.
     const byte_t         d[] = { 0x11, 0x22, 0x05 };
