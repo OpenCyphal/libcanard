@@ -357,89 +357,99 @@ static void test_rx_parse_tail_byte_exhaustive(void)
     frame_t        v1;
     const uint32_t can_id = 0x00002A01UL; // valid for both versions (message, bit7=0)
 
-    // All 8 SOT/EOT/toggle combinations. Pick the correct output depending on version detection.
-    {
-        byte_t         d[2] = { 0x42, 0x00 };
-        canard_bytes_t pl   = { sizeof(d), d };
-
-        // SOT=0 EOT=0 toggle=0 → both versions, check v1
-        d[1] = 0x00;
+    // All 8 SOT/EOT/toggle combinations. Each uses its own data array to avoid cppcheck false positives.
+    { // SOT=0 EOT=0 toggle=0 → both versions, check v1
+        const byte_t         d[] = { 0x42, 0x00 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_FALSE(v1.start);
         TEST_ASSERT_FALSE(v1.end);
         TEST_ASSERT_FALSE(v1.toggle);
-
-        // SOT=0 EOT=0 toggle=1
-        d[1] = 0x20;
+    }
+    { // SOT=0 EOT=0 toggle=1
+        const byte_t         d[] = { 0x42, 0x20 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_FALSE(v1.start);
         TEST_ASSERT_FALSE(v1.end);
         TEST_ASSERT_TRUE(v1.toggle);
-
-        // SOT=0 EOT=1 toggle=0
-        d[1] = 0x40;
+    }
+    { // SOT=0 EOT=1 toggle=0
+        const byte_t         d[] = { 0x42, 0x40 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_FALSE(v1.start);
         TEST_ASSERT_TRUE(v1.end);
         TEST_ASSERT_FALSE(v1.toggle);
-
-        // SOT=0 EOT=1 toggle=1
-        d[1] = 0x60;
+    }
+    { // SOT=0 EOT=1 toggle=1
+        const byte_t         d[] = { 0x42, 0x60 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_FALSE(v1.start);
         TEST_ASSERT_TRUE(v1.end);
         TEST_ASSERT_TRUE(v1.toggle);
-
-        // SOT=1 EOT=0 toggle=0 → v0 only
-        d[1] = 0x80;
+    }
+    { // SOT=1 EOT=0 toggle=0 → v0 only
+        const byte_t         d[] = { 0x42, 0x80 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_TRUE(v0.start);
         TEST_ASSERT_FALSE(v0.end);
         TEST_ASSERT_FALSE(v0.toggle);
-
-        // SOT=1 EOT=0 toggle=1 → v1 only
-        d[1] = 0xA0;
+    }
+    { // SOT=1 EOT=0 toggle=1 → v1 only
+        const byte_t         d[] = { 0x42, 0xA0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_TRUE(v1.start);
         TEST_ASSERT_FALSE(v1.end);
         TEST_ASSERT_TRUE(v1.toggle);
-
-        // SOT=1 EOT=1 toggle=0 → v0 only
-        d[1] = 0xC0;
+    }
+    { // SOT=1 EOT=1 toggle=0 → v0 only
+        const byte_t         d[] = { 0x42, 0xC0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_TRUE(v0.start);
         TEST_ASSERT_TRUE(v0.end);
         TEST_ASSERT_FALSE(v0.toggle);
-
-        // SOT=1 EOT=1 toggle=1 → v1 only
-        d[1] = 0xE0;
+    }
+    { // SOT=1 EOT=1 toggle=1 → v1 only
+        const byte_t         d[] = { 0x42, 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_TRUE(v1.start);
         TEST_ASSERT_TRUE(v1.end);
         TEST_ASSERT_TRUE(v1.toggle);
     }
     // Transfer-ID boundary values with v1 single-frame tail (0xE0 | tid).
-    {
-        byte_t         d[2] = { 0x42, 0xE0 };
-        canard_bytes_t pl   = { sizeof(d), d };
-
-        d[1] = 0xE0; // tid=0
+    { // tid=0
+        const byte_t         d[] = { 0x42, 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(0, v1.transfer_id);
-
-        d[1] = 0xE1; // tid=1
+    }
+    { // tid=1
+        const byte_t         d[] = { 0x42, 0xE1 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(1, v1.transfer_id);
-
-        d[1] = 0xEF; // tid=15
+    }
+    { // tid=15
+        const byte_t         d[] = { 0x42, 0xEF };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(15, v1.transfer_id);
-
-        d[1] = 0xF0; // tid=16
+    }
+    { // tid=16
+        const byte_t         d[] = { 0x42, 0xF0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(16, v1.transfer_id);
-
-        d[1] = 0xFF; // tid=31
+    }
+    { // tid=31
+        const byte_t         d[] = { 0x42, 0xFF };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(31, v1.transfer_id);
     }
