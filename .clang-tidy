@@ -34,6 +34,7 @@ Checks: >-
   -*-use-trailing-return-type,
   -*-deprecated-headers,
   -*-avoid-c-arrays,
+  -*DeprecatedOrUnsafeBufferHandling,
 CheckOptions:
   - key:   readability-function-cognitive-complexity.Threshold
     value: '99'

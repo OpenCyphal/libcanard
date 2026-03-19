@@ -353,8 +353,8 @@ struct canard_t
 /// The same node-ID is used for both v1 and legacy v0 communications.
 ///
 /// The filter storage is an array of filters that is used by the library to automatically set up the acceptance
-/// filters when the RX pipeline is reconfigured. The number of available filters is limited by the CAN hardware.
-/// Pass zero filters to disable this functionality.
+/// filters when the RX pipeline is reconfigured. The filter count equals the storage size. The storage must
+/// outlive the library instance. It is possible to pass zero filters & NULL if filtering is unneeded/unsupported.
 ///
 /// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///
@@ -368,7 +368,9 @@ bool canard_new(canard_t* const              self,
                 const size_t                 filter_count,
                 canard_filter_t* const       filter_storage);
 
-void canard_free(canard_t* const self);
+/// The application MUST destroy all subscriptions before invoking this (this is asserted).
+/// The TX queue will be purged automatically if not empty.
+void canard_destroy(canard_t* const self);
 
 /// This must be invoked periodically to ensure liveliness.
 /// The function must be called asap once any of the interfaces for which there are pending outgoing transfers

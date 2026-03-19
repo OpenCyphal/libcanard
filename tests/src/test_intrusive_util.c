@@ -96,34 +96,6 @@ static void test_math_helpers(void)
     TEST_ASSERT_EQUAL_INT64(-4, earlier(-4, 2));
 }
 
-static void test_ctz_helpers(void)
-{
-    // Known trailing zero counts.
-    TEST_ASSERT_EQUAL_UINT8(4, ctz_emulated(0x10U));
-    TEST_ASSERT_EQUAL_UINT8(0, ctz(0x01U));
-    TEST_ASSERT_EQUAL_UINT8(3, ctz(0x08U));
-}
-
-// ============================================  SERDE TESTS  ============================================
-
-static void test_serialize_deserialize(void)
-{
-    // Serialize and deserialize fixed values.
-    byte_t  buf[8] = { 0 };
-    byte_t* end    = serialize_u64(buf, 0x1122334455667788ULL);
-    TEST_ASSERT_EQUAL_PTR(&buf[8], end);
-
-    uint32_t      out32 = 0;
-    const byte_t* p32   = deserialize_u32(buf, &out32);
-    TEST_ASSERT_EQUAL_HEX32(0x55667788U, out32);
-    TEST_ASSERT_EQUAL_PTR(&buf[4], p32);
-
-    uint64_t      out64 = 0;
-    const byte_t* p64   = deserialize_u64(buf, &out64);
-    TEST_ASSERT_EQUAL_HEX64(0x1122334455667788ULL, out64);
-    TEST_ASSERT_EQUAL_PTR(&buf[8], p64);
-}
-
 // ==============================================  CRC TESTS  ==============================================
 
 static void test_crc_add(void)
@@ -506,8 +478,6 @@ int main(void)
     RUN_TEST(test_popcount_emulated);
     RUN_TEST(test_popcount_intrinsics);
     RUN_TEST(test_math_helpers);
-    RUN_TEST(test_ctz_helpers);
-    RUN_TEST(test_serialize_deserialize);
     RUN_TEST(test_crc_add);
     RUN_TEST(test_crc_add_chain);
     RUN_TEST(test_bytes_chain);

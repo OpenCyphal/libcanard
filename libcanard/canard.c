@@ -143,6 +143,11 @@ static void mem_free(const canard_mem_t memory, const size_t size, void* const d
     memory.vtable->free(memory, size, data);
 }
 
+static bool mem_valid(const canard_mem_t memory)
+{
+    return (memory.vtable != NULL) && (memory.vtable->alloc != NULL) && (memory.vtable->free != NULL);
+}
+
 // ---------------------------------------------            CRC            ---------------------------------------------
 
 #define CRC_INITIAL    0xFFFFU
@@ -766,6 +771,61 @@ static bool tx_push(canard_t* const            self,
     return true;
 }
 
+bool canard_new(canard_t* const              self,
+                const canard_vtable_t* const vtable,
+                const canard_mem_set_t       memory,
+                const size_t                 tx_queue_capacity,
+                const uint_least8_t          node_id,
+                const uint64_t               prng_seed,
+                const size_t                 filter_count,
+                canard_filter_t* const       filter_storage)
+{
+    const bool has_valid_node_id = (node_id <= CANARD_NODE_ID_MAX) || (node_id == CANARD_NODE_ID_ANONYMOUS);
+    bool       ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
+              (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
+              mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
+              ((filter_count == 0U) || (filter_storage != NULL)) && has_valid_node_id;
+    if (ok) {
+        (void)memset(self, 0, sizeof(*self));
+        self->node_id                   = (node_id <= CANARD_NODE_ID_MAX) ? node_id : 0U;
+        self->tx.fd                     = true;
+        self->tx.queue_capacity         = tx_queue_capacity;
+        self->rx.filter_count           = filter_count;
+        self->rx.filters                = filter_storage;
+        self->mem                       = memory;
+        self->prng_state                = prng_seed;
+        self->vtable                    = vtable;
+        self->unicast_sub.index_port_id = TREE_NULL;
+    }
+    return ok;
+}
+
+void canard_destroy(canard_t* const self)
+{
+    CANARD_ASSERT(self != NULL);
+    for (size_t i = 0; i < (sizeof(self->rx.subscriptions) / sizeof(self->rx.subscriptions[0])); i++) {
+        CANARD_ASSERT(self->rx.subscriptions[i] == NULL);
+    }
+    CANARD_ASSERT(self->rx.list_session_by_animation.head == NULL);
+    CANARD_ASSERT(self->rx.list_session_by_animation.tail == NULL);
+    while (self->tx.agewise.head != NULL) {
+        canard_txfer_t* const tr = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
+        txfer_retire(self, tr);
+    }
+    (void)memset(self, 0, sizeof(*self));
+}
+
+uint_least8_t canard_pending_ifaces(const canard_t* const self)
+{
+    uint_least8_t out = 0;
+    if (self != NULL) {
+        FOREACH_IFACE (i) {
+            out |= (self->tx.pending[i] != NULL) ? (uint_least8_t)(1U << i) : 0U;
+        }
+    }
+    return out;
+}
+
 bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         iface_bitmap,
@@ -828,4 +888,15 @@ bool canard_0v1_publish(canard_t* const             self,
         ok                       = (tr != NULL) && tx_push(self, tr, true, iface_bitmap, payload, crc_seed);
     }
     return ok;
+}
+
+uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature)
+{
+    uint16_t crc = CRC_INITIAL;
+    uint64_t sig = data_type_signature;
+    for (size_t i = 0; i < 8U; i++) {
+        crc = crc_add_byte(crc, (byte_t)(sig & BYTE_MAX));
+        sig >>= 8U;
+    }
+    return crc;
 }
