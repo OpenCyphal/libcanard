@@ -20,15 +20,6 @@ set(unity_root "${CMAKE_SOURCE_DIR}/lib/unity")
 
 include_directories(SYSTEM ${CMAKE_SOURCE_DIR}/lib/cavl2)
 
-# Use -DNO_STATIC_ANALYSIS=1 to suppress static analysis. If not suppressed, the tools used here shall be available.
-if (NOT NO_STATIC_ANALYSIS)
-    find_program(clang_tidy NAMES clang-tidy)
-    if (NOT clang_tidy)
-        message(FATAL_ERROR "Could not locate clang-tidy")
-    endif ()
-    message(STATUS "Using clang-tidy: ${clang_tidy}")
-endif ()
-
 # Fail the build if poisoned identifiers are present.
 # Poison fixed-length 8-bit integer types to maximize portability across DSP cores that may not support them.
 set(POISON_REGEXP "\\b(int8_t|uint8_t)\\b")
@@ -50,7 +41,7 @@ if (NOT NO_STATIC_ANALYSIS)
 endif ()
 
 function(gen_test name files compile_definitions compile_flags link_flags c_standard)
-    # Unity
+    # Unity. As an external dependency, it is excluded from static analysis.
     add_library("${name}_unity" STATIC "${unity_root}/src/unity.c")
     target_include_directories("${name}_unity" SYSTEM PUBLIC "${unity_root}/src/")
     target_compile_definitions("${name}_unity" PUBLIC
@@ -61,6 +52,10 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
             COMPILE_FLAGS "${compile_flags} \
             -Wno-sign-conversion -Wno-conversion -Wno-switch-enum -Wno-float-equal -Wno-double-promotion"
             LINK_FLAGS "${link_flags}"
+            C_CLANG_TIDY ""
+            CXX_CLANG_TIDY ""
+            C_CPPCHECK ""
+            CXX_CPPCHECK ""
     )
     # Target executable
     add_executable(${name} ${files})
@@ -81,8 +76,6 @@ function(gen_test name files compile_definitions compile_flags link_flags c_stan
             LINK_FLAGS "${link_flags}"
             C_STANDARD "${c_standard}"
             C_EXTENSIONS OFF
-            C_CLANG_TIDY "${use_clang_tidy}"
-            CXX_CLANG_TIDY "${use_clang_tidy}"
     )
     add_test("run_${name}" "${name}")
 endfunction()

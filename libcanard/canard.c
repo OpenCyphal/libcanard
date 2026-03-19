@@ -335,7 +335,7 @@ typedef struct tx_frame_t
 {
     struct tx_frame_t* next;
     size_t             refcount : (sizeof(size_t) * CHAR_BIT) - DLC_BITS; // 268+ million ought to be enough for anybody
-    size_t             dlc      : DLC_BITS; // use canard_len_to_dlc[] and canard_dlc_to_len[]
+    size_t             dlc : DLC_BITS; // use canard_len_to_dlc[] and canard_dlc_to_len[]
     byte_t             data[];
 } tx_frame_t;
 static_assert((sizeof(void*) > 4) || ((sizeof(tx_frame_t) + CANARD_MTU_CAN_CLASSIC) <= 24),
@@ -406,9 +406,9 @@ struct canard_txfer_t
     // Constant transfer properties supplied by the client.
     canard_us_t deadline;
     uint64_t    seqno;
-    uint64_t    can_id_msb  : CAN_ID_MSb_BITS;
+    uint64_t    can_id_msb : CAN_ID_MSb_BITS;
     uint64_t    transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
-    uint64_t    fd          : 1;
+    uint64_t    fd : 1;
 
     // Mutable transmission state. All other fields, except for the index handles, are immutable.
     tx_frame_t* head[CANARD_IFACE_COUNT];

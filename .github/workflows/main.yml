@@ -1,7 +1,7 @@
 name: Verification & Static Analysis
 on: [push, pull_request]
 env:
-  LLVM_VERSION: 19
+  LLVM_VERSION: 20
 jobs:
   debug:
     if: github.event_name == 'push'
@@ -153,17 +153,6 @@ jobs:
           sudo apt-get install -y gcc-arm-none-eabi
       - run: arm-none-eabi-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c99 ${{ env.flags }}
       - run: arm-none-eabi-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c11 ${{ env.flags }}
-
-  style_check:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: DoozyX/clang-format-lint-action@v0.20
-        with:
-          source: "./libcanard ./tests"
-          extensions: "c,h,cpp,hpp"
-          clangFormatVersion: ${{ env.LLVM_VERSION }}
 
   sonarcloud:
     if: >

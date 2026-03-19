@@ -14,6 +14,7 @@
       <w>popcount</w>
       <w>seqno</w>
       <w>stdatomic</w>
+      <w>suppr</w>
       <w>txfer</w>
       <w>uavcan</w>
       <w>unrespond</w>
