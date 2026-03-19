@@ -439,6 +439,305 @@ static void test_canard_0v1_service_capacity(void)
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
+// =============================================
+// CAN ID specification compliance tests.
+// These tests verify CAN ID composition against hardcoded literals independently derived from the specifications,
+// ensuring that a systematic bit-field error cannot hide behind recomputation using the same expressions.
+// =============================================
+
+// Cyphal v1.0 message broadcast CAN ID compliance.
+// Spec layout: [28:26]=prio [25]=0 [24]=0 [23]=0 [22:21]=11 [20:8]=subject_id [7:0]=0 (template, source filled later)
+static void test_1v0_publish_can_id_compliance(void)
+{
+    canard_t                   self;
+    test_context_t             ctx;
+    instrumented_allocator_t   alloc;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+
+    // Case A: prio=exceptional(0), subject_id=0
+    init_canard(&self, &ctx, &alloc, 8U);
+    TEST_ASSERT_TRUE(
+      canard_1v0_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x00600000UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 26U) & 7U);     // priority
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 25U) & 1U);     // service=0
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 24U) & 1U);     // anonymous=0
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 23U) & 1U);     // reserved
+        TEST_ASSERT_EQUAL_UINT32(3U, (cid >> 21U) & 3U);     // reserved=11
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 8U) & 0x1FFFU); // subject_id
+        TEST_ASSERT_EQUAL_UINT32(0U, cid & 0xFFU);           // bits[7:0]=0
+    }
+    free_all_transfers(&self);
+
+    // Case B: prio=optional(7), subject_id=8191
+    init_canard(&self, &ctx, &alloc, 8U);
+    TEST_ASSERT_TRUE(
+      canard_1v0_publish(&self, 1000, 1U, canard_prio_optional, 8191U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x1C7FFF00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(7U, (cid >> 26U) & 7U);
+        TEST_ASSERT_EQUAL_UINT32(8191U, (cid >> 8U) & 0x1FFFU);
+    }
+    free_all_transfers(&self);
+
+    // Case C: prio=high(3), subject_id=42
+    init_canard(&self, &ctx, &alloc, 8U);
+    TEST_ASSERT_TRUE(canard_1v0_publish(&self, 1000, 1U, canard_prio_high, 42U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x0C602A00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(3U, (cid >> 26U) & 7U);
+        TEST_ASSERT_EQUAL_UINT32(42U, (cid >> 8U) & 0x1FFFU);
+    }
+    free_all_transfers(&self);
+}
+
+// Cyphal v1.0 service request CAN ID compliance.
+// Spec layout: [28:26]=prio [25]=1 [24]=1 [23]=0 [22:14]=service_id [13:7]=dest [6:0]=0 (template)
+static void test_1v0_request_can_id_compliance(void)
+{
+    canard_t                   self;
+    test_context_t             ctx;
+    instrumented_allocator_t   alloc;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+
+    // Case A: prio=exceptional(0), service_id=0, dest=1
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 10U;
+    TEST_ASSERT_TRUE(
+      canard_1v0_request(&self, 1000, canard_prio_exceptional, 0U, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x03000080UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 26U) & 7U);     // priority
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 25U) & 1U);     // service=1
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 24U) & 1U);     // request=1
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 23U) & 1U);     // reserved
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 14U) & 0x1FFU); // service_id
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 7U) & 0x7FU);   // dest
+    }
+    free_all_transfers(&self);
+
+    // Case B: prio=optional(7), service_id=511, dest=127
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 10U;
+    TEST_ASSERT_TRUE(
+      canard_1v0_request(&self, 1000, canard_prio_optional, 511U, 127U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x1F7FFF80UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(7U, (cid >> 26U) & 7U);
+        TEST_ASSERT_EQUAL_UINT32(511U, (cid >> 14U) & 0x1FFU);
+        TEST_ASSERT_EQUAL_UINT32(127U, (cid >> 7U) & 0x7FU);
+    }
+    free_all_transfers(&self);
+}
+
+// Cyphal v1.0 service response CAN ID compliance.
+// Same as request but bit[24]=0 (response, not request).
+static void test_1v0_respond_can_id_compliance(void)
+{
+    canard_t                   self;
+    test_context_t             ctx;
+    instrumented_allocator_t   alloc;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+
+    // Case A: prio=fast(2), service_id=430, dest=24
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 11U;
+    TEST_ASSERT_TRUE(
+      canard_1v0_respond(&self, 1000, canard_prio_fast, 430U, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x0A6B8C00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(2U, (cid >> 26U) & 7U);       // priority
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 25U) & 1U);       // service=1
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 24U) & 1U);       // request=0 (response)
+        TEST_ASSERT_EQUAL_UINT32(430U, (cid >> 14U) & 0x1FFU); // service_id
+        TEST_ASSERT_EQUAL_UINT32(24U, (cid >> 7U) & 0x7FU);    // dest
+    }
+    free_all_transfers(&self);
+
+    // Case B: prio=nominal(4), service_id=1, dest=1
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 11U;
+    TEST_ASSERT_TRUE(
+      canard_1v0_respond(&self, 1000, canard_prio_nominal, 1U, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x12004080UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(4U, (cid >> 26U) & 7U);
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 14U) & 0x1FFU);
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 7U) & 0x7FU);
+    }
+    free_all_transfers(&self);
+}
+
+// UAVCAN v0 message broadcast CAN ID compliance.
+// Spec layout: [28:24]=v0_prio [23:8]=dtid [7:0]=0 (template), where v0_prio=(cyphal_prio<<2)|3
+static void test_0v1_publish_can_id_compliance(void)
+{
+    canard_t                   self;
+    test_context_t             ctx;
+    instrumented_allocator_t   alloc;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+
+    // Case A: prio=exceptional(0), dtid=0
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 1U;
+    TEST_ASSERT_TRUE(
+      canard_0v1_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x03000000UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(3U, (cid >> 24U) & 0x1FU);  // v0_prio = (0<<2)|3 = 3
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 8U) & 0xFFFFU); // dtid
+        TEST_ASSERT_EQUAL_UINT32(0U, cid & 0xFFU);           // bits[7:0]=0
+    }
+    free_all_transfers(&self);
+
+    // Case B: prio=optional(7), dtid=0xFFFF
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 1U;
+    TEST_ASSERT_TRUE(canard_0v1_publish(
+      &self, 1000, 1U, canard_prio_optional, 0xFFFFU, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x1FFFFF00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0x1FU, (cid >> 24U) & 0x1FU); // v0_prio = (7<<2)|3 = 31
+        TEST_ASSERT_EQUAL_UINT32(0xFFFFU, (cid >> 8U) & 0xFFFFU);
+    }
+    free_all_transfers(&self);
+
+    // Case C: prio=nominal(4), dtid=0x040A
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 1U;
+    TEST_ASSERT_TRUE(canard_0v1_publish(
+      &self, 1000, 1U, canard_prio_nominal, 0x040AU, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x13040A00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0x13U, (cid >> 24U) & 0x1FU); // v0_prio = (4<<2)|3 = 19 = 0x13
+        TEST_ASSERT_EQUAL_UINT32(0x040AU, (cid >> 8U) & 0xFFFFU);
+    }
+    free_all_transfers(&self);
+}
+
+// UAVCAN v0 service request CAN ID compliance.
+// Spec layout: [28:24]=v0_prio [23:16]=dtid [15]=1(request) [14:8]=dest [7]=1 [6:0]=0 (template)
+static void test_0v1_request_can_id_compliance(void)
+{
+    canard_t                   self;
+    test_context_t             ctx;
+    instrumented_allocator_t   alloc;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+
+    // Case A: prio=exceptional(0), dti=1, dest=1
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 10U;
+    TEST_ASSERT_TRUE(
+      canard_0v1_request(&self, 1000, canard_prio_exceptional, 1U, 0xFFFFU, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x03018180UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(3U, (cid >> 24U) & 0x1FU); // v0_prio = (0<<2)|3
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 16U) & 0xFFU); // dtid
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 15U) & 1U);    // request=1
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 8U) & 0x7FU);  // dest
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 7U) & 1U);     // service=1
+    }
+    free_all_transfers(&self);
+
+    // Case B: prio=optional(7), dti=255, dest=127
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 10U;
+    TEST_ASSERT_TRUE(canard_0v1_request(
+      &self, 1000, canard_prio_optional, 255U, 0xFFFFU, 127U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x1FFFFF80UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0x1FU, (cid >> 24U) & 0x1FU);
+        TEST_ASSERT_EQUAL_UINT32(255U, (cid >> 16U) & 0xFFU);
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 15U) & 1U);
+        TEST_ASSERT_EQUAL_UINT32(127U, (cid >> 8U) & 0x7FU);
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 7U) & 1U);
+    }
+    free_all_transfers(&self);
+}
+
+// UAVCAN v0 service response CAN ID compliance.
+// Same as request but bit[15]=0 (response, not request).
+static void test_0v1_respond_can_id_compliance(void)
+{
+    canard_t                   self;
+    test_context_t             ctx;
+    instrumented_allocator_t   alloc;
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+
+    // Case A: prio=nominal(4), dti=0x37, dest=24
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 11U;
+    TEST_ASSERT_TRUE(
+      canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xFFFFU, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x13371880UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0x13U, (cid >> 24U) & 0x1FU); // v0_prio = (4<<2)|3 = 19
+        TEST_ASSERT_EQUAL_UINT32(0x37U, (cid >> 16U) & 0xFFU); // dtid
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 15U) & 1U);       // request=0 (response)
+        TEST_ASSERT_EQUAL_UINT32(24U, (cid >> 8U) & 0x7FU);    // dest
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 7U) & 1U);        // service=1
+    }
+    free_all_transfers(&self);
+
+    // Case B: prio=immediate(1), dti=200, dest=42
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 11U;
+    TEST_ASSERT_TRUE(canard_0v1_respond(
+      &self, 1000, canard_prio_immediate, 200U, 0xFFFFU, 42U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    {
+        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        TEST_ASSERT_NOT_NULL(tr);
+        const uint32_t cid = can_id_from_transfer(tr);
+        TEST_ASSERT_EQUAL_HEX32(0x07C82A80UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(7U, (cid >> 24U) & 0x1FU); // v0_prio = (1<<2)|3 = 7
+        TEST_ASSERT_EQUAL_UINT32(200U, (cid >> 16U) & 0xFFU);
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 15U) & 1U);
+        TEST_ASSERT_EQUAL_UINT32(42U, (cid >> 8U) & 0x7FU);
+        TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 7U) & 1U);
+    }
+    free_all_transfers(&self);
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -469,6 +768,14 @@ int main(void)
     RUN_TEST(test_canard_0v1_service_validation);
     RUN_TEST(test_canard_0v1_service_oom);
     RUN_TEST(test_canard_0v1_service_capacity);
+
+    // CAN ID specification compliance (hardcoded literals from specs).
+    RUN_TEST(test_1v0_publish_can_id_compliance);
+    RUN_TEST(test_1v0_request_can_id_compliance);
+    RUN_TEST(test_1v0_respond_can_id_compliance);
+    RUN_TEST(test_0v1_publish_can_id_compliance);
+    RUN_TEST(test_0v1_request_can_id_compliance);
+    RUN_TEST(test_0v1_respond_can_id_compliance);
 
     return UNITY_END();
 }
