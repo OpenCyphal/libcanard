@@ -924,7 +924,7 @@ bool canard_publish(canard_t* const             self,
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
       (subject_id <= CANARD_SUBJECT_ID_MAX);
     if (ok) {
-        const uint32_t        can_id = (((uint32_t)priority) << PRIO_SHIFT) | (subject_id << 8U) | (1UL << 7U);
+        const uint32_t        can_id = (((uint32_t)priority) << PRIO_SHIFT) | (subject_id << 8U) | (UINT32_C(1) << 7U);
         canard_txfer_t* const tr     = txfer_new(self, deadline, transfer_id, can_id, self->tx.fd, context);
         ok                           = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, payload, CRC_INITIAL);
     }
@@ -971,7 +971,8 @@ bool canard_1v0_publish(canard_t* const             self,
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
       (subject_id <= CANARD_SUBJECT_ID_MAX_1v0);
     if (ok) {
-        const uint32_t can_id    = (((uint32_t)priority) << PRIO_SHIFT) | (3UL << 21U) | (((uint32_t)subject_id) << 8U);
+        const uint32_t can_id =
+          (((uint32_t)priority) << PRIO_SHIFT) | (UINT32_C(3) << 21U) | (((uint32_t)subject_id) << 8U);
         canard_txfer_t* const tr = txfer_new(self, deadline, transfer_id, can_id, self->tx.fd, context);
         ok                       = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, payload, CRC_INITIAL);
     }
@@ -992,8 +993,8 @@ static bool tx_1v0_service(canard_t* const             self,
               (service_id <= CANARD_SERVICE_ID_MAX) && (destination_node_id <= CANARD_NODE_ID_MAX);
     if (ok) {
         const uint32_t can_id = (((uint32_t)priority) << PRIO_SHIFT) | //
-                                (1UL << 25U) |                         // service
-                                (request_not_response ? (1UL << 24U) : 0U) | (((uint32_t)service_id) << 14U) |
+                                (UINT32_C(1) << 25U) |                 // service
+                                (request_not_response ? (UINT32_C(1) << 24U) : 0U) | (((uint32_t)service_id) << 14U) |
                                 (((uint32_t)destination_node_id) << 7U);
         canard_txfer_t* const tr = txfer_new(self, deadline, transfer_id, can_id, self->tx.fd, context);
         ok = (tr != NULL) && tx_push(self, tr, false, CANARD_IFACE_BITMAP_ALL, payload, CRC_INITIAL);
@@ -1040,7 +1041,8 @@ bool canard_0v1_publish(canard_t* const             self,
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
       (self->node_id != 0);
     if (ok) {
-        const uint32_t can_id    = (((uint32_t)priority) << PRIO_SHIFT) | (3UL << 24U) | ((uint32_t)data_type_id << 8U);
+        const uint32_t can_id =
+          (((uint32_t)priority) << PRIO_SHIFT) | (UINT32_C(3) << 24U) | ((uint32_t)data_type_id << 8U);
         canard_txfer_t* const tr = txfer_new(self, deadline, transfer_id, can_id, false, context);
         ok                       = (tr != NULL) && tx_push(self, tr, true, iface_bitmap, payload, crc_seed);
     }
@@ -1061,9 +1063,9 @@ static bool tx_0v1_service(canard_t* const             self,
     bool ok = (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) && (self->node_id != 0U) &&
               (destination_node_id > 0U) && (destination_node_id <= CANARD_NODE_ID_MAX);
     if (ok) {
-        const uint32_t can_id = (((((uint32_t)priority) << 2U) | 3UL) << 24U) | //
-                                (((uint32_t)data_type_id) << 16U) | (request_not_response ? (1UL << 15U) : 0U) |
-                                (((uint32_t)destination_node_id) << 8U) | (1UL << 7U); // service
+        const uint32_t can_id = (((((uint32_t)priority) << 2U) | UINT32_C(3)) << 24U) | //
+                                (((uint32_t)data_type_id) << 16U) | (request_not_response ? (UINT32_C(1) << 15U) : 0U) |
+                                (((uint32_t)destination_node_id) << 8U) | (UINT32_C(1) << 7U); // service
         canard_txfer_t* const tr = txfer_new(self, deadline, transfer_id, can_id, false, context);
         ok                       = (tr != NULL) && tx_push(self, tr, true, CANARD_IFACE_BITMAP_ALL, payload, crc_seed);
     }
