@@ -101,7 +101,8 @@ static void test_math_helpers(void)
 static void test_crc_add(void)
 {
     // Empty input returns initial CRC unchanged.
-    TEST_ASSERT_EQUAL_HEX16(0xFFFF, crc_add(CRC_INITIAL, 0, NULL));
+    const uint8_t unused = 0U;
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, crc_add(CRC_INITIAL, 0, &unused));
 
     // Single bytes.
     uint8_t data = 0x00;

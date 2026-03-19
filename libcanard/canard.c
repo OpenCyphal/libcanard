@@ -63,7 +63,7 @@ typedef unsigned char byte_t;
 #define TAIL_EOT    64U
 #define TAIL_TOGGLE 32U
 
-#define FOREACH_IFACE(i) for (size_t i = 0; i < CANARD_IFACE_COUNT; i++)
+#define FOREACH_IFACE(i) for (size_t i = 0; (i) < CANARD_IFACE_COUNT; (i)++)
 
 #define TREE_NULL (canard_tree_t){ NULL, { NULL, NULL }, 0 }
 

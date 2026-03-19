@@ -27,8 +27,7 @@ static void test_instrumented_allocator(void)
     TEST_ASSERT_EQUAL_UINT64(2, al.count_alloc);
     TEST_ASSERT_EQUAL_UINT64(0, al.count_free);
 
-    al.limit_bytes     = 600;
-    al.limit_fragments = 2;
+    al.limit_bytes = 600;
 
     TEST_ASSERT_EQUAL_PTR(NULL, resource.vtable->alloc(resource, 100));
     TEST_ASSERT_EQUAL_size_t(2, al.allocated_fragments);
@@ -36,12 +35,13 @@ static void test_instrumented_allocator(void)
     TEST_ASSERT_EQUAL_UINT64(3, al.count_alloc);
     TEST_ASSERT_EQUAL_UINT64(0, al.count_free);
 
+    al.limit_fragments = 2;
     TEST_ASSERT_EQUAL_PTR(NULL, resource.vtable->alloc(resource, 21));
     TEST_ASSERT_EQUAL_size_t(2, al.allocated_fragments);
     TEST_ASSERT_EQUAL_size_t(579, al.allocated_bytes);
     TEST_ASSERT_EQUAL_UINT64(4, al.count_alloc);
     TEST_ASSERT_EQUAL_UINT64(0, al.count_free);
-    al.limit_fragments = 4;
+    al.limit_fragments += 2;
 
     void* c = resource.vtable->alloc(resource, 21);
     TEST_ASSERT_EQUAL_size_t(3, al.allocated_fragments);

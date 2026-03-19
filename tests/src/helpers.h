@@ -26,6 +26,12 @@ extern "C"
 {
 #endif
 
+#ifdef __cplusplus
+#define TEST_CAST(type, value) static_cast<type>(value)
+#else
+#define TEST_CAST(type, value) ((type)(value))
+#endif
+
 #define TEST_PANIC(message)                                                                 \
     do {                                                                                    \
         (void)fprintf(stderr, "%s:%u: PANIC: %s\n", __FILE__, (unsigned)__LINE__, message); \
@@ -46,7 +52,7 @@ static inline void* dummy_alloc(void* const user, const size_t size)
     return NULL;
 }
 
-static inline void dummy_free(void* const user, const size_t size, void* const pointer)
+static inline void dummy_free(void* const user, const size_t size, const void* const pointer)
 {
     (void)user;
     (void)size;
@@ -82,7 +88,7 @@ typedef struct
 
 static inline void* instrumented_allocator_alloc(const canard_mem_t mem, const size_t size)
 {
-    instrumented_allocator_t* const self   = (instrumented_allocator_t*)mem.context;
+    instrumented_allocator_t* const self   = TEST_CAST(instrumented_allocator_t*, mem.context);
     void*                           result = NULL; // NOLINT(*-const-correctness)
     self->count_alloc++;
     if ((size > 0U) &&                                           //
@@ -91,9 +97,9 @@ static inline void* instrumented_allocator_alloc(const canard_mem_t mem, const s
         const size_t size_with_canaries = size + ((size_t)INSTRUMENTED_ALLOCATOR_CANARY_SIZE * 2U);
         void*        origin             = malloc(size_with_canaries);
         TEST_PANIC_UNLESS(origin != NULL);
-        *((size_t*)origin) = size;
-        uint_least8_t* p   = ((uint_least8_t*)origin) + sizeof(size_t); // NOLINT(*-const-correctness)
-        result             = ((uint_least8_t*)origin) + INSTRUMENTED_ALLOCATOR_CANARY_SIZE;
+        *TEST_CAST(size_t*, origin) = size;
+        uint_least8_t* p            = TEST_CAST(uint_least8_t*, origin) + sizeof(size_t); // NOLINT(*-const-correctness)
+        result                      = TEST_CAST(uint_least8_t*, origin) + INSTRUMENTED_ALLOCATOR_CANARY_SIZE;
         for (size_t i = sizeof(size_t); i < INSTRUMENTED_ALLOCATOR_CANARY_SIZE; i++) // Fill the front canary.
         {
             *p++ = self->canary[i];
@@ -114,12 +120,12 @@ static inline void* instrumented_allocator_alloc(const canard_mem_t mem, const s
 
 static inline void instrumented_allocator_free(const canard_mem_t mem, const size_t size, void* const pointer)
 {
-    instrumented_allocator_t* const self = (instrumented_allocator_t*)mem.context;
+    instrumented_allocator_t* const self = TEST_CAST(instrumented_allocator_t*, mem.context);
     self->count_free++;
     if (pointer != NULL) { // NOLINTNEXTLINE(*-const-correctness)
-        uint_least8_t* p         = ((uint_least8_t*)pointer) - INSTRUMENTED_ALLOCATOR_CANARY_SIZE;
+        uint_least8_t* p         = TEST_CAST(uint_least8_t*, pointer) - INSTRUMENTED_ALLOCATOR_CANARY_SIZE;
         void* const    origin    = p;
-        const size_t   true_size = *((const size_t*)origin);
+        const size_t   true_size = *TEST_CAST(const size_t*, origin);
         TEST_PANIC_UNLESS(size == true_size);
         p += sizeof(size_t);
         for (size_t i = sizeof(size_t); i < INSTRUMENTED_ALLOCATOR_CANARY_SIZE; i++) // Check the front canary.
@@ -188,6 +194,8 @@ static inline void seed_prng(void)
 #ifdef __cplusplus
 }
 #endif
+
+#undef TEST_CAST
 
 // NOLINTEND(*-cstyle-cast)
 // NOLINTEND(*DeprecatedOrUnsafeBufferHandling,*err34-c,*-vararg,*-use-auto,*-use-nullptr,*-redundant-void-arg)
