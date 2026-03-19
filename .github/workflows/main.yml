@@ -28,6 +28,8 @@ jobs:
           sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION clang-format-$LLVM_VERSION cppcheck
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
           sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$LLVM_VERSION 50
+          sudo update-alternatives --set clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION
+          sudo update-alternatives --set clang-format /usr/bin/clang-format-$LLVM_VERSION
           clang-tidy --version
           clang-format --version
       - run: >
