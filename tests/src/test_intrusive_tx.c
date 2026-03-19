@@ -19,12 +19,7 @@ static canard_us_t mock_now(canard_t* const self)
 }
 
 // Minimal vtable used by tests.
-static const canard_vtable_t test_vtable = {
-    .now    = mock_now,
-    .on_p2p = NULL,
-    .tx     = NULL,
-    .filter = NULL,
-};
+static const canard_vtable_t test_vtable = { .now = mock_now, .on_unicast = NULL, .tx = NULL, .filter = NULL };
 
 // Build a minimal instance with instrumented allocators.
 static void init_canard(canard_t* const                 self,

@@ -34,12 +34,10 @@ static bool        mock_tx(canard_t* const,
 static bool mock_filter(canard_t* const, const size_t, const canard_filter_t*) { return true; }
 
 // Shared vtable and memory resources used by canard_new() tests.
-static const canard_vtable_t kTestVtable = {
-    .now    = mock_now,
-    .on_p2p = nullptr,
-    .tx     = mock_tx,
-    .filter = mock_filter,
-};
+static const canard_vtable_t kTestVtable = { .now        = mock_now,
+                                             .on_unicast = nullptr,
+                                             .tx         = mock_tx,
+                                             .filter     = mock_filter };
 
 static const canard_mem_vtable_t kStdMemVtable = {
     .free  = std_free_mem,
@@ -96,10 +94,10 @@ static bool capture_tx(canard_t* const self,
 }
 
 static const canard_vtable_t kCaptureVtable = {
-    .now    = capture_now,
-    .on_p2p = nullptr,
-    .tx     = capture_tx,
-    .filter = mock_filter,
+    .now        = capture_now,
+    .on_unicast = nullptr,
+    .tx         = capture_tx,
+    .filter     = mock_filter,
 };
 
 static canard_mem_set_t make_std_memory()

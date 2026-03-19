@@ -65,7 +65,7 @@ extern "C"
 /// Cyphal v1.1 does not support anonymous messages so this value is never used there.
 #define CANARD_NODE_ID_ANONYMOUS 0xFFU
 
-/// Cyphal/CAN v1.1 uses a dedicated service-ID for unicast messages.
+/// Cyphal/CAN v1.1 uses a dedicated service-ID for unicast messages with the request-not-response bit set.
 #define CANARD_SERVICE_ID_UNICAST 511U
 
 /// This is the recommended transfer-ID timeout value given in the Cyphal Specification. The application may choose
@@ -236,12 +236,12 @@ typedef struct canard_vtable_t
 
     /// A new unicast message is received.
     /// The handler takes ownership of the payload; it must free it after use using the corresponding memory resource.
-    void (*on_p2p)(canard_t*,
-                   canard_us_t        timestamp,
-                   canard_prio_t      priority,
-                   uint_least8_t      source_node_id,
-                   uint_least8_t      transfer_id,
-                   canard_bytes_mut_t payload);
+    void (*on_unicast)(canard_t*,
+                       canard_us_t        timestamp,
+                       canard_prio_t      priority,
+                       uint_least8_t      source_node_id,
+                       uint_least8_t      transfer_id,
+                       canard_bytes_mut_t payload);
 
     /// Submit one CAN frame for transmission via the specified interface.
     /// If the data is empty (size==0), the data pointer may be NULL.
