@@ -235,7 +235,7 @@ struct canard_subscription_t
 typedef struct canard_vtable_t
 {
     /// The current monotonic time in microseconds. Must be a non-negative non-decreasing value.
-    canard_us_t (*now)(canard_t*);
+    canard_us_t (*now)(const canard_t*);
 
     /// A new unicast message is received.
     /// The handler takes ownership of the payload; it must free it after use using the corresponding memory resource.
@@ -261,6 +261,7 @@ typedef struct canard_vtable_t
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
+    /// filter_count is guaranteed to not exceed the value given at initialization.
     /// Returns true on success, false if the filters could not be applied; another attempt will be made later.
     bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
@@ -299,10 +300,9 @@ struct canard_t
         /// Incremented with every enqueued transfer. Used internally but also works as a stats counter.
         uint64_t seqno;
 
-        canard_tree_t* pending[CANARD_IFACE_COUNT]; ///< Next to transmit at the head.
+        canard_tree_t* pending[CANARD_IFACE_COUNT]; ///< Next to transmit on the left.
+        canard_tree_t* deadline;                    ///< Soonest to expire on the left.
         canard_list_t  agewise;                     ///< ALL transfers FIFO, oldest at the head.
-
-        canard_txfer_t* iter; ///< For iterative poll() scanning; NULL to restart.
     } tx;
 
     struct

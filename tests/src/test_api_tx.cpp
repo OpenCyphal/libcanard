@@ -20,7 +20,7 @@ static void* std_alloc_mem(const canard_mem_t, const size_t size) { return std::
 static void  std_free_mem(const canard_mem_t, const size_t, void* const pointer) { std::free(pointer); }
 
 // Minimal callbacks for canard_new().
-static canard_us_t mock_now(canard_t* const) { return 0; }
+static canard_us_t mock_now(const canard_t* const) { return 0; }
 static bool        mock_tx(canard_t* const,
                            const canard_user_context_t,
                            const canard_us_t,
@@ -59,9 +59,9 @@ struct tx_capture_t
     std::array<tx_record_t, 32> records;
 };
 
-static tx_capture_t* capture_from(canard_t* const self) { return static_cast<tx_capture_t*>(self->user_context); }
+static tx_capture_t* capture_from(const canard_t* const self) { return static_cast<tx_capture_t*>(self->user_context); }
 
-static canard_us_t capture_now(canard_t* const self) { return capture_from(self)->now; }
+static canard_us_t capture_now(const canard_t* const self) { return capture_from(self)->now; }
 
 static bool capture_tx(canard_t* const self,
                        const canard_user_context_t,

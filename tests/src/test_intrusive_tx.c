@@ -12,7 +12,7 @@ typedef struct
 } test_context_t;
 
 // Monotonic time callback.
-static canard_us_t mock_now(canard_t* const self)
+static canard_us_t mock_now(const canard_t* const self)
 {
     const test_context_t* const ctx = (const test_context_t*)self->user_context;
     return (ctx != NULL) ? ctx->now : 0;

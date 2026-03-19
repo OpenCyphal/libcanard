@@ -398,10 +398,11 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj)
 // hence it would not affect the ordering.
 #define CAN_ID_MSb_BITS (29U - 7U)
 
-// The struct is manually packed to ensure it fits into a 128-byte O1Heap block in common embedded configurations.
+// The struct must fit into a 128-byte O1Heap block in common embedded configurations.
 struct canard_txfer_t
 {
     canard_tree_t   index_pending[CANARD_IFACE_COUNT];
+    canard_tree_t   index_deadline;
     canard_listed_t list_agewise;
 
     // Constant transfer properties supplied by the client.
@@ -418,8 +419,7 @@ struct canard_txfer_t
     // Application context.
     canard_user_context_t user_context;
 };
-static_assert((CANARD_IFACE_COUNT > 2) || (sizeof(void*) > 4) || (sizeof(void (*)(void)) > 4) ||
-                (sizeof(canard_txfer_t) <= 120),
+static_assert((CANARD_IFACE_COUNT > 2) || (sizeof(void*) > 4) || (sizeof(canard_txfer_t) <= 120),
               "On a 32-bit platform with a half-fit heap, the TX transfer object should fit in a 128-byte block");
 
 static canard_txfer_t* txfer_new(canard_t* const             self,
@@ -434,12 +434,13 @@ static canard_txfer_t* txfer_new(canard_t* const             self,
         FOREACH_IFACE (i) {
             tr->index_pending[i] = TREE_NULL;
         }
-        tr->list_agewise = LIST_NULL;
-        tr->deadline     = deadline;
-        tr->seqno        = self->tx.seqno++;
-        tr->transfer_id  = transfer_id & CANARD_TRANSFER_ID_MAX;
-        tr->can_id_msb   = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
-        tr->fd           = fd ? 1U : 0U;
+        tr->index_deadline = TREE_NULL;
+        tr->list_agewise   = LIST_NULL;
+        tr->deadline       = deadline;
+        tr->seqno          = self->tx.seqno++;
+        tr->transfer_id    = transfer_id & CANARD_TRANSFER_ID_MAX;
+        tr->can_id_msb     = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
+        tr->fd             = fd ? 1U : 0U;
         FOREACH_IFACE (i) {
             tr->head[i]   = NULL;
             tr->cursor[i] = NULL;
@@ -449,17 +450,11 @@ static canard_txfer_t* txfer_new(canard_t* const             self,
     return tr;
 }
 
-static canard_prio_t txfer_prio(const canard_txfer_t* const tr)
-{
-    return (canard_prio_t)((((unsigned)tr->can_id_msb) >> (CAN_ID_MSb_BITS - 3U)) & 7U);
-}
-
 static bool txfer_is_pending(const canard_t* const self, const canard_txfer_t* const tr)
 {
     FOREACH_IFACE (i) {
         if (cavl2_is_inserted(self->tx.pending[i], &tr->index_pending[i])) {
-            CANARD_ASSERT(tr->head[i] != NULL);
-            CANARD_ASSERT(tr->cursor[i] != NULL);
+            CANARD_ASSERT((tr->head[i] != NULL) && (tr->cursor[i] != NULL));
             return true;
         }
     }
@@ -491,6 +486,16 @@ static int32_t tx_cavl_compare_pending_order(const void* const user, const canar
     return (lhs->seqno < rhs->seqno) ? -1 : +1; // clang-format on
 }
 
+// Soonest to expire (smallest deadline) on the left, then smaller seqno on the left.
+static int32_t tx_cavl_compare_deadline(const void* const user, const canard_tree_t* const node)
+{
+    const canard_txfer_t* const lhs = (const canard_txfer_t*)user;
+    const canard_txfer_t* const rhs = CAVL2_TO_OWNER(node, canard_txfer_t, index_deadline); // clang-format off
+    if (lhs->deadline < rhs->deadline) { return -1; }
+    if (lhs->deadline > rhs->deadline) { return +1; }
+    return (lhs->seqno < rhs->seqno) ? -1 : +1; // clang-format on
+}
+
 static void tx_make_pending(canard_t* const self, canard_txfer_t* const tr)
 {
     FOREACH_IFACE (i) { // Enqueue for transmission unless it's there already (stalled interface?)
@@ -507,15 +512,12 @@ static void tx_make_pending(canard_t* const self, canard_txfer_t* const tr)
 // Retire one transfer and release its resources.
 static void txfer_retire(canard_t* const self, canard_txfer_t* const tr)
 {
-    if (self->tx.iter == tr) {
-        self->tx.iter = LIST_NEXT(tr, canard_txfer_t, list_agewise); // May be NULL, is OK.
-    }
     FOREACH_IFACE (i) {
         (void)cavl2_remove_if(&self->tx.pending[i], &tr->index_pending[i]);
     }
+    CANARD_ASSERT(cavl2_is_inserted(self->tx.deadline, &tr->index_deadline));
+    cavl2_remove(&self->tx.deadline, &tr->index_deadline);
     delist(&self->tx.agewise, &tr->list_agewise);
-
-    // Free the memory. The payload memory may already be empty depending on where we were invoked from.
     txfer_free_payload(self, tr);
     mem_free(self->mem.tx_transfer, sizeof(canard_txfer_t), tr);
 }
@@ -714,6 +716,18 @@ static size_t tx_predict_frame_count(const size_t transfer_size, const size_t mt
     return ((transfer_size + CRC_SIZE_BYTES + bytes_per_frame) - 1U) / bytes_per_frame; // rounding up
 }
 
+static void tx_expire(canard_t* const self, const canard_us_t now)
+{
+    canard_txfer_t* tr = CAVL2_TO_OWNER(cavl2_min(self->tx.deadline), canard_txfer_t, index_deadline);
+    while ((tr != NULL) && (now > tr->deadline)) {
+        canard_txfer_t* const tr_next =
+          CAVL2_TO_OWNER(cavl2_next_greater(&tr->index_deadline), canard_txfer_t, index_deadline);
+        txfer_retire(self, tr);
+        self->err.tx_expiration++;
+        tr = tr_next;
+    }
+}
+
 // Enqueues a transfer for transmission.
 static bool tx_push(canard_t* const            self,
                     canard_txfer_t* const      tr,
@@ -725,6 +739,11 @@ static bool tx_push(canard_t* const            self,
     CANARD_ASSERT(tr != NULL);
     CANARD_ASSERT((!tr->fd) || !v0); // The caller must ensure this.
     CANARD_ASSERT(iface_bitmap != 0);
+
+    const canard_us_t now = self->vtable->now(self);
+
+    // Expire old transfers first to free up queue space.
+    tx_expire(self, now);
 
     // Ensure the queue has enough space. v0 transfers always use Classic CAN regardless of tr->fd.
     const size_t mtu      = tr->fd ? CANARD_MTU_CAN_FD : CANARD_MTU_CAN_CLASSIC;
@@ -770,6 +789,10 @@ static bool tx_push(canard_t* const            self,
     }
 
     // Register the transfer and schedule for transmission.
+    const canard_tree_t* const deadline_tree = cavl2_find_or_insert(
+      &self->tx.deadline, tr, tx_cavl_compare_deadline, &tr->index_deadline, cavl2_trivial_factory);
+    CANARD_ASSERT(deadline_tree == &tr->index_deadline);
+    (void)deadline_tree;
     enlist_tail(&self->tx.agewise, &tr->list_agewise);
     tx_make_pending(self, tr);
     return true;
@@ -779,21 +802,6 @@ static canard_txfer_t* tx_pending_node_to_transfer(const canard_tree_t* const no
 {
     return (canard_txfer_t*)ptr_unbias(
       node, offsetof(canard_txfer_t, index_pending) + (((size_t)iface_index) * sizeof(canard_tree_t)));
-}
-
-static void tx_expire_iterative(canard_t* const self, const canard_us_t now)
-{
-    if (self->tx.iter == NULL) {
-        self->tx.iter = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
-    }
-    if (self->tx.iter != NULL) {
-        canard_txfer_t* const tr = self->tx.iter;
-        self->tx.iter            = LIST_NEXT(tr, canard_txfer_t, list_agewise);
-        if (now > tr->deadline) {
-            txfer_retire(self, tr);
-            self->err.tx_expiration++;
-        }
-    }
 }
 
 static void tx_eject_pending(canard_t* const self, const byte_t iface_index)
@@ -838,8 +846,9 @@ static void tx_eject_pending(canard_t* const self, const byte_t iface_index)
 void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap)
 {
     if (self != NULL) {
-        tx_expire_iterative(self, self->vtable->now(self)); // deadline maintenance first to keep queue pressure bounded
-        FOREACH_IFACE (i) { // submit queued frames through all currently writable interfaces
+        const canard_us_t now = self->vtable->now(self);
+        tx_expire(self, now); // deadline maintenance first to keep queue pressure bounded
+        FOREACH_IFACE (i) {   // submit queued frames through all currently writable interfaces
             if ((tx_ready_iface_bitmap & (1U << i)) != 0U) {
                 tx_eject_pending(self, (byte_t)i);
             }
