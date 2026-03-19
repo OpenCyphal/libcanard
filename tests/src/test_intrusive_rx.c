@@ -19,7 +19,7 @@ static void test_rx_parse_empty_payload(void)
     frame_t v0, v1;
     memset(&v0, 0xA5, sizeof(v0));
     memset(&v1, 0xA5, sizeof(v1));
-    const canard_bytes_t pl = {0, NULL};
+    const canard_bytes_t pl  = { 0, NULL };
     const byte_t         ret = rx_parse(0x00000000UL, pl, &v0, &v1);
     TEST_ASSERT_EQUAL_UINT8(0, ret);
     // Outputs shall be zeroed even on the early-return path.
@@ -37,8 +37,8 @@ static void test_rx_parse_v1_1_message_golden(void)
     frame_t v0, v1;
     // Mid: prio=3, subject=1234, src=42. CAN ID = 0x0C04D2AA.
     {
-        const byte_t         d[] = {0x11, 0x22, 0xE7}; // v1 single-frame tail: SOT=1 EOT=1 toggle=1 tid=7
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0x11, 0x22, 0xE7 }; // v1 single-frame tail: SOT=1 EOT=1 toggle=1 tid=7
+        const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret);
         TEST_ASSERT_EQUAL_INT(format_1v1_message, v1.format);
@@ -55,8 +55,8 @@ static void test_rx_parse_v1_1_message_golden(void)
     }
     // Min: prio=0, subject=0, src=0. CAN ID = 0x00000080.
     {
-        const byte_t         d[] = {0xE0}; // tid=0
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 }; // tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x00000080UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v1_message, v1.format);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
@@ -67,8 +67,8 @@ static void test_rx_parse_v1_1_message_golden(void)
     }
     // Max: prio=7, subject=131071 (0x1FFFF), src=127. CAN ID = 0x1DFFFFFF.
     {
-        const byte_t         d[] = {0xFF}; // 0xE0|31 → tid=31
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xFF }; // 0xE0|31 → tid=31
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x1DFFFFFFUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v1_message, v1.format);
         TEST_ASSERT_EQUAL_UINT32(131071UL, v1.port_id);
@@ -87,8 +87,8 @@ static void test_rx_parse_v1_0_message_golden(void)
     frame_t v0, v1;
     // Normal: prio=4, subject=42, src=11, reserved=11b. CAN ID = 0x10602A0B.
     {
-        const byte_t         d[] = {0xAA, 0xE5}; // v1 single, tid=5
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xAA, 0xE5 }; // v1 single, tid=5
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x10602A0BUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_message, v1.format);
         TEST_ASSERT_EQUAL_UINT32(42, v1.port_id);
@@ -98,8 +98,8 @@ static void test_rx_parse_v1_0_message_golden(void)
     }
     // Max subject: prio=0, subject=8191, src=1, reserved=11b. CAN ID = 0x007FFF01.
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x007FFF01UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_message, v1.format);
         TEST_ASSERT_EQUAL_UINT32(8191, v1.port_id);
@@ -107,8 +107,8 @@ static void test_rx_parse_v1_0_message_golden(void)
     }
     // Anonymous: prio=2, subject=100, bit24=1, src=0x55(pseudo), reserved=11b. CAN ID = 0x09606455.
     {
-        const byte_t         d[] = {0xE3}; // v1 single, tid=3
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE3 }; // v1 single, tid=3
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x09606455UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_message, v1.format);
         TEST_ASSERT_EQUAL_UINT32(100, v1.port_id);
@@ -125,8 +125,8 @@ static void test_rx_parse_v1_0_service_golden(void)
     frame_t v0, v1;
     // Request: prio=4, svc_id=430, dst=24, src=11. CAN ID = 0x136B8C0B.
     {
-        const byte_t         d[] = {0xBB, 0xE1}; // v1 single, tid=1
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xBB, 0xE1 }; // v1 single, tid=1
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x136B8C0BUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_request, v1.format);
         TEST_ASSERT_EQUAL_UINT32(430, v1.port_id);
@@ -136,8 +136,8 @@ static void test_rx_parse_v1_0_service_golden(void)
     }
     // Response min: prio=0, svc_id=0, dst=1, src=127. CAN ID = 0x020000FF.
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x020000FFUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_response, v1.format);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
@@ -147,8 +147,8 @@ static void test_rx_parse_v1_0_service_golden(void)
     }
     // Request max: prio=7, svc_id=511, dst=127, src=126. CAN ID = 0x1F7FFFFE.
     {
-        const byte_t         d[] = {0xFF}; // v1 single, tid=31
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xFF }; // v1 single, tid=31
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x1F7FFFFEUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_request, v1.format);
         TEST_ASSERT_EQUAL_UINT32(511, v1.port_id);
@@ -166,8 +166,8 @@ static void test_rx_parse_v0_message_golden(void)
     frame_t v0, v1;
     // Normal: prio=4, type_id=0x040A, src=1. CAN ID = 0x13040A01.
     {
-        const byte_t         d[] = {0x55, 0xC2}; // v0 single: SOT=1 EOT=1 toggle=0 tid=2
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0x55, 0xC2 }; // v0 single: SOT=1 EOT=1 toggle=0 tid=2
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x13040A01UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_0v1_message, v0.format);
         TEST_ASSERT_EQUAL_UINT32(0x040A, v0.port_id);
@@ -177,8 +177,8 @@ static void test_rx_parse_v0_message_golden(void)
     }
     // Anonymous: same frame but src=0. CAN ID = 0x13040A00.
     {
-        const byte_t         d[] = {0xC0}; // v0 single, tid=0
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xC0 }; // v0 single, tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x13040A00UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_0v1_message, v0.format);
         TEST_ASSERT_EQUAL_UINT32(0x040A, v0.port_id);
@@ -186,8 +186,8 @@ static void test_rx_parse_v0_message_golden(void)
     }
     // Max: prio=7, type_id=0xFFFF, src=127. CAN ID = 0x1FFFFF7F.
     {
-        const byte_t         d[] = {0xDF}; // v0 single: 0xC0|31, tid=31
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xDF }; // v0 single: 0xC0|31, tid=31
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x1FFFFF7FUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_0v1_message, v0.format);
         TEST_ASSERT_EQUAL_UINT32(0xFFFF, v0.port_id);
@@ -204,8 +204,8 @@ static void test_rx_parse_v0_service_golden(void)
     frame_t v0, v1;
     // Request: prio=4, type_id=0x37, dst=24, src=11. CAN ID = 0x1337988B.
     {
-        const byte_t         d[] = {0x42, 0xC4}; // v0 single, tid=4
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0x42, 0xC4 }; // v0 single, tid=4
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x1337988BUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_0v1_request, v0.format);
         TEST_ASSERT_EQUAL_UINT32(0x37, v0.port_id);
@@ -215,8 +215,8 @@ static void test_rx_parse_v0_service_golden(void)
     }
     // Response: prio=0, type_id=1, dst=1, src=1. CAN ID = 0x03010181.
     {
-        const byte_t         d[] = {0xC0}; // v0 single, tid=0
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xC0 }; // v0 single, tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03010181UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_0v1_response, v0.format);
         TEST_ASSERT_EQUAL_UINT32(1, v0.port_id);
@@ -233,14 +233,14 @@ static void test_rx_parse_v1_0_reserved_bit23_reject(void)
     frame_t v0, v1;
     // v1.0 service: 0x136B8C0B | 0x00800000 = 0x13EB8C0B. v1 tail → is_v0=false. bit23 → is_v1=false.
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(0, rx_parse(0x13EB8C0BUL, pl, &v0, &v1));
     }
     // v1.0 message: 0x10602A0B | 0x00800000 = 0x10E02A0B. v1 tail → is_v0=false. bit23 → is_v1=false.
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(0, rx_parse(0x10E02A0BUL, pl, &v0, &v1));
     }
 }
@@ -252,14 +252,14 @@ static void test_rx_parse_v0_service_zero_node_reject(void)
     frame_t v0, v1;
     // src=0: CAN ID 0x13379880 → v0 service with src=0 → rejected. v0 tail → is_v1=false. Return=0.
     {
-        const byte_t         d[] = {0xC0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xC0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(0, rx_parse(0x13379880UL, pl, &v0, &v1));
     }
     // dst=0: CAN ID 0x1337808B → v0 service with dst=0 → rejected. v0 tail → is_v1=false. Return=0.
     {
-        const byte_t         d[] = {0xC0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xC0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(0, rx_parse(0x1337808BUL, pl, &v0, &v1));
     }
 }
@@ -273,26 +273,26 @@ static void test_rx_parse_version_detection(void)
     const uint32_t can_id = 0x00002A01UL; // prio=0, subject=42 (v1.0), type_id=42 (v0), src=1
     // SOT=1 toggle=1 → v1 only
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(can_id, pl, &v0, &v1));
     }
     // SOT=1 toggle=0 → v0 only
     {
-        const byte_t         d[] = {0xC0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xC0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(can_id, pl, &v0, &v1));
     }
     // SOT=0 toggle=0 → both
     {
-        const byte_t         d[] = {0x00};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0x00 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(3, rx_parse(can_id, pl, &v0, &v1));
     }
     // SOT=0 toggle=1 → both
     {
-        const byte_t         d[] = {0x20};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0x20 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(3, rx_parse(can_id, pl, &v0, &v1));
     }
 }
@@ -301,28 +301,28 @@ static void test_rx_parse_version_detection(void)
 // Test 10: Payload pointer and size are forwarded correctly.
 static void test_rx_parse_payload_handling(void)
 {
-    frame_t v0, v1;
+    frame_t        v0, v1;
     const uint32_t can_id = 0x00000080UL; // v1.1 message, prio=0, subject=0, src=0
     // Size 1 (tail byte only → effective payload is 0 bytes)
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_size_t(0, v1.payload.size);
         TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
     }
     // Size 2
     {
-        const byte_t         d[] = {0xAA, 0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xAA, 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_size_t(1, v1.payload.size);
         TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
     }
     // Size 8 (classic CAN)
     {
-        const byte_t         d[] = {1, 2, 3, 4, 5, 6, 7, 0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_size_t(7, v1.payload.size);
         TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
@@ -331,8 +331,8 @@ static void test_rx_parse_payload_handling(void)
     {
         byte_t d[64];
         memset(d, 0xAA, sizeof(d));
-        d[63] = 0xE0;
-        const canard_bytes_t pl = {sizeof(d), d};
+        d[63]                   = 0xE0;
+        const canard_bytes_t pl = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_size_t(63, v1.payload.size);
         TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
@@ -343,13 +343,13 @@ static void test_rx_parse_payload_handling(void)
 // Test 11: Exhaustive tail-byte field mapping for all SOT/EOT/toggle combinations and TID boundary values.
 static void test_rx_parse_tail_byte_exhaustive(void)
 {
-    frame_t v0, v1;
+    frame_t        v0, v1;
     const uint32_t can_id = 0x00002A01UL; // valid for both versions (message, bit7=0)
 
     // All 8 SOT/EOT/toggle combinations. Pick the correct output depending on version detection.
     {
-        byte_t         d[2] = {0x42, 0x00};
-        canard_bytes_t pl   = {sizeof(d), d};
+        byte_t         d[2] = { 0x42, 0x00 };
+        canard_bytes_t pl   = { sizeof(d), d };
 
         // SOT=0 EOT=0 toggle=0 → both versions, check v1
         d[1] = 0x00;
@@ -409,8 +409,8 @@ static void test_rx_parse_tail_byte_exhaustive(void)
     }
     // Transfer-ID boundary values with v1 single-frame tail (0xE0 | tid).
     {
-        byte_t         d[2] = {0x42, 0xE0};
-        canard_bytes_t pl   = {sizeof(d), d};
+        byte_t         d[2] = { 0x42, 0xE0 };
+        canard_bytes_t pl   = { sizeof(d), d };
 
         d[1] = 0xE0; // tid=0
         rx_parse(can_id, pl, &v0, &v1);
@@ -444,8 +444,8 @@ static void test_rx_parse_cross_version_ambiguity(void)
 
     // v1.1 message CAN ID 0x0C04D2AA simultaneously parses as v0 service (bit7=1).
     {
-        const byte_t         d[] = {0x42, nf};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0x42, nf };
+        const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(3, ret);
         // v1: v1.1 message, subject=1234, src=42
@@ -460,8 +460,8 @@ static void test_rx_parse_cross_version_ambiguity(void)
     }
     // All-ones 0x1FFFFFFF: v1 rejected (bit23 in service path), v0 parses as service.
     {
-        const byte_t         d[] = {nf};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { nf };
+        const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x1FFFFFFFUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(1, ret);
         TEST_ASSERT_EQUAL_INT(format_0v1_request, v0.format);
@@ -471,8 +471,8 @@ static void test_rx_parse_cross_version_ambiguity(void)
     }
     // All-zeros 0x00000000: both parse as messages with all-zero port/priority.
     {
-        const byte_t         d[] = {nf};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { nf };
+        const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x00000000UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(3, ret);
         // v1: v1.0 message (bit7=0), port_id=0, src=0
@@ -494,8 +494,8 @@ static void test_rx_parse_bit_field_boundaries(void)
     // v1.0 service: max svc_id=511 with dst=0 and src=0 → verify dst and src read 0.
     // CAN ID: (0<<26)|(1<<25)|(0<<24)|(511<<14)|(0<<7)|0 = 0x027FC000
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x027FC000UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_response, v1.format);
         TEST_ASSERT_EQUAL_UINT32(511, v1.port_id);
@@ -505,8 +505,8 @@ static void test_rx_parse_bit_field_boundaries(void)
     // v1.0 service: max dst=127 with svc_id=0 and src=0 → verify svc_id and src read 0.
     // CAN ID: (0<<26)|(1<<25)|(0<<24)|(0<<14)|(127<<7)|0 = 0x02003F80
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x02003F80UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_1v0_response, v1.format);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
@@ -516,8 +516,8 @@ static void test_rx_parse_bit_field_boundaries(void)
     // v0 service: max type_id=0xFF with dst=1, req=0 → verify req reads 0 and dst is correct.
     // CAN ID: ((0<<2)|3)<<24 | (0xFF<<16) | (0<<15) | (1<<8) | (1<<7) | 1 = 0x03FF0181
     {
-        const byte_t         d[] = {0xC0}; // v0 single
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xC0 }; // v0 single
+        const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03FF0181UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(format_0v1_response, v0.format); // req=0
         TEST_ASSERT_EQUAL_UINT32(0xFF, v0.port_id);
@@ -534,8 +534,8 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
     // Subject 0x18000: bit 23 of CAN ID is set because (0x18000 << 8) sets bit 23.
     // CAN ID: (0<<26) | (0x18000<<8) | (1<<7) | 0 = 0x01800080
     {
-        const byte_t         d[] = {0xE5}; // v1 single, tid=5
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE5 }; // v1 single, tid=5
+        const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x01800080UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret); // accepted despite bit 23
         TEST_ASSERT_EQUAL_INT(format_1v1_message, v1.format);
@@ -544,8 +544,8 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
     // Max subject 0x1FFFF also sets bit 23.
     // CAN ID: (0<<26) | (0x1FFFF<<8) | (1<<7) | 0 = 0x01FFFF80
     {
-        const byte_t         d[] = {0xE0};
-        const canard_bytes_t pl  = {sizeof(d), d};
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x01FFFF80UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret);
         TEST_ASSERT_EQUAL_INT(format_1v1_message, v1.format);
@@ -557,9 +557,9 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
 // Test 15: v1.0 message reserved bits 22:21 are masked out and do not affect the extracted subject-ID.
 static void test_rx_parse_v1_0_message_ignores_reserved_bits_22_21(void)
 {
-    frame_t v0, v1;
-    const byte_t         d[] = {0xE0};
-    const canard_bytes_t pl  = {sizeof(d), d};
+    frame_t              v0, v1;
+    const byte_t         d[] = { 0xE0 };
+    const canard_bytes_t pl  = { sizeof(d), d };
     // bits 22:21 = 00: CAN ID = (0<<26)|(0<<21)|(42<<8)|1 = 0x00002A01
     rx_parse(0x00002A01UL, pl, &v0, &v1);
     TEST_ASSERT_EQUAL_INT(format_1v0_message, v1.format);
@@ -577,8 +577,8 @@ static void test_rx_parse_non_first_dual_output(void)
     frame_t v0, v1;
     // CAN ID 0x0C04D2AA: v1.1 message (bit7=1) / v0 service (bit7=1).
     // Non-first tail: SOT=0 EOT=0 toggle=0 tid=5.
-    const byte_t         d[] = {0x11, 0x22, 0x05};
-    const canard_bytes_t pl  = {sizeof(d), d};
+    const byte_t         d[] = { 0x11, 0x22, 0x05 };
+    const canard_bytes_t pl  = { sizeof(d), d };
     const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
     TEST_ASSERT_EQUAL_UINT8(3, ret);
 
