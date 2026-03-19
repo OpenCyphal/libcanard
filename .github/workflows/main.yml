@@ -17,7 +17,7 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - run: |
@@ -25,7 +25,7 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
           sudo apt-get update -y && sudo apt-get upgrade -y
-          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
+          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION cppcheck
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
           clang-tidy --version
       - run: >
@@ -39,7 +39,7 @@ jobs:
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
@@ -62,7 +62,7 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - run: |
@@ -80,7 +80,7 @@ jobs:
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
@@ -92,7 +92,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - run: |
@@ -102,7 +102,7 @@ jobs:
           cmake
           -B ${{ github.workspace }}/build
           -DCMAKE_BUILD_TYPE=Debug
-          -DNO_STATIC_ANALYSIS=ON
+          -DNO_STATIC_ANALYSIS=1
           -DENABLE_COVERAGE=ON
           .
       - working-directory: ${{ github.workspace }}/build
@@ -110,7 +110,7 @@ jobs:
           make -j$(nproc)
           make test
           make coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ${{ github.job }}-coverage-report
@@ -125,7 +125,7 @@ jobs:
         -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
         -Wno-error=unused-function
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - run: |
