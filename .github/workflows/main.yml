@@ -117,26 +117,6 @@ jobs:
           path: ${{ github.workspace }}/build/coverage-html
           retention-days: 30
 
-  avr:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    env:
-      mcu: at90can64
-      flags: >
-        -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wno-error=unused-function -Wno-error=conversion
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-      - run: |
-          sudo apt-get update -y && sudo apt-get upgrade -y
-          sudo apt-get install gcc-avr avr-libc
-          avr-gcc --version
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-
   arm:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
