@@ -25,9 +25,11 @@ jobs:
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
           sudo apt-get update -y && sudo apt-get upgrade -y
-          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION cppcheck
+          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION clang-format-$LLVM_VERSION cppcheck
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
+          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$LLVM_VERSION 50
           clang-tidy --version
+          clang-format --version
       - run: >
           cmake
           -B ${{ github.workspace }}/build
