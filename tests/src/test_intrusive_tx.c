@@ -64,6 +64,9 @@ static size_t count_frames(const tx_frame_t* head)
     return count;
 }
 
+// Reconstructs the CAN-ID template from an enqueued transfer.
+static uint32_t can_id_from_transfer(const canard_txfer_t* const tr) { return ((uint32_t)tr->can_id_msb) << 7U; }
+
 // Validate single-frame spooling.
 static void test_tx_spool_single_frame(void)
 {
@@ -263,6 +266,184 @@ static void test_canard_0v1_publish_basic(void)
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
+// Validate Cyphal v1.0 service request/response CAN-ID composition.
+static void test_canard_1v0_service_basic(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.tx.fd   = true;
+    self.node_id = 11U;
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_TRUE(
+      canard_1v0_request(&self, 1000, canard_prio_nominal, 430U, 24U, 5U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(
+      canard_1v0_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
+
+    const canard_txfer_t* const req = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    TEST_ASSERT_NOT_NULL(req);
+    const canard_txfer_t* const res = LIST_NEXT(req, canard_txfer_t, list_agewise);
+    TEST_ASSERT_NOT_NULL(res);
+
+    const uint32_t expected_req_id = (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | //
+                                     (1UL << 25U) | (1UL << 24U) | ((uint32_t)430U << 14U) | ((uint32_t)24U << 7U);
+    const uint32_t expected_res_id = (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | //
+                                     (1UL << 25U) | ((uint32_t)430U << 14U) | ((uint32_t)24U << 7U);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)req->fd);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)res->fd);
+    TEST_ASSERT_EQUAL_UINT8(5U, (uint8_t)req->transfer_id);
+    TEST_ASSERT_EQUAL_UINT8(6U, (uint8_t)res->transfer_id);
+    TEST_ASSERT_EQUAL_UINT32(expected_req_id, can_id_from_transfer(req));
+    TEST_ASSERT_EQUAL_UINT32(expected_res_id, can_id_from_transfer(res));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate Cyphal v1.0 service validation branches.
+static void test_canard_1v0_service_validation(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    const canard_bytes_chain_t bad     = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
+
+    TEST_ASSERT_FALSE(canard_1v0_request(
+      &self, 1000, canard_prio_nominal, CANARD_SERVICE_ID_MAX + 1U, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_1v0_respond(
+      &self, 1000, canard_prio_nominal, 430U, CANARD_NODE_ID_MAX + 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(
+      canard_1v0_request(&self, 1000, canard_prio_nominal, 430U, 24U, 0U, bad, CANARD_USER_CONTEXT_NULL));
+
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate Cyphal v1.0 service transfer allocation failure.
+static void test_canard_1v0_service_oom(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    alloc.limit_fragments = 0U;
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_FALSE(
+      canard_1v0_request(&self, 1000, canard_prio_nominal, 430U, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate Cyphal v1.0 service queue-capacity failure.
+static void test_canard_1v0_service_capacity(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 0U);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_FALSE(
+      canard_1v0_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate UAVCAN v0 service request/response CAN-ID composition.
+static void test_canard_0v1_service_basic(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.tx.fd   = true; // Legacy service TX must still force Classic CAN.
+    self.node_id = 11U;
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_TRUE(
+      canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(
+      canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
+
+    const canard_txfer_t* const req = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    TEST_ASSERT_NOT_NULL(req);
+    const canard_txfer_t* const res = LIST_NEXT(req, canard_txfer_t, list_agewise);
+    TEST_ASSERT_NOT_NULL(res);
+
+    const uint32_t expected_req_id = ((((uint32_t)canard_prio_nominal << 2U) | 3UL) << 24U) | //
+                                     ((uint32_t)0x37U << 16U) | (1UL << 15U) | ((uint32_t)24U << 8U) | (1UL << 7U);
+    const uint32_t expected_res_id = ((((uint32_t)canard_prio_nominal << 2U) | 3UL) << 24U) | //
+                                     ((uint32_t)0x37U << 16U) | ((uint32_t)24U << 8U) | (1UL << 7U);
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)req->fd);
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)res->fd);
+    TEST_ASSERT_EQUAL_UINT8(5U, (uint8_t)req->transfer_id);
+    TEST_ASSERT_EQUAL_UINT8(6U, (uint8_t)res->transfer_id);
+    TEST_ASSERT_EQUAL_UINT32(expected_req_id, can_id_from_transfer(req));
+    TEST_ASSERT_EQUAL_UINT32(expected_res_id, can_id_from_transfer(res));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate UAVCAN v0 service validation branches.
+static void test_canard_0v1_service_validation(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    const canard_bytes_chain_t bad     = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
+
+    self.node_id = 0U;
+    TEST_ASSERT_FALSE(
+      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    self.node_id = 1U;
+    TEST_ASSERT_FALSE(
+      canard_0v1_respond(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_0v1_request(
+      &self, 1000, canard_prio_nominal, 1U, 0xFFFFU, CANARD_NODE_ID_MAX + 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(
+      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, bad, CANARD_USER_CONTEXT_NULL));
+
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate UAVCAN v0 service transfer allocation failure.
+static void test_canard_0v1_service_oom(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    alloc.limit_fragments = 0U;
+    self.node_id          = 1U;
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_FALSE(
+      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xBEEFU, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate UAVCAN v0 service queue-capacity failure.
+static void test_canard_0v1_service_capacity(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 0U);
+    self.node_id = 1U;
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_FALSE(
+      canard_0v1_respond(&self, 1000, canard_prio_nominal, 1U, 0xBEEFU, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -285,6 +466,14 @@ int main(void)
     RUN_TEST(test_canard_publish_basic);
     RUN_TEST(test_canard_1v0_publish_basic);
     RUN_TEST(test_canard_0v1_publish_basic);
+    RUN_TEST(test_canard_1v0_service_basic);
+    RUN_TEST(test_canard_1v0_service_validation);
+    RUN_TEST(test_canard_1v0_service_oom);
+    RUN_TEST(test_canard_1v0_service_capacity);
+    RUN_TEST(test_canard_0v1_service_basic);
+    RUN_TEST(test_canard_0v1_service_validation);
+    RUN_TEST(test_canard_0v1_service_oom);
+    RUN_TEST(test_canard_0v1_service_capacity);
 
     return UNITY_END();
 }

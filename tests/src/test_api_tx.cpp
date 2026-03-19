@@ -113,14 +113,19 @@ static canard_mem_set_t make_std_memory()
     };
 }
 
-static void init_with_capture(canard_t* const self, tx_capture_t* const capture)
+static void init_with_capture_node_id(canard_t* const self, tx_capture_t* const capture, const uint_least8_t node_id)
 {
     *capture           = tx_capture_t{};
     capture->now       = 0;
     capture->accept_tx = true;
     capture->count     = 0;
-    TEST_ASSERT_TRUE(canard_new(self, &kCaptureVtable, make_std_memory(), 16U, 42U, 1234U, 0U, nullptr));
+    TEST_ASSERT_TRUE(canard_new(self, &kCaptureVtable, make_std_memory(), 16U, node_id, 1234U, 0U, nullptr));
     self->user_context = capture;
+}
+
+static void init_with_capture(canard_t* const self, tx_capture_t* const capture)
+{
+    init_with_capture_node_id(self, capture, 42U);
 }
 
 // Basic constructor argument validation.
@@ -402,12 +407,78 @@ static void test_canard_unicast_encoding_and_transfer_id()
         TEST_ASSERT_EQUAL_UINT64(1000U, (uint64_t)cap.records[i].deadline);
         TEST_ASSERT_TRUE(cap.records[i].fd);
         TEST_ASSERT_EQUAL_UINT8((uint8_t)canard_prio_high, (uint8_t)((can_id >> 26U) & 7U));
+        TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)((can_id >> 25U) & 1U));
+        TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)((can_id >> 24U) & 1U));
+        TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)((can_id >> 23U) & 1U));
         TEST_ASSERT_EQUAL_UINT32(CANARD_SERVICE_ID_UNICAST, (can_id >> 14U) & CANARD_SERVICE_ID_MAX);
-        TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)((can_id >> 23U) & 1U));
         TEST_ASSERT_EQUAL_UINT8(expected_dest[i], (uint8_t)((can_id >> 7U) & CANARD_NODE_ID_MAX));
         TEST_ASSERT_EQUAL_UINT8(42U, (uint8_t)(can_id & CANARD_NODE_ID_MAX));
         TEST_ASSERT_EQUAL_UINT8(expected_tid[i], (uint8_t)(cap.records[i].tail & CANARD_TRANSFER_ID_MAX));
     }
+
+    canard_destroy(&self);
+}
+
+// Validate Cyphal v1.0 service CAN-ID encoding against specification examples.
+static void test_canard_1v0_service_can_id_golden()
+{
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = nullptr }, .next = nullptr };
+
+    canard_t     req_self = {};
+    tx_capture_t req_cap  = {};
+    init_with_capture_node_id(&req_self, &req_cap, 123U);
+    TEST_ASSERT_TRUE(
+      canard_1v0_request(&req_self, 1000, canard_prio_nominal, 430U, 42U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    canard_poll(&req_self, 1U);
+    TEST_ASSERT_EQUAL_size_t(1U, req_cap.count);
+    TEST_ASSERT_EQUAL_UINT32(0x136B957BU, req_cap.records[0].can_id);
+    TEST_ASSERT_TRUE(req_cap.records[0].fd);
+    TEST_ASSERT_EQUAL_UINT8(0xE1U, req_cap.records[0].tail);
+    canard_destroy(&req_self);
+
+    canard_t     res_self = {};
+    tx_capture_t res_cap  = {};
+    init_with_capture_node_id(&res_self, &res_cap, 42U);
+    TEST_ASSERT_TRUE(
+      canard_1v0_respond(&res_self, 1000, canard_prio_nominal, 430U, 123U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    canard_poll(&res_self, 1U);
+    TEST_ASSERT_EQUAL_size_t(1U, res_cap.count);
+    TEST_ASSERT_EQUAL_UINT32(0x126BBDAAU, res_cap.records[0].can_id);
+    TEST_ASSERT_TRUE(res_cap.records[0].fd);
+    TEST_ASSERT_EQUAL_UINT8(0xE1U, res_cap.records[0].tail);
+    canard_destroy(&res_self);
+}
+
+// Validate legacy v0 service rules and CAN-ID encoding.
+static void test_canard_0v1_service_node_id_rule_and_encoding()
+{
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = nullptr }, .next = nullptr };
+
+    canard_t self_zero = {};
+    TEST_ASSERT_FALSE(canard_0v1_request(
+      &self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_0v1_respond(
+      &self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
+
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture_node_id(&self, &cap, 11U);
+
+    TEST_ASSERT_TRUE(
+      canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, CANARD_USER_CONTEXT_NULL));
+    canard_poll(&self, 1U);
+
+    TEST_ASSERT_TRUE(
+      canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
+    canard_poll(&self, 1U);
+
+    TEST_ASSERT_EQUAL_size_t(2U, cap.count);
+    TEST_ASSERT_EQUAL_UINT32(0x1337988BU, cap.records[0].can_id);
+    TEST_ASSERT_EQUAL_UINT32(0x1337188BU, cap.records[1].can_id);
+    TEST_ASSERT_FALSE(cap.records[0].fd);
+    TEST_ASSERT_FALSE(cap.records[1].fd);
+    TEST_ASSERT_EQUAL_UINT8(0xC5U, cap.records[0].tail);
+    TEST_ASSERT_EQUAL_UINT8(0xC6U, cap.records[1].tail);
 
     canard_destroy(&self);
 }
@@ -435,6 +506,8 @@ int main()
     RUN_TEST(test_canard_poll_expiration);
     RUN_TEST(test_canard_unicast_validation);
     RUN_TEST(test_canard_unicast_encoding_and_transfer_id);
+    RUN_TEST(test_canard_1v0_service_can_id_golden);
+    RUN_TEST(test_canard_0v1_service_node_id_rule_and_encoding);
 
     return UNITY_END();
 }
