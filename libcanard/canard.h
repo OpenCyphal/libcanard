@@ -396,8 +396,8 @@ bool canard_ingest_frame(canard_t* const      self,
 void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 
-/// Message ordering observed on the bus is guaranteed per topic as long as the priority of later messages is not higher
-/// (numerically not lower) than that of earlier messages.
+/// Message ordering observed on the bus is guaranteed per subject as long as the priority of later messages is
+/// not higher (numerically not lower) than that of earlier messages.
 bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         iface_bitmap,

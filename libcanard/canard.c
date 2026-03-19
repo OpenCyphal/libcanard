@@ -1052,20 +1052,118 @@ bool canard_0v1_respond(canard_t* const             self,
 
 // ---------------------------------------------            RX             ---------------------------------------------
 
-/*
 typedef struct
 {
     canard_prio_t priority;
     format_t      format;
-    uint32_t      port_id;
-    uint_least8_t dst;
-    uint_least8_t src;
-    uint_least8_t transfer_id;
-    bool          start;
-    bool          end;
-    bool          toggle;
+
+    uint32_t port_id; // in v0 this stores the data type ID.
+
+    byte_t dst;
+    byte_t src;
+
+    byte_t transfer_id;
+
+    bool start;
+    bool end;
+    bool toggle;
+
+    canard_bytes_t payload;
 } frame_t;
-*/
+
+// The protocol version is only unambiguously detectable in the first frame of a transfer.
+// In non-first frames, we attempt to parse the frame as both versions simultaneously and then let the caller
+// decide which one is correct by checking for incomplete multi-frame reassembly states.
+// The return value is a bitmask indicating which of the versions have been parsed at this level.
+static byte_t rx_parse(const uint32_t       can_id,
+                       const canard_bytes_t payload,
+                       frame_t* const       out_v0,
+                       frame_t* const       out_v1)
+{
+    CANARD_ASSERT(can_id < (UINT32_C(1) << 29U));
+    CANARD_ASSERT(out_v0 != NULL);
+    CANARD_ASSERT(out_v1 != NULL);
+    if (payload.size < 1) {
+        return 0;
+    }
+    CANARD_ASSERT(payload.data != NULL);
+    memset(out_v0, 0, sizeof(*out_v0));
+    memset(out_v1, 0, sizeof(*out_v1));
+
+    // Common items.
+    const canard_prio_t priority = (canard_prio_t)(can_id >> PRIO_SHIFT);
+    const byte_t        src      = (byte_t)(can_id & CANARD_NODE_ID_MAX);
+
+    // Parse the tail byte.
+    const byte_t tail        = ((const byte_t*)payload.data)[payload.size - 1U];
+    const bool   start       = (tail & TAIL_SOT) != 0U;
+    const bool   end         = (tail & TAIL_EOT) != 0U;
+    const bool   toggle      = (tail & TAIL_TOGGLE) != 0U;
+    const byte_t transfer_id = tail & CANARD_TRANSFER_ID_MAX;
+
+    // Version detection: v1 requires the toggle to start from 1, v0 starts from 0.
+    // If this is not the first frame of a transfer, the version is not detectable, so we attempt to parse both.
+    bool is_v1 = !(start && !toggle);
+    bool is_v0 = !(start && toggle);
+    if (is_v1) {
+        out_v1->priority    = priority;
+        out_v1->src         = src;
+        out_v1->transfer_id = transfer_id;
+        out_v1->start       = start;
+        out_v1->end         = end;
+        out_v1->toggle      = toggle;
+        out_v1->payload     = (canard_bytes_t){ .size = payload.size - 1U, .data = payload.data };
+        const bool svc      = (can_id & (UINT32_C(1) << 25U)) != 0U;
+        const bool bit_23   = (can_id & (UINT32_C(1) << 23U)) != 0U;
+        if (svc) {
+            is_v1           = is_v1 && !bit_23;
+            out_v1->dst     = (byte_t)((can_id >> 7U) & CANARD_NODE_ID_MAX);
+            out_v1->port_id = (can_id >> 14U) & CANARD_SERVICE_ID_MAX;
+            const bool req  = (can_id & (UINT32_C(1) << 24U)) != 0U;
+            out_v1->format  = req ? format_1v0_request : format_1v0_response;
+        } else {
+            out_v1->dst       = CANARD_NODE_ID_ANONYMOUS;
+            const bool is_1v1 = (can_id & (UINT32_C(1) << 7U)) != 0U;
+            if (is_1v1) {
+                out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX;
+                out_v1->format  = format_1v1_message;
+            } else {
+                is_v1           = is_v1 && !bit_23;
+                out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX_1v0;
+                out_v1->format  = format_1v0_message;
+                if ((can_id & (UINT32_C(1) << 24U)) != 0U) {
+                    out_v1->src = CANARD_NODE_ID_ANONYMOUS;
+                }
+            }
+        }
+    }
+    if (is_v0) {
+        out_v0->priority    = priority;
+        out_v0->src         = src;
+        out_v0->transfer_id = transfer_id;
+        out_v0->start       = start;
+        out_v0->end         = end;
+        out_v0->toggle      = toggle;
+        out_v0->payload     = (canard_bytes_t){ .size = payload.size - 1U, .data = payload.data };
+        const bool svc      = (can_id & (UINT32_C(1) << 7U)) != 0U;
+        if (svc) {
+            const byte_t dst = (byte_t)((can_id >> 8U) & CANARD_NODE_ID_MAX);
+            is_v0            = (dst != 0) && (src != 0); // 0 is reserved in v0 for anonymous/broadcast, not for svc.
+            out_v0->dst      = dst;
+            out_v0->port_id  = (can_id >> 16U) & 0xFFU;
+            const bool req   = (can_id & (UINT32_C(1) << 15U)) != 0U;
+            out_v0->format   = req ? format_0v1_request : format_0v1_response;
+        } else {
+            out_v0->dst     = CANARD_NODE_ID_ANONYMOUS;
+            out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
+            out_v0->format  = format_0v1_message;
+            if (src == 0) {
+                out_v0->src = CANARD_NODE_ID_ANONYMOUS;
+            }
+        }
+    }
+    return (is_v0 ? 1U : 0U) | (is_v1 ? 2U : 0U);
+}
 
 // TODO rx impl
 
