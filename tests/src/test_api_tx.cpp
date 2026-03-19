@@ -296,6 +296,8 @@ static void test_canard_poll_ready_bitmap()
     canard_poll(&self, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, cap.count);
     TEST_ASSERT_EQUAL_UINT8(0U, cap.records[0].iface_index);
+    TEST_ASSERT_EQUAL_UINT64(1000U, (uint64_t)cap.records[0].deadline);
+    TEST_ASSERT_TRUE(cap.records[0].fd);
     TEST_ASSERT_EQUAL_UINT8(2U, canard_pending_ifaces(&self));
 
     canard_poll(&self, 1U);
@@ -305,6 +307,8 @@ static void test_canard_poll_ready_bitmap()
     canard_poll(&self, 2U);
     TEST_ASSERT_EQUAL_size_t(2U, cap.count);
     TEST_ASSERT_EQUAL_UINT8(1U, cap.records[1].iface_index);
+    TEST_ASSERT_EQUAL_UINT64(1000U, (uint64_t)cap.records[1].deadline);
+    TEST_ASSERT_TRUE(cap.records[1].fd);
     TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
 
     canard_destroy(&self);
@@ -395,6 +399,8 @@ static void test_canard_unicast_encoding_and_transfer_id()
     const uint_least8_t expected_tid[]  = { CANARD_TRANSFER_ID_MAX, 0U, 0U };
     for (size_t i = 0; i < 3U; i++) {
         const uint32_t can_id = cap.records[i].can_id;
+        TEST_ASSERT_EQUAL_UINT64(1000U, (uint64_t)cap.records[i].deadline);
+        TEST_ASSERT_TRUE(cap.records[i].fd);
         TEST_ASSERT_EQUAL_UINT8((uint8_t)canard_prio_high, (uint8_t)((can_id >> 26U) & 7U));
         TEST_ASSERT_EQUAL_UINT32(CANARD_SERVICE_ID_UNICAST, (can_id >> 14U) & CANARD_SERVICE_ID_MAX);
         TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)((can_id >> 23U) & 1U));
