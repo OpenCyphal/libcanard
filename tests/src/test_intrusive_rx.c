@@ -800,13 +800,13 @@ static void test_rx_session_scan(void)
     {
         test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
-        ses.owner    = &ctx.sub;
-        ses.slots[0] = make_test_slot(&ctx, 3999, 0, true);  // stale
-        ses.slots[2] = make_test_slot(&ctx, 1000, 0, true);  // stale
-        ses.slots[1] = make_test_slot(&ctx, 4500, 0, true);  // fresh, in-progress
+        ses.owner                        = &ctx.sub;
+        ses.slots[0]                     = make_test_slot(&ctx, 3999, 0, true); // stale
+        ses.slots[2]                     = make_test_slot(&ctx, 1000, 0, true); // stale
+        ses.slots[1]                     = make_test_slot(&ctx, 4500, 0, true); // fresh, in-progress
         ses.slots[1]->total_payload_size = 10;
-        ses.slots[4] = make_test_slot(&ctx, 4200, 0, true);  // fresh, idle
-        ses.slots[6] = make_test_slot(&ctx, 4000, 0, true);  // boundary, NOT stale
+        ses.slots[4]                     = make_test_slot(&ctx, 4200, 0, true); // fresh, idle
+        ses.slots[6]                     = make_test_slot(&ctx, 4000, 0, true); // boundary, NOT stale
         TEST_ASSERT_EQUAL_size_t(1, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[2]);
@@ -875,12 +875,12 @@ static void test_rx_session_scan(void)
         ses.slots[4] = make_test_slot(&ctx, 2000, 0, true);
         ses.slots[6] = make_test_slot(&ctx, 3999, 0, true);
         // 4 fresh (slots[1] and slots[5] are in-progress):
-        ses.slots[1] = make_test_slot(&ctx, 4500, 0, true);
+        ses.slots[1]                     = make_test_slot(&ctx, 4500, 0, true);
         ses.slots[1]->total_payload_size = 10;
-        ses.slots[3] = make_test_slot(&ctx, 4001, 0, true);
-        ses.slots[5] = make_test_slot(&ctx, 4999, 0, true);
+        ses.slots[3]                     = make_test_slot(&ctx, 4001, 0, true);
+        ses.slots[5]                     = make_test_slot(&ctx, 4999, 0, true);
         ses.slots[5]->total_payload_size = 20;
-        ses.slots[7] = make_test_slot(&ctx, 4000, 0, true);
+        ses.slots[7]                     = make_test_slot(&ctx, 4000, 0, true);
         TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[2]);
@@ -901,12 +901,12 @@ static void test_rx_session_scan(void)
     {
         test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
-        ses.owner = &ctx.sub;
-        ses.slots[0] = make_test_slot(&ctx, 5000, 0, true);
+        ses.owner                        = &ctx.sub;
+        ses.slots[0]                     = make_test_slot(&ctx, 5000, 0, true);
         ses.slots[0]->total_payload_size = 10;
-        ses.slots[3] = make_test_slot(&ctx, 6000, 0, true);
+        ses.slots[3]                     = make_test_slot(&ctx, 6000, 0, true);
         ses.slots[3]->total_payload_size = 20;
-        ses.slots[5] = make_test_slot(&ctx, 7000, 0, true); // fresh, idle
+        ses.slots[5]                     = make_test_slot(&ctx, 7000, 0, true); // fresh, idle
         TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_EQUAL_INT64(7000, ses.timestamp);
         rx_slot_destroy(&ctx.sub, ses.slots[0]);
@@ -920,10 +920,10 @@ static void test_rx_session_scan(void)
         memset(&ses, 0, sizeof(ses));
         ses.owner = &ctx.sub;
         // Fresh single-frame with 42-byte payload.
-        ses.slots[0] = make_test_slot(&ctx, 5000, 42, true);
+        ses.slots[0]                     = make_test_slot(&ctx, 5000, 42, true);
         ses.slots[0]->total_payload_size = 42;
         // Fresh multi-frame with extent-sized payload, partially written.
-        ses.slots[1] = make_test_slot(&ctx, 6000, 64, false);
+        ses.slots[1]                     = make_test_slot(&ctx, 6000, 64, false);
         ses.slots[1]->payload.size       = 30;
         ses.slots[1]->total_payload_size = 30;
         TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
