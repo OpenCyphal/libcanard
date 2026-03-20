@@ -1188,6 +1188,8 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 
 // Reassembly state at a specific priority level.
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
+// Each state is only kept as long as the transfer reassembly is in progress; once it's completed, the slot is
+// immediately destroyed.
 typedef struct
 {
     canard_us_t        timestamp;          // Timestamp of the start-of-transfer.
@@ -1262,8 +1264,8 @@ typedef struct
 
 static canard_tree_t* rx_session_factory(void* const user)
 {
-    rx_session_factory_context_t* const ctx = (rx_session_factory_context_t*)user;
-    rx_session_t* const                 ses = mem_alloc_zero(ctx->owner->owner->mem.rx_session, sizeof(rx_session_t));
+    const rx_session_factory_context_t* const ctx = (rx_session_factory_context_t*)user;
+    rx_session_t* const ses = mem_alloc_zero(ctx->owner->owner->mem.rx_session, sizeof(rx_session_t));
     if (ses == NULL) {
         return NULL;
     }
