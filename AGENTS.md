@@ -19,9 +19,11 @@ Keep code compact and add brief comments before non-obvious logic.
 
 Treat warnings as errors and keep compatibility with strict warning flags.
 
+**FORCE PUSH MUST NEVER BE USED**. The git history is sacrosanct and must not be rewritten. If you need to undo a change, make a new commit.
+
 For agent-authored commits, set `GIT_AUTHOR_NAME="Agent"` and `GIT_COMMITTER_NAME="Agent"`.
 
-**FORCE PUSH MUST NEVER BE USED**. The git history is sacrosanct and must not be rewritten. If you need to undo a change, make a new commit.
+The build system will reject code that is not clang-formatted; use build target `format` to invoke clang-format.
 
 ## Adversarial validation and verification
 

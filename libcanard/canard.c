@@ -63,7 +63,9 @@ typedef unsigned char byte_t;
 
 #define FOREACH_IFACE(i) for (size_t i = 0; (i) < CANARD_IFACE_COUNT; (i)++)
 
-#if CANARD_IFACE_COUNT <= 4
+#if CANARD_IFACE_COUNT <= 2
+#define IFACE_INDEX_BIT_LENGTH 1U
+#elif CANARD_IFACE_COUNT <= 4
 #define IFACE_INDEX_BIT_LENGTH 2U
 #elif CANARD_IFACE_COUNT <= 8
 #define IFACE_INDEX_BIT_LENGTH 3U
@@ -1193,7 +1195,6 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 
 // Reassembly state at a specific priority level.
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
-// Each state is only kept as long as the transfer reassembly is in progress; once it's completed, the slot is deleted.
 typedef struct
 {
     canard_us_t start_ts;
@@ -1210,14 +1211,6 @@ typedef struct
 // but it was too costly on MCUs: with a 32-bit pointer it took 512 bytes for the array plus overheads,
 // resulting in 1 KiB o1heap blocks per session, very expensive. Here we use a much less RAM-heavy approach with
 // sparse nodes in a tree with log-time lookup.
-//
-// The session keeps the last transfer-ID, plus each slot holds one as well. This is needed because a low-priority
-// transfer may be temporarily preempted by a higher-priority one; each transfer has a unique transfer-ID within
-// the transfer-ID wraparound window. It is possible that a low-priority transfer with ID N is preempted by a sequence
-// of transfers whose count is a multiple of the wraparound window; if the transfer-ID deduplication was done at the
-// slot level only, then such sequence could cause the slot to reject a new transfer as a duplicate. To avoid this,
-// transfer-ID state in the slots is only used for start-of-transfer loss detection, while deduplication relies on the
-// single shared state at the session level.
 //
 // Core invariants:
 //  - Only start-of-transfer may create/replace a slot.
@@ -1280,8 +1273,9 @@ static canard_tree_t* rx_session_factory(void* const user)
     FOREACH_SLOT (i) {
         ses->slots[i] = NULL;
     }
-    ses->owner   = ctx->owner;
-    ses->node_id = ctx->node_id;
+    ses->last_admitted_start_ts = BIG_BANG;
+    ses->owner                  = ctx->owner;
+    ses->node_id                = ctx->node_id;
     enlist_tail(&ctx->owner->owner->rx.list_session_by_animation, &ses->list_animation);
     return &ses->index;
 }
@@ -1356,16 +1350,15 @@ static bool rx_session_update(canard_subscription_t* const sub,
 
     // Frame admittance state machine. A highly complex piece, redesigned after v4 to support priority preemption.
     // TID forward difference illustration: f(2,3)==31, f(2,2)==0, f(2,1)==1
-    const bool tid_new = rx_transfer_id_forward_difference(ses->last_admitted_transfer_id, frame->transfer_id) > 1;
-    const canard_us_t timed_out = (ts - ses->last_admitted_start_ts) > ses->owner->transfer_id_timeout;
-    bool              accept    = false;
+    const bool tid_new   = rx_transfer_id_forward_difference(ses->last_admitted_transfer_id, frame->transfer_id) > 1;
+    const bool timed_out = ts > (ses->last_admitted_start_ts + ses->owner->transfer_id_timeout);
+    bool       accept    = false;
+    const rx_slot_t* const slot = ses->slots[frame->priority];
     if (!frame->start) {
-        const rx_slot_t* const slot = ses->slots[frame->priority];
         accept = (slot != NULL) && (slot->transfer_id == frame->transfer_id) && (slot->iface_index == iface_index) &&
                  (slot->expected_toggle == frame->toggle);
     } else {
-        const rx_slot_t* const slot = ses->slots[frame->priority];
-        accept = (slot == NULL) || (slot->transfer_id != frame->transfer_id) || tid_new || timed_out; // --
+        accept = ((slot == NULL) || (slot->transfer_id != frame->transfer_id)) && (tid_new || timed_out);
     }
     if (!accept) {
         return true; // Frame not needed; not a failure to accept.
@@ -1374,8 +1367,6 @@ static bool rx_session_update(canard_subscription_t* const sub,
     // The frame must be accepted. If this is the start of a new transfer, we must update state.
     enlist_tail(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
     if (frame->start) {
-        ses->last_admitted_start_ts    = ts;
-        ses->last_admitted_transfer_id = frame->transfer_id;
         rx_slot_destroy(sub, ses->slots[frame->priority]);
         ses->slots[frame->priority] = NULL;
         if (!frame->end) { // more frames to follow, must store in-progress state
@@ -1385,6 +1376,8 @@ static bool rx_session_update(canard_subscription_t* const sub,
                 return false;
             }
         }
+        ses->last_admitted_start_ts    = ts;
+        ses->last_admitted_transfer_id = frame->transfer_id;
     }
 
     // TODO acceptance
