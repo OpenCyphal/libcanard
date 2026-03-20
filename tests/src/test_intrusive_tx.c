@@ -40,10 +40,10 @@ static void init_canard(canard_t* const                 self,
 // Release all queued transfers.
 static void free_all_transfers(canard_t* const self)
 {
-    canard_txfer_t* tr = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
+    tx_transfer_t* tr = LIST_HEAD(self->tx.agewise, tx_transfer_t, list_agewise);
     while (tr != NULL) {
-        canard_txfer_t* const next = LIST_NEXT(tr, canard_txfer_t, list_agewise);
-        txfer_retire(self, tr);
+        tx_transfer_t* const next = LIST_NEXT(tr, tx_transfer_t, list_agewise);
+        tx_retire(self, tr);
         tr = next;
     }
 }
@@ -60,7 +60,7 @@ static size_t count_frames(const tx_frame_t* head)
 }
 
 // Reconstructs the CAN-ID template from an enqueued transfer.
-static uint32_t can_id_from_transfer(const canard_txfer_t* const tr) { return ((uint32_t)tr->can_id_msb) << 7U; }
+static uint32_t can_id_from_transfer(const tx_transfer_t* const tr) { return ((uint32_t)tr->can_id_msb) << 7U; }
 
 // Validate single-frame spooling.
 static void test_tx_spool_single_frame(void)
@@ -124,12 +124,12 @@ static void test_tx_push_basic(void)
 
     const byte_t               data[]  = { 0xAAU };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    canard_txfer_t* const      tr =
-      txfer_new(&self, 1000, 5U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self, 1000, 5U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
-    TEST_ASSERT_NOT_NULL(LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise));
+    TEST_ASSERT_NOT_NULL(LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise));
     TEST_ASSERT_TRUE(cavl2_is_inserted(self.tx.pending[0], &tr->index_pending[0]));
 
     free_all_transfers(&self);
@@ -145,8 +145,8 @@ static void test_tx_push_capacity_reject(void)
     init_canard(&self, &ctx, &alloc, 0U);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    canard_txfer_t* const      tr =
-      txfer_new(&self, 1000, 1U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self, 1000, 1U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
@@ -166,8 +166,8 @@ static void test_tx_push_oom(void)
 
     const byte_t               data[]  = { 1U, 2U, 3U, 4U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    canard_txfer_t* const      tr =
-      txfer_new(&self, 1000, 3U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self, 1000, 3U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.oom);
@@ -202,7 +202,7 @@ static void test_canard_publish_basic(void)
 
     TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_high, 1234U, 17U, payload, CANARD_USER_CONTEXT_NULL));
 
-    const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
     const uint32_t can_id = ((uint32_t)tr->can_id_msb) << 7U;
     TEST_ASSERT_EQUAL_UINT8(17U, (uint8_t)tr->transfer_id);
@@ -225,7 +225,7 @@ static void test_canard_1v0_publish_basic(void)
     TEST_ASSERT_TRUE(
       canard_1v0_publish(&self, 1000, 1U, canard_prio_nominal, 42U, 7U, payload, CANARD_USER_CONTEXT_NULL));
 
-    const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
     const uint32_t can_id = ((uint32_t)tr->can_id_msb) << 7U;
     TEST_ASSERT_EQUAL_UINT32(3UL, (can_id >> 21U) & 3UL);
@@ -253,7 +253,7 @@ static void test_canard_0v1_publish_basic(void)
     self.node_id = 1U;
     TEST_ASSERT_TRUE(
       canard_0v1_publish(&self, 1000, 1U, canard_prio_nominal, 11U, 0xFFFFU, 3U, payload, CANARD_USER_CONTEXT_NULL));
-    const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->fd);
 
@@ -277,9 +277,9 @@ static void test_canard_1v0_service_basic(void)
     TEST_ASSERT_TRUE(
       canard_1v0_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
 
-    const canard_txfer_t* const req = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const req = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(req);
-    const canard_txfer_t* const res = LIST_NEXT(req, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const res = LIST_NEXT(req, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(res);
 
     const uint32_t expected_req_id = (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | //
@@ -363,9 +363,9 @@ static void test_canard_0v1_service_basic(void)
     TEST_ASSERT_TRUE(
       canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
 
-    const canard_txfer_t* const req = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const req = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(req);
-    const canard_txfer_t* const res = LIST_NEXT(req, canard_txfer_t, list_agewise);
+    const tx_transfer_t* const res = LIST_NEXT(req, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(res);
 
     const uint32_t expected_req_id = ((((uint32_t)canard_prio_nominal << 2U) | 3UL) << 24U) | //
@@ -459,7 +459,7 @@ static void test_1v0_publish_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_1v0_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x00600000UL, cid);
@@ -478,7 +478,7 @@ static void test_1v0_publish_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_1v0_publish(&self, 1000, 1U, canard_prio_optional, 8191U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x1C7FFF00UL, cid);
@@ -491,7 +491,7 @@ static void test_1v0_publish_can_id_compliance(void)
     init_canard(&self, &ctx, &alloc, 8U);
     TEST_ASSERT_TRUE(canard_1v0_publish(&self, 1000, 1U, canard_prio_high, 42U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x0C602A00UL, cid);
@@ -516,7 +516,7 @@ static void test_1v0_request_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_1v0_request(&self, 1000, canard_prio_exceptional, 0U, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x03000080UL, cid);
@@ -535,7 +535,7 @@ static void test_1v0_request_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_1v0_request(&self, 1000, canard_prio_optional, 511U, 127U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x1F7FFF80UL, cid);
@@ -561,7 +561,7 @@ static void test_1v0_respond_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_1v0_respond(&self, 1000, canard_prio_fast, 430U, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x0A6B8C00UL, cid);
@@ -579,7 +579,7 @@ static void test_1v0_respond_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_1v0_respond(&self, 1000, canard_prio_nominal, 1U, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x12004080UL, cid);
@@ -605,7 +605,7 @@ static void test_0v1_publish_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_0v1_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x03000000UL, cid);
@@ -621,7 +621,7 @@ static void test_0v1_publish_can_id_compliance(void)
     TEST_ASSERT_TRUE(canard_0v1_publish(
       &self, 1000, 1U, canard_prio_optional, 0xFFFFU, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x1FFFFF00UL, cid);
@@ -636,7 +636,7 @@ static void test_0v1_publish_can_id_compliance(void)
     TEST_ASSERT_TRUE(canard_0v1_publish(
       &self, 1000, 1U, canard_prio_nominal, 0x040AU, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x13040A00UL, cid);
@@ -661,7 +661,7 @@ static void test_0v1_request_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_0v1_request(&self, 1000, canard_prio_exceptional, 1U, 0xFFFFU, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x03018180UL, cid);
@@ -679,7 +679,7 @@ static void test_0v1_request_can_id_compliance(void)
     TEST_ASSERT_TRUE(canard_0v1_request(
       &self, 1000, canard_prio_optional, 255U, 0xFFFFU, 127U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x1FFFFF80UL, cid);
@@ -707,7 +707,7 @@ static void test_0v1_respond_can_id_compliance(void)
     TEST_ASSERT_TRUE(
       canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xFFFFU, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x13371880UL, cid);
@@ -725,7 +725,7 @@ static void test_0v1_respond_can_id_compliance(void)
     TEST_ASSERT_TRUE(canard_0v1_respond(
       &self, 1000, canard_prio_immediate, 200U, 0xFFFFU, 42U, 0U, payload, CANARD_USER_CONTEXT_NULL));
     {
-        const canard_txfer_t* const tr = LIST_HEAD(self.tx.agewise, canard_txfer_t, list_agewise);
+        const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
         TEST_ASSERT_EQUAL_HEX32(0x07C82A80UL, cid);
