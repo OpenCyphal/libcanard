@@ -1264,8 +1264,6 @@ static bool rx_slot_write_payload(rx_session_t* const  ses,
     // For simplicity, the case of zero extent is handled separately. It cannot fail.
     // The case of nonzero extent but an empty frame is handled similarly.
     if ((ses->owner->extent == 0) || (payload.size == 0)) {
-        CANARD_ASSERT(payload.size == 0);
-        CANARD_ASSERT(slot->payload.data == NULL);
         return true;
     }
 
@@ -1282,7 +1280,6 @@ static bool rx_slot_write_payload(rx_session_t* const  ses,
     }
 
     // The general multi-frame case with non-empty payload.
-    slot->single_frame = false;
     if (start) {
         CANARD_ASSERT((payload.size > 0) && (ses->owner->extent > 0) && (slot->payload.data == NULL));
         slot->payload.data = mem_alloc(ses->owner->owner->mem.rx_payload, ses->owner->extent);
