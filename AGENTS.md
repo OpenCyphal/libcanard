@@ -21,6 +21,8 @@ Treat warnings as errors and keep compatibility with strict warning flags.
 
 For agent-authored commits, set `GIT_AUTHOR_NAME="Agent"` and `GIT_COMMITTER_NAME="Agent"`.
 
+**FORCE PUSH MUST NEVER BE USED**. The git history is sacrosanct and must not be rewritten. If you need to undo a change, make a new commit.
+
 ## Adversarial validation and verification
 
 Practice an adversarial approach to testing: the purpose of a test case is not to provide coverage, but to empirically prove correctness of the tested code. Always treat the code as suspect; you will be rewarded for pointing out flaws in it. If the code does not appear to be correct, refuse to test it and provide evidence of its defects instead of proceeding with testing.

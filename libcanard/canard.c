@@ -1362,6 +1362,7 @@ static bool rx_session_update(canard_subscription_t* const sub, const canard_us_
         return false;
     }
     ses->transfer_id++; // TODO stub
+    (void)ts;
 
     return false;
 }
