@@ -201,8 +201,7 @@ typedef struct canard_mem_set_t
     canard_mem_t tx_transfer; ///< TX transfer objects, fixed-size, one per enqueued transfer.
     canard_mem_t tx_frame;    ///< One per enqueued frame, at least one per TX transfer, size MTU+overhead.
     canard_mem_t rx_session;  ///< Remote-associated sessions per subscriber, fixed-size.
-    canard_mem_t rx_slot;     ///< Reassembly slots per session, fixed-size.
-    canard_mem_t rx_payload;  ///< Variable-size, at most extent-sized.
+    canard_mem_t rx_payload;  ///< Variable-size, max size extent+sizeof(slot).
 } canard_mem_set_t;
 
 typedef struct canard_subscription_t        canard_subscription_t;

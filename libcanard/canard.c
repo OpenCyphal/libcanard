@@ -63,6 +63,14 @@ typedef unsigned char byte_t;
 
 #define FOREACH_IFACE(i) for (size_t i = 0; (i) < CANARD_IFACE_COUNT; (i)++)
 
+#if CANARD_IFACE_COUNT <= 4
+#define IFACE_INDEX_BIT_LENGTH 2U
+#elif CANARD_IFACE_COUNT <= 8
+#define IFACE_INDEX_BIT_LENGTH 3U
+#else
+#error "Too many interfaces"
+#endif
+
 #define TREE_NULL (canard_tree_t){ NULL, { NULL, NULL }, 0 }
 
 typedef enum format_t
@@ -1191,28 +1199,35 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 // Each state is only kept as long as the transfer reassembly is in progress; once it's completed, the slot is deleted.
 typedef struct
 {
-    canard_us_t        start_ts;
-    size_t             total_size; // The raw payload size before the implicit truncation and CRC removal.
-    canard_bytes_mut_t payload;    // Dynamically allocated and handed off to the application when done.
-    uint16_t           crc;
-    byte_t             transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
-    byte_t             expected_toggle : 1;
-    byte_t             iface_index;
+    canard_us_t start_ts;
+    size_t      total_size; // The raw payload size before the implicit truncation and CRC removal.
+    uint16_t    crc;
+    byte_t      transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
+    byte_t      expected_toggle : 1;
+    byte_t      iface_index : IFACE_INDEX_BIT_LENGTH;
+    byte_t      payload[]; // Extent-sized.
 } rx_slot_t;
-static_assert((sizeof(void*) > 4) || (sizeof(rx_slot_t) <= 24), "too large");
+#define RX_SLOT_OVERHEAD (offsetof(rx_slot_t, payload))
 
 // Up to libcanard v4 we used a fixed-capacity array of pointers for per-remote sessions for constant-time lookup,
 // but it was too costly on MCUs: with a 32-bit pointer it took 512 bytes for the array plus overheads,
 // resulting in 1 KiB o1heap blocks per session, very expensive. Here we use a much less RAM-heavy approach with
 // sparse nodes in a tree with log-time lookup.
 //
-// The session keeps the last received transfer-ID, plus each slot holds one as well. This is needed because a
-// low-priority transfer may be temporarily preempted by a higher-priority one; each transfer has a unique transfer-ID
-// within the transfer-ID wraparound window. It is possible that a low-priority transfer with ID N is preempted by a
-// sequence of transfers whose count is a multiple of the wraparound window; if the transfer-ID deduplication was done
-// at the slot level only, then such sequence could cause the slot to reject a new transfer as a duplicate. To avoid
-// this, transfer-ID state in the slots is only used for start-of-transfer loss detection, while deduplication relies
-// on the single shared state at the session level.
+// The session keeps the last transfer-ID, plus each slot holds one as well. This is needed because a low-priority
+// transfer may be temporarily preempted by a higher-priority one; each transfer has a unique transfer-ID within
+// the transfer-ID wraparound window. It is possible that a low-priority transfer with ID N is preempted by a sequence
+// of transfers whose count is a multiple of the wraparound window; if the transfer-ID deduplication was done at the
+// slot level only, then such sequence could cause the slot to reject a new transfer as a duplicate. To avoid this,
+// transfer-ID state in the slots is only used for start-of-transfer loss detection, while deduplication relies on the
+// single shared state at the session level.
+//
+// Core invariants:
+//  - Only start-of-transfer may create/replace a slot.
+//  - Non-start frames never create state.
+//  - Session dedup state is updated on admitted start-of-transfer, not on transfer completion.
+//  - Timeout is consulted only for start-of-transfer admission.
+//  - Slot matching for continuation uses exact match: priority, transfer-ID, toggle, and iface.
 typedef struct
 {
     canard_tree_t          index;
@@ -1231,24 +1246,21 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
                               const byte_t                       iface_index,
                               const bool                         v1)
 {
-    rx_slot_t* const slot = mem_alloc_zero(sub->owner->mem.rx_slot, sizeof(rx_slot_t));
+    rx_slot_t* const slot = mem_alloc(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent);
     if (slot != NULL) {
+        memset(slot, 0, RX_SLOT_OVERHEAD);
         slot->start_ts        = start_ts;
-        slot->payload.data    = NULL;
         slot->crc             = sub->crc_seed;
         slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
         slot->expected_toggle = v1 ? 1 : 0;
-        slot->iface_index     = iface_index;
+        slot->iface_index     = iface_index & ((1U << IFACE_INDEX_BIT_LENGTH) - 1U);
     }
     return slot;
 }
 
 static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* const slot)
 {
-    if (slot != NULL) {
-        mem_free(sub->owner->mem.rx_payload, slot->payload.size, slot->payload.data);
-        mem_free(sub->owner->mem.rx_slot, sizeof(rx_slot_t), slot);
-    }
+    mem_free(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent, slot);
 }
 
 static int32_t rx_session_cavl_compare(const void* const user, const canard_tree_t* const node)
@@ -1314,29 +1326,13 @@ static size_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
     return n_slots;
 }
 
-// Returns false on OOM, no other failure modes. Stores at most extent bytes. This is ONLY for multi-frame transfers.
-static bool rx_slot_write_payload(rx_session_t* const ses, rx_slot_t* const slot, const canard_bytes_t payload)
+static void rx_slot_write_payload(const rx_session_t* const ses, rx_slot_t* const slot, const canard_bytes_t payload)
 {
-    CANARD_ASSERT(slot->payload.size <= ses->owner->extent); // enforced by the subscription logic
-    CANARD_ASSERT(slot->payload.size <= slot->total_size);
-    CANARD_ASSERT(payload.size > 0); // a multi-frame transfer cannot contain empty frames; enforced externally
-    const bool start = slot->total_size == 0;
+    if (slot->total_size < ses->owner->extent) {
+        const size_t copy_size = smaller(payload.size, ses->owner->extent - slot->total_size);
+        (void)memcpy(&slot->payload[slot->total_size], payload.data, copy_size);
+    }
     slot->total_size += payload.size; // Before truncation.
-    if (ses->owner->extent == 0) {
-        return true;
-    }
-    if (start) {
-        CANARD_ASSERT((ses->owner->extent > 0) && (slot->payload.data == NULL));
-        slot->payload.data = mem_alloc(ses->owner->owner->mem.rx_payload, ses->owner->extent);
-        if (NULL == slot->payload.data) {
-            return false; // OOM. Must destroy the slot.
-        }
-    }
-    CANARD_ASSERT(slot->payload.data != NULL);
-    const size_t copy_size = smaller(payload.size, ses->owner->extent - slot->payload.size);
-    (void)memcpy(((byte_t*)slot->payload.data) + slot->payload.size, payload.data, copy_size);
-    slot->payload.size += copy_size;
-    return true;
 }
 
 // Returns false on OOM, no other failure modes.
@@ -1372,7 +1368,7 @@ bool canard_new(canard_t* const              self,
 {
     bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
               (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
-              mem_valid(memory.rx_session) && mem_valid(memory.rx_slot) && mem_valid(memory.rx_payload) &&
+              mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
               ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
     if (ok) {
         (void)memset(self, 0, sizeof(*self));

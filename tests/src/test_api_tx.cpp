@@ -100,7 +100,7 @@ static const canard_vtable_t capture_vtable = {
 static canard_mem_set_t make_std_memory()
 {
     const canard_mem_t r = { .vtable = &std_mem_vtable, .context = nullptr };
-    return canard_mem_set_t{ .tx_transfer = r, .tx_frame = r, .rx_session = r, .rx_slot = r, .rx_payload = r };
+    return canard_mem_set_t{ .tx_transfer = r, .tx_frame = r, .rx_session = r, .rx_payload = r };
 }
 
 static void init_with_capture_node_id(canard_t* const self, tx_capture_t* const capture, const uint_least8_t node_id)
@@ -126,9 +126,8 @@ static void test_canard_new_validation()
     const canard_mem_set_t    mem     = make_std_memory();
     const canard_mem_vtable_t bad_mv  = { .free = std_free_mem, .alloc = nullptr };
     const canard_mem_t        bad_mr  = { .vtable = &bad_mv, .context = nullptr };
-    const canard_mem_set_t    bad_mem = canard_mem_set_t{
-           .tx_transfer = bad_mr, .tx_frame = bad_mr, .rx_session = bad_mr, .rx_slot = bad_mr, .rx_payload = bad_mr
-    };
+    const canard_mem_set_t    bad_mem =
+      canard_mem_set_t{ .tx_transfer = bad_mr, .tx_frame = bad_mr, .rx_session = bad_mr, .rx_payload = bad_mr };
 
     TEST_ASSERT_FALSE(canard_new(nullptr, &test_vtable, mem, 16, 1, 1234, 0, nullptr)); // Invalid self.
     TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, 16, 1, 1234, 0, nullptr));        // Invalid vtable.
