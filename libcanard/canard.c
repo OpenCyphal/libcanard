@@ -411,7 +411,7 @@ typedef struct tx_transfer_t
     canard_us_t deadline;
     uint64_t    seqno;
     uint64_t    can_id_msb : CAN_ID_MSb_BITS;
-    uint64_t    transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
+    uint64_t    transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH; // TODO remove, not needed.
     uint64_t    fd : 1;
 
     // Mutable transmission state. All other fields, except for the index handles, are immutable.
@@ -1194,21 +1194,74 @@ static_assert((sizeof(void*) > 4) || (sizeof(rx_slot_t) <= 24), "too large");
 // but it was too costly on MCUs: with a 32-bit pointer it took 512 bytes for the array plus overheads,
 // resulting in 1 KiB o1heap blocks per session, very expensive. Here we use a much less RAM-heavy approach with
 // sparse nodes in a tree with log-time lookup.
+//
+// The session keeps the last received transfer-ID, plus each slot holds one as well. This is needed because a
+// low-priority transfer may be temporarily preempted by a higher-priority one; each transfer has a unique transfer-ID
+// within the transfer-ID wraparound window. It is possible that a low-priority transfer with ID N is preempted by a
+// sequence of transfers whose count is a multiple of the wraparound window; if the transfer-ID deduplication was done
+// at the slot level only, then such sequence could cause the slot to reject a new transfer as a duplicate. To avoid
+// this, transfer-ID state in the slots is only used for start-of-transfer loss detection, while deduplication relies
+// on the single shared state at the session level.
 typedef struct
 {
     canard_tree_t          index;
     canard_listed_t        list_animation;           // On update, session moved to the tail; oldest pushed to the head.
     rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
     canard_subscription_t* owner;
+    byte_t                 transfer_id; // Used for deduplication.
     byte_t                 node_id;
     byte_t                 iface_index; // Currently accepting frames only from this iface.
 } rx_session_t;
 static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large");
 
+static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
+                              const canard_us_t                  ts,
+                              const byte_t                       transfer_id,
+                              const bool                         v1)
+{
+    rx_slot_t* const slot = mem_alloc_zero(sub->owner->mem.rx_slot, sizeof(rx_slot_t));
+    if (slot != NULL) {
+        slot->timestamp    = ts;
+        slot->payload.data = NULL;
+        slot->crc          = sub->crc_seed;
+        slot->transfer_id  = transfer_id & CANARD_TRANSFER_ID_MAX;
+        slot->toggle       = v1 ? 1 : 0;
+    }
+    return slot;
+}
+
 static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* const slot)
 {
     mem_free(sub->owner->mem.rx_payload, slot->single_frame ? slot->payload.size : sub->extent, slot->payload.data);
     mem_free(sub->owner->mem.rx_slot, sizeof(rx_slot_t), slot);
+}
+
+static int32_t rx_session_cavl_compare(const void* const user, const canard_tree_t* const node)
+{
+    return ((int32_t)(*(byte_t*)user)) - ((int32_t)CAVL2_TO_OWNER(node, rx_session_t, index)->node_id);
+}
+
+typedef struct
+{
+    canard_subscription_t* owner;
+    byte_t                 node_id;
+} rx_session_factory_context_t;
+
+static canard_tree_t* rx_session_factory(void* const user)
+{
+    rx_session_factory_context_t* const ctx = (rx_session_factory_context_t*)user;
+    rx_session_t* const                 ses = mem_alloc_zero(ctx->owner->owner->mem.rx_session, sizeof(rx_session_t));
+    if (ses == NULL) {
+        return NULL;
+    }
+    ses->index          = TREE_NULL;
+    ses->list_animation = LIST_NULL;
+    FOREACH_SLOT (i) {
+        ses->slots[i] = NULL;
+    }
+    ses->owner   = ctx->owner;
+    ses->node_id = ctx->node_id;
+    return &ses->index;
 }
 
 static void rx_session_destroy(rx_session_t* const ses)
@@ -1292,6 +1345,25 @@ static bool rx_slot_write_payload(rx_session_t* const  ses,
     (void)memcpy(((byte_t*)slot->payload.data) + slot->payload.size, payload.data, copy_size);
     slot->payload.size += copy_size;
     return true;
+}
+
+// Returns false on OOM, no other failure modes.
+static bool rx_session_update(canard_subscription_t* const sub, const canard_us_t ts, const frame_t* const frame)
+{
+    CANARD_ASSERT((sub != NULL) && (frame != NULL) && (frame->payload.data != NULL) && (ts >= 0));
+    CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
+
+    rx_session_factory_context_t factory_context = { .owner = sub, .node_id = frame->src };
+    rx_session_t* const          ses             = CAVL2_TO_OWNER(
+      cavl2_find_or_insert(&sub->sessions, &frame->src, rx_session_cavl_compare, &factory_context, rx_session_factory),
+      rx_session_t,
+      index);
+    if (ses == NULL) {
+        return false;
+    }
+    ses->transfer_id++; // TODO stub
+
+    return false;
 }
 
 // ---------------------------------------------           MISC            ---------------------------------------------
