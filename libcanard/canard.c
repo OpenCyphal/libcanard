@@ -73,23 +73,20 @@ typedef unsigned char byte_t;
 
 #define TREE_NULL (canard_tree_t){ NULL, { NULL, NULL }, 0 }
 
-typedef enum format_t
+typedef enum kind_t
 {
-    format_1v1_message  = 0,
-    format_1v0_message  = 1,
-    format_1v0_response = 2,
-    format_1v0_request  = 3,
+    kind_1v1_message  = 0,
+    kind_1v0_message  = 1,
+    kind_1v0_response = 2,
+    kind_1v0_request  = 3,
     // v0.1
-    format_0v1_message  = 4,
-    format_0v1_response = 5,
-    format_0v1_request  = 6,
-} format_t;
-static_assert(CANARD_FORMAT_COUNT == format_0v1_request + 1, "");
+    kind_0v1_message  = 4,
+    kind_0v1_response = 5,
+    kind_0v1_request  = 6,
+} kind_t;
+static_assert(CANARD_KIND_COUNT == kind_0v1_request + 1, "");
 
-static bool format_is_v0(const format_t kind)
-{
-    return (kind == format_0v1_message) || (kind == format_0v1_request) || (kind == format_0v1_response);
-}
+static bool kind_is_v1(const kind_t kind) { return kind < kind_0v1_message; }
 
 #define KILO 1000LL
 #define MEGA (KILO * KILO)
@@ -1055,7 +1052,7 @@ bool canard_0v1_respond(canard_t* const             self,
 typedef struct
 {
     canard_prio_t priority;
-    format_t      format;
+    kind_t        kind;
 
     uint32_t port_id; // in v0 this stores the data type ID.
 
@@ -1125,17 +1122,17 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v1->dst     = (byte_t)((can_id >> 7U) & CANARD_NODE_ID_MAX);
             out_v1->port_id = (can_id >> 14U) & CANARD_SERVICE_ID_MAX;
             const bool req  = (can_id & (UINT32_C(1) << 24U)) != 0U;
-            out_v1->format  = req ? format_1v0_request : format_1v0_response;
+            out_v1->kind    = req ? kind_1v0_request : kind_1v0_response;
         } else {
             out_v1->dst       = CANARD_NODE_ID_ANONYMOUS;
             const bool is_1v1 = (can_id & (UINT32_C(1) << 7U)) != 0U;
             if (is_1v1) {
                 out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX;
-                out_v1->format  = format_1v1_message;
+                out_v1->kind    = kind_1v1_message;
             } else {
                 is_v1           = is_v1 && !bit_23;
                 out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX_1v0;
-                out_v1->format  = format_1v0_message;
+                out_v1->kind    = kind_1v0_message;
                 if ((can_id & (UINT32_C(1) << 24U)) != 0U) {
                     out_v1->src = CANARD_NODE_ID_ANONYMOUS;
                     is_v1       = is_v1 && start && end; // anonymous can only be single-frame
@@ -1158,11 +1155,11 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v0->dst      = dst;
             out_v0->port_id  = (can_id >> 16U) & 0xFFU;
             const bool req   = (can_id & (UINT32_C(1) << 15U)) != 0U;
-            out_v0->format   = req ? format_0v1_request : format_0v1_response;
+            out_v0->kind     = req ? kind_0v1_request : kind_0v1_response;
         } else {
             out_v0->dst     = CANARD_NODE_ID_ANONYMOUS;
             out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
-            out_v0->format  = format_0v1_message;
+            out_v0->kind    = kind_0v1_message;
             if (src == 0) {
                 out_v0->src = CANARD_NODE_ID_ANONYMOUS;
                 is_v0       = is_v0 && start && end; // anonymous can only be single-frame
@@ -1243,8 +1240,7 @@ static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large")
 static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
                               const canard_us_t                  start_ts,
                               const byte_t                       transfer_id,
-                              const byte_t                       iface_index,
-                              const bool                         v1)
+                              const byte_t                       iface_index)
 {
     rx_slot_t* const slot = mem_alloc(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent);
     if (slot != NULL) {
@@ -1252,7 +1248,7 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
         slot->start_ts        = start_ts;
         slot->crc             = sub->crc_seed;
         slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
-        slot->expected_toggle = v1 ? 1 : 0;
+        slot->expected_toggle = kind_is_v1(sub->kind) ? 1 : 0;
         slot->iface_index     = iface_index & ((1U << IFACE_INDEX_BIT_LENGTH) - 1U);
     }
     return slot;
@@ -1281,13 +1277,12 @@ static canard_tree_t* rx_session_factory(void* const user)
     if (ses == NULL) {
         return NULL;
     }
-    ses->index          = TREE_NULL;
-    ses->list_animation = LIST_NULL;
     FOREACH_SLOT (i) {
         ses->slots[i] = NULL;
     }
     ses->owner   = ctx->owner;
     ses->node_id = ctx->node_id;
+    enlist_tail(&ctx->owner->owner->rx.list_session_by_animation, &ses->list_animation);
     return &ses->index;
 }
 
@@ -1336,21 +1331,63 @@ static void rx_slot_write_payload(const rx_session_t* const ses, rx_slot_t* cons
 }
 
 // Returns false on OOM, no other failure modes.
-static bool rx_session_update(canard_subscription_t* const sub, const canard_us_t ts, const frame_t* const frame)
+static bool rx_session_update(canard_subscription_t* const sub,
+                              const canard_us_t            ts,
+                              const frame_t* const         frame,
+                              const byte_t                 iface_index)
 {
     CANARD_ASSERT((sub != NULL) && (frame != NULL) && (frame->payload.data != NULL) && (ts >= 0));
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
 
     rx_session_factory_context_t factory_context = { .owner = sub, .node_id = frame->src };
-    rx_session_t* const          ses             = CAVL2_TO_OWNER(
-      cavl2_find_or_insert(&sub->sessions, &frame->src, rx_session_cavl_compare, &factory_context, rx_session_factory),
-      rx_session_t,
-      index);
+    rx_session_t* const          ses =
+      CAVL2_TO_OWNER(frame->start ? cavl2_find_or_insert(&sub->sessions, //
+                                                         &frame->src,
+                                                         rx_session_cavl_compare,
+                                                         &factory_context,
+                                                         rx_session_factory)
+                                  : cavl2_find(sub->sessions, &frame->src, rx_session_cavl_compare),
+                     rx_session_t,
+                     index);
     if (ses == NULL) {
-        return false;
+        sub->owner->err.oom += frame->start;
+        return !frame->start;
     }
-    ses->last_admitted_transfer_id++; // TODO stub
-    (void)ts;
+
+    // Frame admittance state machine. A highly complex piece, redesigned after v4 to support priority preemption.
+    // TID forward difference illustration: f(2,3)==31, f(2,2)==0, f(2,1)==1
+    const bool tid_new = rx_transfer_id_forward_difference(ses->last_admitted_transfer_id, frame->transfer_id) > 1;
+    const canard_us_t timed_out = (ts - ses->last_admitted_start_ts) > ses->owner->transfer_id_timeout;
+    bool              accept    = false;
+    if (!frame->start) {
+        const rx_slot_t* const slot = ses->slots[frame->priority];
+        accept = (slot != NULL) && (slot->transfer_id == frame->transfer_id) && (slot->iface_index == iface_index) &&
+                 (slot->expected_toggle == frame->toggle);
+    } else {
+        const rx_slot_t* const slot = ses->slots[frame->priority];
+        accept = (slot == NULL) || (slot->transfer_id != frame->transfer_id) || tid_new || timed_out; // --
+    }
+    if (!accept) {
+        return true; // Frame not needed; not a failure to accept.
+    }
+
+    // The frame must be accepted. If this is the start of a new transfer, we must update state.
+    enlist_tail(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
+    if (frame->start) {
+        ses->last_admitted_start_ts    = ts;
+        ses->last_admitted_transfer_id = frame->transfer_id;
+        rx_slot_destroy(sub, ses->slots[frame->priority]);
+        ses->slots[frame->priority] = NULL;
+        if (!frame->end) { // more frames to follow, must store in-progress state
+            ses->slots[frame->priority] = rx_slot_new(sub, ts, frame->transfer_id, iface_index);
+            if (ses->slots[frame->priority] == NULL) {
+                sub->owner->err.oom++;
+                return false;
+            }
+        }
+    }
+
+    // TODO acceptance
 
     return false;
 }

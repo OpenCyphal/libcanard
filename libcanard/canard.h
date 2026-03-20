@@ -80,7 +80,7 @@ extern "C"
 #define CANARD_MTU_CAN_FD      64U
 
 /// Exposed only for type completeness.
-#define CANARD_FORMAT_COUNT 7
+#define CANARD_KIND_COUNT 7
 
 typedef struct canard_t canard_t;
 
@@ -316,7 +316,7 @@ struct canard_t
 
     struct
     {
-        canard_tree_t* subscriptions[CANARD_FORMAT_COUNT];
+        canard_tree_t* subscriptions[CANARD_KIND_COUNT];
         canard_list_t  list_session_by_animation; ///< Oldest at the head.
 
         size_t           filter_count;
