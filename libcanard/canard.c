@@ -1188,17 +1188,16 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 
 // Reassembly state at a specific priority level.
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
-// Each state is only kept as long as the transfer reassembly is in progress; once it's completed, the slot is
-// immediately destroyed.
+// Each state is only kept as long as the transfer reassembly is in progress; once it's completed, the slot is deleted.
 typedef struct
 {
-    canard_us_t        timestamp;          // Timestamp of the start-of-transfer.
-    size_t             total_payload_size; // The raw payload size before the implicit truncation and CRC removal.
-    canard_bytes_mut_t payload;            // Dynamically allocated and handed off to the application when done.
+    canard_us_t        start_ts;
+    size_t             total_size; // The raw payload size before the implicit truncation and CRC removal.
+    canard_bytes_mut_t payload;    // Dynamically allocated and handed off to the application when done.
     uint16_t           crc;
     byte_t             transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
-    byte_t             toggle       : 1;
-    byte_t             single_frame : 1; // Not extent-sized; the payload size is full size.
+    byte_t             expected_toggle : 1;
+    byte_t             iface_index;
 } rx_slot_t;
 static_assert((sizeof(void*) > 4) || (sizeof(rx_slot_t) <= 24), "too large");
 
@@ -1218,27 +1217,28 @@ typedef struct
 {
     canard_tree_t          index;
     canard_listed_t        list_animation; // On update, session moved to the tail; oldest pushed to the head.
-    canard_us_t            timestamp;
+    canard_us_t            last_admitted_start_ts;
     rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
     canard_subscription_t* owner;
-    byte_t                 transfer_id; // Used for deduplication.
+    byte_t                 last_admitted_transfer_id;
     byte_t                 node_id;
-    byte_t                 iface_index; // Currently accepting frames only from this iface.
 } rx_session_t;
 static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large");
 
 static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
-                              const canard_us_t                  ts,
+                              const canard_us_t                  start_ts,
                               const byte_t                       transfer_id,
+                              const byte_t                       iface_index,
                               const bool                         v1)
 {
     rx_slot_t* const slot = mem_alloc_zero(sub->owner->mem.rx_slot, sizeof(rx_slot_t));
     if (slot != NULL) {
-        slot->timestamp    = ts;
-        slot->payload.data = NULL;
-        slot->crc          = sub->crc_seed;
-        slot->transfer_id  = transfer_id & CANARD_TRANSFER_ID_MAX;
-        slot->toggle       = v1 ? 1 : 0;
+        slot->start_ts        = start_ts;
+        slot->payload.data    = NULL;
+        slot->crc             = sub->crc_seed;
+        slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
+        slot->expected_toggle = v1 ? 1 : 0;
+        slot->iface_index     = iface_index;
     }
     return slot;
 }
@@ -1246,7 +1246,7 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
 static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* const slot)
 {
     if (slot != NULL) {
-        mem_free(sub->owner->mem.rx_payload, slot->single_frame ? slot->payload.size : sub->extent, slot->payload.data);
+        mem_free(sub->owner->mem.rx_payload, slot->payload.size, slot->payload.data);
         mem_free(sub->owner->mem.rx_slot, sizeof(rx_slot_t), slot);
     }
 }
@@ -1295,67 +1295,41 @@ static void rx_session_destroy(rx_session_t* const ses)
 // Checks the state and purges stale slots to reclaim memory early. Returns the number of in-progress slots remaining.
 static size_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
 {
-    const canard_us_t deadline          = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
-    size_t            in_progress_slots = 0;
+    const canard_us_t deadline = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
+    size_t            n_slots  = 0;
     FOREACH_SLOT (i) {
         const rx_slot_t* const slot = ses->slots[i];
         if (slot == NULL) {
             continue;
         }
-        CANARD_ASSERT(slot->timestamp >= 0);
-        if (slot->timestamp < deadline) { // Too old, destroy even if in progress -- unlikely to complete anyway.
+        CANARD_ASSERT(slot->start_ts >= 0);
+        CANARD_ASSERT(ses->last_admitted_start_ts >= slot->start_ts);
+        if (slot->start_ts < deadline) { // Too old, destroy even if in progress -- unlikely to complete anyway.
             rx_slot_destroy(ses->owner, ses->slots[i]);
             ses->slots[i] = NULL;
         } else {
-            ses->timestamp = later(ses->timestamp, slot->timestamp);
-            if (slot->total_payload_size > 0) {
-                in_progress_slots++;
-            }
+            n_slots++;
         }
     }
-    return in_progress_slots;
+    return n_slots;
 }
 
-// Returns false on OOM, no other failure modes. Stores at most extent bytes.
-// Has an optimization for single-frame transfers where the allocated size is capped by min(extent, payload_size).
-// The idea is that if we receive the first frame that is also the last, there is no need to allocate full extent-sized
-// buffer if the actual frame payload is smaller.
-static bool rx_slot_write_payload(rx_session_t* const  ses,
-                                  rx_slot_t* const     slot,
-                                  const canard_bytes_t payload,
-                                  const bool           end)
+// Returns false on OOM, no other failure modes. Stores at most extent bytes. This is ONLY for multi-frame transfers.
+static bool rx_slot_write_payload(rx_session_t* const ses, rx_slot_t* const slot, const canard_bytes_t payload)
 {
     CANARD_ASSERT(slot->payload.size <= ses->owner->extent); // enforced by the subscription logic
-    CANARD_ASSERT(slot->payload.size <= slot->total_payload_size);
-
-    const bool start   = slot->total_payload_size == 0;
-    slot->single_frame = start && end;
-    slot->total_payload_size += payload.size; // Before truncation.
-
-    // For simplicity, the case of zero extent is handled separately. It cannot fail.
-    // The case of nonzero extent but an empty frame is handled similarly.
-    if ((ses->owner->extent == 0) || (payload.size == 0)) {
+    CANARD_ASSERT(slot->payload.size <= slot->total_size);
+    CANARD_ASSERT(payload.size > 0); // a multi-frame transfer cannot contain empty frames; enforced externally
+    const bool start = slot->total_size == 0;
+    slot->total_size += payload.size; // Before truncation.
+    if (ses->owner->extent == 0) {
         return true;
     }
-
-    // The single-frame non-empty case is also extracted for simplicity.
-    if (slot->single_frame) {
-        CANARD_ASSERT((payload.size > 0) && (ses->owner->extent > 0) && (slot->payload.data == NULL));
-        slot->payload.size = smaller(payload.size, ses->owner->extent);
-        slot->payload.data = mem_alloc(ses->owner->owner->mem.rx_payload, slot->payload.size);
-        if (slot->payload.data == NULL) {
-            return false; // OOM. Must reset the slot.
-        }
-        (void)memcpy(slot->payload.data, payload.data, slot->payload.size);
-        return true;
-    }
-
-    // The general multi-frame case with non-empty payload.
     if (start) {
-        CANARD_ASSERT((payload.size > 0) && (ses->owner->extent > 0) && (slot->payload.data == NULL));
+        CANARD_ASSERT((ses->owner->extent > 0) && (slot->payload.data == NULL));
         slot->payload.data = mem_alloc(ses->owner->owner->mem.rx_payload, ses->owner->extent);
         if (NULL == slot->payload.data) {
-            return false; // OOM. Must reset the slot.
+            return false; // OOM. Must destroy the slot.
         }
     }
     CANARD_ASSERT(slot->payload.data != NULL);
@@ -1379,7 +1353,7 @@ static bool rx_session_update(canard_subscription_t* const sub, const canard_us_
     if (ses == NULL) {
         return false;
     }
-    ses->transfer_id++; // TODO stub
+    ses->last_admitted_transfer_id++; // TODO stub
     (void)ts;
 
     return false;
@@ -1447,7 +1421,7 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
         rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
         if (ses != NULL) {
             const size_t in_progress_slots = rx_session_scan(ses, now);
-            if ((in_progress_slots == 0) && (ses->timestamp < (now - ses->owner->transfer_id_timeout))) {
+            if ((in_progress_slots == 0) && (ses->last_admitted_start_ts < (now - ses->owner->transfer_id_timeout))) {
                 rx_session_destroy(ses);
             }
         }
