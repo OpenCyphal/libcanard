@@ -292,15 +292,15 @@ static void test_rx_parse_version_detection(void)
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(can_id, pl, &v0, &v1));
     }
-    // SOT=0 toggle=0 → both
+    // SOT=0 toggle=0 → both (8 bytes needed: non-last frames require full MTU)
     {
-        const byte_t         d[] = { 0x00 };
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x00 };
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(3, rx_parse(can_id, pl, &v0, &v1));
     }
-    // SOT=0 toggle=1 → both
+    // SOT=0 toggle=1 → both (8 bytes needed: non-last frames require full MTU)
     {
-        const byte_t         d[] = { 0x20 };
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x20 };
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(3, rx_parse(can_id, pl, &v0, &v1));
     }
@@ -358,16 +358,16 @@ static void test_rx_parse_tail_byte_exhaustive(void)
     const uint32_t can_id = 0x00002A01UL; // valid for both versions (message, bit7=0)
 
     // All 8 SOT/EOT/toggle combinations. Each uses its own data array to avoid cppcheck false positives.
-    { // SOT=0 EOT=0 toggle=0 → both versions, check v1
-        const byte_t         d[] = { 0x42, 0x00 };
+    { // SOT=0 EOT=0 toggle=0 → both versions, check v1 (8 bytes: non-last requires full MTU)
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x00 };
         const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_FALSE(v1.start);
         TEST_ASSERT_FALSE(v1.end);
         TEST_ASSERT_FALSE(v1.toggle);
     }
-    { // SOT=0 EOT=0 toggle=1
-        const byte_t         d[] = { 0x42, 0x20 };
+    { // SOT=0 EOT=0 toggle=1 (8 bytes: non-last requires full MTU)
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x20 };
         const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_FALSE(v1.start);
@@ -390,16 +390,16 @@ static void test_rx_parse_tail_byte_exhaustive(void)
         TEST_ASSERT_TRUE(v1.end);
         TEST_ASSERT_TRUE(v1.toggle);
     }
-    { // SOT=1 EOT=0 toggle=0 → v0 only
-        const byte_t         d[] = { 0x42, 0x80 };
+    { // SOT=1 EOT=0 toggle=0 → v0 only (8 bytes: non-last requires full MTU)
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x80 };
         const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_TRUE(v0.start);
         TEST_ASSERT_FALSE(v0.end);
         TEST_ASSERT_FALSE(v0.toggle);
     }
-    { // SOT=1 EOT=0 toggle=1 → v1 only
-        const byte_t         d[] = { 0x42, 0xA0 };
+    { // SOT=1 EOT=0 toggle=1 → v1 only (8 bytes: non-last requires full MTU)
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0xA0 };
         const canard_bytes_t pl  = { sizeof(d), d };
         rx_parse(can_id, pl, &v0, &v1);
         TEST_ASSERT_TRUE(v1.start);
@@ -466,7 +466,7 @@ static void test_rx_parse_cross_version_ambiguity(void)
 
     // v1.1 message CAN ID 0x0C04D2AA simultaneously parses as v0 service (bit7=1).
     {
-        const byte_t         d[] = { 0x42, nf };
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, nf };
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(3, ret);
@@ -482,7 +482,7 @@ static void test_rx_parse_cross_version_ambiguity(void)
     }
     // All-ones 0x1FFFFFFF: v1 rejected (bit23 in service path), v0 parses as service.
     {
-        const byte_t         d[] = { nf };
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, nf };
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x1FFFFFFFUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(1, ret);
@@ -491,20 +491,17 @@ static void test_rx_parse_cross_version_ambiguity(void)
         TEST_ASSERT_EQUAL_HEX8(127, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(127, v0.src);
     }
-    // All-zeros 0x00000000: both parse as messages with all-zero port/priority.
+    // All-zeros 0x00000000: v1 parses as v1.0 message; v0 anonymous (src=0) rejected for non-first frame
+    // because anonymous can only be single-frame (start && end required, but start=false here).
     {
-        const byte_t         d[] = { nf };
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, nf };
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x00000000UL, pl, &v0, &v1);
-        TEST_ASSERT_EQUAL_UINT8(3, ret);
+        TEST_ASSERT_EQUAL_UINT8(2, ret); // v1 only; v0 anonymous rejected
         // v1: v1.0 message (bit7=0), port_id=0, src=0
         TEST_ASSERT_EQUAL_INT(format_1v0_message, v1.format);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0, v1.src);
-        // v0: message, port_id=0, src=0→anonymous
-        TEST_ASSERT_EQUAL_INT(format_0v1_message, v0.format);
-        TEST_ASSERT_EQUAL_UINT32(0, v0.port_id);
-        TEST_ASSERT_EQUAL_HEX8(0xFF, v0.src);
     }
 }
 
@@ -602,8 +599,8 @@ static void test_rx_parse_non_first_dual_output(void)
     frame_t v0;
     frame_t v1;
     // CAN ID 0x0C04D2AA: v1.1 message (bit7=1) / v0 service (bit7=1).
-    // Non-first tail: SOT=0 EOT=0 toggle=0 tid=5.
-    const byte_t         d[] = { 0x11, 0x22, 0x05 };
+    // Non-first tail: SOT=0 EOT=0 toggle=0 tid=5. 8 bytes needed for non-last MTU.
+    const byte_t         d[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x05 };
     const canard_bytes_t pl  = { sizeof(d), d };
     const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
     TEST_ASSERT_EQUAL_UINT8(3, ret);
@@ -618,7 +615,7 @@ static void test_rx_parse_non_first_dual_output(void)
     TEST_ASSERT_FALSE(v1.start);
     TEST_ASSERT_FALSE(v1.end);
     TEST_ASSERT_FALSE(v1.toggle);
-    TEST_ASSERT_EQUAL_size_t(2, v1.payload.size);
+    TEST_ASSERT_EQUAL_size_t(7, v1.payload.size);
     TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
 
     // v0 output fully populated: v0 service request, type_id=4, dst=82, src=42.
@@ -631,8 +628,80 @@ static void test_rx_parse_non_first_dual_output(void)
     TEST_ASSERT_FALSE(v0.start);
     TEST_ASSERT_FALSE(v0.end);
     TEST_ASSERT_FALSE(v0.toggle);
-    TEST_ASSERT_EQUAL_size_t(2, v0.payload.size);
+    TEST_ASSERT_EQUAL_size_t(7, v0.payload.size);
     TEST_ASSERT_EQUAL_PTR(d, v0.payload.data);
+}
+
+// =====================================================================================================================
+// Test 17: Payload validation — exercises the payload_ok computation.
+static void test_rx_parse_payload_validation(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // CAN ID valid for both versions (message, bit7=0, bit25=0, bit23=0).
+    const uint32_t can_id = 0x00002A01UL;
+
+    // Non-last frame under MTU → rejected (payload_raw.size < 8 when end=false).
+    {
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 0x05 }; // 7 bytes, tail: SOT=0 EOT=0 toggle=0 tid=5
+        const canard_bytes_t pl  = { sizeof(d), d };
+        TEST_ASSERT_EQUAL_UINT8(0, rx_parse(can_id, pl, &v0, &v1));
+    }
+    // Non-last frame at exact MTU → accepted.
+    {
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x05 }; // 8 bytes
+        const canard_bytes_t pl  = { sizeof(d), d };
+        TEST_ASSERT_EQUAL_UINT8(3, rx_parse(can_id, pl, &v0, &v1));
+    }
+    // Last frame of multi-frame with empty payload → rejected (payload.size=0, not single-frame).
+    {
+        const byte_t         d[] = { 0x40 }; // SOT=0 EOT=1 toggle=0 tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        TEST_ASSERT_EQUAL_UINT8(0, rx_parse(can_id, pl, &v0, &v1));
+    }
+    // Single-frame with empty payload → accepted (start && end, so second clause passes).
+    {
+        const byte_t         d[] = { 0xC0 }; // SOT=1 EOT=1 toggle=0 tid=0 → v0 only
+        const canard_bytes_t pl  = { sizeof(d), d };
+        TEST_ASSERT_EQUAL_UINT8(1, rx_parse(can_id, pl, &v0, &v1));
+    }
+}
+
+// =====================================================================================================================
+// Test 18: Anonymous multi-frame transfers are rejected.
+static void test_rx_parse_anonymous_multi_frame_reject(void)
+{
+    frame_t v0;
+    frame_t v1;
+
+    // v1.0 anonymous multi-frame → v1 rejected (anonymous requires start && end).
+    // CAN ID 0x09606455: v1.0 message, bit24=1 (anonymous), prio=2, subject=100.
+    {
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0xA0 }; // SOT=1 EOT=0 toggle=1 → v1 first frame
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x09606455UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(0, ret); // v1 rejected (anonymous multi-frame); v0 excluded (toggle=1)
+    }
+    // v0 anonymous multi-frame → v0 rejected (anonymous requires start && end).
+    // CAN ID 0x13040A00: v0 message, src=0 (anonymous), prio=4, type_id=0x040A.
+    {
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x80 }; // SOT=1 EOT=0 toggle=0 → v0 first frame
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(0, ret); // v0 rejected (anonymous multi-frame); v1 excluded (toggle=0)
+    }
+    // v1.0 anonymous single-frame → accepted (sanity check).
+    {
+        const byte_t         d[] = { 0xE0 }; // SOT=1 EOT=1 toggle=1 tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x09606455UL, pl, &v0, &v1));
+    }
+    // v0 anonymous single-frame → accepted (sanity check).
+    {
+        const byte_t         d[] = { 0xC0 }; // SOT=1 EOT=1 toggle=0 tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x13040A00UL, pl, &v0, &v1));
+    }
 }
 
 // =====================================================================================================================
@@ -657,6 +726,8 @@ int main(void)
     RUN_TEST(test_rx_parse_v1_1_accepts_bit23);
     RUN_TEST(test_rx_parse_v1_0_message_ignores_reserved_bits_22_21);
     RUN_TEST(test_rx_parse_non_first_dual_output);
+    RUN_TEST(test_rx_parse_payload_validation);
+    RUN_TEST(test_rx_parse_anonymous_multi_frame_reject);
 
     return UNITY_END();
 }
