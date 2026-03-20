@@ -761,7 +761,7 @@ static void test_rx_session_scan(void)
         test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner = &ctx.sub;
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
@@ -774,7 +774,7 @@ static void test_rx_session_scan(void)
         ses.slots[0] = make_test_slot(&ctx, 4500, 0, true);
         ses.slots[3] = make_test_slot(&ctx, 4800, 0, true);
         ses.slots[7] = make_test_slot(&ctx, 4001, 0, true);
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_EQUAL_INT64(4800, ses.timestamp);
         TEST_ASSERT_EQUAL_UINT64(0, ctx.alloc_slot.count_free);
         rx_slot_destroy(&ctx.sub, ses.slots[0]);
@@ -789,7 +789,7 @@ static void test_rx_session_scan(void)
         ses.owner    = &ctx.sub;
         ses.slots[1] = make_test_slot(&ctx, 3999, 0, true);
         ses.slots[5] = make_test_slot(&ctx, 2000, 0, true);
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NULL(ses.slots[1]);
         TEST_ASSERT_NULL(ses.slots[5]);
         TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
@@ -807,7 +807,7 @@ static void test_rx_session_scan(void)
         ses.slots[1]->total_payload_size = 10;
         ses.slots[4]                     = make_test_slot(&ctx, 4200, 0, true); // fresh, idle
         ses.slots[6]                     = make_test_slot(&ctx, 4000, 0, true); // boundary, NOT stale
-        TEST_ASSERT_EQUAL_size_t(1, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(1, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[2]);
         TEST_ASSERT_NOT_NULL(ses.slots[1]);
@@ -826,7 +826,7 @@ static void test_rx_session_scan(void)
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[0] = make_test_slot(&ctx, 4000, 0, true);
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NOT_NULL(ses.slots[0]);
         TEST_ASSERT_EQUAL_INT64(4000, ses.timestamp);
         rx_slot_destroy(&ctx.sub, ses.slots[0]);
@@ -838,7 +838,7 @@ static void test_rx_session_scan(void)
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[0] = make_test_slot(&ctx, 3999, 0, true);
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
@@ -855,7 +855,7 @@ static void test_rx_session_scan(void)
         ses.slots[1]                     = make_test_slot(&ctx, 2000, 64, false);
         ses.slots[1]->payload.size       = 30; // written so far; irrelevant to free size
         ses.slots[1]->total_payload_size = 30;
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[1]);
         TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
@@ -881,7 +881,7 @@ static void test_rx_session_scan(void)
         ses.slots[5]                     = make_test_slot(&ctx, 4999, 0, true);
         ses.slots[5]->total_payload_size = 20;
         ses.slots[7]                     = make_test_slot(&ctx, 4000, 0, true);
-        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[2]);
         TEST_ASSERT_NULL(ses.slots[4]);
@@ -907,7 +907,7 @@ static void test_rx_session_scan(void)
         ses.slots[3]                     = make_test_slot(&ctx, 6000, 0, true);
         ses.slots[3]->total_payload_size = 20;
         ses.slots[5]                     = make_test_slot(&ctx, 7000, 0, true); // fresh, idle
-        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_EQUAL_INT64(7000, ses.timestamp);
         rx_slot_destroy(&ctx.sub, ses.slots[0]);
         rx_slot_destroy(&ctx.sub, ses.slots[3]);
@@ -926,7 +926,7 @@ static void test_rx_session_scan(void)
         ses.slots[1]                     = make_test_slot(&ctx, 6000, 64, false);
         ses.slots[1]->payload.size       = 30;
         ses.slots[1]->total_payload_size = 30;
-        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_EQUAL_UINT64(0, ctx.alloc_payload.count_free);
         TEST_ASSERT_EQUAL_size_t(42, ses.slots[0]->payload.size);
         TEST_ASSERT_EQUAL_size_t(30, ses.slots[1]->payload.size);
@@ -943,7 +943,7 @@ static void test_rx_session_scan(void)
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[0] = make_test_slot(&ctx, 3999, 0, true);
-        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, (40 * MEGA) + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_UINT64(0, ctx.alloc_payload.count_free);
