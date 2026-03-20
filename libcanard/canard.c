@@ -1190,7 +1190,7 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
 typedef struct
 {
-    canard_us_t        timestamp;          // Timestamp of the last received start-of-transfer; initially BIG_BANG.
+    canard_us_t        timestamp;          // Timestamp of the start-of-transfer.
     size_t             total_payload_size; // The raw payload size before the implicit truncation and CRC removal.
     canard_bytes_mut_t payload;            // Dynamically allocated and handed off to the application when done.
     uint16_t           crc;
@@ -1215,7 +1215,8 @@ static_assert((sizeof(void*) > 4) || (sizeof(rx_slot_t) <= 24), "too large");
 typedef struct
 {
     canard_tree_t          index;
-    canard_listed_t        list_animation;           // On update, session moved to the tail; oldest pushed to the head.
+    canard_listed_t        list_animation; // On update, session moved to the tail; oldest pushed to the head.
+    canard_us_t            timestamp;
     rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
     canard_subscription_t* owner;
     byte_t                 transfer_id; // Used for deduplication.
@@ -1289,18 +1290,11 @@ static void rx_session_destroy(rx_session_t* const ses)
     mem_free(sub->owner->mem.rx_session, sizeof(rx_session_t), ses);
 }
 
-typedef struct
+// Checks the state and purges stale slots to reclaim memory early. Returns the number of in-progress slots remaining.
+static size_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
 {
-    canard_us_t latest_sof_at;
-    byte_t      in_progress_slots;
-} rx_session_state_t;
-
-// Checks the state and purges stale slots to reclaim memory early.
-// A slot is stale if it's been idle for a very long time that is usually much larger than the transfer-ID timeout.
-static rx_session_state_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
-{
-    const canard_us_t  deadline = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
-    rx_session_state_t out      = { .latest_sof_at = BIG_BANG, .in_progress_slots = 0 };
+    const canard_us_t deadline          = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
+    size_t            in_progress_slots = 0;
     FOREACH_SLOT (i) {
         const rx_slot_t* const slot = ses->slots[i];
         if (slot == NULL) {
@@ -1311,13 +1305,13 @@ static rx_session_state_t rx_session_scan(rx_session_t* const ses, const canard_
             rx_slot_destroy(ses->owner, ses->slots[i]);
             ses->slots[i] = NULL;
         } else {
-            out.latest_sof_at = later(out.latest_sof_at, slot->timestamp);
+            ses->timestamp = later(ses->timestamp, slot->timestamp);
             if (slot->total_payload_size > 0) {
-                out.in_progress_slots++;
+                in_progress_slots++;
             }
         }
     }
-    return out;
+    return in_progress_slots;
 }
 
 // Returns false on OOM, no other failure modes. Stores at most extent bytes.
@@ -1450,8 +1444,8 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
         // transfer-ID timeout among all subscriptions, but this is a reasonable tradeoff for the reduced complexity.
         rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
         if (ses != NULL) {
-            const rx_session_state_t state = rx_session_scan(ses, now);
-            if ((state.in_progress_slots == 0) && (state.latest_sof_at < (now - ses->owner->transfer_id_timeout))) {
+            const size_t in_progress_slots = rx_session_scan(ses, now);
+            if ((in_progress_slots == 0) && (ses->timestamp < (now - ses->owner->transfer_id_timeout))) {
                 rx_session_destroy(ses);
             }
         }
