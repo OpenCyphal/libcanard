@@ -729,7 +729,7 @@ static void test_rx_context_init(test_rx_context_t* const ctx, const size_t exte
 
 // Allocates an rx_slot_t and optionally its payload buffer.
 // For single_frame slots, payload.size equals payload_alloc_size. For multi-frame, it starts at 0.
-static rx_slot_t* make_test_slot(const test_rx_context_t* const ctx,
+static rx_slot_t* make_test_slot(test_rx_context_t* const ctx,
                                  const canard_us_t        timestamp,
                                  const size_t             payload_alloc_size,
                                  const bool               single_frame)
