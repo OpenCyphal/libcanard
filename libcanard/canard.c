@@ -141,7 +141,9 @@ static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 
 static void mem_free(const canard_mem_t memory, const size_t size, void* const data)
 {
-    memory.vtable->free(memory, size, data);
+    if (data != NULL) {
+        memory.vtable->free(memory, size, data);
+    }
 }
 
 static bool mem_valid(const canard_mem_t memory)
@@ -399,7 +401,7 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj)
 #define CAN_ID_MSb_BITS (29U - 7U)
 
 // The struct must fit into a 128-byte O1Heap block in common embedded configurations.
-struct canard_txfer_t
+typedef struct canard_txfer_t
 {
     canard_tree_t   index_pending[CANARD_IFACE_COUNT];
     canard_tree_t   index_deadline;
@@ -418,7 +420,7 @@ struct canard_txfer_t
 
     // Application context.
     canard_user_context_t user_context;
-};
+} canard_txfer_t;
 static_assert((CANARD_IFACE_COUNT > 2) || (sizeof(void*) > 4) || (sizeof(canard_txfer_t) <= 120),
               "On a 32-bit platform with a half-fit heap, the TX transfer object should fit in a 128-byte block");
 
@@ -1172,9 +1174,7 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 // The maximum preemption depth is the number of priority levels minus one. We need one extra slot for the preempted
 // transfer itself. The worst case scenario is when we have a transfer at the lowest priority level preempted
 // by a transfer at the priority one higher, and so on up to the maximum.
-#define RX_SLOT_COUNT CANARD_PRIO_COUNT
-
-#define FOREACH_SLOT(i) for (size_t i = 0; (i) < RX_SLOT_COUNT; (i)++)
+#define FOREACH_SLOT(i) for (size_t i = 0; (i) < CANARD_PRIO_COUNT; (i)++)
 
 // Reassembly state at a specific priority level.
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
@@ -1184,51 +1184,46 @@ typedef struct
     size_t             total_payload_size; // The raw payload size before the implicit truncation and CRC removal.
     canard_bytes_mut_t payload;            // Dynamically allocated and handed off to the application when done.
     uint16_t           crc;
-    byte_t             transfer_id;
-    bool               toggle;
+    byte_t             transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
+    byte_t             toggle       : 1;
+    byte_t             single_frame : 1; // Not extent-sized; the payload size is full size.
 } rx_slot_t;
+static_assert((sizeof(void*) > 4) || (sizeof(rx_slot_t) <= 24), "too large");
 
 // Up to libcanard v4 we used a fixed-capacity array of pointers for per-remote sessions for constant-time lookup,
 // but it was too costly on MCUs: with a 32-bit pointer it took 512 bytes for the array plus overheads,
 // resulting in 1 KiB o1heap blocks per session, very expensive. Here we use a much less RAM-heavy approach with
-// sparse nodes in a tree with log-time lookup. We could also allocate them dynamically but they are small.
+// sparse nodes in a tree with log-time lookup.
 typedef struct
 {
     canard_tree_t          index;
-    canard_listed_t        list_animation;       // On update, session moved to the tail; oldest pushed to the head.
-    rx_slot_t              slots[RX_SLOT_COUNT]; // Indexed by priority level to allow preemption.
+    canard_listed_t        list_animation;           // On update, session moved to the tail; oldest pushed to the head.
+    rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
     canard_subscription_t* owner;
     byte_t                 node_id;
     byte_t                 iface_index; // Currently accepting frames only from this iface.
 } rx_session_t;
-static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 248), "too large");
+static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large");
 
-static void rx_slot_reset(rx_slot_t* const slot, const canard_mem_t payload_mem)
+static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* const slot)
 {
-    if (slot->payload.data != NULL) {
-        mem_free(payload_mem, slot->payload.size, slot->payload.data);
-    }
-    slot->timestamp          = BIG_BANG;
-    slot->total_payload_size = 0;
-    slot->payload            = (canard_bytes_mut_t){ .size = 0, .data = NULL };
-    slot->crc                = CRC_INITIAL;
-    slot->transfer_id        = 0;
-    slot->toggle             = false;
+    mem_free(sub->owner->mem.rx_payload, slot->single_frame ? slot->payload.size : sub->extent, slot->payload.data);
+    mem_free(sub->owner->mem.rx_slot, sizeof(rx_slot_t), slot);
 }
 
-static void rx_session_destroy(canard_subscription_t* const sub,
-                               rx_session_t* const          ses,
-                               const canard_mem_t           mem_session,
-                               const canard_mem_t           mem_payload)
+static void rx_session_destroy(rx_session_t* const ses)
 {
+    canard_subscription_t* const sub = ses->owner;
     FOREACH_SLOT (i) {
-        rx_slot_reset(&ses->slots[i], mem_payload);
+        if (ses->slots[i] != NULL) {
+            rx_slot_destroy(sub, ses->slots[i]);
+        }
     }
     CANARD_ASSERT(cavl2_is_inserted(sub->sessions, &ses->index));
     cavl2_remove(&sub->sessions, &ses->index);
     CANARD_ASSERT(is_listed(&sub->owner->rx.list_session_by_animation, &ses->list_animation));
     delist(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
-    mem_free(mem_session, sizeof(rx_session_t), ses);
+    mem_free(sub->owner->mem.rx_session, sizeof(rx_session_t), ses);
 }
 
 // Returns the most recently updated slot timestamp. At the same time purges stale slots to reclaim memory early.
@@ -1237,14 +1232,69 @@ static canard_us_t rx_session_scan(rx_session_t* const ses, const canard_us_t no
     const canard_us_t deadline = now - ses->owner->transfer_id_timeout;
     canard_us_t       latest   = BIG_BANG;
     FOREACH_SLOT (i) {
-        const canard_us_t ts = ses->slots[i].timestamp;
-        if ((ts != BIG_BANG) && (ts < deadline)) {
-            rx_slot_reset(&ses->slots[i], ses->owner->owner->mem.rx_payload);
-        } else {
-            latest = later(latest, ts);
+        const rx_slot_t* const slot = ses->slots[i];
+        if (slot != NULL) {
+            if (slot->timestamp < deadline) {
+                rx_slot_destroy(ses->owner, ses->slots[i]);
+                ses->slots[i] = NULL;
+            } else {
+                latest = later(latest, slot->timestamp);
+            }
         }
     }
     return latest;
+}
+
+// Returns false on OOM, no other failure modes. Stores at most extent bytes.
+// Has an optimization for single-frame transfers where the allocated size is capped by min(extent, payload_size).
+// The idea is that if we receive the first frame that is also the last, there is no need to allocate full extent-sized
+// buffer if the actual frame payload is smaller.
+static bool rx_slot_write_payload(rx_session_t* const  ses,
+                                  rx_slot_t* const     slot,
+                                  const canard_bytes_t payload,
+                                  const bool           end)
+{
+    CANARD_ASSERT(slot->payload.size <= ses->owner->extent); // enforced by the subscription logic
+    CANARD_ASSERT(slot->payload.size <= slot->total_payload_size);
+
+    const bool start   = slot->total_payload_size == 0;
+    slot->single_frame = start && end;
+    slot->total_payload_size += payload.size; // Before truncation.
+
+    // For simplicity, the case of zero extent is handled separately. It cannot fail.
+    // The case of nonzero extent but an empty frame is handled similarly.
+    if ((ses->owner->extent == 0) || (payload.size == 0)) {
+        CANARD_ASSERT(payload.size == 0);
+        CANARD_ASSERT(slot->payload.data == NULL);
+        return true;
+    }
+
+    // The single-frame non-empty case is also extracted for simplicity.
+    if (slot->single_frame) {
+        CANARD_ASSERT((payload.size > 0) && (ses->owner->extent > 0) && (slot->payload.data == NULL));
+        slot->payload.size = smaller(payload.size, ses->owner->extent);
+        slot->payload.data = mem_alloc(ses->owner->owner->mem.rx_payload, slot->payload.size);
+        if (slot->payload.data == NULL) {
+            return false; // OOM. Must reset the slot.
+        }
+        (void)memcpy(slot->payload.data, payload.data, slot->payload.size);
+        return true;
+    }
+
+    // The general multi-frame case with non-empty payload.
+    slot->single_frame = false;
+    if (start) {
+        CANARD_ASSERT((payload.size > 0) && (ses->owner->extent > 0) && (slot->payload.data == NULL));
+        slot->payload.data = mem_alloc(ses->owner->owner->mem.rx_payload, ses->owner->extent);
+        if (NULL == slot->payload.data) {
+            return false; // OOM. Must reset the slot.
+        }
+    }
+    CANARD_ASSERT(slot->payload.data != NULL);
+    const size_t copy_size = smaller(payload.size, ses->owner->extent - slot->payload.size);
+    (void)memcpy(((byte_t*)slot->payload.data) + slot->payload.size, payload.data, copy_size);
+    slot->payload.size += copy_size;
+    return true;
 }
 
 // ---------------------------------------------           MISC            ---------------------------------------------
@@ -1306,11 +1356,8 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
         // always); the only downside is that memory reclamation time is bounded in the worst case by the longest
         // transfer-ID timeout among all subscriptions, but this is a reasonable tradeoff for the reduced complexity.
         rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
-        if (ses != NULL) {
-            const canard_us_t ts = rx_session_scan(ses, now);
-            if (ts < (now - ses->owner->transfer_id_timeout)) {
-                rx_session_destroy(ses->owner, ses, self->mem.rx_session, self->mem.rx_payload);
-            }
+        if ((ses != NULL) && (rx_session_scan(ses, now) < (now - ses->owner->transfer_id_timeout))) {
+            rx_session_destroy(ses);
         }
 
         // Process the TX pipeline.
@@ -1322,6 +1369,20 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
         }
     }
 }
+
+// bool canard_ingest_frame(canard_t* const      self,
+//                          const canard_us_t    timestamp,
+//                          const uint_least8_t  iface_index,
+//                          const uint32_t       extended_can_id,
+//                          const canard_bytes_t can_data)
+// {
+//     bool ok = (self != NULL) && (timestamp >= 0) && (iface_index < CANARD_IFACE_COUNT) &&
+//               (extended_can_id < (UINT32_C(1) << 29U)) && ((can_data.size == 0) || (can_data.data != NULL));
+//     if (ok) {
+//         ok = false; // TODO
+//     }
+//     return ok;
+// }
 
 uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature)
 {

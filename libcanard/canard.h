@@ -160,6 +160,16 @@ struct canard_mem_t
     void*                      context;
 };
 
+/// Represents received transfer payload.
+/// The actual useful data may be smaller than the allocated memory block, hence the application should use
+/// the view to access the useful transfer payload, while using the storage to free the memory when done.
+/// The view is guaranteed to be inside the storage.
+typedef struct canard_payload_t
+{
+    canard_bytes_t     view;    ///< Use this to access the data. Guaranteed to be inside the storage.
+    canard_bytes_mut_t storage; ///< Use this to free the memory. Do not attempt to access this data.
+} canard_payload_t;
+
 /// The library carries the user-provided context from inputs to outputs without interpreting it,
 /// allowing the application to associate its own data with various entities inside the library.
 /// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
@@ -188,13 +198,12 @@ typedef struct canard_filter_t
 /// Ordinary applications can use the same resource for everything.
 typedef struct canard_mem_set_t
 {
-    canard_mem_t tx_transfer;
-    canard_mem_t tx_frame;
-    canard_mem_t rx_session;
-    canard_mem_t rx_payload;
+    canard_mem_t tx_transfer; ///< TX transfer objects, fixed-size, one per enqueued transfer.
+    canard_mem_t tx_frame;    ///< One per enqueued frame, at least one per TX transfer, size MTU+overhead.
+    canard_mem_t rx_session;  ///< Remote-associated sessions per subscriber, fixed-size.
+    canard_mem_t rx_slot;     ///< Reassembly slots per session, fixed-size.
+    canard_mem_t rx_payload;  ///< Variable-size, at most extent-sized.
 } canard_mem_set_t;
-
-typedef struct canard_txfer_t canard_txfer_t;
 
 typedef struct canard_subscription_t        canard_subscription_t;
 typedef struct canard_subscription_vtable_t canard_subscription_vtable_t;
@@ -207,7 +216,7 @@ struct canard_subscription_vtable_t
                        canard_prio_t          priority,
                        uint_least8_t          source_node_id,
                        uint_least8_t          transfer_id,
-                       canard_bytes_mut_t     payload);
+                       canard_payload_t       payload);
 };
 
 /// Subscription instances must not be moved while in use.
@@ -221,7 +230,7 @@ struct canard_subscription_t
 
     canard_us_t transfer_id_timeout;
     uint32_t    port_id; ///< Represents subjects, services, and legacy message- and service type IDs.
-    size_t      extent;
+    size_t      extent;  ///< Must not be altered after initialization!
 
     canard_tree_t* sessions;
 
@@ -242,11 +251,11 @@ typedef struct canard_vtable_t
     /// A new unicast message is received.
     /// The handler takes ownership of the payload; it must free it after use using the corresponding memory resource.
     void (*on_unicast)(canard_t*,
-                       canard_us_t        timestamp,
-                       canard_prio_t      priority,
-                       uint_least8_t      source_node_id,
-                       uint_least8_t      transfer_id,
-                       canard_bytes_mut_t payload);
+                       canard_us_t      timestamp,
+                       canard_prio_t    priority,
+                       uint_least8_t    source_node_id,
+                       uint_least8_t    transfer_id,
+                       canard_payload_t payload);
 
     /// Submit one CAN frame for transmission via the specified interface.
     /// If the data is empty (size==0), the data pointer may be NULL.
