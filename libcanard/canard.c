@@ -1307,7 +1307,7 @@ bool canard_new(canard_t* const              self,
 {
     bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
               (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
-              mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
+              mem_valid(memory.rx_session) && mem_valid(memory.rx_slot) && mem_valid(memory.rx_payload) &&
               ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
