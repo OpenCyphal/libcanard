@@ -83,6 +83,9 @@ static bool format_is_v0(const format_t kind)
     return (kind == format_0v1_message) || (kind == format_0v1_request) || (kind == format_0v1_response);
 }
 
+#define KILO 1000LL
+#define MEGA (KILO * KILO)
+
 #define DLC_BITS 4U
 
 const uint_least8_t canard_dlc_to_len[16] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64 };
@@ -1161,6 +1164,7 @@ static byte_t rx_parse(const uint32_t       can_id,
     return (is_v0 ? 1U : 0U) | (is_v1 ? 2U : 0U);
 }
 
+// f(2, 3)==31, f(2, 2)==0, f(2, 1)==1
 static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 {
     CANARD_ASSERT((a <= CANARD_TRANSFER_ID_MAX) && (b <= CANARD_TRANSFER_ID_MAX));
@@ -1170,6 +1174,12 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
     }
     return (byte_t)diff;
 }
+
+// Idle sessions are removed after this timeout even if reassembly is not finished.
+// This is not related to the transfer-ID timeout and does not affect the correctness;
+// it is only needed to improve the memory footprint when remotes cease sending messages.
+// This could be made configurable but it is not a tuning-sensitive parameter.
+#define RX_SESSION_TIMEOUT (30 * MEGA)
 
 // The maximum preemption depth is the number of priority levels minus one. We need one extra slot for the preempted
 // transfer itself. The worst case scenario is when we have a transfer at the lowest priority level preempted
@@ -1232,8 +1242,10 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
 
 static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* const slot)
 {
-    mem_free(sub->owner->mem.rx_payload, slot->single_frame ? slot->payload.size : sub->extent, slot->payload.data);
-    mem_free(sub->owner->mem.rx_slot, sizeof(rx_slot_t), slot);
+    if (slot != NULL) {
+        mem_free(sub->owner->mem.rx_payload, slot->single_frame ? slot->payload.size : sub->extent, slot->payload.data);
+        mem_free(sub->owner->mem.rx_slot, sizeof(rx_slot_t), slot);
+    }
 }
 
 static int32_t rx_session_cavl_compare(const void* const user, const canard_tree_t* const node)
@@ -1268,9 +1280,7 @@ static void rx_session_destroy(rx_session_t* const ses)
 {
     canard_subscription_t* const sub = ses->owner;
     FOREACH_SLOT (i) {
-        if (ses->slots[i] != NULL) {
-            rx_slot_destroy(sub, ses->slots[i]);
-        }
+        rx_slot_destroy(sub, ses->slots[i]);
     }
     CANARD_ASSERT(cavl2_is_inserted(sub->sessions, &ses->index));
     cavl2_remove(&sub->sessions, &ses->index);
@@ -1280,9 +1290,10 @@ static void rx_session_destroy(rx_session_t* const ses)
 }
 
 // Returns the most recently updated slot timestamp. At the same time purges stale slots to reclaim memory early.
+// A slot is stale if it's been idle for a very long time that is usually much larger than the transfer-ID timeout.
 static canard_us_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
 {
-    const canard_us_t deadline = now - ses->owner->transfer_id_timeout;
+    const canard_us_t deadline = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
     canard_us_t       latest   = BIG_BANG;
     FOREACH_SLOT (i) {
         const rx_slot_t* const slot = ses->slots[i];
@@ -1419,14 +1430,16 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
         const canard_us_t now = self->vtable->now(self);
 
         // Drop stale sessions to reclaim memory. This happens when remote peers cease sending data.
-        // The oldest is held alive until its transfer-ID timeout has expired, but notice that it may be different
-        // depending on the subscription instance. This means that a stale session that belongs to a subscription
-        // with a long timeout may keep other sessions with a shorter timeout alive beyond their expiration time.
+        // The oldest is held alive until its session timeout has expired, but notice that it may be different
+        // depending on the subscription instance if very large transfer-ID values are used (which is not expected).
+        // This means that a stale session that belongs to a subscription with a long timeout may keep other sessions
+        // with a shorter timeout alive beyond their expiration time.
         // We accept this because it does not affect correctness (the transfer-ID timeout is checked on reception
         // always); the only downside is that memory reclamation time is bounded in the worst case by the longest
         // transfer-ID timeout among all subscriptions, but this is a reasonable tradeoff for the reduced complexity.
         rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
-        if ((ses != NULL) && (rx_session_scan(ses, now) < (now - ses->owner->transfer_id_timeout))) {
+        if ((ses != NULL) &&
+            (rx_session_scan(ses, now) < (now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout)))) {
             rx_session_destroy(ses);
         }
 
