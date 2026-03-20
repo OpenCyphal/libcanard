@@ -1289,24 +1289,35 @@ static void rx_session_destroy(rx_session_t* const ses)
     mem_free(sub->owner->mem.rx_session, sizeof(rx_session_t), ses);
 }
 
-// Returns the most recently updated slot timestamp. At the same time purges stale slots to reclaim memory early.
-// A slot is stale if it's been idle for a very long time that is usually much larger than the transfer-ID timeout.
-static canard_us_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
+typedef struct
 {
-    const canard_us_t deadline = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
-    canard_us_t       latest   = BIG_BANG;
+    canard_us_t latest_sof_at;
+    byte_t      in_progress_slots;
+} rx_session_state_t;
+
+// Checks the state and purges stale slots to reclaim memory early.
+// A slot is stale if it's been idle for a very long time that is usually much larger than the transfer-ID timeout.
+static rx_session_state_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
+{
+    const canard_us_t  deadline = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
+    rx_session_state_t out      = { .latest_sof_at = BIG_BANG, .in_progress_slots = 0 };
     FOREACH_SLOT (i) {
         const rx_slot_t* const slot = ses->slots[i];
-        if (slot != NULL) {
-            if (slot->timestamp < deadline) {
-                rx_slot_destroy(ses->owner, ses->slots[i]);
-                ses->slots[i] = NULL;
-            } else {
-                latest = later(latest, slot->timestamp);
+        if (slot == NULL) {
+            continue;
+        }
+        CANARD_ASSERT(slot->timestamp >= 0);
+        if (slot->timestamp < deadline) { // Too old, destroy even if in progress -- unlikely to complete anyway.
+            rx_slot_destroy(ses->owner, ses->slots[i]);
+            ses->slots[i] = NULL;
+        } else {
+            out.latest_sof_at = later(out.latest_sof_at, slot->timestamp);
+            if (slot->total_payload_size > 0) {
+                out.in_progress_slots++;
             }
         }
     }
-    return latest;
+    return out;
 }
 
 // Returns false on OOM, no other failure modes. Stores at most extent bytes.
@@ -1431,16 +1442,18 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
 
         // Drop stale sessions to reclaim memory. This happens when remote peers cease sending data.
         // The oldest is held alive until its session timeout has expired, but notice that it may be different
-        // depending on the subscription instance if very large transfer-ID values are used (which is not expected).
+        // depending on the subscription instance if large transfer-ID values are used.
         // This means that a stale session that belongs to a subscription with a long timeout may keep other sessions
         // with a shorter timeout alive beyond their expiration time.
         // We accept this because it does not affect correctness (the transfer-ID timeout is checked on reception
         // always); the only downside is that memory reclamation time is bounded in the worst case by the longest
         // transfer-ID timeout among all subscriptions, but this is a reasonable tradeoff for the reduced complexity.
         rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
-        if ((ses != NULL) &&
-            (rx_session_scan(ses, now) < (now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout)))) {
-            rx_session_destroy(ses);
+        if (ses != NULL) {
+            const rx_session_state_t state = rx_session_scan(ses, now);
+            if ((state.in_progress_slots == 0) && (state.latest_sof_at < (now - ses->owner->transfer_id_timeout))) {
+                rx_session_destroy(ses);
+            }
         }
 
         // Process the TX pipeline.
