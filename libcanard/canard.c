@@ -1194,11 +1194,12 @@ typedef struct
 // sparse nodes in a tree with log-time lookup. We could also allocate them dynamically but they are small.
 typedef struct
 {
-    canard_tree_t   index;
-    canard_listed_t list_animation;       // On update, session moved to the tail; oldest pushed to the head.
-    rx_slot_t       slots[RX_SLOT_COUNT]; // Indexed by priority level to allow preemption.
-    byte_t          node_id;
-    byte_t          iface_index; // Currently accepting frames only from this iface.
+    canard_tree_t          index;
+    canard_listed_t        list_animation;       // On update, session moved to the tail; oldest pushed to the head.
+    rx_slot_t              slots[RX_SLOT_COUNT]; // Indexed by priority level to allow preemption.
+    canard_subscription_t* owner;
+    byte_t                 node_id;
+    byte_t                 iface_index; // Currently accepting frames only from this iface.
 } rx_session_t;
 static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 248), "too large");
 
@@ -1231,17 +1232,14 @@ static void rx_session_destroy(canard_subscription_t* const sub,
 }
 
 // Returns the most recently updated slot timestamp. At the same time purges stale slots to reclaim memory early.
-static canard_us_t rx_session_scan(rx_session_t* const ses,
-                                   const canard_us_t   now,
-                                   const canard_us_t   transfer_id_timeout,
-                                   const canard_mem_t  mem_payload)
+static canard_us_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
 {
-    const canard_us_t deadline = now - transfer_id_timeout;
+    const canard_us_t deadline = now - ses->owner->transfer_id_timeout;
     canard_us_t       latest   = BIG_BANG;
     FOREACH_SLOT (i) {
         const canard_us_t ts = ses->slots[i].timestamp;
         if ((ts != BIG_BANG) && (ts < deadline)) {
-            rx_slot_reset(&ses->slots[i], mem_payload);
+            rx_slot_reset(&ses->slots[i], ses->owner->owner->mem.rx_payload);
         } else {
             latest = later(latest, ts);
         }
@@ -1282,6 +1280,7 @@ bool canard_new(canard_t* const              self,
 void canard_destroy(canard_t* const self)
 {
     CANARD_ASSERT(self != NULL);
+    // The application MUST destroy all subscriptions before destroying the instance.
     for (size_t i = 0; i < (sizeof(self->rx.subscriptions) / sizeof(self->rx.subscriptions[0])); i++) {
         CANARD_ASSERT(self->rx.subscriptions[i] == NULL);
     }
@@ -1291,13 +1290,30 @@ void canard_destroy(canard_t* const self)
         canard_txfer_t* const tr = LIST_HEAD(self->tx.agewise, canard_txfer_t, list_agewise);
         txfer_retire(self, tr);
     }
-    (void)memset(self, 0, sizeof(*self));
+    (void)memset(self, 0, sizeof(*self)); // UAF safety
 }
 
 void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap)
 {
     if (self != NULL) {
         const canard_us_t now = self->vtable->now(self);
+
+        // Drop stale sessions to reclaim memory. This happens when remote peers cease sending data.
+        // The oldest is held alive until its transfer-ID timeout has expired, but notice that it may be different
+        // depending on the subscription instance. This means that a stale session that belongs to a subscription
+        // with a long timeout may keep other sessions with a shorter timeout alive beyond their expiration time.
+        // We accept this because it does not affect correctness (the transfer-ID timeout is checked on reception
+        // always); the only downside is that memory reclamation time is bounded in the worst case by the longest
+        // transfer-ID timeout among all subscriptions, but this is a reasonable tradeoff for the reduced complexity.
+        rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
+        if (ses != NULL) {
+            const canard_us_t ts = rx_session_scan(ses, now);
+            if (ts < (now - ses->owner->transfer_id_timeout)) {
+                rx_session_destroy(ses->owner, ses, self->mem.rx_session, self->mem.rx_payload);
+            }
+        }
+
+        // Process the TX pipeline.
         tx_expire(self, now); // deadline maintenance first to keep queue pressure bounded
         FOREACH_IFACE (i) {   // submit queued frames through all currently writable interfaces
             if ((tx_ready_iface_bitmap & (1U << i)) != 0U) {
