@@ -17,3 +17,4 @@ AlignTrailingComments: true
 SortIncludes: false
 ForEachMacros:
   - FOREACH_IFACE
+  - FOREACH_SLOT

@@ -89,11 +89,10 @@ static void test_popcount_intrinsics(void) { test_popcount(popcount); }
 
 static void test_math_helpers(void)
 {
-    // Simple comparisons.
     TEST_ASSERT_EQUAL_size_t(3, smaller(3, 5));
     TEST_ASSERT_EQUAL_size_t(5, larger(3, 5));
     TEST_ASSERT_EQUAL_INT64(-4, min_i64(-4, 2));
-    TEST_ASSERT_EQUAL_INT64(-4, earlier(-4, 2));
+    TEST_ASSERT_EQUAL_INT64(-4, sooner(-4, 2));
 }
 
 // ==============================================  CRC TESTS  ==============================================

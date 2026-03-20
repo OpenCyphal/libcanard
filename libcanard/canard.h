@@ -217,11 +217,13 @@ struct canard_subscription_t
 {
     canard_tree_t index_port_id; ///< Must be the first member.
 
+    canard_t* owner;
+
     canard_us_t transfer_id_timeout;
     uint32_t    port_id; ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t      extent;
 
-    canard_tree_t* index_session_by_node_id;
+    canard_tree_t* sessions;
 
     const canard_subscription_vtable_t* vtable;
 
@@ -308,7 +310,7 @@ struct canard_t
     struct
     {
         canard_tree_t* subscriptions[CANARD_FORMAT_COUNT];
-        canard_list_t  list_session_by_animation; ///< Oldest at the tail.
+        canard_list_t  list_session_by_animation; ///< Oldest at the head.
 
         size_t           filter_count;
         canard_filter_t* filters; ///< Storage provided by the user.
