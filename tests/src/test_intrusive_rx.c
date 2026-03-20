@@ -748,67 +748,72 @@ static rx_slot_t* make_test_slot(const test_rx_context_t* const ctx,
 }
 
 // =====================================================================================================================
-// Test 19: rx_session_scan — purges stale slots and returns latest fresh timestamp.
+// Test 19: rx_session_scan — purges stale slots and returns count of in-progress slots remaining.
 static void test_rx_session_scan(void)
 {
-    // tid_timeout=1000, so deadline = now - 1000 = 5000 - 1000 = 4000 for all sub-cases.
+    // tid_timeout=40*MEGA > RX_SESSION_TIMEOUT=30*MEGA, so deadline = now - tid_timeout.
+    // With now = 40*MEGA + 4000: deadline = 4000. Stale if timestamp < 4000.
     test_rx_context_t ctx;
     rx_session_t      ses;
 
-    // 1) All slots NULL → BIG_BANG, no allocator activity.
+    // 1) All slots NULL → return 0, ses.timestamp unchanged.
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner = &ctx.sub;
-        TEST_ASSERT_EQUAL_INT64(BIG_BANG, rx_session_scan(&ses, 5000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
     }
-    // 2) All slots fresh → returns max timestamp, no frees.
+    // 2) All fresh, total_payload_size=0 → return 0 (no in-progress), ses.timestamp updated.
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[0] = make_test_slot(&ctx, 4500, 0, true);
         ses.slots[3] = make_test_slot(&ctx, 4800, 0, true);
         ses.slots[7] = make_test_slot(&ctx, 4001, 0, true);
-        TEST_ASSERT_EQUAL_INT64(4800, rx_session_scan(&ses, 5000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_INT64(4800, ses.timestamp);
         TEST_ASSERT_EQUAL_UINT64(0, ctx.alloc_slot.count_free);
-        // Cleanup remaining fresh slots.
         rx_slot_destroy(&ctx.sub, ses.slots[0]);
         rx_slot_destroy(&ctx.sub, ses.slots[3]);
         rx_slot_destroy(&ctx.sub, ses.slots[7]);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
     }
-    // 3) All slots stale → BIG_BANG, both destroyed.
+    // 3) All stale → return 0, both destroyed, ses.timestamp unchanged (no fresh slots).
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[1] = make_test_slot(&ctx, 3999, 0, true);
         ses.slots[5] = make_test_slot(&ctx, 2000, 0, true);
-        TEST_ASSERT_EQUAL_INT64(BIG_BANG, rx_session_scan(&ses, 5000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NULL(ses.slots[1]);
         TEST_ASSERT_NULL(ses.slots[5]);
+        TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_bytes);
     }
-    // 4) Mix of fresh, stale, NULL.
+    // 4) Mix of fresh (with in-progress), stale, NULL.
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
-        ses.slots[0] = make_test_slot(&ctx, 3999, 0, true); // stale
-        ses.slots[2] = make_test_slot(&ctx, 1000, 0, true); // stale
-        ses.slots[1] = make_test_slot(&ctx, 4500, 0, true); // fresh
-        ses.slots[4] = make_test_slot(&ctx, 4200, 0, true); // fresh
-        ses.slots[6] = make_test_slot(&ctx, 4000, 0, true); // exactly at deadline, NOT stale
-        TEST_ASSERT_EQUAL_INT64(4500, rx_session_scan(&ses, 5000));
+        ses.slots[0] = make_test_slot(&ctx, 3999, 0, true);  // stale
+        ses.slots[2] = make_test_slot(&ctx, 1000, 0, true);  // stale
+        ses.slots[1] = make_test_slot(&ctx, 4500, 0, true);  // fresh, in-progress
+        ses.slots[1]->total_payload_size = 10;
+        ses.slots[4] = make_test_slot(&ctx, 4200, 0, true);  // fresh, idle
+        ses.slots[6] = make_test_slot(&ctx, 4000, 0, true);  // boundary, NOT stale
+        TEST_ASSERT_EQUAL_size_t(1, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[2]);
         TEST_ASSERT_NOT_NULL(ses.slots[1]);
         TEST_ASSERT_NOT_NULL(ses.slots[4]);
         TEST_ASSERT_NOT_NULL(ses.slots[6]);
+        TEST_ASSERT_EQUAL_INT64(4500, ses.timestamp);
         rx_slot_destroy(&ctx.sub, ses.slots[1]);
         rx_slot_destroy(&ctx.sub, ses.slots[4]);
         rx_slot_destroy(&ctx.sub, ses.slots[6]);
@@ -817,28 +822,30 @@ static void test_rx_session_scan(void)
     }
     // 5) Boundary: timestamp == deadline (4000). Condition is strict '<', so NOT stale.
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[0] = make_test_slot(&ctx, 4000, 0, true);
-        TEST_ASSERT_EQUAL_INT64(4000, rx_session_scan(&ses, 5000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NOT_NULL(ses.slots[0]);
+        TEST_ASSERT_EQUAL_INT64(4000, ses.timestamp);
         rx_slot_destroy(&ctx.sub, ses.slots[0]);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
     }
     // 6) Boundary: timestamp == deadline - 1 (3999). Stale and destroyed.
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner    = &ctx.sub;
         ses.slots[0] = make_test_slot(&ctx, 3999, 0, true);
-        TEST_ASSERT_EQUAL_INT64(BIG_BANG, rx_session_scan(&ses, 5000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
+        TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
     }
     // 7) single_frame affects free size — instrumented allocator validates correct sizes.
     {
-        test_rx_context_init(&ctx, 64, 1000);
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
         memset(&ses, 0, sizeof(ses));
         ses.owner = &ctx.sub;
         // Stale single-frame: payload freed with payload.size=42.
@@ -848,13 +855,99 @@ static void test_rx_session_scan(void)
         ses.slots[1]                     = make_test_slot(&ctx, 2000, 64, false);
         ses.slots[1]->payload.size       = 30; // written so far; irrelevant to free size
         ses.slots[1]->total_payload_size = 30;
-        TEST_ASSERT_EQUAL_INT64(BIG_BANG, rx_session_scan(&ses, 5000));
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
         TEST_ASSERT_NULL(ses.slots[0]);
         TEST_ASSERT_NULL(ses.slots[1]);
+        TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_bytes);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_bytes);
+    }
+    // 8) All 8 slots populated — verifies FOREACH_SLOT covers all CANARD_PRIO_COUNT entries.
+    {
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
+        memset(&ses, 0, sizeof(ses));
+        ses.owner = &ctx.sub;
+        // 4 stale:
+        ses.slots[0] = make_test_slot(&ctx, 3000, 0, true);
+        ses.slots[2] = make_test_slot(&ctx, 3500, 0, true);
+        ses.slots[4] = make_test_slot(&ctx, 2000, 0, true);
+        ses.slots[6] = make_test_slot(&ctx, 3999, 0, true);
+        // 4 fresh (slots[1] and slots[5] are in-progress):
+        ses.slots[1] = make_test_slot(&ctx, 4500, 0, true);
+        ses.slots[1]->total_payload_size = 10;
+        ses.slots[3] = make_test_slot(&ctx, 4001, 0, true);
+        ses.slots[5] = make_test_slot(&ctx, 4999, 0, true);
+        ses.slots[5]->total_payload_size = 20;
+        ses.slots[7] = make_test_slot(&ctx, 4000, 0, true);
+        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_NULL(ses.slots[0]);
+        TEST_ASSERT_NULL(ses.slots[2]);
+        TEST_ASSERT_NULL(ses.slots[4]);
+        TEST_ASSERT_NULL(ses.slots[6]);
+        TEST_ASSERT_NOT_NULL(ses.slots[1]);
+        TEST_ASSERT_NOT_NULL(ses.slots[3]);
+        TEST_ASSERT_NOT_NULL(ses.slots[5]);
+        TEST_ASSERT_NOT_NULL(ses.slots[7]);
+        TEST_ASSERT_EQUAL_INT64(4999, ses.timestamp);
+        rx_slot_destroy(&ctx.sub, ses.slots[1]);
+        rx_slot_destroy(&ctx.sub, ses.slots[3]);
+        rx_slot_destroy(&ctx.sub, ses.slots[5]);
+        rx_slot_destroy(&ctx.sub, ses.slots[7]);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
+    }
+    // 9) In-progress counting: multiple fresh slots with total_payload_size > 0.
+    {
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
+        memset(&ses, 0, sizeof(ses));
+        ses.owner = &ctx.sub;
+        ses.slots[0] = make_test_slot(&ctx, 5000, 0, true);
+        ses.slots[0]->total_payload_size = 10;
+        ses.slots[3] = make_test_slot(&ctx, 6000, 0, true);
+        ses.slots[3]->total_payload_size = 20;
+        ses.slots[5] = make_test_slot(&ctx, 7000, 0, true); // fresh, idle
+        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_INT64(7000, ses.timestamp);
+        rx_slot_destroy(&ctx.sub, ses.slots[0]);
+        rx_slot_destroy(&ctx.sub, ses.slots[3]);
+        rx_slot_destroy(&ctx.sub, ses.slots[5]);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
+    }
+    // 10) Fresh slots WITH payload allocations survive intact.
+    {
+        test_rx_context_init(&ctx, 64, 40 * MEGA);
+        memset(&ses, 0, sizeof(ses));
+        ses.owner = &ctx.sub;
+        // Fresh single-frame with 42-byte payload.
+        ses.slots[0] = make_test_slot(&ctx, 5000, 42, true);
+        ses.slots[0]->total_payload_size = 42;
+        // Fresh multi-frame with extent-sized payload, partially written.
+        ses.slots[1] = make_test_slot(&ctx, 6000, 64, false);
+        ses.slots[1]->payload.size       = 30;
+        ses.slots[1]->total_payload_size = 30;
+        TEST_ASSERT_EQUAL_size_t(2, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_EQUAL_UINT64(0, ctx.alloc_payload.count_free);
+        TEST_ASSERT_EQUAL_size_t(42, ses.slots[0]->payload.size);
+        TEST_ASSERT_EQUAL_size_t(30, ses.slots[1]->payload.size);
+        TEST_ASSERT_EQUAL_INT64(6000, ses.timestamp);
+        rx_slot_destroy(&ctx.sub, ses.slots[0]);
+        rx_slot_destroy(&ctx.sub, ses.slots[1]);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
+    }
+    // 11) Zero-extent subscription: stale slot with NULL payload.data.
+    //     rx_slot_destroy → mem_free(rx_payload, 0, NULL) → skipped by NULL check in mem_free.
+    {
+        test_rx_context_init(&ctx, 0, 40 * MEGA);
+        memset(&ses, 0, sizeof(ses));
+        ses.owner    = &ctx.sub;
+        ses.slots[0] = make_test_slot(&ctx, 3999, 0, true);
+        TEST_ASSERT_EQUAL_size_t(0, rx_session_scan(&ses, 40 * MEGA + 4000));
+        TEST_ASSERT_NULL(ses.slots[0]);
+        TEST_ASSERT_EQUAL_INT64(0, ses.timestamp);
+        TEST_ASSERT_EQUAL_UINT64(0, ctx.alloc_payload.count_free);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_slot.allocated_fragments);
     }
 }
 
@@ -1088,6 +1181,64 @@ static void test_rx_slot_write_payload(void)
         for (size_t i = 0; i < 4; i++) {
             TEST_ASSERT_EQUAL_HEX8(pat3[i], buf[16 + i]);
         }
+        mem_free(ctx.canard.mem.rx_payload, ctx.sub.extent, slot.payload.data);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
+    }
+    // 15) Empty continuation frame mid-stream — buffer and payload.size unchanged.
+    {
+        test_rx_context_init(&ctx, 64, 1000);
+        memset(&ses, 0, sizeof(ses));
+        ses.owner = &ctx.sub;
+        memset(&slot, 0, sizeof(slot));
+        // Start frame: 8 bytes.
+        const byte_t         d1[] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8 };
+        const canard_bytes_t f1   = { 8, d1 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f1, false));
+        TEST_ASSERT_EQUAL_size_t(8, slot.payload.size);
+        TEST_ASSERT_EQUAL_size_t(8, slot.total_payload_size);
+        // Empty continuation: 0 bytes. Early return, no state change.
+        const canard_bytes_t f2 = { 0, NULL };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f2, false));
+        TEST_ASSERT_EQUAL_size_t(8, slot.payload.size);
+        TEST_ASSERT_EQUAL_size_t(8, slot.total_payload_size);
+        // Last frame: 4 bytes appended.
+        const byte_t         d3[] = { 0xC1, 0xC2, 0xC3, 0xC4 };
+        const canard_bytes_t f3   = { 4, d3 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f3, true));
+        TEST_ASSERT_EQUAL_size_t(12, slot.payload.size);
+        TEST_ASSERT_EQUAL_size_t(12, slot.total_payload_size);
+        TEST_ASSERT_EQUAL_MEMORY(d1, slot.payload.data, 8);
+        TEST_ASSERT_EQUAL_MEMORY(d3, (const byte_t*)slot.payload.data + 8, 4);
+        mem_free(ctx.canard.mem.rx_payload, ctx.sub.extent, slot.payload.data);
+        TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
+    }
+    // 16) Non-empty frame after empty first frame — start re-detection.
+    //     An empty first frame leaves total_payload_size=0, so the next non-empty frame re-detects start=true.
+    {
+        test_rx_context_init(&ctx, 64, 1000);
+        memset(&ses, 0, sizeof(ses));
+        ses.owner = &ctx.sub;
+        memset(&slot, 0, sizeof(slot));
+        // Empty first frame (not last). total_payload_size stays 0, no allocation.
+        const canard_bytes_t f0 = { 0, NULL };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f0, false));
+        TEST_ASSERT_EQUAL_size_t(0, slot.total_payload_size);
+        TEST_ASSERT_NULL(slot.payload.data);
+        // Non-empty frame (not last). Re-detects start=true, allocates extent.
+        const byte_t         d1[] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66 };
+        const canard_bytes_t f1   = { 6, d1 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f1, false));
+        TEST_ASSERT_EQUAL_size_t(6, slot.payload.size);
+        TEST_ASSERT_EQUAL_size_t(6, slot.total_payload_size);
+        TEST_ASSERT_NOT_NULL(slot.payload.data);
+        // Last frame: 4 bytes appended.
+        const byte_t         d2[] = { 0xAA, 0xBB, 0xCC, 0xDD };
+        const canard_bytes_t f2   = { 4, d2 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f2, true));
+        TEST_ASSERT_EQUAL_size_t(10, slot.payload.size);
+        TEST_ASSERT_EQUAL_size_t(10, slot.total_payload_size);
+        TEST_ASSERT_EQUAL_MEMORY(d1, slot.payload.data, 6);
+        TEST_ASSERT_EQUAL_MEMORY(d2, (const byte_t*)slot.payload.data + 6, 4);
         mem_free(ctx.canard.mem.rx_payload, ctx.sub.extent, slot.payload.data);
         TEST_ASSERT_EQUAL_size_t(0, ctx.alloc_payload.allocated_fragments);
     }
