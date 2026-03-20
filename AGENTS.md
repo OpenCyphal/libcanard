@@ -1,10 +1,13 @@
 # LibCANard instructions for AI agents
 
 Read `README.md` for general information about the library, and `CONTRIBUTING.md` for development-related notes.
+Read all README files in all subdirectories except for `lib/`.
 
-Build directories should be created in the project root named with a `build` prefix. Parallelize compilation.
+Project layout:
 
-Run all tests in debug build to ensure that all assertion checks are enabled.
+- `libcanard`: the library itself; the shippable code.
+- `tests`: the test harness. Read its own README for details.
+- `lib`: external dependencies.
 
 ## Style conventions
 
