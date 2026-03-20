@@ -1019,16 +1019,16 @@ static void test_rx_slot_write_payload(void)
         ses.owner = &ctx.sub;
         memset(&slot, 0, sizeof(slot));
         const byte_t         d1[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
-        const canard_bytes_t p1   = { 8, d1 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p1, false));
+        const canard_bytes_t f1   = { 8, d1 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f1, false));
         const byte_t         d2[] = { 9, 10, 11, 12, 13, 14, 15, 16 };
-        const canard_bytes_t p2   = { 8, d2 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p2, false));
+        const canard_bytes_t f2   = { 8, d2 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f2, false));
         TEST_ASSERT_EQUAL_size_t(16, slot.payload.size);
         // Write 8 more → copy_size = min(8, 20-16) = 4.
         const byte_t         d3[] = { 17, 18, 19, 20, 21, 22, 23, 24 };
-        const canard_bytes_t p3   = { 8, d3 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p3, true));
+        const canard_bytes_t f3   = { 8, d3 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f3, true));
         TEST_ASSERT_EQUAL_size_t(20, slot.payload.size);
         TEST_ASSERT_EQUAL_size_t(24, slot.total_payload_size);
         // Verify only the first 4 bytes of d3 were copied.
@@ -1047,15 +1047,15 @@ static void test_rx_slot_write_payload(void)
         ses.owner = &ctx.sub;
         memset(&slot, 0, sizeof(slot));
         const byte_t         d1[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
-        const canard_bytes_t p1   = { 8, d1 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p1, false));
+        const canard_bytes_t f1   = { 8, d1 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f1, false));
         const byte_t         d2[] = { 9, 10, 11, 12, 13, 14, 15, 16 };
-        const canard_bytes_t p2   = { 8, d2 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p2, false));
+        const canard_bytes_t f2   = { 8, d2 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f2, false));
         TEST_ASSERT_EQUAL_size_t(16, slot.payload.size);
         const byte_t         d3[] = { 17, 18, 19, 20, 21, 22, 23, 24 };
-        const canard_bytes_t p3   = { 8, d3 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p3, true));
+        const canard_bytes_t f3   = { 8, d3 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f3, true));
         TEST_ASSERT_EQUAL_size_t(16, slot.payload.size);       // unchanged
         TEST_ASSERT_EQUAL_size_t(24, slot.total_payload_size); // raw total tracks everything
         mem_free(ctx.canard.mem.rx_payload, ctx.sub.extent, slot.payload.data);
@@ -1070,12 +1070,12 @@ static void test_rx_slot_write_payload(void)
         const byte_t         pat1[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE };
         const byte_t         pat2[] = { 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF };
         const byte_t         pat3[] = { 0xFE, 0xDC, 0xBA, 0x98 };
-        const canard_bytes_t pp1    = { 8, pat1 };
-        const canard_bytes_t pp2    = { 8, pat2 };
-        const canard_bytes_t pp3    = { 4, pat3 };
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, pp1, false));
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, pp2, false));
-        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, pp3, true));
+        const canard_bytes_t f1     = { 8, pat1 };
+        const canard_bytes_t f2     = { 8, pat2 };
+        const canard_bytes_t f3     = { 4, pat3 };
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f1, false));
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f2, false));
+        TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f3, true));
         TEST_ASSERT_EQUAL_size_t(20, slot.payload.size);
         TEST_ASSERT_EQUAL_size_t(20, slot.total_payload_size);
         const byte_t* buf = (const byte_t*)slot.payload.data;
@@ -1108,8 +1108,8 @@ static void test_rx_slot_write_payload_zero_extent_nonempty(void)
 
     // First frame: 8-byte payload, not last.
     const byte_t         d1[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
-    const canard_bytes_t p1   = { 8, d1 };
-    TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p1, false));
+    const canard_bytes_t f1   = { 8, d1 };
+    TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f1, false));
     TEST_ASSERT_FALSE(slot.single_frame);
     TEST_ASSERT_EQUAL_size_t(8, slot.total_payload_size);
     TEST_ASSERT_NULL(slot.payload.data);
@@ -1117,8 +1117,8 @@ static void test_rx_slot_write_payload_zero_extent_nonempty(void)
 
     // Second frame: 8-byte payload, last.
     const byte_t         d2[] = { 9, 10, 11, 12, 13, 14, 15, 16 };
-    const canard_bytes_t p2   = { 8, d2 };
-    TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, p2, true));
+    const canard_bytes_t f2   = { 8, d2 };
+    TEST_ASSERT_TRUE(rx_slot_write_payload(&ses, &slot, f2, true));
     TEST_ASSERT_FALSE(slot.single_frame);
     TEST_ASSERT_EQUAL_size_t(16, slot.total_payload_size);
     TEST_ASSERT_NULL(slot.payload.data);
