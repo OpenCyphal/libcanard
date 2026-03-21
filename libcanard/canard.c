@@ -1378,7 +1378,7 @@ static void rx_session_record_admission(rx_session_t* const ses,
                                         const canard_us_t   ts,
                                         const byte_t        iface_index)
 {
-    ses->seqno_frontier[priority] = rx_seqno_pack(seqno); // nothing older than this at this priority from now on
+    ses->seqno_frontier[priority] = rx_seqno_pack(seqno); // nothing older than this at this & higher prio from now on
     ses->last_admitted_start_ts   = ts;
     ses->iface_index              = iface_index;
 }
@@ -1413,6 +1413,11 @@ static bool rx_session_should_admit(const rx_session_t* const ses,
         const rx_slot_t* const slot = ses->slots[priority];
         return (slot != NULL) && (slot->transfer_id == (seqno & CANARD_TRANSFER_ID_MAX)) &&
                (slot->iface_index == iface_index) && (slot->expected_toggle == toggle);
+    }
+    // This is a start frame, but before we allocate new state for it, we must ensure that it is of the correct version.
+    const bool start_toggle = kind_is_v1(ses->owner->kind) ? 1 : 0;
+    if (toggle != start_toggle) {
+        return false; // Wrong protocol version.
     }
     // Duplicate start frames do not require special treatment because a duplicate frame can only follow the original
     // without any frames belonging to the same transfer in between (see the assumptions). If we get a duplicate start,
