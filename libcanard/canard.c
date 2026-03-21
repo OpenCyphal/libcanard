@@ -1249,6 +1249,10 @@ static rx_seqno_packed_t rx_seqno_pack(const uint64_t v)
         { (uint16_t)(v & 0xFFFFU), (uint16_t)((v >> 16U) & 0xFFFFU), (uint16_t)((v >> 32U) & 0xFFFFU) }
     };
 }
+
+// The linearizer logic results in a behavior that differs compared to v4 significantly: v4 used to admit any
+// transfer-ID except the same and the one older compared to the last transfer; in terms of the linearization logic it
+// means that the reference point was biased.
 static uint64_t rx_seqno_linearize(const uint64_t ref_seqno, const byte_t transfer_id)
 {
     CANARD_ASSERT(transfer_id <= CANARD_TRANSFER_ID_MAX);
@@ -1256,13 +1260,13 @@ static uint64_t rx_seqno_linearize(const uint64_t ref_seqno, const byte_t transf
     int16_t      delta   = ((int16_t)transfer_id) - ((int16_t)ref_tid); // NOLINT(*-narrowing-conversions)
     // Select the nearest congruent seqno in the half-open interval [-16, +16) around the reference.
     if (delta > (int16_t)(CANARD_TRANSFER_ID_MAX / 2U)) {
-        delta -= (int16_t)(CANARD_TRANSFER_ID_MAX + 1U);
+        delta -= (int16_t)CANARD_TRANSFER_ID_MODULO;
     } else if (delta < -((int16_t)(CANARD_TRANSFER_ID_MAX / 2U) + 1)) {
-        delta += (int16_t)(CANARD_TRANSFER_ID_MAX + 1U);
+        delta += (int16_t)CANARD_TRANSFER_ID_MODULO;
     }
     // Near the origin the backward representative may underflow, so use the next forward one instead.
     if ((delta < 0) && (ref_seqno < (uint64_t)(-delta))) {
-        delta += (int16_t)(CANARD_TRANSFER_ID_MAX + 1U);
+        delta += (int16_t)CANARD_TRANSFER_ID_MODULO;
     }
     return (uint64_t)(((int64_t)ref_seqno) + ((int64_t)delta));
 }
@@ -1425,12 +1429,6 @@ static uint64_t rx_session_solve_admission(const rx_session_t* const ses,
         return admit ? RX_SESSION_ADMISSION_CONTINUATION : RX_SESSION_ADMISSION_REJECTED;
     }
 
-    // This is a start frame, but before we allocate new state for it, we must ensure that it is of the correct version.
-    const bool start_toggle = kind_is_v1(ses->owner->kind) ? 1 : 0;
-    if (toggle != start_toggle) {
-        return RX_SESSION_ADMISSION_REJECTED; // Wrong protocol version.
-    }
-
     // It is best to postpone seqno derivation until the last moment because it is costly.
     // Life would have been so much easier if we could just use normal non-wrapping IDs like we have in Cyphal/UDP!
     const uint64_t frontier_global = rx_session_seqno_frontier(ses, canard_prio_exceptional);
@@ -1490,6 +1488,14 @@ static bool rx_session_update(canard_subscription_t* const sub,
 {
     CANARD_ASSERT((sub != NULL) && (frame != NULL) && (frame->payload.data != NULL) && (ts >= 0));
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
+
+    // This is a start frame, but before we allocate new state for it, we must ensure that it is of the correct version.
+    // Wrong protocol version must be rejected as early as possible to avoid wasting memory on unused states.
+    // The protocol version is only acceptable on start-of-transfer frames, but new sessions can only be created
+    // on start frames, so this is robust.
+    if (frame->start && (frame->toggle != kind_is_v1(sub->kind))) {
+        return true; // Wrong protocol version is not a failure.
+    }
 
     // Only start frames may create new states.
     rx_session_factory_context_t factory_context = { .owner = sub, .iface_index = iface_index, .node_id = frame->src };
