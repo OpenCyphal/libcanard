@@ -59,7 +59,8 @@ extern "C"
 #define CANARD_NODE_ID_MAX            127U
 #define CANARD_NODE_ID_CAPACITY       (CANARD_NODE_ID_MAX + 1U)
 #define CANARD_TRANSFER_ID_BIT_LENGTH 5U
-#define CANARD_TRANSFER_ID_MAX        ((1U << CANARD_TRANSFER_ID_BIT_LENGTH) - 1U)
+#define CANARD_TRANSFER_ID_MODULO     (1U << CANARD_TRANSFER_ID_BIT_LENGTH)
+#define CANARD_TRANSFER_ID_MAX        (CANARD_TRANSFER_ID_MODULO - 1U)
 
 /// This is used only with Cyphal v1.0 and legacy v0 protocols to indicate anonymous messages.
 /// Cyphal v1.1 does not support anonymous messages so this value is never used there.

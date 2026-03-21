@@ -62,6 +62,7 @@ typedef unsigned char byte_t;
 #define TAIL_TOGGLE 32U
 
 #define FOREACH_IFACE(i) for (size_t i = 0; (i) < CANARD_IFACE_COUNT; (i)++)
+#define FOREACH_PRIO(i)  for (size_t i = 0; (i) < CANARD_PRIO_COUNT; (i)++)
 
 #if CANARD_IFACE_COUNT <= 2
 #define IFACE_INDEX_BIT_LENGTH 1U
@@ -1179,11 +1180,6 @@ static byte_t rx_parse(const uint32_t       can_id,
 // This could be made configurable but it is not a tuning-sensitive parameter.
 #define RX_SESSION_TIMEOUT (30 * MEGA)
 
-// The maximum preemption depth is the number of priority levels minus one. We need one extra slot for the preempted
-// transfer itself. The worst case scenario is when we have a transfer at the lowest priority level preempted
-// by a transfer at the priority one higher, and so on up to the maximum.
-#define FOREACH_SLOT(i) for (size_t i = 0; (i) < CANARD_PRIO_COUNT; (i)++)
-
 // Reassembly state at a specific priority level.
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
 // Interface affinity is required because frames duplicated across redundant interfaces may arrive with a significant
@@ -1232,6 +1228,10 @@ static void rx_slot_advance(rx_slot_t* const slot, const size_t extent, const ca
     slot->total_size = (uint32_t)(slot->total_size + payload.size); // Before truncation.
     slot->expected_toggle ^= 1U;
 }
+
+// This value is unreachable even if seqno is incremented by full transfer-ID period every frame at 5k frames/s;
+// at that rate, it would take about 56 years to wrap around.
+#define RX_SEQNO_MAX ((UINT64_C(1) << 48U) - 1U)
 
 // A compact representation is needed because we need to store an array of these in dynamic memory.
 typedef struct
@@ -1298,7 +1298,7 @@ typedef struct
 {
     canard_tree_t          index;
     canard_listed_t        list_animation; // On update, session moved to the tail; oldest pushed to the head.
-    canard_us_t            last_admitted_start_ts;
+    canard_us_t            last_admission_ts;
     rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
     canard_subscription_t* owner;
     rx_seqno_packed_t      seqno_frontier[CANARD_PRIO_COUNT];
@@ -1326,13 +1326,13 @@ static canard_tree_t* rx_session_factory(void* const user)
     if (ses == NULL) {
         return NULL;
     }
-    FOREACH_SLOT (i) {
+    FOREACH_PRIO (i) {
         ses->slots[i] = NULL;
     }
-    ses->last_admitted_start_ts = BIG_BANG;
-    ses->owner                  = ctx->owner;
-    ses->iface_index            = ctx->iface_index;
-    ses->node_id                = ctx->node_id;
+    ses->last_admission_ts = BIG_BANG;
+    ses->owner             = ctx->owner;
+    ses->iface_index       = ctx->iface_index;
+    ses->node_id           = ctx->node_id;
     enlist_tail(&ctx->owner->owner->rx.list_session_by_animation, &ses->list_animation);
     return &ses->index;
 }
@@ -1340,7 +1340,7 @@ static canard_tree_t* rx_session_factory(void* const user)
 static void rx_session_destroy(rx_session_t* const ses)
 {
     canard_subscription_t* const sub = ses->owner;
-    FOREACH_SLOT (i) {
+    FOREACH_PRIO (i) {
         rx_slot_destroy(sub, ses->slots[i]);
     }
     CANARD_ASSERT(cavl2_is_inserted(sub->sessions, &ses->index));
@@ -1351,17 +1351,16 @@ static void rx_session_destroy(rx_session_t* const ses)
 }
 
 // Checks the state and purges stale slots to reclaim memory early. Returns the number of in-progress slots remaining.
-static size_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
+static size_t rx_session_cleanup(rx_session_t* const ses, const canard_us_t now)
 {
     const canard_us_t deadline = now - later(RX_SESSION_TIMEOUT, ses->owner->transfer_id_timeout);
     size_t            n_slots  = 0;
-    FOREACH_SLOT (i) {
+    FOREACH_PRIO (i) {
         const rx_slot_t* const slot = ses->slots[i];
         if (slot == NULL) {
             continue;
         }
-        CANARD_ASSERT(slot->start_ts >= 0);
-        CANARD_ASSERT(ses->last_admitted_start_ts >= slot->start_ts);
+        CANARD_ASSERT((0 <= slot->start_ts) && (slot->start_ts <= ses->last_admission_ts));
         if (slot->start_ts < deadline) { // Too old, destroy even if in progress -- unlikely to complete anyway.
             rx_slot_destroy(ses->owner, ses->slots[i]);
             ses->slots[i] = NULL;
@@ -1370,17 +1369,6 @@ static size_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
         }
     }
     return n_slots;
-}
-
-static void rx_session_record_admission(rx_session_t* const ses,
-                                        const canard_prio_t priority,
-                                        const uint64_t      seqno,
-                                        const canard_us_t   ts,
-                                        const byte_t        iface_index)
-{
-    ses->seqno_frontier[priority] = rx_seqno_pack(seqno); // nothing older than this at this & higher prio from now on
-    ses->last_admitted_start_ts   = ts;
-    ses->iface_index              = iface_index;
 }
 
 // Maximum seqno seen from the given highest priority level (numerically lowest, inclusive) and down.
@@ -1393,17 +1381,38 @@ static uint64_t rx_session_seqno_frontier(const rx_session_t* const ses, const c
     return seqno;
 }
 
-// Frame admittance state machine update. A complex piece, redesigned after v4 to support priority preemption.
+static void rx_session_record_admission(rx_session_t* const ses,
+                                        const canard_prio_t priority,
+                                        const uint64_t      seqno,
+                                        const canard_us_t   ts,
+                                        const byte_t        iface_index)
+{
+    // Seqno per priority cannot go back. When we reset it on a transfer-ID timeout, we simply bump the seqno state by
+    // a multiple of transfer-ID overflow periods to ensure monotonicity. Earlier I tried dumb direct approaches
+    // where we erase the seqno states to zero on tid-timeout, or introduce epoch counters, or per-seqno timestamp,
+    // but this solution is so much simpler while achieves the same goal: leave older seqnos behind, start new epoch.
+    CANARD_ASSERT(seqno > rx_seqno_unpack(ses->seqno_frontier[priority]));
+    ses->seqno_frontier[priority] = rx_seqno_pack(seqno); // nothing older than this at this & higher prio from now on
+    ses->last_admission_ts        = ts;
+    ses->iface_index              = iface_index;
+}
+
+#define RX_SESSION_ADMISSION_REJECTED     (UINT64_MAX)
+#define RX_SESSION_ADMISSION_CONTINUATION (UINT64_MAX - 1)
+
+// Frame admittance solver. A complex piece, redesigned after v4 to support priority preemption.
 // Key ideas: 1. Separate reassembly state per priority level. 2. TID is linearized into seqno.
 // Once we admit a transfer at some priority with a certain seqno, we know that any older seqno at this or higher
 // priority would be stale, since only higher priority transfers can preempt lower priority ones.
-static bool rx_session_should_admit(const rx_session_t* const ses,
-                                    const canard_us_t         ts,
-                                    const canard_prio_t       priority,
-                                    const bool                start,
-                                    const bool                toggle,
-                                    const uint64_t            seqno,
-                                    const byte_t              iface_index)
+// On a transfer-ID timeout the seqno is bumped by a full transfer-ID timeout to ensure that it becomes the new
+// frontier matching the current transfer-ID while maintaining monotonicity.
+static uint64_t rx_session_solve_admission(const rx_session_t* const ses,
+                                           const canard_us_t         ts,
+                                           const canard_prio_t       priority,
+                                           const bool                start,
+                                           const bool                toggle,
+                                           const byte_t              transfer_id,
+                                           const byte_t              iface_index)
 {
     // Continuation frames cannot create new state so their handling is simpler.
     // They are only accepted if there is a slot with an exact match of all transfer parameters.
@@ -1411,14 +1420,22 @@ static bool rx_session_should_admit(const rx_session_t* const ses,
     // and especially to allow reassembly of multi-frame transfers even when the transfer-ID timeout is zero.
     if (!start) {
         const rx_slot_t* const slot = ses->slots[priority];
-        return (slot != NULL) && (slot->transfer_id == (seqno & CANARD_TRANSFER_ID_MAX)) &&
-               (slot->iface_index == iface_index) && (slot->expected_toggle == toggle);
+        const bool admit = (slot != NULL) && (slot->transfer_id == transfer_id) && (slot->iface_index == iface_index) &&
+                           (slot->expected_toggle == toggle);
+        return admit ? RX_SESSION_ADMISSION_CONTINUATION : RX_SESSION_ADMISSION_REJECTED;
     }
+
     // This is a start frame, but before we allocate new state for it, we must ensure that it is of the correct version.
     const bool start_toggle = kind_is_v1(ses->owner->kind) ? 1 : 0;
     if (toggle != start_toggle) {
-        return false; // Wrong protocol version.
+        return RX_SESSION_ADMISSION_REJECTED; // Wrong protocol version.
     }
+
+    // It is best to postpone seqno derivation until the last moment because it is costly.
+    // Life would have been so much easier if we could just use normal non-wrapping IDs like we have in Cyphal/UDP!
+    const uint64_t frontier_global = rx_session_seqno_frontier(ses, canard_prio_exceptional);
+    const uint64_t seqno           = rx_seqno_linearize(frontier_global, transfer_id);
+
     // Duplicate start frames do not require special treatment because a duplicate frame can only follow the original
     // without any frames belonging to the same transfer in between (see the assumptions). If we get a duplicate start,
     // with a nonzero TID timeout it will be rejected as not-new; even if the timeout is zero, accepting the duplicate
@@ -1441,10 +1458,28 @@ static bool rx_session_should_admit(const rx_session_t* const ses,
     // survives) we will still reject a new transfer arriving from a different interface if it happened to roll the
     // same transfer-ID timeout. This is not an issue because we would still accept new transfers on the same iface,
     // and after the RX_SESSION_TIMEOUT the session is destroyed and all new transfers will be accepted unconditionally.
-    const bool seqno_new   = seqno > rx_session_seqno_frontier(ses, priority);
-    const bool iface_match = ses->iface_index == iface_index;
-    const bool timed_out   = ts > (ses->last_admitted_start_ts + ses->owner->transfer_id_timeout);
-    return (seqno_new && iface_match) || (iface_match && timed_out) || (timed_out && seqno_new);
+    const uint64_t frontier_priority = rx_session_seqno_frontier(ses, priority);
+    const bool     seqno_new         = seqno > frontier_priority;
+    const bool     iface_match       = ses->iface_index == iface_index;
+    const bool     timed_out         = ts > (ses->last_admission_ts + ses->owner->transfer_id_timeout);
+    const bool     admit = (seqno_new && iface_match) || (iface_match && timed_out) || (timed_out && seqno_new);
+    if (!admit) {
+        return RX_SESSION_ADMISSION_REJECTED;
+    }
+
+    // It is vital that seqno is monotonically increasing even across timeouts, otherwise following a transfer-ID
+    // timeout further arrivals on higher priority levels may be rejected if their seqnos are greater.
+    // Instead of sweeping seqnos across all priority levels, we ensure monotonicity without breaking transfer-ID
+    // matching by bumping the seqno by the minimal required number of overflow periods.
+    uint64_t admitted_seqno = seqno;
+    if (!seqno_new) {
+        static const uint64_t mod = CANARD_TRANSFER_ID_MODULO;
+        CANARD_ASSERT(frontier_priority >= admitted_seqno);
+        const uint64_t periods = ((frontier_priority - admitted_seqno) + mod) / mod;
+        admitted_seqno += periods * mod;
+    }
+    CANARD_ASSERT(admitted_seqno > frontier_priority);
+    return admitted_seqno;
 }
 
 // Returns false on OOM, no other failure modes.
@@ -1473,26 +1508,33 @@ static bool rx_session_update(canard_subscription_t* const sub,
     }
 
     // Decide admit or drop.
-    const uint64_t seqno =
-      rx_seqno_linearize(rx_session_seqno_frontier(ses, canard_prio_exceptional), frame->transfer_id);
-    if (!rx_session_should_admit(ses, ts, frame->priority, frame->start, frame->toggle, seqno, iface_index)) {
+    const uint64_t seqno = rx_session_solve_admission(
+      ses, ts, frame->priority, frame->start, frame->toggle, frame->transfer_id, iface_index);
+    if (seqno == RX_SESSION_ADMISSION_REJECTED) {
         return true; // Rejection is not a failure.
     }
 
     // The frame must be accepted. If this is the start of a new transfer, we must update state.
-    enlist_tail(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
-    if (frame->start) {
+    if (seqno != RX_SESSION_ADMISSION_CONTINUATION) {
+        CANARD_ASSERT(seqno <= RX_SEQNO_MAX);
+        CANARD_ASSERT(frame->start);
+        // Animate only when a new transfer is started to manage load. Correctness-wise there is not much difference.
+        enlist_tail(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
+        // Destroy the old slot if it exists (if we're discarding a stale transfer).
         if (ses->slots[frame->priority] != NULL) {
             rx_slot_destroy(sub, ses->slots[frame->priority]);
             ses->slots[frame->priority] = NULL;
         }
-        if (!frame->end) { // more frames to follow, must store in-progress state
+        // If there are more frames to follow, we must store in-progress state for reassembly.
+        if (!frame->end) {
+            (void)rx_session_cleanup(ses, ts); // Cleanup before allocating a new slot; don't do too often, is costly.
             ses->slots[frame->priority] = rx_slot_new(sub, ts, frame->transfer_id, iface_index);
             if (ses->slots[frame->priority] == NULL) {
                 sub->owner->err.oom++;
                 return false;
             }
         }
+        // Register the new state only after we have a confirmation that we have memory to store the frame.
         rx_session_record_admission(ses, frame->priority, seqno, ts, iface_index);
     }
 
@@ -1562,8 +1604,8 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
         // transfer-ID timeout among all subscriptions, but this is a reasonable tradeoff for the reduced complexity.
         rx_session_t* const ses = LIST_HEAD(self->rx.list_session_by_animation, rx_session_t, list_animation);
         if (ses != NULL) {
-            const size_t in_progress_slots = rx_session_scan(ses, now);
-            if ((in_progress_slots == 0) && (ses->last_admitted_start_ts < (now - ses->owner->transfer_id_timeout))) {
+            const size_t in_progress_slots = rx_session_cleanup(ses, now);
+            if ((in_progress_slots == 0) && (ses->last_admission_ts < (now - ses->owner->transfer_id_timeout))) {
                 rx_session_destroy(ses);
             }
         }
