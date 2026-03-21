@@ -1186,6 +1186,8 @@ static byte_t rx_parse(const uint32_t       can_id,
 
 // Reassembly state at a specific priority level.
 // Maintaining separate state per priority level allows preemption of higher-priority transfers without loss.
+// Interface affinity is required because frames duplicated across redundant interfaces may arrive with a significant
+// delay, which may cause the receiver to accept more frames than necessary.
 typedef struct
 {
     canard_us_t start_ts;
@@ -1221,13 +1223,14 @@ static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* c
     mem_free(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent, slot);
 }
 
-static void rx_slot_store(rx_slot_t* const slot, const size_t extent, const canard_bytes_t payload)
+static void rx_slot_advance(rx_slot_t* const slot, const size_t extent, const canard_bytes_t payload)
 {
     if (slot->total_size < extent) {
         const size_t copy_size = smaller(payload.size, (size_t)(extent - slot->total_size));
         (void)memcpy(&slot->payload[slot->total_size], payload.data, copy_size);
     }
     slot->total_size = (uint32_t)(slot->total_size + payload.size); // Before truncation.
+    slot->expected_toggle ^= 1U;
 }
 
 // A compact representation is needed because we need to store an array of these in dynamic memory.
@@ -1280,6 +1283,11 @@ static uint64_t rx_seqno_linearize(const uint64_t ref_seqno, const byte_t transf
 //  - The case of a zero transfer-ID timeout is a first-class use case. In this mode, duplication is tolerated by
 //    the application, but multi-frame transfers must still follow interface affinity to avoid incorrect reassembly.
 //
+// Assumptions:
+//  - Frames within a transfer arrive in order;
+//    see https://forum.opencyphal.org/t/uavcan-can-tx-buffer-management-in-can-fd-controllers/1215
+//  - A frame may be duplicated (a well-known CAN PHY edge case), but duplicates immediately follow the original.
+//
 // Core invariants:
 //  - Only start-of-transfer may create/replace a slot.
 //  - Non-start frames never create state.
@@ -1307,6 +1315,7 @@ static int32_t rx_session_cavl_compare(const void* const user, const canard_tree
 typedef struct
 {
     canard_subscription_t* owner;
+    byte_t                 iface_index; // Start with the affinity to the iface that delivered the first frame.
     byte_t                 node_id;
 } rx_session_factory_context_t;
 
@@ -1322,6 +1331,7 @@ static canard_tree_t* rx_session_factory(void* const user)
     }
     ses->last_admitted_start_ts = BIG_BANG;
     ses->owner                  = ctx->owner;
+    ses->iface_index            = ctx->iface_index;
     ses->node_id                = ctx->node_id;
     enlist_tail(&ctx->owner->owner->rx.list_session_by_animation, &ses->list_animation);
     return &ses->index;
@@ -1395,22 +1405,37 @@ static bool rx_session_should_admit(const rx_session_t* const ses,
                                     const uint64_t            seqno,
                                     const byte_t              iface_index)
 {
+    // Continuation frames cannot create new state so their handling is simpler.
+    // They are only accepted if there is a slot with an exact match of all transfer parameters.
+    // We ignore the transfer-ID timeout to avoid breaking transfers that are preempted for a long time,
+    // and especially to allow reassembly of multi-frame transfers even when the transfer-ID timeout is zero.
     if (!start) {
-        // Continuation frames only accepted if there is a slot with an exact match of all transfer parameters.
         const rx_slot_t* const slot = ses->slots[priority];
         return (slot != NULL) && (slot->transfer_id == (seqno & CANARD_TRANSFER_ID_MAX)) &&
                (slot->iface_index == iface_index) && (slot->expected_toggle == toggle);
     }
+    // Duplicate start frames do not require special treatment because a duplicate frame can only follow the original
+    // without any frames belonging to the same transfer in between (see the assumptions). If we get a duplicate start,
+    // with a nonzero TID timeout it will be rejected as not-new; even if the timeout is zero, accepting the duplicate
+    // will simply restart the slot without loss of information since there were no other frames in between.
+    //
     // In the case of a single priority level, the seqno would be considered new if it is greater than last admitted.
     // Priority preemption makes this simple condition insufficient, because a newer higher-priority transfer with
     // a greater seqno may push older lower-priority transfers aside, causing the receiver to observe seqno going
     // backward for new transfers. Our solution is to keep a dedicated seqno frontier per priority level.
-    //
     // The lowest bound of a genuinely new seqno would then be located at the lowest priority level, since that level
     // cannot preempt others. To decide if a given seqno is new, one needs to scan all priority levels from the
     // current one (inclusive) down to the lowest level (numerically greater).
-    //
     // Higher priority levels (numerically lesser) may have greater seqno frontiers which bear no relevance.
+    //
+    // The original design had a special case that enabled admittance of a transfer with the next seqno from a
+    // different interface if there is no pending reassembly in progress; see details here and the original v4 code:
+    // https://github.com/OpenCyphal/libcanard/issues/228. This behavior is no longer present here mostly because we
+    // now update the session state only on admittance and not upon completion of a transfer, which changes the logic
+    // considerably. One side effect is that even after a timeout (potentially a very long time as long as the session
+    // survives) we will still reject a new transfer arriving from a different interface if it happened to roll the
+    // same transfer-ID timeout. This is not an issue because we would still accept new transfers on the same iface,
+    // and after the RX_SESSION_TIMEOUT the session is destroyed and all new transfers will be accepted unconditionally.
     const bool seqno_new   = seqno > rx_session_seqno_frontier(ses, priority);
     const bool iface_match = ses->iface_index == iface_index;
     const bool timed_out   = ts > (ses->last_admitted_start_ts + ses->owner->transfer_id_timeout);
@@ -1427,7 +1452,7 @@ static bool rx_session_update(canard_subscription_t* const sub,
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
 
     // Only start frames may create new states.
-    rx_session_factory_context_t factory_context = { .owner = sub, .node_id = frame->src };
+    rx_session_factory_context_t factory_context = { .owner = sub, .iface_index = iface_index, .node_id = frame->src };
     rx_session_t* const          ses =
       CAVL2_TO_OWNER(frame->start ? cavl2_find_or_insert(&sub->sessions, //
                                                          &frame->src,
@@ -1452,8 +1477,10 @@ static bool rx_session_update(canard_subscription_t* const sub,
     // The frame must be accepted. If this is the start of a new transfer, we must update state.
     enlist_tail(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
     if (frame->start) {
-        rx_slot_destroy(sub, ses->slots[frame->priority]);
-        ses->slots[frame->priority] = NULL;
+        if (ses->slots[frame->priority] != NULL) {
+            rx_slot_destroy(sub, ses->slots[frame->priority]);
+            ses->slots[frame->priority] = NULL;
+        }
         if (!frame->end) { // more frames to follow, must store in-progress state
             ses->slots[frame->priority] = rx_slot_new(sub, ts, frame->transfer_id, iface_index);
             if (ses->slots[frame->priority] == NULL) {
