@@ -1264,9 +1264,9 @@ typedef struct
     rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
     canard_subscription_t* owner;
     byte_t                 node_id;
-    byte_t                 last_admitted_transfer_id : CANARD_TRANSFER_ID_BITS;
-    byte_t                 last_admitted_priority : CANARD_PRIO_BITS;
-    byte_t                 iface_index : IFACE_INDEX_BITS;
+    byte_t                 last_admitted_transfer_id;
+    byte_t                 last_admitted_priority;
+    byte_t                 iface_index;
 } rx_session_t;
 static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large");
 
@@ -1366,8 +1366,8 @@ static bool rx_session_solve_admission(const rx_session_t* const ses,
     }
     // Duplicate start frames do not require special treatment because a duplicate frame can only follow the original
     // without any frames belonging to the same transfer in between (see the assumptions). If we get a duplicate start,
-    // with a nonzero TID timeout it will be rejected as not-new; even if the timeout is zero, accepting the duplicate
-    // will simply restart the slot without loss of information since there were no other frames in between.
+    // with a nonzero TID timeout it will be rejected as not-new. Zero transfer-ID timeout means the application
+    // accepts duplicates; with zero timeout duplicate rejection is not possible given this protocol design.
     //
     // The original design had a special case that enabled admittance of a transfer with the next transfer-ID from a
     // different interface if there is no pending reassembly in progress; see details here and the original v4 code:
@@ -1390,20 +1390,14 @@ static bool rx_session_solve_admission(const rx_session_t* const ses,
     //  P=low      |                    0 | <-- arrived late, rejected as duplicate!
     //  P=high     |    1   2   3   0     |
     //
-    // One solution is to unroll the transfer-ID sequence locally to track wraparounds:
+    // One solution is to track the last admitted priority along with the transfer-ID:
+    // preemption alters the admitted priority, which prevents false rejection.
     //
-    //             |RECEIVER (unrolling)  |
-    //  P=low      |                    5 | <-- thanks to unrolling we observe this as not a duplicate
-    //  P=high     |    1   2   3   4     | <-- unrolled
-    //
-    // Another solution that is much simpler but yields identical behavior is to track the last admitted priority
-    // along with the transfer-ID: preemption alters the admitted priority, which prevents false rejection.
-    //
-    // Regardless of the approach, there is one critical edge case: if a low-priority frame is duplicated (due to the
-    // CAN ACK glitch effect) AND at least one higher-priority frame is admitted between the original frame and its
-    // duplicate, then the duplicate will be accepted as a new transfer.
+    // There is one critical edge case: if a low-priority frame is duplicated (due to the CAN ACK glitch effect)
+    // AND at least one higher-priority frame is admitted between the original frame and its duplicate,
+    // then the duplicate will be accepted as a new transfer.
     // Example: low-prio tid=1, high-prio preemption tid=2, high-prio tid=2...X, low-prio duplicate tid=1.
-    // In general, the problem of duplicate detection under these conditions appears undecidable.
+    // In general, the problem of duplicate detection under these conditions is believed to be undecidable.
     // We inherit the CAN PHY design limitation here by accepting the risk of spurious duplication, recognizing that
     // it is very low, as it requires both unlikely events to occur simultaneously: CAN ACK glitch and a high-priority
     // preemption exactly between the original transmission and its duplicate.
@@ -1425,7 +1419,7 @@ static bool rx_session_update(canard_subscription_t* const sub,
 
     // This is a start frame, but before we allocate new state for it, we must ensure that it is of the correct version.
     // Wrong protocol version must be rejected as early as possible to avoid wasting memory on unused states.
-    // The protocol version is only acceptable on start-of-transfer frames, but new sessions can only be created
+    // The protocol version is only visible on start-of-transfer frames, but new sessions can only be created
     // on start frames, so this is robust.
     if (frame->start && (frame->toggle != kind_is_v1(sub->kind))) {
         return true; // Wrong protocol version is not a failure.
