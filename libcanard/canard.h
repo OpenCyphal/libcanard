@@ -53,14 +53,14 @@ extern "C"
 #define CANARD_IFACE_BITMAP_ALL ((1U << CANARD_IFACE_COUNT) - 1U)
 
 /// Parameter ranges are inclusive; the lower bound is zero for all.
-#define CANARD_SUBJECT_ID_MAX         0x1FFFFUL
-#define CANARD_SUBJECT_ID_MAX_1v0     8191U // Cyphal v1.0 supports only 13-bit subject-IDs.
-#define CANARD_SERVICE_ID_MAX         511U
-#define CANARD_NODE_ID_MAX            127U
-#define CANARD_NODE_ID_CAPACITY       (CANARD_NODE_ID_MAX + 1U)
-#define CANARD_TRANSFER_ID_BIT_LENGTH 5U
-#define CANARD_TRANSFER_ID_MODULO     (1U << CANARD_TRANSFER_ID_BIT_LENGTH)
-#define CANARD_TRANSFER_ID_MAX        (CANARD_TRANSFER_ID_MODULO - 1U)
+#define CANARD_SUBJECT_ID_MAX     0x1FFFFUL
+#define CANARD_SUBJECT_ID_MAX_1v0 8191U // Cyphal v1.0 supports only 13-bit subject-IDs.
+#define CANARD_SERVICE_ID_MAX     511U
+#define CANARD_NODE_ID_MAX        127U
+#define CANARD_NODE_ID_CAPACITY   (CANARD_NODE_ID_MAX + 1U)
+#define CANARD_TRANSFER_ID_BITS   5U
+#define CANARD_TRANSFER_ID_MODULO (1U << CANARD_TRANSFER_ID_BITS)
+#define CANARD_TRANSFER_ID_MAX    (CANARD_TRANSFER_ID_MODULO - 1U)
 
 /// This is used only with Cyphal v1.0 and legacy v0 protocols to indicate anonymous messages.
 /// Cyphal v1.1 does not support anonymous messages so this value is never used there.
@@ -104,6 +104,7 @@ typedef enum canard_prio_t
     canard_prio_optional    = 7,
 } canard_prio_t;
 #define CANARD_PRIO_COUNT 8U
+#define CANARD_PRIO_BITS  3U
 
 typedef struct canard_tree_t
 {
