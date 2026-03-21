@@ -6,6 +6,7 @@
       <w>acks</w>
       <w>cyphal</w>
       <w>dcanard</w>
+      <w>frankentransfers</w>
       <w>iface</w>
       <w>ifaces</w>
       <w>libcyphal</w>
@@ -15,6 +16,7 @@
       <w>objcount</w>
       <w>popcount</w>
       <w>seqno</w>
+      <w>seqnos</w>
       <w>stdatomic</w>
       <w>suppr</w>
       <w>txfer</w>

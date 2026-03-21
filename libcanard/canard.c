@@ -109,6 +109,8 @@ const uint_least8_t canard_len_to_dlc[65] = {
 
 static size_t      smaller(const size_t a, const size_t b) { return (a < b) ? a : b; }
 static size_t      larger(const size_t a, const size_t b) { return (a > b) ? a : b; }
+static uint64_t    min_u64(const uint64_t a, const uint64_t b) { return (a < b) ? a : b; }
+static uint64_t    max_u64(const uint64_t a, const uint64_t b) { return (a > b) ? a : b; }
 static int64_t     min_i64(const int64_t a, const int64_t b) { return (a < b) ? a : b; }
 static int64_t     max_i64(const int64_t a, const int64_t b) { return (a > b) ? a : b; }
 static canard_us_t sooner(const canard_us_t a, const canard_us_t b) { return min_i64(a, b); }
@@ -1171,17 +1173,6 @@ static byte_t rx_parse(const uint32_t       can_id,
     return (is_v0 ? 1U : 0U) | (is_v1 ? 2U : 0U);
 }
 
-// f(2, 3)==31, f(2, 2)==0, f(2, 1)==1
-static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
-{
-    CANARD_ASSERT((a <= CANARD_TRANSFER_ID_MAX) && (b <= CANARD_TRANSFER_ID_MAX));
-    int16_t diff = (int16_t)(((int16_t)a) - ((int16_t)b));
-    if (diff < 0) {
-        diff = (int16_t)(diff + (int16_t)(1U << CANARD_TRANSFER_ID_BIT_LENGTH));
-    }
-    return (byte_t)diff;
-}
-
 // Idle sessions are removed after this timeout even if reassembly is not finished.
 // This is not related to the transfer-ID timeout and does not affect the correctness;
 // it is only needed to improve the memory footprint when remotes cease sending messages.
@@ -1198,37 +1189,15 @@ static byte_t rx_transfer_id_forward_difference(const byte_t a, const byte_t b)
 typedef struct
 {
     canard_us_t start_ts;
-    size_t      total_size; // The raw payload size before the implicit truncation and CRC removal.
+    uint32_t    total_size; // The raw payload size seen before the implicit truncation and CRC removal.
     uint16_t    crc;
     byte_t      transfer_id : CANARD_TRANSFER_ID_BIT_LENGTH;
-    byte_t      expected_toggle : 1;
     byte_t      iface_index : IFACE_INDEX_BIT_LENGTH;
+    byte_t      expected_toggle : 1;
     byte_t      payload[]; // Extent-sized.
 } rx_slot_t;
 #define RX_SLOT_OVERHEAD (offsetof(rx_slot_t, payload))
-
-// Up to libcanard v4 we used a fixed-capacity array of pointers for per-remote sessions for constant-time lookup,
-// but it was too costly on MCUs: with a 32-bit pointer it took 512 bytes for the array plus overheads,
-// resulting in 1 KiB o1heap blocks per session, very expensive. Here we use a much less RAM-heavy approach with
-// sparse nodes in a tree with log-time lookup.
-//
-// Core invariants:
-//  - Only start-of-transfer may create/replace a slot.
-//  - Non-start frames never create state.
-//  - Session dedup state is updated on admitted start-of-transfer, not on transfer completion.
-//  - Timeout is consulted only for start-of-transfer admission.
-//  - Slot matching for continuation uses exact match: priority, transfer-ID, toggle, and iface.
-typedef struct
-{
-    canard_tree_t          index;
-    canard_listed_t        list_animation; // On update, session moved to the tail; oldest pushed to the head.
-    canard_us_t            last_admitted_start_ts;
-    rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
-    canard_subscription_t* owner;
-    byte_t                 last_admitted_transfer_id;
-    byte_t                 node_id;
-} rx_session_t;
-static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large");
+static_assert(RX_SLOT_OVERHEAD <= 16, "unexpected layout");
 
 static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
                               const canard_us_t                  start_ts,
@@ -1251,6 +1220,84 @@ static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* c
 {
     mem_free(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent, slot);
 }
+
+static void rx_slot_store(rx_slot_t* const slot, const size_t extent, const canard_bytes_t payload)
+{
+    if (slot->total_size < extent) {
+        const size_t copy_size = smaller(payload.size, (size_t)(extent - slot->total_size));
+        (void)memcpy(&slot->payload[slot->total_size], payload.data, copy_size);
+    }
+    slot->total_size = (uint32_t)(slot->total_size + payload.size); // Before truncation.
+}
+
+// A compact representation is needed because we need to store an array of these in dynamic memory.
+typedef struct
+{
+    uint16_t limbs[3];
+} rx_seqno_packed_t;
+
+static uint64_t rx_seqno_unpack(const rx_seqno_packed_t v)
+{
+    return ((uint64_t)v.limbs[0]) | (((uint64_t)v.limbs[1]) << 16U) | (((uint64_t)v.limbs[2]) << 32U);
+}
+static rx_seqno_packed_t rx_seqno_pack(const uint64_t v)
+{
+    return (rx_seqno_packed_t){
+        { (uint16_t)(v & 0xFFFFU), (uint16_t)((v >> 16U) & 0xFFFFU), (uint16_t)((v >> 32U) & 0xFFFFU) }
+    };
+}
+static uint64_t rx_seqno_linearize(const uint64_t ref_seqno, const byte_t transfer_id)
+{
+    CANARD_ASSERT(transfer_id <= CANARD_TRANSFER_ID_MAX);
+    const byte_t ref_tid = (byte_t)(ref_seqno & CANARD_TRANSFER_ID_MAX);
+    int16_t      delta   = ((int16_t)transfer_id) - ((int16_t)ref_tid); // NOLINT(*-narrowing-conversions)
+    // Select the nearest congruent seqno in the half-open interval [-16, +16) around the reference.
+    if (delta > (int16_t)(CANARD_TRANSFER_ID_MAX / 2U)) {
+        delta -= (int16_t)(CANARD_TRANSFER_ID_MAX + 1U);
+    } else if (delta < -((int16_t)(CANARD_TRANSFER_ID_MAX / 2U) + 1)) {
+        delta += (int16_t)(CANARD_TRANSFER_ID_MAX + 1U);
+    }
+    // Near the origin the backward representative may underflow, so use the next forward one instead.
+    if ((delta < 0) && (ref_seqno < (uint64_t)(-delta))) {
+        delta += (int16_t)(CANARD_TRANSFER_ID_MAX + 1U);
+    }
+    return (uint64_t)(((int64_t)ref_seqno) + ((int64_t)delta));
+}
+
+// Up to libcanard v4 we used a fixed-capacity array of pointers for per-remote sessions for constant-time lookup,
+// but it was too costly on MCUs: with a 32-bit pointer it took 512 bytes for the array plus overheads,
+// resulting in 1 KiB o1heap blocks per session, very expensive. Here we use a much less RAM-heavy approach with
+// sparse nodes in a tree with log-time lookup.
+//
+// Design goals:
+//
+//  - Admit frames from a single interface only, arbitrarily chosen, until it has been observed to be silent for
+//    at least one transfer-ID timeout period. This is because redundant interfaces may carry frames with a significant
+//    delay, which may cause a receiver to admit the same transfer multiple times without interface affinity.
+//
+//  - Allow preemption of transfers by higher-priority ones, without loss of the preempted transfer's state.
+//
+//  - The case of a zero transfer-ID timeout is a first-class use case. In this mode, duplication is tolerated by
+//    the application, but multi-frame transfers must still follow interface affinity to avoid incorrect reassembly.
+//
+// Core invariants:
+//  - Only start-of-transfer may create/replace a slot.
+//  - Non-start frames never create state.
+//  - Session dedup state is updated on admitted start-of-transfer, not on transfer completion.
+//  - Timeout is consulted only for start-of-transfer admission.
+//  - Slot matching for continuation uses exact match: priority, transfer-ID/seqno, toggle, and iface.
+typedef struct
+{
+    canard_tree_t          index;
+    canard_listed_t        list_animation; // On update, session moved to the tail; oldest pushed to the head.
+    canard_us_t            last_admitted_start_ts;
+    rx_slot_t*             slots[CANARD_PRIO_COUNT]; // Indexed by priority level to allow preemption.
+    canard_subscription_t* owner;
+    rx_seqno_packed_t      seqno_frontier[CANARD_PRIO_COUNT];
+    byte_t                 iface_index;
+    byte_t                 node_id;
+} rx_session_t;
+static_assert((sizeof(void*) > 4) || (sizeof(rx_session_t) <= 120), "too large");
 
 static int32_t rx_session_cavl_compare(const void* const user, const canard_tree_t* const node)
 {
@@ -1315,13 +1362,59 @@ static size_t rx_session_scan(rx_session_t* const ses, const canard_us_t now)
     return n_slots;
 }
 
-static void rx_slot_write_payload(const rx_session_t* const ses, rx_slot_t* const slot, const canard_bytes_t payload)
+static void rx_session_record_admission(rx_session_t* const ses,
+                                        const canard_prio_t priority,
+                                        const uint64_t      seqno,
+                                        const canard_us_t   ts,
+                                        const byte_t        iface_index)
 {
-    if (slot->total_size < ses->owner->extent) {
-        const size_t copy_size = smaller(payload.size, ses->owner->extent - slot->total_size);
-        (void)memcpy(&slot->payload[slot->total_size], payload.data, copy_size);
+    ses->seqno_frontier[priority] = rx_seqno_pack(seqno); // nothing older than this at this priority from now on
+    ses->last_admitted_start_ts   = ts;
+    ses->iface_index              = iface_index;
+}
+
+// Maximum seqno seen from the given highest priority level (numerically lowest, inclusive) and down.
+static uint64_t rx_session_seqno_frontier(const rx_session_t* const ses, const canard_prio_t highest_priority)
+{
+    uint64_t seqno = 0;
+    for (size_t i = (size_t)highest_priority; i < CANARD_PRIO_COUNT; i++) {
+        seqno = max_u64(seqno, rx_seqno_unpack(ses->seqno_frontier[i]));
     }
-    slot->total_size += payload.size; // Before truncation.
+    return seqno;
+}
+
+// Frame admittance state machine update. A complex piece, redesigned after v4 to support priority preemption.
+// Key ideas: 1. Separate reassembly state per priority level. 2. TID is linearized into seqno.
+// Once we admit a transfer at some priority with a certain seqno, we know that any older seqno at this or higher
+// priority would be stale, since only higher priority transfers can preempt lower priority ones.
+static bool rx_session_should_admit(const rx_session_t* const ses,
+                                    const canard_us_t         ts,
+                                    const canard_prio_t       priority,
+                                    const bool                start,
+                                    const bool                toggle,
+                                    const uint64_t            seqno,
+                                    const byte_t              iface_index)
+{
+    if (!start) {
+        // Continuation frames only accepted if there is a slot with an exact match of all transfer parameters.
+        const rx_slot_t* const slot = ses->slots[priority];
+        return (slot != NULL) && (slot->transfer_id == (seqno & CANARD_TRANSFER_ID_MAX)) &&
+               (slot->iface_index == iface_index) && (slot->expected_toggle == toggle);
+    }
+    // In the case of a single priority level, the seqno would be considered new if it is greater than last admitted.
+    // Priority preemption makes this simple condition insufficient, because a newer higher-priority transfer with
+    // a greater seqno may push older lower-priority transfers aside, causing the receiver to observe seqno going
+    // backward for new transfers. Our solution is to keep a dedicated seqno frontier per priority level.
+    //
+    // The lowest bound of a genuinely new seqno would then be located at the lowest priority level, since that level
+    // cannot preempt others. To decide if a given seqno is new, one needs to scan all priority levels from the
+    // current one (inclusive) down to the lowest level (numerically greater).
+    //
+    // Higher priority levels (numerically lesser) may have greater seqno frontiers which bear no relevance.
+    const bool seqno_new   = seqno > rx_session_seqno_frontier(ses, priority);
+    const bool iface_match = ses->iface_index == iface_index;
+    const bool timed_out   = ts > (ses->last_admitted_start_ts + ses->owner->transfer_id_timeout);
+    return (seqno_new && iface_match) || (iface_match && timed_out) || (timed_out && seqno_new);
 }
 
 // Returns false on OOM, no other failure modes.
@@ -1333,6 +1426,7 @@ static bool rx_session_update(canard_subscription_t* const sub,
     CANARD_ASSERT((sub != NULL) && (frame != NULL) && (frame->payload.data != NULL) && (ts >= 0));
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
 
+    // Only start frames may create new states.
     rx_session_factory_context_t factory_context = { .owner = sub, .node_id = frame->src };
     rx_session_t* const          ses =
       CAVL2_TO_OWNER(frame->start ? cavl2_find_or_insert(&sub->sessions, //
@@ -1348,20 +1442,11 @@ static bool rx_session_update(canard_subscription_t* const sub,
         return !frame->start;
     }
 
-    // Frame admittance state machine. A highly complex piece, redesigned after v4 to support priority preemption.
-    // TID forward difference illustration: f(2,3)==31, f(2,2)==0, f(2,1)==1
-    const bool tid_new   = rx_transfer_id_forward_difference(ses->last_admitted_transfer_id, frame->transfer_id) > 1;
-    const bool timed_out = ts > (ses->last_admitted_start_ts + ses->owner->transfer_id_timeout);
-    bool       accept    = false;
-    const rx_slot_t* const slot = ses->slots[frame->priority];
-    if (!frame->start) {
-        accept = (slot != NULL) && (slot->transfer_id == frame->transfer_id) && (slot->iface_index == iface_index) &&
-                 (slot->expected_toggle == frame->toggle);
-    } else {
-        accept = ((slot == NULL) || (slot->transfer_id != frame->transfer_id)) && (tid_new || timed_out);
-    }
-    if (!accept) {
-        return true; // Frame not needed; not a failure to accept.
+    // Decide admit or drop.
+    const uint64_t seqno =
+      rx_seqno_linearize(rx_session_seqno_frontier(ses, canard_prio_exceptional), frame->transfer_id);
+    if (!rx_session_should_admit(ses, ts, frame->priority, frame->start, frame->toggle, seqno, iface_index)) {
+        return true; // Rejection is not a failure.
     }
 
     // The frame must be accepted. If this is the start of a new transfer, we must update state.
@@ -1376,13 +1461,12 @@ static bool rx_session_update(canard_subscription_t* const sub,
                 return false;
             }
         }
-        ses->last_admitted_start_ts    = ts;
-        ses->last_admitted_transfer_id = frame->transfer_id;
+        rx_session_record_admission(ses, frame->priority, seqno, ts, iface_index);
     }
 
-    // TODO acceptance
+    // TODO acceptance is not yet implemented.
 
-    return false;
+    return true;
 }
 
 // ---------------------------------------------           MISC            ---------------------------------------------
@@ -1396,10 +1480,10 @@ bool canard_new(canard_t* const              self,
                 const size_t                 filter_count,
                 canard_filter_t* const       filter_storage)
 {
-    bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
-              (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
-              mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
-              ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
+    const bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
+                    (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
+                    mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
+                    ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
         self->node_id                   = (node_id <= CANARD_NODE_ID_MAX) ? node_id : CANARD_NODE_ID_ANONYMOUS;
