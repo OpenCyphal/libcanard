@@ -409,6 +409,7 @@ void canard_destroy(canard_t* const self);
 
 /// This can be invoked after initialization to manually assign the desired node-ID.
 /// This does not disable the occupancy/collision monitoring; the assigned ID will be changed if a collision is found.
+/// Returns false if any of the arguments are invalid. Anonymous node-ID is not allowed.
 bool canard_set_node_id(canard_t* const self, const uint_least8_t node_id);
 
 /// This must be invoked periodically to ensure liveliness.
@@ -422,6 +423,7 @@ uint_least8_t canard_pending_ifaces(const canard_t* const self);
 
 /// True if successfully processed, false if any of the arguments are invalid.
 /// Other failures are reported via the counters.
+/// This function should not be invoked from the callbacks.
 /// The lifetime of can_data can end after this function returns.
 bool canard_ingest_frame(canard_t* const      self,
                          const canard_us_t    timestamp,

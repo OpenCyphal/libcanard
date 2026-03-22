@@ -1067,7 +1067,7 @@ static byte_t rx_parse(const uint32_t       can_id,
                        frame_t* const       out_v0,
                        frame_t* const       out_v1)
 {
-    CANARD_ASSERT(can_id < (UINT32_C(1) << 29U));
+    CANARD_ASSERT(can_id <= CAN_EXT_ID_MASK);
     CANARD_ASSERT(out_v0 != NULL);
     CANARD_ASSERT(out_v1 != NULL);
     memset(out_v0, 0, sizeof(*out_v0));
@@ -1461,6 +1461,7 @@ static void rx_session_update(canard_subscription_t* const sub,
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
     CANARD_ASSERT(!frame->start || (frame->toggle == canard_kind_version(sub->kind)));
     CANARD_ASSERT((frame->dst == CANARD_NODE_ID_ANONYMOUS) || (frame->dst == sub->owner->node_id));
+    CANARD_ASSERT((canard_kind_version(sub->kind) != 0) || (sub->extent >= 2)); // v0 CRC reservation
 
     // Only start frames may create new states.
     // The protocol version is observable on start frames by design, which makes this robust.
@@ -1518,7 +1519,7 @@ static void rx_session_update(canard_subscription_t* const sub,
 
 static int32_t rx_subscription_cavl_compare(const void* const user, const canard_tree_t* const node)
 {
-    return ((int32_t)(*(uint32_t*)user)) - ((int32_t)((canard_subscription_t*)node)->port_id);
+    return ((int32_t)(*(const uint32_t*)user)) - ((int32_t)((const canard_subscription_t*)(const void*)node)->port_id);
 }
 
 // Locates the appropriate subscription if the destination is matching and there is a subscription.
@@ -1688,7 +1689,7 @@ bool canard_ingest_frame(canard_t* const      self,
                          const canard_bytes_t can_data)
 {
     const bool ok = (self != NULL) && (timestamp >= 0) && (iface_index < CANARD_IFACE_COUNT) &&
-                    (extended_can_id < (UINT32_C(1) << 29U)) && ((can_data.size == 0) || (can_data.data != NULL));
+                    (extended_can_id <= CAN_EXT_ID_MASK) && ((can_data.size == 0) || (can_data.data != NULL));
     if (ok) {
         frame_t      frs[2] = { { 0 }, { 0 } };
         const byte_t parsed = rx_parse(extended_can_id, can_data, &frs[0], &frs[1]);
