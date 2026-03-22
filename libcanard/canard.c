@@ -1062,6 +1062,8 @@ typedef struct
 // In non-first frames, we attempt to parse the frame as both versions simultaneously and then let the caller
 // decide which one is correct by checking for incomplete multi-frame reassembly states.
 // The return value is a bitmask indicating which of the versions have been parsed at this level.
+// This function admits v0 frames with MTU>8 even though this is not compliant with the v0 specification;
+// there are a few non-compliant implementations out there that use this and there is value in liberal acceptance.
 static byte_t rx_parse(const uint32_t       can_id,
                        const canard_bytes_t payload_raw,
                        frame_t* const       out_v0,
@@ -1593,7 +1595,7 @@ static void node_id_occupancy_update(canard_t* const self, const byte_t src, con
     (void)src;
     (void)dst;
     // TODO not implemented.
-    // TODO filtering.
+    // TODO purge pending TX transfers that have already emitted the first frame.
     rx_filter_configure(self);
 }
 

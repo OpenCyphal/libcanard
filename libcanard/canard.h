@@ -335,7 +335,7 @@ struct canard_t
         /// the setting only affects the mode used for outgoing frames.
         ///
         /// Legacy v0 transfers (UAVCAN/DroneCAN) are always sent in Classic CAN mode regardless of this flag,
-        /// because UAVCAN v0 does not define CAN FD support.
+        /// because UAVCAN v0 does not define CAN FD support. CAN FD v0 transfers can still be received though.
         bool fd;
 
         /// Queue size and capacity are measured in CAN frames for convenience, but the TX pipeline actually operates
