@@ -1320,40 +1320,45 @@ static size_t rx_session_cleanup(rx_session_t* const ses, const canard_us_t now)
     return n_slots;
 }
 
-static void rx_session_complete(rx_session_t* const ses, const canard_us_t ts_frame, const frame_t* const fr)
+static void rx_session_complete_single_frame(canard_subscription_t* const sub,
+                                             const canard_us_t            ts,
+                                             const frame_t* const         fr)
 {
-    canard_subscription_t* const sub = ses->owner;
-    CANARD_ASSERT((fr->end) && (fr->port_id == sub->port_id) && (fr->kind == sub->kind));
+    CANARD_ASSERT(fr->start && fr->end && (fr->port_id == sub->port_id) && (fr->kind == sub->kind));
     CANARD_ASSERT(sub->vtable->on_message != NULL);
-    rx_slot_t* const slot = ses->slots[fr->priority];
-    if (slot == NULL) {
-        CANARD_ASSERT(fr->start && fr->end); // Only single-frame can complete without a slot.
-        const canard_payload_t payload = { .view = fr->payload, .origin = { .data = NULL, .size = 0 } };
-        sub->vtable->on_message(sub, ts_frame, fr->priority, fr->src, fr->transfer_id, payload);
+    const canard_payload_t payload = { .view = fr->payload, .origin = { .data = NULL, .size = 0 } };
+    sub->vtable->on_message(sub, ts, fr->priority, fr->src, fr->transfer_id, payload);
+}
+
+static void rx_session_complete_slot(rx_session_t* const ses, const frame_t* const fr)
+{
+    canard_subscription_t* const sub  = ses->owner;
+    rx_slot_t* const             slot = ses->slots[fr->priority];
+    CANARD_ASSERT(!fr->start && fr->end && (fr->port_id == sub->port_id) && (fr->kind == sub->kind));
+    CANARD_ASSERT((slot != NULL) && (sub->vtable->on_message != NULL));
+    CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
+    CANARD_ASSERT(fr->src != CANARD_NODE_ID_ANONYMOUS); // anons cannot be multiframe
+    // Verify the CRC and dispatch the message if correct. The slot is consumed in either case.
+    ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
+    const bool     v1        = canard_kind_version(sub->kind) == 1;
+    const uint16_t crc_ref   = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
+    CANARD_ASSERT(v1 || (sub->extent >= 2)); // In v0, the CRC size is included in the extent.
+    if (slot->crc == crc_ref) {
+        const size_t           size    = smaller(slot->total_size - 2, sub->extent - (v1 ? 0 : 2));
+        const canard_payload_t payload = {
+            .view   = { .data = v1 ? slot->payload : &slot->payload[2], .size = size },
+            .origin = { .data = slot, .size = RX_SLOT_OVERHEAD + sub->extent },
+        };
+        sub->vtable->on_message(sub, slot->start_ts, fr->priority, fr->src, fr->transfer_id, payload);
     } else {
-        CANARD_ASSERT(!fr->start && fr->end);
-        CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
-        ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
-        const bool     v1        = canard_kind_version(sub->kind) == 1;
-        const uint16_t crc_ref = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
-        CANARD_ASSERT(v1 || (sub->extent >= 2)); // In v0, the CRC size is included in the extent.
-        if (slot->crc == crc_ref) {
-            const size_t           size    = smaller(slot->total_size - 2, sub->extent - (v1 ? 0 : 2));
-            const canard_payload_t payload = {
-                .view   = { .data = v1 ? slot->payload : &slot->payload[2], .size = size },
-                .origin = { .data = slot, .size = RX_SLOT_OVERHEAD + sub->extent },
-            };
-            sub->vtable->on_message(sub, slot->start_ts, fr->priority, fr->src, fr->transfer_id, payload);
-        } else {
-            sub->owner->err.rx_transfer++;
-            rx_slot_destroy(ses->owner, slot);
-        }
+        sub->owner->err.rx_transfer++;
+        rx_slot_destroy(ses->owner, slot);
     }
 }
 
 static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_frame, const frame_t* const fr)
 {
-    const canard_subscription_t* const sub = ses->owner;
+    canard_subscription_t* const sub = ses->owner;
     CANARD_ASSERT((fr->port_id == sub->port_id) && (fr->kind == sub->kind));
     rx_slot_t* const slot = ses->slots[fr->priority];
     if (slot != NULL) {
@@ -1370,9 +1375,12 @@ static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_fram
             ? (canard_bytes_t){ .size = fr->payload.size - 2, .data = ((byte_t*)fr->payload.data) + 2 }
             : fr->payload;
         slot->crc = crc_add(slot->crc, crc_input.size, crc_input.data);
-    }
-    if (fr->end) {
-        rx_session_complete(ses, ts_frame, fr);
+        if (fr->end) {
+            rx_session_complete_slot(ses, fr);
+        }
+    } else {
+        CANARD_ASSERT(fr->start && fr->end);
+        rx_session_complete_single_frame(sub, ts_frame, fr);
     }
 }
 
@@ -1462,6 +1470,15 @@ static void rx_session_update(canard_subscription_t* const sub,
     CANARD_ASSERT(!frame->start || (frame->toggle == canard_kind_version(sub->kind)));
     CANARD_ASSERT((frame->dst == CANARD_NODE_ID_ANONYMOUS) || (frame->dst == sub->owner->node_id));
     CANARD_ASSERT((canard_kind_version(sub->kind) != 0) || (sub->extent >= 2)); // v0 CRC reservation
+
+    // Anonymous frames are stateless and require special treatment.
+    // They are scheduled to be deprecated in Cyphal v1.1 and their support will be eventually dropped.
+    if (frame->src == CANARD_NODE_ID_ANONYMOUS) {
+        CANARD_ASSERT(frame->start && frame->end && (frame->dst == CANARD_NODE_ID_ANONYMOUS));
+        CANARD_ASSERT((frame->kind == canard_kind_0v1_message) || (frame->kind == canard_kind_1v0_message));
+        rx_session_complete_single_frame(sub, ts, frame);
+        return;
+    }
 
     // Only start frames may create new states.
     // The protocol version is observable on start frames by design, which makes this robust.
