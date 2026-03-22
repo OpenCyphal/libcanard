@@ -1366,8 +1366,8 @@ static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_fram
         // The CRC initial state is constant for v1, data-type-dependent for v0; this is managed outside of this scope.
         const canard_bytes_t crc_input =
           ((canard_kind_version(sub->kind) == 0) && fr->start)
-            ? fr->payload
-            : (canard_bytes_t){ .size = fr->payload.size - 2, .data = ((byte_t*)fr->payload.data) + 2 };
+            ? (canard_bytes_t){ .size = fr->payload.size - 2, .data = ((byte_t*)fr->payload.data) + 2 }
+            : fr->payload;
         slot->crc = crc_add(slot->crc, crc_input.size, crc_input.data);
     }
     if (fr->end) {

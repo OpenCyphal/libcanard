@@ -3,6 +3,10 @@
 Read `README.md` for general information about the library, and `CONTRIBUTING.md` for development-related notes.
 Read all README files in all subdirectories except for `lib/`.
 
+The applicable specifications can be found here:
+- **Cyphal v1**: https://github.com/OpenCyphal/specification
+- **UAVCAN v0**, aka DroneCAN: https://dronecan.github.io/Specification/4.1_CAN_bus_transport_layer
+
 Project layout:
 
 - `libcanard`: the library itself; the shippable code.
