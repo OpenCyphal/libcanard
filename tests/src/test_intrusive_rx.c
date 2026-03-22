@@ -43,7 +43,7 @@ static void test_rx_parse_v1_1_message_golden(void)
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret);
-        TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(1234, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(42, v1.src);
@@ -60,7 +60,7 @@ static void test_rx_parse_v1_1_message_golden(void)
         const byte_t         d[] = { 0xE0 }; // tid=0
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x00000080UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(0, v1.src);
@@ -72,7 +72,7 @@ static void test_rx_parse_v1_1_message_golden(void)
         const byte_t         d[] = { 0xFF }; // 0xE0|31 → tid=31
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x1DFFFFFFUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(131071UL, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(127, v1.src);
@@ -93,7 +93,7 @@ static void test_rx_parse_v1_0_message_golden(void)
         const byte_t         d[] = { 0xAA, 0xE5 }; // v1 single, tid=5
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x10602A0BUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(42, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(11, v1.src);
@@ -104,7 +104,7 @@ static void test_rx_parse_v1_0_message_golden(void)
         const byte_t         d[] = { 0xE0 };
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x007FFF01UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(8191, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(1, v1.src);
     }
@@ -113,7 +113,7 @@ static void test_rx_parse_v1_0_message_golden(void)
         const byte_t         d[] = { 0xE3 }; // v1 single, tid=3
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x09606455UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(100, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v1.src); // anonymous
         TEST_ASSERT_EQUAL_INT(canard_prio_fast, v1.priority);
@@ -132,7 +132,7 @@ static void test_rx_parse_v1_0_service_golden(void)
         const byte_t         d[] = { 0xBB, 0xE1 }; // v1 single, tid=1
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x136B8C0BUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_request, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_request, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(430, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(24, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(11, v1.src);
@@ -143,7 +143,7 @@ static void test_rx_parse_v1_0_service_golden(void)
         const byte_t         d[] = { 0xE0 };
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x020000FFUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_response, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_response, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(1, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(127, v1.src);
@@ -154,7 +154,7 @@ static void test_rx_parse_v1_0_service_golden(void)
         const byte_t         d[] = { 0xFF }; // v1 single, tid=31
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x1F7FFFFEUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_request, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_request, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(511, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(127, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(126, v1.src);
@@ -174,7 +174,7 @@ static void test_rx_parse_v0_message_golden(void)
         const byte_t         d[] = { 0x55, 0xC2 }; // v0 single: SOT=1 EOT=1 toggle=0 tid=2
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x13040A01UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_0v1_message, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_message, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(0x040A, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(1, v0.src);
@@ -185,7 +185,7 @@ static void test_rx_parse_v0_message_golden(void)
         const byte_t         d[] = { 0xC0 }; // v0 single, tid=0
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x13040A00UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_0v1_message, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_message, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(0x040A, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v0.src); // anonymous
     }
@@ -194,7 +194,7 @@ static void test_rx_parse_v0_message_golden(void)
         const byte_t         d[] = { 0xDF }; // v0 single: 0xC0|31, tid=31
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x1FFFFF7FUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_0v1_message, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_message, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(0xFFFF, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(127, v0.src);
         TEST_ASSERT_EQUAL_INT(canard_prio_optional, v0.priority);
@@ -213,7 +213,7 @@ static void test_rx_parse_v0_service_golden(void)
         const byte_t         d[] = { 0x42, 0xC4 }; // v0 single, tid=4
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x1337988BUL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_0v1_request, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_request, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(0x37, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(24, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(11, v0.src);
@@ -224,7 +224,7 @@ static void test_rx_parse_v0_service_golden(void)
         const byte_t         d[] = { 0xC0 }; // v0 single, tid=0
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03010181UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_0v1_response, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_response, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(1, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(1, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(1, v0.src);
@@ -471,11 +471,11 @@ static void test_rx_parse_cross_version_ambiguity(void)
         const byte_t         ret = rx_parse(0x0C04D2AAUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(3, ret);
         // v1: v1.1 message, subject=1234, src=42
-        TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(1234, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(42, v1.src);
         // v0: service request, type_id=4, dst=82, src=42
-        TEST_ASSERT_EQUAL_INT(kind_0v1_request, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_request, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(4, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(82, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(42, v0.src);
@@ -486,7 +486,7 @@ static void test_rx_parse_cross_version_ambiguity(void)
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x1FFFFFFFUL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(1, ret);
-        TEST_ASSERT_EQUAL_INT(kind_0v1_request, v0.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_request, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(0xFF, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(127, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(127, v0.src);
@@ -499,7 +499,7 @@ static void test_rx_parse_cross_version_ambiguity(void)
         const byte_t         ret = rx_parse(0x00000000UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret); // v1 only; v0 anonymous rejected
         // v1: v1.0 message (bit7=0), port_id=0, src=0
-        TEST_ASSERT_EQUAL_INT(kind_1v0_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0, v1.src);
     }
@@ -517,7 +517,7 @@ static void test_rx_parse_bit_field_boundaries(void)
         const byte_t         d[] = { 0xE0 };
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x027FC000UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_response, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_response, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(511, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(0, v1.src);
@@ -528,7 +528,7 @@ static void test_rx_parse_bit_field_boundaries(void)
         const byte_t         d[] = { 0xE0 };
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x02003F80UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_1v0_response, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v0_response, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(0, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(127, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(0, v1.src);
@@ -539,7 +539,7 @@ static void test_rx_parse_bit_field_boundaries(void)
         const byte_t         d[] = { 0xC0 }; // v0 single
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03FF0181UL, pl, &v0, &v1));
-        TEST_ASSERT_EQUAL_INT(kind_0v1_response, v0.kind); // req=0
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_response, v0.kind); // req=0
         TEST_ASSERT_EQUAL_UINT32(0xFF, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(1, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(1, v0.src);
@@ -559,7 +559,7 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x01800080UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret); // accepted despite bit 23
-        TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(0x18000UL, v1.port_id);
     }
     // Max subject 0x1FFFF also sets bit 23.
@@ -569,7 +569,7 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x01FFFF80UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret);
-        TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(0x1FFFFUL, v1.port_id);
     }
 }
@@ -584,11 +584,11 @@ static void test_rx_parse_v1_0_message_ignores_reserved_bits_22_21(void)
     const canard_bytes_t pl  = { sizeof(d), d };
     // bits 22:21 = 00: CAN ID = (0<<26)|(0<<21)|(42<<8)|1 = 0x00002A01
     rx_parse(0x00002A01UL, pl, &v0, &v1);
-    TEST_ASSERT_EQUAL_INT(kind_1v0_message, v1.kind);
+    TEST_ASSERT_EQUAL_INT(canard_kind_1v0_message, v1.kind);
     TEST_ASSERT_EQUAL_UINT32(42, v1.port_id);
     // bits 22:21 = 11: CAN ID = (0<<26)|(3<<21)|(42<<8)|1 = 0x00602A01
     rx_parse(0x00602A01UL, pl, &v0, &v1);
-    TEST_ASSERT_EQUAL_INT(kind_1v0_message, v1.kind);
+    TEST_ASSERT_EQUAL_INT(canard_kind_1v0_message, v1.kind);
     TEST_ASSERT_EQUAL_UINT32(42, v1.port_id); // same despite different reserved bits
 }
 
@@ -606,7 +606,7 @@ static void test_rx_parse_non_first_dual_output(void)
     TEST_ASSERT_EQUAL_UINT8(3, ret);
 
     // v1 output fully populated: v1.1 message, subject=1234, src=42.
-    TEST_ASSERT_EQUAL_INT(kind_1v1_message, v1.kind);
+    TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
     TEST_ASSERT_EQUAL_UINT32(1234, v1.port_id);
     TEST_ASSERT_EQUAL_HEX8(0xFF, v1.dst);
     TEST_ASSERT_EQUAL_HEX8(42, v1.src);
@@ -619,7 +619,7 @@ static void test_rx_parse_non_first_dual_output(void)
     TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
 
     // v0 output fully populated: v0 service request, type_id=4, dst=82, src=42.
-    TEST_ASSERT_EQUAL_INT(kind_0v1_request, v0.kind);
+    TEST_ASSERT_EQUAL_INT(canard_kind_0v1_request, v0.kind);
     TEST_ASSERT_EQUAL_UINT32(4, v0.port_id);
     TEST_ASSERT_EQUAL_HEX8(82, v0.dst);
     TEST_ASSERT_EQUAL_HEX8(42, v0.src);

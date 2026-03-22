@@ -40,7 +40,7 @@ static void fixture_init(fixture_t* const f, const canard_us_t tid_timeout)
     f->sub.owner               = &f->canard;
     f->sub.transfer_id_timeout = tid_timeout;
     f->sub.extent              = 64;
-    f->sub.kind                = kind_1v1_message;
+    f->sub.kind                = canard_kind_1v1_message;
     f->sub.crc_seed            = CRC_INITIAL;
     f->ses.owner               = &f->sub;
     f->ses.last_admission_ts   = BIG_BANG;

@@ -76,21 +76,6 @@ typedef unsigned char byte_t;
 
 #define TREE_NULL (canard_tree_t){ NULL, { NULL, NULL }, 0 }
 
-typedef enum kind_t
-{
-    kind_1v1_message  = 0,
-    kind_1v0_message  = 1,
-    kind_1v0_response = 2,
-    kind_1v0_request  = 3,
-    // v0.1
-    kind_0v1_message  = 4,
-    kind_0v1_response = 5,
-    kind_0v1_request  = 6,
-} kind_t;
-static_assert(CANARD_KIND_COUNT == kind_0v1_request + 1, "");
-
-static bool kind_is_v1(const kind_t kind) { return kind < kind_0v1_message; }
-
 #define KILO 1000LL
 #define MEGA (KILO * KILO)
 
@@ -1057,7 +1042,7 @@ bool canard_0v1_respond(canard_t* const             self,
 typedef struct
 {
     canard_prio_t priority;
-    kind_t        kind;
+    canard_kind_t kind;
 
     uint32_t port_id; // in v0 this stores the data type ID.
 
@@ -1127,17 +1112,17 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v1->dst     = (byte_t)((can_id >> 7U) & CANARD_NODE_ID_MAX);
             out_v1->port_id = (can_id >> 14U) & CANARD_SERVICE_ID_MAX;
             const bool req  = (can_id & (UINT32_C(1) << 24U)) != 0U;
-            out_v1->kind    = req ? kind_1v0_request : kind_1v0_response;
+            out_v1->kind    = req ? canard_kind_1v0_request : canard_kind_1v0_response;
         } else {
             out_v1->dst       = CANARD_NODE_ID_ANONYMOUS;
             const bool is_1v1 = (can_id & (UINT32_C(1) << 7U)) != 0U;
             if (is_1v1) {
                 out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX;
-                out_v1->kind    = kind_1v1_message;
+                out_v1->kind    = canard_kind_1v1_message;
             } else {
                 is_v1           = is_v1 && !bit_23;
                 out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX_1v0;
-                out_v1->kind    = kind_1v0_message;
+                out_v1->kind    = canard_kind_1v0_message;
                 if ((can_id & (UINT32_C(1) << 24U)) != 0U) {
                     out_v1->src = CANARD_NODE_ID_ANONYMOUS;
                     is_v1       = is_v1 && start && end; // anonymous can only be single-frame
@@ -1160,11 +1145,11 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v0->dst      = dst;
             out_v0->port_id  = (can_id >> 16U) & 0xFFU;
             const bool req   = (can_id & (UINT32_C(1) << 15U)) != 0U;
-            out_v0->kind     = req ? kind_0v1_request : kind_0v1_response;
+            out_v0->kind     = req ? canard_kind_0v1_request : canard_kind_0v1_response;
         } else {
             out_v0->dst     = CANARD_NODE_ID_ANONYMOUS;
             out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
-            out_v0->kind    = kind_0v1_message;
+            out_v0->kind    = canard_kind_0v1_message;
             if (src == 0) {
                 out_v0->src = CANARD_NODE_ID_ANONYMOUS;
                 is_v0       = is_v0 && start && end; // anonymous can only be single-frame
@@ -1208,7 +1193,7 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
         slot->start_ts        = start_ts;
         slot->crc             = sub->crc_seed;
         slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
-        slot->expected_toggle = kind_is_v1(sub->kind) ? 1 : 0;
+        slot->expected_toggle = canard_kind_is_v1(sub->kind) ? 1 : 0;
         slot->iface_index     = iface_index & ((1U << IFACE_INDEX_BITS) - 1U);
     }
     return slot;
@@ -1421,7 +1406,7 @@ static bool rx_session_update(canard_subscription_t* const sub,
     // Wrong protocol version must be rejected as early as possible to avoid wasting memory on unused states.
     // The protocol version is only visible on start-of-transfer frames, but new sessions can only be created
     // on start frames, so this is robust.
-    if (frame->start && (frame->toggle != kind_is_v1(sub->kind))) {
+    if (frame->start && (frame->toggle != canard_kind_is_v1(sub->kind))) {
         return true; // Wrong protocol version is not a failure.
     }
 

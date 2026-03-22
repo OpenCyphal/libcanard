@@ -80,8 +80,21 @@ extern "C"
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD      64U
 
-/// Exposed only for type completeness.
+/// All valid transfer kind and version combinations.
+typedef enum canard_kind_t
+{
+    canard_kind_1v1_message  = 0,
+    canard_kind_1v0_message  = 1,
+    canard_kind_1v0_response = 2,
+    canard_kind_1v0_request  = 3,
+    // v0.1
+    canard_kind_0v1_message  = 4,
+    canard_kind_0v1_response = 5,
+    canard_kind_0v1_request  = 6,
+} canard_kind_t;
 #define CANARD_KIND_COUNT 7
+
+static bool canard_kind_is_v1(const canard_kind_t kind) { return kind < canard_kind_0v1_message; }
 
 typedef struct canard_t canard_t;
 
@@ -232,7 +245,7 @@ struct canard_subscription_t
     uint32_t      port_id;  ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t        extent;   ///< Must not be altered after initialization!
     uint16_t      crc_seed; ///< For v0 this is set explicitly, for v1 this is always 0xFFFF.
-    uint_least8_t kind;     ///< Which of the indexes in canard_rx_t this subscription is part of.
+    canard_kind_t kind;
 
     canard_filter_t filter; ///< Precomputed for quick acceptance filter configuration.
 
