@@ -1108,11 +1108,11 @@ static byte_t rx_parse(const uint32_t       can_id,
         const bool svc      = (can_id & (UINT32_C(1) << 25U)) != 0U;
         const bool bit_23   = (can_id & (UINT32_C(1) << 23U)) != 0U;
         if (svc) {
-            is_v1           = is_v1 && !bit_23;
             out_v1->dst     = (byte_t)((can_id >> 7U) & CANARD_NODE_ID_MAX);
             out_v1->port_id = (can_id >> 14U) & CANARD_SERVICE_ID_MAX;
             const bool req  = (can_id & (UINT32_C(1) << 24U)) != 0U;
             out_v1->kind    = req ? canard_kind_1v0_request : canard_kind_1v0_response;
+            is_v1           = is_v1 && !bit_23 && (out_v1->src != out_v1->dst); // self-addressing not allowed
         } else {
             out_v1->dst       = CANARD_NODE_ID_ANONYMOUS;
             const bool is_1v1 = (can_id & (UINT32_C(1) << 7U)) != 0U;
@@ -1141,11 +1141,12 @@ static byte_t rx_parse(const uint32_t       can_id,
         const bool svc      = (can_id & (UINT32_C(1) << 7U)) != 0U;
         if (svc) {
             const byte_t dst = (byte_t)((can_id >> 8U) & CANARD_NODE_ID_MAX);
-            is_v0            = is_v0 && (dst != 0) && (src != 0); // 0 reserved for anonymous/broadcast, not for svc.
             out_v0->dst      = dst;
             out_v0->port_id  = (can_id >> 16U) & 0xFFU;
             const bool req   = (can_id & (UINT32_C(1) << 15U)) != 0U;
             out_v0->kind     = req ? canard_kind_0v1_request : canard_kind_0v1_response;
+            // Node-ID 0 reserved for anonymous/broadcast, invalid for services. Self-addressing not allowed.
+            is_v0 = is_v0 && (dst != 0) && (src != 0) && (src != dst);
         } else {
             out_v0->dst     = CANARD_NODE_ID_ANONYMOUS;
             out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
@@ -1449,10 +1450,9 @@ static bool rx_session_solve_admission(const rx_session_t* const ses,
     return (fresh && affine) || (affine && stale) || (stale && fresh);
 }
 
-// Returns false on OOM, no other failure modes.
 // The caller must ensure the frame is of the correct version that matches the subscription (v0/v1).
 // The caller must ensure the frame is directed to the local node (broadcast or unicast to the local node-ID).
-static bool rx_session_update(canard_subscription_t* const sub,
+static void rx_session_update(canard_subscription_t* const sub,
                               const canard_us_t            ts,
                               const frame_t* const         frame,
                               const byte_t                 iface_index)
@@ -1477,14 +1477,14 @@ static bool rx_session_update(canard_subscription_t* const sub,
                      index);
     if (ses == NULL) {
         sub->owner->err.oom += frame->start;
-        return !frame->start;
+        return;
     }
 
     // Decide admit or drop.
     const bool admit = rx_session_solve_admission(
       ses, ts, frame->priority, frame->start, frame->toggle, frame->transfer_id, iface_index);
     if (!admit) {
-        return true; // Rejection is not a failure.
+        return;
     }
 
     // The frame must be accepted. If this is the start of a new transfer, we must update state.
@@ -1502,7 +1502,7 @@ static bool rx_session_update(canard_subscription_t* const sub,
             ses->slots[frame->priority] = rx_slot_new(sub, ts, frame->transfer_id, iface_index);
             if (ses->slots[frame->priority] == NULL) {
                 sub->owner->err.oom++;
-                return false;
+                return;
             }
             CANARD_ASSERT(ses->slots[frame->priority]->transfer_id == frame->transfer_id);
             CANARD_ASSERT(ses->slots[frame->priority]->expected_toggle == frame->toggle);
@@ -1514,35 +1514,94 @@ static bool rx_session_update(canard_subscription_t* const sub,
     // Accept the frame.
     rx_session_accept(ses, ts, frame);
     CANARD_ASSERT(!frame->end || (ses->slots[frame->priority] == NULL));
-    return true;
+}
+
+static int32_t rx_subscription_cavl_compare(const void* const user, const canard_tree_t* const node)
+{
+    return ((int32_t)(*(uint32_t*)user)) - ((int32_t)((canard_subscription_t*)node)->port_id);
+}
+
+// Locates the appropriate subscription if the destination is matching and there is a subscription.
+static canard_subscription_t* rx_route(const canard_t* const self, const frame_t* const fr)
+{
+    CANARD_ASSERT((self != NULL) && (fr != NULL));
+    if ((fr->dst != CANARD_NODE_ID_ANONYMOUS) && (fr->dst != self->node_id)) {
+        return NULL; // misfiltered
+    }
+    return (canard_subscription_t*)cavl2_find(
+      self->rx.subscriptions[fr->kind], &fr->port_id, rx_subscription_cavl_compare);
+}
+
+// Recompute the filter configuration and apply.
+// Must be invoked after modification of the subscription set and after the local node-ID is changed.
+static void rx_filter_configure(const canard_t* const self)
+{
+    if (self->vtable->filter == NULL) {
+        return; // No filtering support, nothing to do.
+    }
+    (void)self;
+    // TODO not implemented.
 }
 
 // ---------------------------------------------           MISC            ---------------------------------------------
+
+// The splitmix64 PRNG algorithm. Original work by Sebastiano Vigna, released under CC0-1.0 (public domain dedication).
+// Source http://xoshiro.di.unimi.it/splitmix64.c.
+static uint64_t splitmix64(uint64_t* const state)
+{
+    uint64_t z = (*state += 0x9E3779B97F4A7C15ULL);
+    z          = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
+    z          = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31U);
+}
+
+// Obtains a decent-quality pseudo-random number in [0, cardinality).
+static uint64_t random(canard_t* const self, const uint64_t cardinality)
+{
+    CANARD_ASSERT(cardinality > 0);
+    return splitmix64(&self->prng_state) % cardinality;
+}
+
+static void node_id_occupancy_reset(canard_t* const self)
+{
+    self->node_id_occupancy_bitmap[0] = 1; // Reserve 0 for compatibility with v0
+    self->node_id_occupancy_bitmap[1] = 0;
+}
+
+// Records the seen node-ID and reallocates the local node if a collision is found.
+static void node_id_occupancy_update(canard_t* const self, const byte_t src, const byte_t dst)
+{
+    (void)self;
+    (void)src;
+    (void)dst;
+    // TODO not implemented.
+    // TODO filtering.
+    rx_filter_configure(self);
+}
 
 bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
                 const size_t                 tx_queue_capacity,
-                const uint_least8_t          node_id,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count,
                 canard_filter_t* const       filter_storage)
 {
     const bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
-                    (vtable->filter != NULL) && mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) &&
-                    mem_valid(memory.rx_session) && mem_valid(memory.rx_payload) &&
-                    ((filter_count == 0U) || (filter_storage != NULL)) && (node_id <= CANARD_NODE_ID_MAX);
+                    mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) && mem_valid(memory.rx_session) &&
+                    mem_valid(memory.rx_payload) && ((filter_count == 0U) || (filter_storage != NULL));
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
-        self->node_id                   = (node_id <= CANARD_NODE_ID_MAX) ? node_id : CANARD_NODE_ID_ANONYMOUS;
         self->tx.fd                     = true;
         self->tx.queue_capacity         = tx_queue_capacity;
         self->rx.filter_count           = filter_count;
         self->rx.filters                = filter_storage;
         self->mem                       = memory;
-        self->prng_state                = prng_seed;
+        self->prng_state                = prng_seed ^ (uintptr_t)self;
         self->vtable                    = vtable;
         self->unicast_sub.index_port_id = TREE_NULL;
+        self->node_id                   = (byte_t)(random(self, CANARD_NODE_ID_MAX) + 1U); // [1, 127]
+        node_id_occupancy_reset(self);
     }
     return ok;
 }
@@ -1563,11 +1622,21 @@ void canard_destroy(canard_t* const self)
     (void)memset(self, 0, sizeof(*self)); // UAF safety
 }
 
+bool canard_set_node_id(canard_t* const self, const uint_least8_t node_id)
+{
+    const bool ok = (self != NULL) && (node_id <= CANARD_NODE_ID_MAX);
+    if (ok && (node_id != self->node_id)) {
+        self->node_id = node_id;
+        node_id_occupancy_reset(self);
+        rx_filter_configure(self);
+    }
+    return ok;
+}
+
 void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap)
 {
     if (self != NULL) {
         const canard_us_t now = self->vtable->now(self);
-
         // Drop stale sessions to reclaim memory. This happens when remote peers cease sending data.
         // The oldest is held alive until its session timeout has expired, but notice that it may be different
         // depending on the subscription instance if large transfer-ID values are used.
@@ -1583,7 +1652,6 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
                 rx_session_destroy(ses);
             }
         }
-
         // Process the TX pipeline.
         tx_expire(self, now); // deadline maintenance first to keep queue pressure bounded
         FOREACH_IFACE (i) {   // submit queued frames through all currently writable interfaces
@@ -1594,19 +1662,50 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
     }
 }
 
-// bool canard_ingest_frame(canard_t* const      self,
-//                          const canard_us_t    timestamp,
-//                          const uint_least8_t  iface_index,
-//                          const uint32_t       extended_can_id,
-//                          const canard_bytes_t can_data)
-// {
-//     bool ok = (self != NULL) && (timestamp >= 0) && (iface_index < CANARD_IFACE_COUNT) &&
-//               (extended_can_id < (UINT32_C(1) << 29U)) && ((can_data.size == 0) || (can_data.data != NULL));
-//     if (ok) {
-//         ok = false; // TODO
-//     }
-//     return ok;
-// }
+static void ingest_frame(canard_t* const     self,
+                         const canard_us_t   timestamp,
+                         const uint_least8_t iface_index,
+                         const frame_t       frame)
+{
+    // Update the node-ID occupancy/collision monitoring states before routing the message.
+    // We do this only on start frames because non-start frames have the version detection ambiguity,
+    // which is not a problem for the routing logic (new states can only be created on start frames),
+    // but it may cause phantom occupancy detection. Also, doing it only on start frames reduces the load.
+    if (frame.start) {
+        node_id_occupancy_update(self, frame.src, frame.dst);
+    }
+    // Route the frame to the appropriate destination internally.
+    canard_subscription_t* const sub = rx_route(self, &frame);
+    if (sub != NULL) {
+        rx_session_update(sub, timestamp, &frame, iface_index);
+    }
+}
+
+bool canard_ingest_frame(canard_t* const      self,
+                         const canard_us_t    timestamp,
+                         const uint_least8_t  iface_index,
+                         const uint32_t       extended_can_id,
+                         const canard_bytes_t can_data)
+{
+    const bool ok = (self != NULL) && (timestamp >= 0) && (iface_index < CANARD_IFACE_COUNT) &&
+                    (extended_can_id < (UINT32_C(1) << 29U)) && ((can_data.size == 0) || (can_data.data != NULL));
+    if (ok) {
+        frame_t      frs[2] = { { 0 }, { 0 } };
+        const byte_t parsed = rx_parse(extended_can_id, can_data, &frs[0], &frs[1]);
+        if (parsed == 0) {
+            self->err.rx_frame++;
+        }
+        if ((parsed & 1U) != 0) {
+            CANARD_ASSERT(canard_kind_version(frs[0].kind) == 0);
+            ingest_frame(self, timestamp, iface_index, frs[0]);
+        }
+        if ((parsed & 2U) != 0) {
+            CANARD_ASSERT(canard_kind_version(frs[1].kind) == 1);
+            ingest_frame(self, timestamp, iface_index, frs[1]);
+        }
+    }
+    return ok;
+}
 
 uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature)
 {

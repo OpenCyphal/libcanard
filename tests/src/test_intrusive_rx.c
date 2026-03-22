@@ -219,15 +219,15 @@ static void test_rx_parse_v0_service_golden(void)
         TEST_ASSERT_EQUAL_HEX8(11, v0.src);
         TEST_ASSERT_EQUAL_INT(canard_prio_nominal, v0.priority);
     }
-    // Response: prio=0, type_id=1, dst=1, src=1. CAN ID = 0x03010181.
+    // Response: prio=0, type_id=1, dst=1, src=2. CAN ID = 0x03010181.
     {
         const byte_t         d[] = { 0xC0 }; // v0 single, tid=0
         const canard_bytes_t pl  = { sizeof(d), d };
-        TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03010181UL, pl, &v0, &v1));
+        TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03010182UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(canard_kind_0v1_response, v0.kind);
         TEST_ASSERT_EQUAL_UINT32(1, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(1, v0.dst);
-        TEST_ASSERT_EQUAL_HEX8(1, v0.src);
+        TEST_ASSERT_EQUAL_HEX8(2, v0.src);
         TEST_ASSERT_EQUAL_INT(canard_prio_exceptional, v0.priority);
     }
 }
@@ -480,16 +480,12 @@ static void test_rx_parse_cross_version_ambiguity(void)
         TEST_ASSERT_EQUAL_HEX8(82, v0.dst);
         TEST_ASSERT_EQUAL_HEX8(42, v0.src);
     }
-    // All-ones 0x1FFFFFFF: v1 rejected (bit23 in service path), v0 parses as service.
+    // All-ones 0x1FFFFFFF: v1 rejected (bit23 in service path), v0 rejected (src==dst).
     {
         const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, nf };
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x1FFFFFFFUL, pl, &v0, &v1);
-        TEST_ASSERT_EQUAL_UINT8(1, ret);
-        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_request, v0.kind);
-        TEST_ASSERT_EQUAL_UINT32(0xFF, v0.port_id);
-        TEST_ASSERT_EQUAL_HEX8(127, v0.dst);
-        TEST_ASSERT_EQUAL_HEX8(127, v0.src);
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
     }
     // All-zeros 0x00000000: v1 parses as v1.0 message; v0 anonymous (src=0) rejected for non-first frame
     // because anonymous can only be single-frame (start && end required, but start=false here).
@@ -511,16 +507,16 @@ static void test_rx_parse_bit_field_boundaries(void)
 {
     frame_t v0;
     frame_t v1;
-    // v1.0 service: max svc_id=511 with dst=0 and src=0 → verify dst and src read 0.
+    // v1.0 service: max svc_id=511 with dst=0 and src=1
     // CAN ID: (0<<26)|(1<<25)|(0<<24)|(511<<14)|(0<<7)|0 = 0x027FC000
     {
         const byte_t         d[] = { 0xE0 };
         const canard_bytes_t pl  = { sizeof(d), d };
-        TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x027FC000UL, pl, &v0, &v1));
+        TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x027FC001UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(canard_kind_1v0_response, v1.kind);
         TEST_ASSERT_EQUAL_UINT32(511, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0, v1.dst);
-        TEST_ASSERT_EQUAL_HEX8(0, v1.src);
+        TEST_ASSERT_EQUAL_HEX8(1, v1.src);
     }
     // v1.0 service: max dst=127 with svc_id=0 and src=0 → verify svc_id and src read 0.
     // CAN ID: (0<<26)|(1<<25)|(0<<24)|(0<<14)|(127<<7)|0 = 0x02003F80
@@ -538,11 +534,11 @@ static void test_rx_parse_bit_field_boundaries(void)
     {
         const byte_t         d[] = { 0xC0 }; // v0 single
         const canard_bytes_t pl  = { sizeof(d), d };
-        TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03FF0181UL, pl, &v0, &v1));
+        TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x03FF0182UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(canard_kind_0v1_response, v0.kind); // req=0
         TEST_ASSERT_EQUAL_UINT32(0xFF, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(1, v0.dst);
-        TEST_ASSERT_EQUAL_HEX8(1, v0.src);
+        TEST_ASSERT_EQUAL_HEX8(2, v0.src);
     }
 }
 

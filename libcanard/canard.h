@@ -294,17 +294,21 @@ typedef struct canard_vtable_t
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
     /// filter_count is guaranteed to not exceed the value given at initialization.
-    /// Returns true on success, false if the filters could not be applied; another attempt will be made later.
-    bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
+    /// This function may be NULL if the CAN controller/driver does not support filtering or it is not desired.
+    /// The implementation is assumed to be infallible; if error handling is necessary, it must be implemented
+    /// on the application side, perhaps with retries.
+    void (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
 
 /// None of the fields should be mutated by the application, unless explicitly allowed.
 struct canard_t
 {
-    /// If automatic allocation is used, libcanard will avoid picking a node-ID of zero to ensure compatibility with
-    /// legacy v0 nodes, where node-ID zero is reserved for anonymous nodes. Zero can be assigned manually,
-    /// but it is only a good idea in networks where no legacy v0 nodes are present.
-    uint64_t      node_id_occupancy_bitmap[2];
+    uint64_t node_id_occupancy_bitmap[2];
+
+    /// By default, the node-ID is allocated automatically, with occupancy/collision tracking.
+    /// Automatic allocation will avoid using the node-ID of zero to ensure compatibility with legacy v0 nodes, where
+    /// zero is reserved for anonymous nodes. Zero can still be assigned manually if compatibility is not needed.
+    /// The node-ID can be set manually via the corresponding function.
     uint_least8_t node_id;
 
     struct
@@ -356,6 +360,7 @@ struct canard_t
         uint64_t tx_expiration; ///< A transfer had to be dequeued due to deadline expiration.
         uint64_t rx_frame;      ///< A received frame was malformed and thus dropped.
         uint64_t rx_transfer;   ///< A transfer could not be reassembled correctly.
+        uint64_t collision;     ///< Number of times the local node-ID was changed to repair a collision.
     } err;
 
     canard_mem_set_t mem;
@@ -379,13 +384,9 @@ struct canard_t
 /// In the absence of a true RNG, a good way to obtain the seed is to use a unique hardware identifier hashed
 /// down to 64 bits with a good hash, e.g., rapidhash.
 ///
-/// The node_id parameter should be CANARD_NODE_ID_ANONYMOUS to enable automatic stateless allocation;
-/// however, if the application has a preferred node-ID (e.g., restored from a non-volatile memory),
-/// it may be passed here directly. Regardless of whether it is assigned automatically or manually,
-/// if another node with the same node-ID is detected, a re-allocation will be done automatically.
-/// Even if the node-ID is allocated automatically, it is recommended to save it in non-volatile memory for
-/// faster startup next time and to avoid the risk of unnecessary perturbations to the network.
-/// The same node-ID is used for both v1 and legacy v0 communications.
+/// The local node-ID will be chosen randomly by default, and the stack will monitor the network for node-ID occupancy
+/// and collisions, and will automatically migrate to a free node-ID shall a collision be detected.
+/// If manual allocation is desired, use the corresponding function to set the node-ID after initialization.
 ///
 /// The filter storage is an array of filters that is used by the library to automatically set up the acceptance
 /// filters when the RX pipeline is reconfigured. The filter count equals the storage size. The storage must
@@ -398,7 +399,6 @@ bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
                 const size_t                 tx_queue_capacity,
-                const uint_least8_t          node_id,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count,
                 canard_filter_t* const       filter_storage);
@@ -406,6 +406,10 @@ bool canard_new(canard_t* const              self,
 /// The application MUST destroy all subscriptions before invoking this (this is asserted).
 /// The TX queue will be purged automatically if not empty.
 void canard_destroy(canard_t* const self);
+
+/// This can be invoked after initialization to manually assign the desired node-ID.
+/// This does not disable the occupancy/collision monitoring; the assigned ID will be changed if a collision is found.
+bool canard_set_node_id(canard_t* const self, const uint_least8_t node_id);
 
 /// This must be invoked periodically to ensure liveliness.
 /// The function must be called asap once any of the interfaces for which there are pending outgoing transfers
@@ -417,8 +421,8 @@ void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap
 uint_least8_t canard_pending_ifaces(const canard_t* const self);
 
 /// True if successfully processed, false if any of the arguments are invalid.
-/// A malformed frame is not considered an error; it is simply dropped and the corresponding counter is incremented.
-/// The can_data is copied and thus can be discarded by the caller after this function returns.
+/// Other failures are reported via the counters.
+/// The lifetime of can_data can end after this function returns.
 bool canard_ingest_frame(canard_t* const      self,
                          const canard_us_t    timestamp,
                          const uint_least8_t  iface_index,

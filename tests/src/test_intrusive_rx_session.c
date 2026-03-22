@@ -104,10 +104,12 @@ static void fixture_init_v1(session_fixture_t* const fx,
     fixture_init(fx, kind, port_id, extent, 2 * MEGA, CRC_INITIAL);
 }
 
-/// Feed a frame into the RX session pipeline. Returns what rx_session_update returns.
+/// Feed a frame into the RX session pipeline. Returns false on OOM, true on success.
 static bool feed(session_fixture_t* const fx, const canard_us_t ts, const frame_t* const fr, const byte_t iface_index)
 {
-    return rx_session_update(&fx->sub, ts, fr, iface_index);
+    const uint64_t c_oom = fx->canard.err.oom;
+    rx_session_update(&fx->sub, ts, fr, iface_index);
+    return fx->canard.err.oom == c_oom; // OOM is the only expected error mode.
 }
 
 /// Construct a frame_t for a single-frame transfer (start=true, end=true).

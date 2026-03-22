@@ -17,6 +17,7 @@
       <w>popcount</w>
       <w>seqno</w>
       <w>seqnos</w>
+      <w>splitmix</w>
       <w>stdatomic</w>
       <w>suppr</w>
       <w>txfer</w>
