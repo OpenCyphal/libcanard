@@ -1404,7 +1404,7 @@ static bool rx_session_solve_admission(const rx_session_t* const ses,
     const bool fresh = (transfer_id != ses->last_admitted_transfer_id) || // always accept if transfer-ID is different
                        (priority != ses->last_admitted_priority);         // or we switched the priority level
     const bool affine = ses->iface_index == iface_index;
-    const bool stale  = ts > (ses->last_admission_ts + ses->owner->transfer_id_timeout);
+    const bool stale  = (ts - ses->owner->transfer_id_timeout) > ses->last_admission_ts;
     return (fresh && affine) || (affine && stale) || (stale && fresh);
 }
 

@@ -100,6 +100,7 @@ gen_test_matrix(test_helpers "src/test_helpers.c")
 gen_test_matrix(test_intrusive_util "src/test_intrusive_util.c")
 gen_test_matrix(test_intrusive_tx "src/test_intrusive_tx.c")
 gen_test_matrix(test_intrusive_rx "src/test_intrusive_rx.c")
+gen_test_matrix(test_intrusive_rx_admission "src/test_intrusive_rx_admission.c")
 # API tests.
 gen_test_single(test_api_tx "${library_dir}/canard.c;src/test_api_tx.cpp")
 
