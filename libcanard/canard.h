@@ -231,7 +231,8 @@ typedef struct canard_subscription_vtable_t canard_subscription_vtable_t;
 struct canard_subscription_vtable_t
 {
     /// A new message is received on a subscription.
-    /// The handler takes ownership of the payload; it must free it after use using the rx_payload memory resource.
+    /// For the payload ownership notes refer to canard_payload_t.
+    /// The timestamp is the arrival timestamp of the first frame of the transfer.
     void (*on_message)(canard_subscription_t* self,
                        canard_us_t            timestamp,
                        canard_prio_t          priority,
@@ -251,7 +252,7 @@ struct canard_subscription_t
     canard_us_t   transfer_id_timeout;
     uint32_t      port_id;  ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t        extent;   ///< Must not be altered after initialization!
-    uint16_t      crc_seed; ///< For v0 this is set explicitly, for v1 this is always 0xFFFF.
+    uint16_t      crc_seed; ///< For v0 this is set at subscription time, for v1 this is always 0xFFFF.
     canard_kind_t kind;
 
     canard_filter_t filter; ///< Precomputed for quick acceptance filter configuration.

@@ -1333,8 +1333,8 @@ static void rx_session_complete(rx_session_t* const ses, const canard_us_t ts_fr
         CANARD_ASSERT(!fr->start && fr->end);
         CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
         ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
-        const bool v1            = canard_kind_version(sub->kind) == 1;
-        const bool crc_ref = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
+        const bool     v1        = canard_kind_version(sub->kind) == 1;
+        const uint16_t crc_ref = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
         CANARD_ASSERT(v1 || (sub->extent >= 2)); // In v0, the CRC size is included in the extent.
         if (slot->crc == crc_ref) {
             const size_t           size    = smaller(slot->total_size - 2, sub->extent - (v1 ? 0 : 2));
@@ -1459,7 +1459,7 @@ static bool rx_session_update(canard_subscription_t* const sub,
 {
     CANARD_ASSERT((sub != NULL) && (frame != NULL) && (frame->payload.data != NULL) && (ts >= 0));
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
-    CANARD_ASSERT(!frame->start || (frame->toggle != canard_kind_version(sub->kind)));
+    CANARD_ASSERT(!frame->start || (frame->toggle == canard_kind_version(sub->kind)));
     CANARD_ASSERT((frame->dst == CANARD_NODE_ID_ANONYMOUS) || (frame->dst == sub->owner->node_id));
 
     // Only start frames may create new states.
