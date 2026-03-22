@@ -94,7 +94,7 @@ typedef enum canard_kind_t
 } canard_kind_t;
 #define CANARD_KIND_COUNT 7
 
-static bool canard_kind_is_v1(const canard_kind_t kind) { return kind < canard_kind_0v1_message; }
+static uint_least8_t canard_kind_version(const canard_kind_t kind) { return (kind < canard_kind_0v1_message) ? 1 : 0; }
 
 typedef struct canard_t canard_t;
 
@@ -177,12 +177,19 @@ struct canard_mem_t
 
 /// Represents received transfer payload.
 /// The actual useful data may be smaller than the allocated memory block, hence the application should use
-/// the view to access the useful transfer payload, while using the storage to free the memory when done.
-/// The view is guaranteed to be inside the storage.
+/// the view to access the useful transfer payload, while using the origin to free the memory when done.
+///
+/// For multi-frame transfers, the view is pointing into a dynamically allocated storage from the rx_payload resource,
+/// and the view is guaranteed to be inside the origin. The application must eventually deallocate the storage to
+/// reclaim the memory.
+///
+/// For single-frame transfers, the view is pointing into the CAN frame data buffer passed by the application via
+/// canard_ingest_frame(), and the storage is NULL/empty. The lifetime of the view ends upon return from the callback.
+/// The application must manually copy the data if it needs to outlive the callback.
 typedef struct canard_payload_t
 {
-    canard_bytes_t     view;    ///< Use this to access the data. Guaranteed to be inside the storage.
-    canard_bytes_mut_t storage; ///< Use this to free the memory. Do not attempt to access this data.
+    canard_bytes_t     view;   ///< Use this to access the data.
+    canard_bytes_mut_t origin; ///< Use this to free the memory, unless NULL/empty.
 } canard_payload_t;
 
 /// The library carries the user-provided context from inputs to outputs without interpreting it,

@@ -1193,7 +1193,7 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
         slot->start_ts        = start_ts;
         slot->crc             = sub->crc_seed;
         slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
-        slot->expected_toggle = canard_kind_is_v1(sub->kind) ? 1 : 0;
+        slot->expected_toggle = canard_kind_version(sub->kind) & 1U;
         slot->iface_index     = iface_index & ((1U << IFACE_INDEX_BITS) - 1U);
     }
     return slot;
@@ -1319,6 +1319,62 @@ static size_t rx_session_cleanup(rx_session_t* const ses, const canard_us_t now)
     return n_slots;
 }
 
+static void rx_session_complete(rx_session_t* const ses, const canard_us_t ts_frame, const frame_t* const fr)
+{
+    canard_subscription_t* const sub = ses->owner;
+    CANARD_ASSERT((fr->end) && (fr->port_id == sub->port_id) && (fr->kind == sub->kind));
+    CANARD_ASSERT(sub->vtable->on_message != NULL);
+    rx_slot_t* const slot = ses->slots[fr->priority];
+    if (slot == NULL) {
+        CANARD_ASSERT(fr->start && fr->end); // Only single-frame can complete without a slot.
+        const canard_payload_t payload = { .view = fr->payload, .origin = { .data = NULL, .size = 0 } };
+        sub->vtable->on_message(sub, ts_frame, fr->priority, fr->src, fr->transfer_id, payload);
+    } else {
+        CANARD_ASSERT(!fr->start && fr->end);
+        CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
+        ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
+        const bool v1            = canard_kind_version(sub->kind) == 1;
+        const bool crc_ref = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
+        CANARD_ASSERT(v1 || (sub->extent >= 2)); // In v0, the CRC size is included in the extent.
+        if (slot->crc == crc_ref) {
+            const size_t           size    = smaller(slot->total_size - 2, sub->extent - (v1 ? 0 : 2));
+            const canard_payload_t payload = {
+                .view   = { .data = v1 ? slot->payload : &slot->payload[2], .size = size },
+                .origin = { .data = slot, .size = RX_SLOT_OVERHEAD + sub->extent },
+            };
+            sub->vtable->on_message(sub, slot->start_ts, fr->priority, fr->src, fr->transfer_id, payload);
+        } else {
+            sub->owner->err.rx_transfer++;
+            rx_slot_destroy(ses->owner, slot);
+        }
+    }
+}
+
+static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_frame, const frame_t* const fr)
+{
+    const canard_subscription_t* const sub = ses->owner;
+    CANARD_ASSERT((fr->port_id == sub->port_id) && (fr->kind == sub->kind));
+    rx_slot_t* const slot = ses->slots[fr->priority];
+    if (slot != NULL) {
+        CANARD_ASSERT((!fr->start || !fr->end) && (slot->expected_toggle == fr->toggle));
+        CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
+        rx_slot_advance(slot, sub->extent, fr->payload);
+        // Multi-frame transfers place CRC differently in v1 and v0.
+        // The v1 handling is trivial: simply compute the full payload CRC and ensure the residue is correct.
+        // The payload may be truncated to the subscription extent, but the CRC is computed over the full payload.
+        // Legacy v0 is messy because the CRC is in the beginning, which we need to handle specially.
+        // The CRC initial state is constant for v1, data-type-dependent for v0; this is managed outside of this scope.
+        const canard_bytes_t crc_input =
+          ((canard_kind_version(sub->kind) == 0) && fr->start)
+            ? fr->payload
+            : (canard_bytes_t){ .size = fr->payload.size - 2, .data = ((byte_t*)fr->payload.data) + 2 };
+        slot->crc = crc_add(slot->crc, crc_input.size, crc_input.data);
+    }
+    if (fr->end) {
+        rx_session_complete(ses, ts_frame, fr);
+    }
+}
+
 static void rx_session_record_admission(rx_session_t* const ses,
                                         const canard_prio_t priority,
                                         const byte_t        transfer_id,
@@ -1394,6 +1450,8 @@ static bool rx_session_solve_admission(const rx_session_t* const ses,
 }
 
 // Returns false on OOM, no other failure modes.
+// The caller must ensure the frame is of the correct version that matches the subscription (v0/v1).
+// The caller must ensure the frame is directed to the local node (broadcast or unicast to the local node-ID).
 static bool rx_session_update(canard_subscription_t* const sub,
                               const canard_us_t            ts,
                               const frame_t* const         frame,
@@ -1401,16 +1459,12 @@ static bool rx_session_update(canard_subscription_t* const sub,
 {
     CANARD_ASSERT((sub != NULL) && (frame != NULL) && (frame->payload.data != NULL) && (ts >= 0));
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
-
-    // This is a start frame, but before we allocate new state for it, we must ensure that it is of the correct version.
-    // Wrong protocol version must be rejected as early as possible to avoid wasting memory on unused states.
-    // The protocol version is only visible on start-of-transfer frames, but new sessions can only be created
-    // on start frames, so this is robust.
-    if (frame->start && (frame->toggle != canard_kind_is_v1(sub->kind))) {
-        return true; // Wrong protocol version is not a failure.
-    }
+    CANARD_ASSERT(!frame->start || (frame->toggle != canard_kind_version(sub->kind)));
+    CANARD_ASSERT((frame->dst == CANARD_NODE_ID_ANONYMOUS) || (frame->dst == sub->owner->node_id));
 
     // Only start frames may create new states.
+    // The protocol version is observable on start frames by design, which makes this robust.
+    // At this point we also ensured the frame is not misaddressed.
     rx_session_factory_context_t factory_context = { .owner = sub, .iface_index = iface_index, .node_id = frame->src };
     rx_session_t* const          ses =
       CAVL2_TO_OWNER(frame->start ? cavl2_find_or_insert(&sub->sessions, //
@@ -1450,13 +1504,16 @@ static bool rx_session_update(canard_subscription_t* const sub,
                 sub->owner->err.oom++;
                 return false;
             }
+            CANARD_ASSERT(ses->slots[frame->priority]->transfer_id == frame->transfer_id);
+            CANARD_ASSERT(ses->slots[frame->priority]->expected_toggle == frame->toggle);
         }
         // Register the new state only after we have a confirmation that we have memory to store the frame.
         rx_session_record_admission(ses, frame->priority, frame->transfer_id, ts, iface_index);
     }
 
-    // TODO acceptance is not yet implemented.
-
+    // Accept the frame.
+    rx_session_accept(ses, ts, frame);
+    CANARD_ASSERT(!frame->end || (ses->slots[frame->priority] == NULL));
     return true;
 }
 
