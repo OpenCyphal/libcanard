@@ -102,7 +102,7 @@ static void init_with_capture_node_id(canard_t* const self, tx_capture_t* const 
     capture->now       = 0;
     capture->accept_tx = true;
     capture->count     = 0;
-    TEST_ASSERT_TRUE(canard_new(self, &capture_vtable, make_std_memory(), 16U, 1234U, 0U, nullptr));
+    TEST_ASSERT_TRUE(canard_new(self, &capture_vtable, make_std_memory(), 16U, 1234U, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(self, node_id));
     self->user_context = capture;
 }
@@ -117,7 +117,7 @@ static void test_canard_pending_ifaces()
 {
     canard_t               self = {};
     const canard_mem_set_t mem  = make_std_memory();
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16, 1234, 0, nullptr));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16, 1234, 0));
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
     TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));

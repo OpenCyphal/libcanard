@@ -80,6 +80,16 @@ extern "C"
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD      64U
 
+/// If CAN acceptance filter configuration is enabled, the library will be able to configure at most this many filters.
+/// The application can configure a smaller limit at runtime if necessary; this value only affects a stack array size.
+/// The default value is large enough to utilize all available filters in most CAN controllers out there,
+/// considering that we use filters in the extended ID&mask mode which tends to consume more hardware resources.
+/// This value can be reduced to reduce the stack pressure on the filter configuration update path,
+/// or increased if more filters are available (e.g., Bosch M_CAN or ST FDCAN support up to 64, SocketCAN up to 512).
+#ifndef CANARD_FILTERS_MAX
+#define CANARD_FILTERS_MAX 32U
+#endif
+
 /// All valid transfer kind and version combinations.
 typedef enum canard_kind_t
 {
@@ -293,7 +303,8 @@ typedef struct canard_vtable_t
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
-    /// filter_count is guaranteed to not exceed the value given at initialization.
+    /// filter_count is guaranteed to not exceed the value given at initialization and CANARD_FILTERS_MAX,
+    /// whichever is smaller.
     /// This function may be NULL if the CAN controller/driver does not support filtering or it is not desired.
     /// The implementation is assumed to be infallible; if error handling is necessary, it must be implemented
     /// on the application side, perhaps with retries.
@@ -345,9 +356,7 @@ struct canard_t
     {
         canard_tree_t* subscriptions[CANARD_KIND_COUNT];
         canard_list_t  list_session_by_animation; ///< Oldest at the head.
-
-        size_t           filter_count;
-        canard_filter_t* filters; ///< Storage provided by the user.
+        size_t         filter_count;              ///< At most CANARD_FILTERS_MAX.
     } rx;
 
     /// Error counters incremented automatically when the corresponding error condition occurs.
@@ -388,9 +397,9 @@ struct canard_t
 /// and collisions, and will automatically migrate to a free node-ID shall a collision be detected.
 /// If manual allocation is desired, use the corresponding function to set the node-ID after initialization.
 ///
-/// The filter storage is an array of filters that is used by the library to automatically set up the acceptance
-/// filters when the RX pipeline is reconfigured. The filter count equals the storage size. The storage must
-/// outlive the library instance. It is possible to pass zero filters & NULL if filtering is unneeded/unsupported.
+/// The filter count is the number of CAN acceptance filters that the library can utilize. If there are fewer filters
+/// than subscriptions, similar filters will be coalesced. The value will be clamped to CANARD_FILTERS_MAX.
+/// It is possible to pass zero filters if filtering is unneeded/unsupported.
 ///
 /// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///
@@ -400,8 +409,7 @@ bool canard_new(canard_t* const              self,
                 const canard_mem_set_t       memory,
                 const size_t                 tx_queue_capacity,
                 const uint64_t               prng_seed,
-                const size_t                 filter_count,
-                canard_filter_t* const       filter_storage);
+                const size_t                 filter_count);
 
 /// The application MUST destroy all subscriptions before invoking this (this is asserted).
 /// The TX queue will be purged automatically if not empty.

@@ -1546,7 +1546,7 @@ static canard_subscription_t* rx_route(const canard_t* const self, const frame_t
     if ((fr->dst != CANARD_NODE_ID_ANONYMOUS) && (fr->dst != self->node_id)) {
         return NULL; // misfiltered
     }
-    return (canard_subscription_t*)cavl2_find(
+    return (canard_subscription_t*)(void*)cavl2_find(
       self->rx.subscriptions[fr->kind], &fr->port_id, rx_subscription_cavl_compare);
 }
 
@@ -1554,7 +1554,7 @@ static canard_subscription_t* rx_route(const canard_t* const self, const frame_t
 // Must be invoked after modification of the subscription set and after the local node-ID is changed.
 static void rx_filter_configure(const canard_t* const self)
 {
-    if (self->vtable->filter == NULL) {
+    if ((self->vtable->filter == NULL) || (self->rx.filter_count == 0)) {
         return; // No filtering support, nothing to do.
     }
     (void)self;
@@ -1602,18 +1602,16 @@ bool canard_new(canard_t* const              self,
                 const canard_mem_set_t       memory,
                 const size_t                 tx_queue_capacity,
                 const uint64_t               prng_seed,
-                const size_t                 filter_count,
-                canard_filter_t* const       filter_storage)
+                const size_t                 filter_count)
 {
     const bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
                     mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) && mem_valid(memory.rx_session) &&
-                    mem_valid(memory.rx_payload) && ((filter_count == 0U) || (filter_storage != NULL));
+                    mem_valid(memory.rx_payload);
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
         self->tx.fd                     = true;
         self->tx.queue_capacity         = tx_queue_capacity;
-        self->rx.filter_count           = filter_count;
-        self->rx.filters                = filter_storage;
+        self->rx.filter_count           = (vtable->filter == NULL) ? 0 : smaller(filter_count, CANARD_FILTERS_MAX);
         self->mem                       = memory;
         self->prng_state                = prng_seed ^ (uintptr_t)self;
         self->vtable                    = vtable;
