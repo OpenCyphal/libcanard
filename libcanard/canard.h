@@ -521,6 +521,32 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 
 // ---------------------------------   UAVCAN v0 & DroneCAN legacy compatibility API   ---------------------------------
 
+/// ATTENTION: Due to the v0 design, the problem of protocol version detection for correct frame parsing given
+/// multi-frame transfers is undecidable without imposing constraints on the network configuration.
+///
+/// The core problem is that the protocol version is encoded in the initial state of the toggle bit, which is
+/// by definition only observable in the first frame of a transfer; if there happen to be concurrent multi-frame
+/// transfers emitted by the same node under the same transfer-ID under different versions, and their port-IDs
+/// (and in the case of service transfers also the destination node-IDs, with a 1-bit bias) happen to alias
+/// pathologically, remote subscribers will observe the two frame sequences as belonging to the same transfer.
+///
+/// Various heuristics exist, but due to intricate edge cases no robust solution exists for the general case.
+/// The recommended solution is to adopt at least one of the following constraints on the network configuration:
+///
+/// - A single node-ID can only emit transfers of any single protocol version. The disambiguation problem is addressed
+///   by the fact that the multi-frame reassembly state machine necessarily indexes states by the remote node-ID
+///   (this is not an implementation detail but a requirement from the Specification of both UAVCAN v0 and Cyphal/CAN).
+///   The first frame of any transfer is only accepted if the protocol version matches (it is observable reliably
+///   in this case); subsequent frames even if aliased will not cause data corruption because without the start frame
+///   the transfer will not be accepted. An application may maintain more than one node-ID with multiple canard_t.
+///
+/// - A single node-ID may emit transfers of both versions simultaneously as long as the resulting CAN IDs do not alias.
+///   For example, if a v0 data type ID is chosen such that it maps a 1-bit onto a reserved 0-bit of the v1 CAN ID,
+///   no ambiguity will occur.
+///
+/// The above concerns only data emission. It is always safe to receive transfers of any version from any node as long
+/// as the above emission constraints are satisfied.
+
 /// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained from 3-bit priority by left-shifting.
 /// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
 bool canard_0v1_publish(canard_t* const             self,
