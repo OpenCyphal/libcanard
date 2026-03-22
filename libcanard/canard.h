@@ -521,8 +521,7 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 
 // ---------------------------------   UAVCAN v0 & DroneCAN legacy compatibility API   ---------------------------------
 
-/// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained from 3-bit priority by left-shifting
-/// and setting the two least significant bits to 1: prio_v0=(prio<<2)|3.
+/// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained from 3-bit priority by left-shifting.
 /// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
 bool canard_0v1_publish(canard_t* const             self,
                         const canard_us_t           deadline,

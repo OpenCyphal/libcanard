@@ -368,9 +368,9 @@ static void test_canard_0v1_service_basic(void)
     const tx_transfer_t* const res = LIST_NEXT(req, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(res);
 
-    const uint32_t expected_req_id = ((((uint32_t)canard_prio_nominal << 2U) | 3UL) << 24U) | //
+    const uint32_t expected_req_id = (((uint32_t)canard_prio_nominal) << 26U) | //
                                      ((uint32_t)0x37U << 16U) | (1UL << 15U) | ((uint32_t)24U << 8U) | (1UL << 7U);
-    const uint32_t expected_res_id = ((((uint32_t)canard_prio_nominal << 2U) | 3UL) << 24U) | //
+    const uint32_t expected_res_id = (((uint32_t)canard_prio_nominal) << 26U) | //
                                      ((uint32_t)0x37U << 16U) | ((uint32_t)24U << 8U) | (1UL << 7U);
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)req->fd);
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)res->fd);
@@ -608,8 +608,7 @@ static void test_0v1_publish_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x03000000UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(3U, (cid >> 24U) & 0x1FU);  // v0_prio = (0<<2)|3 = 3
+        TEST_ASSERT_EQUAL_HEX32(0x00000000UL, cid);
         TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 8U) & 0xFFFFU); // dtid
         TEST_ASSERT_EQUAL_UINT32(0U, cid & 0xFFU);           // bits[7:0]=0
     }
@@ -624,8 +623,8 @@ static void test_0v1_publish_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x1FFFFF00UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(0x1FU, (cid >> 24U) & 0x1FU); // v0_prio = (7<<2)|3 = 31
+        TEST_ASSERT_EQUAL_HEX32(0x1CFFFF00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(28, (cid >> 24U) & 0x1FU); // v0_prio = (7<<2) = 28
         TEST_ASSERT_EQUAL_UINT32(0xFFFFU, (cid >> 8U) & 0xFFFFU);
     }
     free_all_transfers(&self);
@@ -639,8 +638,8 @@ static void test_0v1_publish_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x13040A00UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(0x13U, (cid >> 24U) & 0x1FU); // v0_prio = (4<<2)|3 = 19 = 0x13
+        TEST_ASSERT_EQUAL_HEX32(0x10040A00UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(16, (cid >> 24U) & 0x1FU); // v0_prio = (4<<2) = 16
         TEST_ASSERT_EQUAL_UINT32(0x040AU, (cid >> 8U) & 0xFFFFU);
     }
     free_all_transfers(&self);
@@ -664,8 +663,8 @@ static void test_0v1_request_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x03018180UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(3U, (cid >> 24U) & 0x1FU); // v0_prio = (0<<2)|3
+        TEST_ASSERT_EQUAL_HEX32(0x00018180UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 24U) & 0x1FU); // v0_prio = (0<<2)
         TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 16U) & 0xFFU); // dtid
         TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 15U) & 1U);    // request=1
         TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 8U) & 0x7FU);  // dest
@@ -682,8 +681,8 @@ static void test_0v1_request_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x1FFFFF80UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(0x1FU, (cid >> 24U) & 0x1FU);
+        TEST_ASSERT_EQUAL_HEX32(0x1CFFFF80UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0x1CU, (cid >> 24U) & 0x1FU);
         TEST_ASSERT_EQUAL_UINT32(255U, (cid >> 16U) & 0xFFU);
         TEST_ASSERT_EQUAL_UINT32(1U, (cid >> 15U) & 1U);
         TEST_ASSERT_EQUAL_UINT32(127U, (cid >> 8U) & 0x7FU);
@@ -710,8 +709,8 @@ static void test_0v1_respond_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x13371880UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(0x13U, (cid >> 24U) & 0x1FU); // v0_prio = (4<<2)|3 = 19
+        TEST_ASSERT_EQUAL_HEX32(0x10371880UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(0x10U, (cid >> 24U) & 0x1FU); // v0_prio = (4<<2) = 16
         TEST_ASSERT_EQUAL_UINT32(0x37U, (cid >> 16U) & 0xFFU); // dtid
         TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 15U) & 1U);       // request=0 (response)
         TEST_ASSERT_EQUAL_UINT32(24U, (cid >> 8U) & 0x7FU);    // dest
@@ -728,8 +727,8 @@ static void test_0v1_respond_can_id_compliance(void)
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
         const uint32_t cid = can_id_from_transfer(tr);
-        TEST_ASSERT_EQUAL_HEX32(0x07C82A80UL, cid);
-        TEST_ASSERT_EQUAL_UINT32(7U, (cid >> 24U) & 0x1FU); // v0_prio = (1<<2)|3 = 7
+        TEST_ASSERT_EQUAL_HEX32(0x04C82A80UL, cid);
+        TEST_ASSERT_EQUAL_UINT32(4U, (cid >> 24U) & 0x1FU); // v0_prio = (1<<2) = 4
         TEST_ASSERT_EQUAL_UINT32(200U, (cid >> 16U) & 0xFFU);
         TEST_ASSERT_EQUAL_UINT32(0U, (cid >> 15U) & 1U);
         TEST_ASSERT_EQUAL_UINT32(42U, (cid >> 8U) & 0x7FU);

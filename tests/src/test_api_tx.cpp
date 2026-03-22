@@ -409,8 +409,8 @@ static void test_canard_0v1_service_node_id_rule_and_encoding()
     canard_poll(&self, 1U);
 
     TEST_ASSERT_EQUAL_size_t(2U, cap.count);
-    TEST_ASSERT_EQUAL_UINT32(0x1337988BU, cap.records[0].can_id);
-    TEST_ASSERT_EQUAL_UINT32(0x1337188BU, cap.records[1].can_id);
+    TEST_ASSERT_EQUAL_UINT32(0x1037988BU, cap.records[0].can_id);
+    TEST_ASSERT_EQUAL_UINT32(0x1037188BU, cap.records[1].can_id);
     TEST_ASSERT_FALSE(cap.records[0].fd);
     TEST_ASSERT_FALSE(cap.records[1].fd);
     TEST_ASSERT_EQUAL_UINT8(0xC5U, cap.records[0].tail);
