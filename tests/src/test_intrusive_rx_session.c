@@ -1922,6 +1922,395 @@ static void test_all_7_kinds(void)
 }
 
 // =====================================================================================================================
+// Group 10: New adversarial tests
+
+/// Two remote nodes (10, 20) sending 3-frame transfers on the same subscription, interleaving frames.
+/// Both complete correctly because separate sessions are created per source node.
+static void test_interleaved_multiframe_two_sources(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+
+    const byte_t d10[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+    const byte_t d20[] = { 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
+
+    canard_us_t ts = 1 * MEGA;
+
+    // N10-F1: Start frame from node 10, TID=0.
+    frame_t fr10_0 = make_start_frame(
+      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 10, 0, d10, sizeof(d10));
+    TEST_ASSERT_TRUE(feed(&fx, ts, &fr10_0, 0));
+    ts += 1;
+
+    // N20-F1: Start frame from node 20, TID=0.
+    frame_t fr20_0 = make_start_frame(
+      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 20, 0, d20, sizeof(d20));
+    TEST_ASSERT_TRUE(feed(&fx, ts, &fr20_0, 0));
+    ts += 1;
+
+    // N10-F2: Continuation from node 10, toggle=0.
+    const byte_t d10b[] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
+    frame_t      fr10_1 = make_cont_frame(
+      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 10, 0, false, false, d10b, 7);
+    TEST_ASSERT_TRUE(feed(&fx, ts, &fr10_1, 0));
+    ts += 1;
+
+    // N20-F2: Continuation from node 20, toggle=0.
+    const byte_t d20b[] = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
+    frame_t      fr20_1 = make_cont_frame(
+      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 20, 0, false, false, d20b, 7);
+    TEST_ASSERT_TRUE(feed(&fx, ts, &fr20_1, 0));
+    ts += 1;
+
+    TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count); // Neither complete yet.
+
+    // N10-F3: End frame from node 10, toggle=1.
+    const uint16_t crc10 = crc_add(crc_add(CRC_INITIAL, 7, d10), 7, d10b);
+    byte_t         f10_end[2];
+    f10_end[0]       = (byte_t)(crc10 >> 8U);
+    f10_end[1]       = (byte_t)(crc10 & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    frame_t fr10_end = make_cont_frame(canard_prio_nominal,
+                                       canard_kind_1v0_message,
+                                       2222,
+                                       CANARD_NODE_ID_ANONYMOUS,
+                                       10,
+                                       0,
+                                       true,
+                                       true,
+                                       f10_end,
+                                       sizeof(f10_end));
+    TEST_ASSERT_TRUE(feed(&fx, ts, &fr10_end, 0));
+    ts += 1;
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(10, fx.capture.source_node_id);
+    TEST_ASSERT_EQUAL_size_t(14, fx.capture.payload.view.size);
+
+    // N20-F3: End frame from node 20, toggle=1.
+    const uint16_t crc20 = crc_add(crc_add(CRC_INITIAL, 7, d20), 7, d20b);
+    byte_t         f20_end[2];
+    f20_end[0]       = (byte_t)(crc20 >> 8U);
+    f20_end[1]       = (byte_t)(crc20 & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    frame_t fr20_end = make_cont_frame(canard_prio_nominal,
+                                       canard_kind_1v0_message,
+                                       2222,
+                                       CANARD_NODE_ID_ANONYMOUS,
+                                       20,
+                                       0,
+                                       true,
+                                       true,
+                                       f20_end,
+                                       sizeof(f20_end));
+    TEST_ASSERT_TRUE(feed(&fx, ts, &fr20_end, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(20, fx.capture.source_node_id);
+    TEST_ASSERT_EQUAL_size_t(14, fx.capture.payload.view.size);
+
+    // 2 sessions should exist (one per source node).
+    TEST_ASSERT_EQUAL_size_t(2, fx.alloc_session.allocated_fragments);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Priority preemption: node 42 starts at nominal, then a high-priority transfer preempts.
+/// Both transfers complete on their respective priority slots.
+static void test_preemption_during_multiframe(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+
+    const byte_t      data[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+    const canard_us_t ts0    = 1 * MEGA;
+
+    // Start nominal-priority multi-frame, TID=0.
+    frame_t fr_nom = make_start_frame(
+      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+    TEST_ASSERT_TRUE(feed(&fx, ts0, &fr_nom, 0));
+    TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
+
+    // Now a high-priority start frame preempts (different slot), TID=1.
+    const byte_t hi_data[] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
+    frame_t      fr_hi     = make_start_frame(
+      canard_prio_high, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, hi_data, sizeof(hi_data));
+    TEST_ASSERT_TRUE(feed(&fx, ts0 + 1, &fr_hi, 0));
+    // Two slots allocated (nominal and high).
+    TEST_ASSERT_EQUAL_size_t(2, fx.alloc_payload.allocated_fragments);
+
+    // Complete the high-priority transfer.
+    const uint16_t crc_hi = crc_add(CRC_INITIAL, 7, hi_data);
+    byte_t         f_hi_end[2];
+    f_hi_end[0]       = (byte_t)(crc_hi >> 8U);
+    f_hi_end[1]       = (byte_t)(crc_hi & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    frame_t fr_hi_end = make_cont_frame(canard_prio_high,
+                                        canard_kind_1v0_message,
+                                        2222,
+                                        CANARD_NODE_ID_ANONYMOUS,
+                                        42,
+                                        1,
+                                        true,
+                                        false,
+                                        f_hi_end,
+                                        sizeof(f_hi_end));
+    TEST_ASSERT_TRUE(feed(&fx, ts0 + 2, &fr_hi_end, 0));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_INT(canard_prio_high, fx.capture.priority);
+    TEST_ASSERT_EQUAL_UINT8(1, fx.capture.transfer_id);
+
+    // Complete the nominal-priority transfer.
+    const uint16_t crc_nom = crc_add(CRC_INITIAL, 7, data);
+    byte_t         f_nom_end[2];
+    f_nom_end[0]       = (byte_t)(crc_nom >> 8U);
+    f_nom_end[1]       = (byte_t)(crc_nom & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    frame_t fr_nom_end = make_cont_frame(canard_prio_nominal,
+                                         canard_kind_1v0_message,
+                                         2222,
+                                         CANARD_NODE_ID_ANONYMOUS,
+                                         42,
+                                         0,
+                                         true,
+                                         false,
+                                         f_nom_end,
+                                         sizeof(f_nom_end));
+    TEST_ASSERT_TRUE(feed(&fx, ts0 + 3, &fr_nom_end, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_INT(canard_prio_nominal, fx.capture.priority);
+    TEST_ASSERT_EQUAL_UINT8(0, fx.capture.transfer_id);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Transfer ID rollover from 31 to 0 via the session pipeline (not just admission solver).
+static void test_transfer_id_rollover_31_to_0(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+
+    const byte_t payload[] = { 0xAA };
+
+    // Send TID=31.
+    frame_t fr31 = make_single_frame(
+      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 31, payload, sizeof(payload));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr31, 0));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(31, fx.capture.transfer_id);
+
+    // Send TID=0: must be accepted (0 != 31 → fresh).
+    frame_t fr0 = make_single_frame(
+      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+    TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr0, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(0, fx.capture.transfer_id);
+
+    // Duplicate TID=0 → rejected (same TID, same prio, within timeout).
+    TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA + 1, &fr0, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count); // No new callback.
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Session timeout exact boundary: strict inequality (ts - timeout) > last_ts.
+static void test_session_timeout_exact_boundary(void)
+{
+    session_fixture_t fx;
+    fixture_init(&fx, canard_kind_1v1_message, 100, 64, 2 * MEGA, CRC_INITIAL);
+
+    const byte_t payload[] = { 0xBB };
+
+    // Admit TID=5 at ts=1000000.
+    frame_t fr5 = make_single_frame(
+      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr5, 0));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+
+    // At ts=3000000: stale = (3000000 - 2000000) > 1000000 = false. Not stale.
+    // Same TID: not fresh. affine=true. Only 1 of 3 (affine only) → reject.
+    TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA, &fr5, 0));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // No new callback.
+
+    // At ts=3000001: stale = (3000001 - 2000000) > 1000000 = true. Stale.
+    // affine && stale → 2 of 3 → admit.
+    TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA + 1, &fr5, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(5, fx.capture.transfer_id);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// OOM on slot allocation: session survives, subsequent transfer succeeds.
+static void test_oom_slot_allocation_session_survives(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+
+    // First, create the session with a single-frame transfer.
+    const byte_t sf[] = { 0xCC };
+    frame_t      sf_fr =
+      make_single_frame(canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, sf, 1);
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &sf_fr, 0));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+
+    // Now prevent payload allocation (OOM for slot).
+    fx.alloc_payload.limit_fragments = 0;
+    const byte_t f0[]                = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+    frame_t      fr_mf               = make_start_frame(
+      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f0, sizeof(f0));
+    TEST_ASSERT_FALSE(feed(&fx, 2 * MEGA, &fr_mf, 0)); // OOM on slot alloc.
+    TEST_ASSERT_EQUAL_UINT64(1, fx.canard.err.oom);
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // No new callback.
+
+    // Session should still exist.
+    TEST_ASSERT_NOT_NULL(fx.sub.sessions);
+    TEST_ASSERT_EQUAL_size_t(1, fx.alloc_session.allocated_fragments);
+
+    // Restore allocation and send a new single-frame transfer.
+    fx.alloc_payload.limit_fragments = SIZE_MAX;
+    frame_t sf2 =
+      make_single_frame(canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, sf, 1);
+    TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA, &sf2, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(2, fx.capture.transfer_id);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Session animation: create 3 sessions, feed to the middle one, verify it moves to tail.
+static void test_session_animation_ordering_move_to_tail(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+
+    const byte_t payload[] = { 0xAA };
+
+    // Create sessions for src=10, src=20, src=30.
+    for (byte_t src = 10; src <= 30; src = (byte_t)(src + 10)) {
+        frame_t fr = make_single_frame(canard_prio_nominal,
+                                       canard_kind_1v1_message,
+                                       100,
+                                       CANARD_NODE_ID_ANONYMOUS,
+                                       src,
+                                       0,
+                                       payload,
+                                       sizeof(payload));
+        TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
+    }
+    TEST_ASSERT_EQUAL_size_t(3, fx.capture.call_count);
+
+    // Animation list: head=10, 20, 30=tail.
+    rx_session_t* head = LIST_HEAD(fx.canard.rx.list_session_by_animation, rx_session_t, list_animation);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_UINT8(10, head->node_id);
+
+    // Feed a frame to session 20 → it should move to the tail.
+    frame_t fr20 = make_single_frame(
+      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 20, 1, payload, sizeof(payload));
+    TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr20, 0));
+    TEST_ASSERT_EQUAL_size_t(4, fx.capture.call_count);
+
+    // Now head should be src=10 (unchanged because 30 was in second position, now 10 stays).
+    head = LIST_HEAD(fx.canard.rx.list_session_by_animation, rx_session_t, list_animation);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_UINT8(10, head->node_id);
+
+    // Feed a frame to session 10 → it should move to the tail.
+    frame_t fr10 = make_single_frame(
+      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 10, 1, payload, sizeof(payload));
+    TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA, &fr10, 0));
+
+    // Now head should be src=30 (the oldest untouched session).
+    head = LIST_HEAD(fx.canard.rx.list_session_by_animation, rx_session_t, list_animation);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_UINT8(30, head->node_id);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// v0 multiframe with correct CRC: verify delivery. Then corrupt CRC and verify rejection.
+static void test_v0_multiframe_crc_validation(void)
+{
+    const uint64_t    dts      = 0x1234567890ABCDEFULL;
+    const uint16_t    crc_seed = canard_0v1_crc_seed_from_data_type_signature(dts);
+    session_fixture_t fx;
+    fixture_init(&fx, canard_kind_0v1_message, 500, 64, 2 * MEGA, crc_seed);
+
+    const byte_t   user_data[8] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE };
+    const uint16_t crc          = crc_add(crc_seed, 8, user_data);
+    const byte_t   crc_lo       = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    const byte_t   crc_hi       = (byte_t)(crc >> 8);   // NOLINT(hicpp-signed-bitwise)
+
+    // v0 multiframe: data = [crc_lo, crc_hi, user_data...]
+    byte_t f0[7];
+    f0[0]              = crc_lo;
+    f0[1]              = crc_hi;
+    f0[2]              = 0xDE;
+    f0[3]              = 0xAD;
+    f0[4]              = 0xBE;
+    f0[5]              = 0xEF;
+    f0[6]              = 0xCA;
+    const byte_t f1[3] = { 0xFE, 0xBA, 0xBE };
+
+    // Correct CRC transfer.
+    frame_t fr0 = make_start_frame(
+      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 0, f0, sizeof(f0));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
+
+    frame_t fr1 = make_cont_frame(
+      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 0, true, true, f1, sizeof(f1));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
+
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_size_t(8, fx.capture.payload.view.size);
+    TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, user_data, 8));
+
+    // Now send with corrupted CRC.
+    byte_t f0_bad[7];
+    memcpy(f0_bad, f0, sizeof(f0_bad));
+    f0_bad[0] = (byte_t)(crc_lo ^ 0x01U); // Corrupt low CRC byte.
+
+    frame_t fr0_bad = make_start_frame(
+      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 1, f0_bad, sizeof(f0_bad));
+    TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr0_bad, 0));
+
+    frame_t fr1_bad = make_cont_frame(
+      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 1, true, true, f1, sizeof(f1));
+    TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr1_bad, 0));
+
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // No new callback.
+    TEST_ASSERT_EQUAL_UINT64(1, fx.canard.err.rx_transfer);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// v0 single-frame transfer: no CRC checked, arbitrary payload accepted.
+static void test_v0_single_frame_no_crc(void)
+{
+    session_fixture_t fx;
+    // Use a non-zero CRC seed; it should not matter for single-frame.
+    fixture_init(&fx, canard_kind_0v1_message, 777, 64, 2 * MEGA, 0xBEEF);
+
+    const byte_t payload[] = { 0xFF, 0xFE, 0xFD, 0xFC, 0xFB };
+    frame_t      fr        = make_single_frame(
+      canard_prio_slow, canard_kind_0v1_message, 777, CANARD_NODE_ID_ANONYMOUS, 50, 3, payload, sizeof(payload));
+
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_UINT8(50, fx.capture.source_node_id);
+    TEST_ASSERT_EQUAL_UINT8(3, fx.capture.transfer_id);
+    TEST_ASSERT_EQUAL_INT(canard_prio_slow, fx.capture.priority);
+    TEST_ASSERT_EQUAL_size_t(5, fx.capture.payload.view.size);
+    TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, payload, 5));
+    TEST_ASSERT_NULL(fx.capture.payload.origin.data);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -1992,6 +2381,16 @@ int main(void)
     RUN_TEST(test_multiple_sources);
     RUN_TEST(test_session_animation_ordering);
     RUN_TEST(test_all_7_kinds);
+
+    // Group 10: New adversarial tests
+    RUN_TEST(test_interleaved_multiframe_two_sources);
+    RUN_TEST(test_preemption_during_multiframe);
+    RUN_TEST(test_transfer_id_rollover_31_to_0);
+    RUN_TEST(test_session_timeout_exact_boundary);
+    RUN_TEST(test_oom_slot_allocation_session_survives);
+    RUN_TEST(test_session_animation_ordering_move_to_tail);
+    RUN_TEST(test_v0_multiframe_crc_validation);
+    RUN_TEST(test_v0_single_frame_no_crc);
 
     return UNITY_END();
 }

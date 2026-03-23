@@ -107,6 +107,10 @@ gen_test_matrix(test_intrusive_misc "src/test_intrusive_misc.c")
 # API tests.
 gen_test_single(test_api_tx "${library_dir}/canard.c;src/test_api_tx.cpp")
 gen_test_single(test_api_rx "${library_dir}/canard.c;src/test_api_rx.cpp")
+gen_test_single(test_api_roundtrip "${library_dir}/canard.c;src/test_api_roundtrip.cpp")
+gen_test_single(test_api_tx_queue "${library_dir}/canard.c;src/test_api_tx_queue.cpp")
+gen_test_single(test_api_rx_edge "${library_dir}/canard.c;src/test_api_rx_edge.cpp")
+gen_test_single(test_api_lifecycle "${library_dir}/canard.c;src/test_api_lifecycle.cpp")
 
 # Coverage targets. Usage:
 #   cmake -DENABLE_COVERAGE=ON -DNO_STATIC_ANALYSIS=ON ..

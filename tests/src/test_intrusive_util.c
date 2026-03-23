@@ -609,6 +609,89 @@ static void test_chance_statistical(void)
     }
 }
 
+// ==========================================  CRC ADDITIONAL TESTS  ==========================================
+
+static void test_crc_add_empty(void)
+{
+    // crc_add with size=0 and NULL pointer must be an identity operation.
+    TEST_ASSERT_EQUAL_HEX16(CRC_INITIAL, crc_add(CRC_INITIAL, 0, NULL));
+    // Same with a non-NULL pointer but size=0.
+    const uint8_t dummy = 0xAA;
+    TEST_ASSERT_EQUAL_HEX16(CRC_INITIAL, crc_add(CRC_INITIAL, 0, &dummy));
+    // Also verify identity with a non-initial CRC value.
+    TEST_ASSERT_EQUAL_HEX16(0x1234, crc_add(0x1234, 0, NULL));
+    TEST_ASSERT_EQUAL_HEX16(0x1234, crc_add(0x1234, 0, &dummy));
+}
+
+static void test_crc_residue_property(void)
+{
+    // Compute CRC over "Hello", then append CRC bytes (big-endian: high byte first, low byte second).
+    // CRC over the whole (data + CRC) must equal CRC_RESIDUE. This is the fundamental property
+    // the receiver relies on for v1 multiframe transfers.
+    const uint8_t  data[] = { 'H', 'e', 'l', 'l', 'o' };
+    const uint16_t crc    = crc_add(CRC_INITIAL, sizeof(data), data);
+    // Append CRC in big-endian order.
+    uint8_t augmented[sizeof(data) + CRC_SIZE_BYTES];
+    memcpy(augmented, data, sizeof(data));
+    augmented[sizeof(data)]     = (uint8_t)(crc >> 8U);   // high byte
+    augmented[sizeof(data) + 1] = (uint8_t)(crc & 0xFFU); // low byte
+    const uint16_t residue      = crc_add(CRC_INITIAL, sizeof(augmented), augmented);
+    TEST_ASSERT_EQUAL_HEX16(CRC_RESIDUE, residue);
+
+    // Repeat with the standard test vector "123456789" for extra confidence.
+    const uint8_t  vec[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+    const uint16_t crc2  = crc_add(CRC_INITIAL, sizeof(vec), vec);
+    TEST_ASSERT_EQUAL_HEX16(0x29B1, crc2);
+    uint8_t aug2[sizeof(vec) + CRC_SIZE_BYTES];
+    memcpy(aug2, vec, sizeof(vec));
+    aug2[sizeof(vec)]     = (uint8_t)(crc2 >> 8U);
+    aug2[sizeof(vec) + 1] = (uint8_t)(crc2 & 0xFFU);
+    TEST_ASSERT_EQUAL_HEX16(CRC_RESIDUE, crc_add(CRC_INITIAL, sizeof(aug2), aug2));
+}
+
+static void test_crc_add_chain_empty_fragments(void)
+{
+    // Chain: [3 bytes "ABC"] -> [0 bytes, data=NULL] -> [2 bytes "DE"].
+    const uint8_t              d1[]      = { 'A', 'B', 'C' };
+    const uint8_t              d3[]      = { 'D', 'E' };
+    const canard_bytes_chain_t c3        = { .bytes = { .size = sizeof(d3), .data = d3 }, .next = NULL };
+    const canard_bytes_chain_t c2        = { .bytes = { .size = 0, .data = NULL }, .next = &c3 };
+    const canard_bytes_chain_t c1        = { .bytes = { .size = sizeof(d1), .data = d1 }, .next = &c2 };
+    const uint16_t             chain_crc = crc_add_chain(CRC_INITIAL, c1);
+    // Must match the flat computation over "ABCDE".
+    const uint8_t  flat[]   = { 'A', 'B', 'C', 'D', 'E' };
+    const uint16_t flat_crc = crc_add(CRC_INITIAL, sizeof(flat), flat);
+    TEST_ASSERT_EQUAL_HEX16(flat_crc, chain_crc);
+}
+
+static void test_bytes_chain_read_one_byte_at_a_time(void)
+{
+    // 3-fragment chain: [2 bytes] -> [3 bytes] -> [1 byte]. Total 6 bytes.
+    const uint8_t              f1[]       = { 0x10, 0x20 };
+    const uint8_t              f2[]       = { 0x30, 0x40, 0x50 };
+    const uint8_t              f3[]       = { 0x60 };
+    const canard_bytes_chain_t c3         = { .bytes = { .size = sizeof(f3), .data = f3 }, .next = NULL };
+    const canard_bytes_chain_t c2         = { .bytes = { .size = sizeof(f2), .data = f2 }, .next = &c3 };
+    const canard_bytes_chain_t c1         = { .bytes = { .size = sizeof(f1), .data = f1 }, .next = &c2 };
+    const uint8_t              expected[] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60 };
+    bytes_chain_reader_t       reader     = { .cursor = &c1, .position = 0 };
+    for (size_t i = 0; i < sizeof(expected); i++) {
+        uint8_t buf = 0;
+        bytes_chain_read(&reader, 1, &buf);
+        TEST_ASSERT_EQUAL_HEX8(expected[i], buf);
+    }
+}
+
+static void test_bytes_chain_valid_null_data(void)
+{
+    // data=NULL, size=0 is valid (empty fragment).
+    const canard_bytes_chain_t ok = { .bytes = { .data = NULL, .size = 0 }, .next = NULL };
+    TEST_ASSERT_TRUE(bytes_chain_valid(ok));
+    // data=NULL, size=1 is invalid (claims data but has no pointer).
+    const canard_bytes_chain_t bad = { .bytes = { .data = NULL, .size = 1 }, .next = NULL };
+    TEST_ASSERT_FALSE(bytes_chain_valid(bad));
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -634,5 +717,10 @@ int main(void)
     RUN_TEST(test_random_range_exhaustive);
     RUN_TEST(test_chance_deterministic_edges);
     RUN_TEST(test_chance_statistical);
+    RUN_TEST(test_crc_add_empty);
+    RUN_TEST(test_crc_residue_property);
+    RUN_TEST(test_crc_add_chain_empty_fragments);
+    RUN_TEST(test_bytes_chain_read_one_byte_at_a_time);
+    RUN_TEST(test_bytes_chain_valid_null_data);
     return UNITY_END();
 }

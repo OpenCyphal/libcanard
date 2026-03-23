@@ -578,6 +578,65 @@ static void test_collision_never_picks_occupied(void)
 }
 
 // =====================================================================================================================
+// Group 7: Nearly-Full Bitmap and Purge Reset
+// =====================================================================================================================
+
+static void test_occupancy_bitmap_nearly_full(void)
+{
+    // Fill the bitmap so that only positions 50 and 100 are free (126 of 128 bits set).
+    // On collision, the new node-ID must be one of the two free slots.
+    const size_t except[] = { 50, 100 };
+    // zc = 128 - 126 = 2. pc = 126 > 64, so chance IS called.
+    // Try both outcomes: random=0 -> pick first free (50), random=1 -> pick second free (100).
+    {
+        const uint64_t seed = find_seed_dense(2, false, 0);
+        TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_MAX, seed);
+        canard_t self = make_canard(seed, 10);
+        fill_bitmap_except(&self, except, 2);
+        node_id_occupancy_update(&self, 10);
+        TEST_ASSERT_EQUAL_UINT64(1, self.err.collision);
+        TEST_ASSERT_EQUAL_UINT8(50, self.node_id);
+    }
+    {
+        const uint64_t seed = find_seed_dense(2, false, 1);
+        TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_MAX, seed);
+        canard_t self = make_canard(seed, 10);
+        fill_bitmap_except(&self, except, 2);
+        node_id_occupancy_update(&self, 10);
+        TEST_ASSERT_EQUAL_UINT64(1, self.err.collision);
+        TEST_ASSERT_EQUAL_UINT8(100, self.node_id);
+    }
+}
+
+static void test_collision_purge_resets_bitmap(void)
+{
+    // When pc > 64, a probabilistic purge may fire. After purge, the bitmap should contain only
+    // bit 0 and the src node-ID bit.
+    // Setup: 65 bits set (0..64), src=65 (new, not yet set). After adding src: pc=66, zc=62.
+    // Need chance(self, 62) to return true so purge fires.
+    const uint64_t seed = find_seed_chance(62, true);
+    TEST_ASSERT_NOT_EQUAL_UINT64(UINT64_MAX, seed);
+    canard_t self = make_canard(seed, 120);
+    for (byte_t i = 1; i < 65; i++) {
+        bitmap_set(self.node_id_occupancy_bitmap, i);
+    }
+    // pc=65. Add src=65 -> pc=66, zc=62. chance returns true -> purge fires.
+    node_id_occupancy_update(&self, 65);
+    // No collision (node_id=120, src=65).
+    TEST_ASSERT_EQUAL_UINT64(0, self.err.collision);
+    TEST_ASSERT_EQUAL_UINT8(120, self.node_id);
+    // After purge: bitmap = {0, 65}
+    TEST_ASSERT_TRUE(bitmap_test(self.node_id_occupancy_bitmap, 0));
+    TEST_ASSERT_TRUE(bitmap_test(self.node_id_occupancy_bitmap, 65));
+    const byte_t pc = popcount(self.node_id_occupancy_bitmap[0]) + popcount(self.node_id_occupancy_bitmap[1]);
+    TEST_ASSERT_EQUAL_UINT8(2, pc);
+    // Verify that the previously-set bits 1..64 are all cleared.
+    for (byte_t i = 1; i < 65; i++) {
+        TEST_ASSERT_FALSE(bitmap_test(self.node_id_occupancy_bitmap, i));
+    }
+}
+
+// =====================================================================================================================
 // Harness
 // =====================================================================================================================
 
@@ -615,6 +674,9 @@ int main(void)
     // Group 6: Exhaustive / property tests
     RUN_TEST(test_collision_exhaustive_zc_one);
     RUN_TEST(test_collision_never_picks_occupied);
+    // Group 7: Nearly-full bitmap and purge reset
+    RUN_TEST(test_occupancy_bitmap_nearly_full);
+    RUN_TEST(test_collision_purge_resets_bitmap);
     return UNITY_END();
 }
 

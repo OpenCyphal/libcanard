@@ -701,6 +701,201 @@ static void test_rx_parse_anonymous_multi_frame_reject(void)
 }
 
 // =====================================================================================================================
+// Test 19: One-byte frame (tail byte only). SOT+EOT single-frame tail 0xE0 → v1 parse, payload.size=0.
+static void test_rx_parse_one_byte_tail_only(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1.1 message CAN ID: prio=0, subject=0, src=0, bit7=1. CAN ID = 0x00000080.
+    // Tail byte 0xE0 = SOT|EOT|toggle=1|TID=0 → v1 single-frame.
+    {
+        const byte_t         d[] = { 0xE0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00000080UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(2, ret); // v1 accepted
+        TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
+        TEST_ASSERT_EQUAL_size_t(0, v1.payload.size);
+        TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
+        TEST_ASSERT_TRUE(v1.start);
+        TEST_ASSERT_TRUE(v1.end);
+        TEST_ASSERT_TRUE(v1.toggle);
+        TEST_ASSERT_EQUAL_UINT8(0, v1.transfer_id);
+    }
+    // v0 single-frame: tail 0xC0 = SOT|EOT|toggle=0|TID=0 → v0 only.
+    // CAN ID 0x00002A01: message, bit7=0. v0 message src=1 (non-anonymous), type_id=42.
+    {
+        const byte_t         d[] = { 0xC0 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00002A01UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(1, ret); // v0 only
+        TEST_ASSERT_EQUAL_INT(canard_kind_0v1_message, v0.kind);
+        TEST_ASSERT_EQUAL_size_t(0, v0.payload.size);
+        TEST_ASSERT_EQUAL_PTR(d, v0.payload.data);
+        TEST_ASSERT_TRUE(v0.start);
+        TEST_ASSERT_TRUE(v0.end);
+        TEST_ASSERT_FALSE(v0.toggle);
+        TEST_ASSERT_EQUAL_UINT8(0, v0.transfer_id);
+    }
+}
+
+// =====================================================================================================================
+// Test 20: 64-byte CAN FD frame with v1.1 message CAN ID. Tail byte at position 63.
+static void test_rx_parse_max_fd_frame(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1.1 message CAN ID: prio=2, subject=5000, src=10, bit7=1. CAN ID = (2<<26)|(5000<<8)|(1<<7)|10 = 0x0813888A.
+    byte_t d[64];
+    memset(d, 0xBB, sizeof(d));
+    d[63]                    = 0xEF; // v1 single-frame tail: SOT|EOT|toggle=1|TID=15
+    const canard_bytes_t pl  = { sizeof(d), d };
+    const byte_t         ret = rx_parse(0x0813888AUL, pl, &v0, &v1);
+    TEST_ASSERT_EQUAL_UINT8(2, ret); // v1 only (toggle=1 excludes v0 on start)
+    TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
+    TEST_ASSERT_EQUAL_size_t(63, v1.payload.size);
+    TEST_ASSERT_EQUAL_PTR(d, v1.payload.data);
+    TEST_ASSERT_EQUAL_UINT8(15, v1.transfer_id);
+    TEST_ASSERT_EQUAL_HEX8(10, v1.src);
+    TEST_ASSERT_EQUAL_UINT32(5000, v1.port_id);
+    TEST_ASSERT_EQUAL_INT(canard_prio_fast, v1.priority);
+}
+
+// =====================================================================================================================
+// Test 21: v1.0 service with src==dst (self-addressing). Must be rejected.
+static void test_rx_parse_v1_service_self_addressing(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1.0 service request: prio=0, svc_id=1, dst=42, src=42. Self-addressing → rejected.
+    // CAN ID: (0<<26)|(1<<25)|(1<<24)|(1<<14)|(42<<7)|42 = 0x0300552A
+    {
+        const byte_t         d[] = { 0xE0 }; // v1 single-frame tail: SOT|EOT|toggle=1|TID=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x0300552AUL, pl, &v0, &v1);
+        // v1 rejected due to src==dst. v0: SOT=1 toggle=1 → v0 excluded. Return = 0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+    // v1.0 service response: prio=4, svc_id=100, dst=10, src=10.
+    // CAN ID: (4<<26)|(1<<25)|(0<<24)|(100<<14)|(10<<7)|10 = 0x1219050A
+    {
+        const byte_t         d[] = { 0xE3 }; // v1 single, tid=3, SOT|EOT|toggle=1
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x1219050AUL, pl, &v0, &v1);
+        // v1 rejected (src==dst=10). v0: SOT=1 toggle=1 → excluded. Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 22: v0 service with src==dst (self-addressing). Must be rejected.
+static void test_rx_parse_v0_service_self_addressing(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v0 service request: prio=4, type_id=0x37, dst=11, src=11. Self-addressing.
+    // CAN ID: (((4<<2)|3)<<24)|(0x37<<16)|(1<<15)|(11<<8)|(1<<7)|11 = 0x13378B8B
+    {
+        const byte_t         d[] = { 0xC0 }; // v0 single: SOT=1, EOT=1, toggle=0, TID=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13378B8BUL, pl, &v0, &v1);
+        // v0 rejected (src==dst). v1: SOT=1 toggle=0 → v1 excluded. Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 23: v0 service with src=0. Must be rejected (node-ID 0 reserved for anonymous).
+static void test_rx_parse_v0_service_zero_src(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v0 service request: prio=4, type_id=0x37, dst=24, src=0.
+    // CAN ID: (((4<<2)|3)<<24)|(0x37<<16)|(1<<15)|(24<<8)|(1<<7)|0 = 0x13379880
+    {
+        const byte_t         d[] = { 0xC0 }; // v0 single
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13379880UL, pl, &v0, &v1);
+        // v0 rejected (src=0). v1: start && !toggle → excluded. Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 24: v0 service with dst=0. Must be rejected (node-ID 0 reserved for anonymous).
+static void test_rx_parse_v0_service_zero_dst(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v0 service request: prio=4, type_id=0x37, dst=0, src=11.
+    // CAN ID: (((4<<2)|3)<<24)|(0x37<<16)|(1<<15)|(0<<8)|(1<<7)|11 = 0x1337808B
+    {
+        const byte_t         d[] = { 0xC0 }; // v0 single
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x1337808BUL, pl, &v0, &v1);
+        // v0 rejected (dst=0). v1: start && !toggle → excluded. Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 25: Middle frame (SOT=0, EOT=0) with only 1 byte (tail only). Payload=0. Rejected by payload_ok.
+static void test_rx_parse_non_start_non_end_empty(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // CAN ID valid for both versions: message, bit7=0. 0x00002A01.
+    // Tail: SOT=0 EOT=0 toggle=0 TID=5 → 0x05. One byte total.
+    {
+        const byte_t         d[] = { 0x05 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00002A01UL, pl, &v0, &v1);
+        // payload_raw.size=1. payload.size=0.
+        // payload_ok = (end || (1 >= 8)) && ((start && end) || (0 > 0))
+        //            = (false || false) && (false || false)
+        //            = false
+        // Both rejected.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 26: Continuation frame (non-last) with only 6 bytes. Under full MTU (8). Rejected.
+static void test_rx_parse_non_last_short_frame(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // CAN ID valid for both versions: message, bit7=0. 0x00002A01.
+    // Tail: SOT=0 EOT=0 toggle=0 TID=3 → 0x03. 6 bytes total, 5 payload.
+    {
+        const byte_t         d[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x03 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00002A01UL, pl, &v0, &v1);
+        // payload_raw.size=6. payload.size=5.
+        // payload_ok = (end || (6 >= 8)) && ((start && end) || (5 > 0))
+        //            = (false || false) && (false || true)
+        //            = false
+        // Both rejected.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+    // Same but with 7 bytes: still under MTU.
+    {
+        const byte_t         d[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x03 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00002A01UL, pl, &v0, &v1);
+        // payload_raw.size=7 < 8 → first clause false. Rejected.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+    // With exactly 8 bytes: at MTU. Accepted.
+    {
+        const byte_t         d[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x03 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00002A01UL, pl, &v0, &v1);
+        // payload_raw.size=8 >= 8 → OK. payload.size=7 > 0 → OK. Both versions attempted.
+        TEST_ASSERT_EQUAL_UINT8(3, ret);
+    }
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -724,5 +919,13 @@ int main(void)
     RUN_TEST(test_rx_parse_non_first_dual_output);
     RUN_TEST(test_rx_parse_payload_validation);
     RUN_TEST(test_rx_parse_anonymous_multi_frame_reject);
+    RUN_TEST(test_rx_parse_one_byte_tail_only);
+    RUN_TEST(test_rx_parse_max_fd_frame);
+    RUN_TEST(test_rx_parse_v1_service_self_addressing);
+    RUN_TEST(test_rx_parse_v0_service_self_addressing);
+    RUN_TEST(test_rx_parse_v0_service_zero_src);
+    RUN_TEST(test_rx_parse_v0_service_zero_dst);
+    RUN_TEST(test_rx_parse_non_start_non_end_empty);
+    RUN_TEST(test_rx_parse_non_last_short_frame);
     return UNITY_END();
 }

@@ -530,6 +530,101 @@ static void test_limitation_duplicate_after_preemption(void)
 }
 
 // =====================================================================================================================
+// Group 9: New adversarial admission tests.
+
+/// Continuation frame arrives for a priority that has no active slot. Must be rejected.
+static void test_continuation_no_slot_rejected(void)
+{
+    fixture_t f;
+    fixture_init(&f, 2 * MEGA);
+    f.ses.iface_index       = 0;
+    f.ses.last_admission_ts = 1 * MEGA;
+
+    // No slots exist (all NULL from memset). Continuation at any priority → reject.
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 5, 0));
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_exceptional, false, 0, 0));
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_optional, true, 31, 1));
+
+    // Create a slot at prio_high, verify continuation at prio_nominal still fails (no slot at nominal).
+    f.ses.slots[canard_prio_high] = rx_slot_new(&f.sub, 1 * MEGA, 5, 0);
+    TEST_ASSERT_NOT_NULL(f.ses.slots[canard_prio_high]);
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 5, 0));
+
+    // But the slot at prio_high should match.
+    TEST_ASSERT_TRUE(solve_cont(&f, 2 * MEGA, canard_prio_high, true, 5, 0));
+
+    fixture_free_slots(&f);
+}
+
+/// Slot exists with TID=5. Continuation with TID=6. Rejected.
+static void test_continuation_wrong_tid_rejected(void)
+{
+    fixture_t f;
+    fixture_init(&f, 2 * MEGA);
+    f.ses.iface_index       = 0;
+    f.ses.last_admission_ts = 1 * MEGA;
+
+    f.ses.slots[canard_prio_nominal] = rx_slot_new(&f.sub, 1 * MEGA, 5, 0);
+    TEST_ASSERT_NOT_NULL(f.ses.slots[canard_prio_nominal]);
+
+    // Correct TID → admit.
+    TEST_ASSERT_TRUE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 5, 0));
+    // Wrong TID → reject.
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 6, 0));
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 0, 0));
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 31, 0));
+
+    fixture_free_slots(&f);
+}
+
+/// Slot on iface 0. Continuation on iface 1. Rejected.
+static void test_continuation_wrong_iface_rejected(void)
+{
+    fixture_t f;
+    fixture_init(&f, 2 * MEGA);
+    f.ses.iface_index       = 0;
+    f.ses.last_admission_ts = 1 * MEGA;
+
+    // Create slot on iface 0.
+    f.ses.slots[canard_prio_nominal] = rx_slot_new(&f.sub, 1 * MEGA, 10, 0);
+    TEST_ASSERT_NOT_NULL(f.ses.slots[canard_prio_nominal]);
+
+    // Correct iface → admit.
+    TEST_ASSERT_TRUE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 10, 0));
+    // Wrong iface → reject.
+    TEST_ASSERT_FALSE(solve_cont(&f, 2 * MEGA, canard_prio_nominal, true, 10, 1));
+
+    fixture_free_slots(&f);
+}
+
+/// With zero timeout, duplicate TIDs are accepted as long as timestamps advance.
+static void test_zero_timeout_duplicates_accepted(void)
+{
+    fixture_t f;
+    fixture_init(&f, 0); // Zero timeout.
+    f.ses.iface_index = 0;
+
+    const canard_us_t ts0 = 1 * MEGA;
+
+    // Admit TID=5 at ts0.
+    TEST_ASSERT_TRUE(solve_start(&f, ts0, canard_prio_nominal, 5, 0)); // fresh via stale (BIG_BANG)
+    record(&f, canard_prio_nominal, 5, ts0, 0);
+
+    // One tick later: stale = (ts0+1 - 0) > ts0 = true. affine && stale → admit.
+    TEST_ASSERT_TRUE(solve_start(&f, ts0 + 1, canard_prio_nominal, 5, 0));
+    record(&f, canard_prio_nominal, 5, ts0 + 1, 0);
+
+    // Another tick: stale again.
+    TEST_ASSERT_TRUE(solve_start(&f, ts0 + 2, canard_prio_nominal, 5, 0));
+    record(&f, canard_prio_nominal, 5, ts0 + 2, 0);
+
+    // Same timestamp: stale = (ts0+2 - 0) > ts0+2 = false. fresh=false, affine=true → only 1 of 3 → reject.
+    TEST_ASSERT_FALSE(solve_start(&f, ts0 + 2, canard_prio_nominal, 5, 0));
+
+    fixture_free_slots(&f);
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -550,6 +645,12 @@ int main(void)
     RUN_TEST(test_integration_iface_failover_tid_collision);
     RUN_TEST(test_integration_zero_timeout);
     RUN_TEST(test_limitation_duplicate_after_preemption);
+
+    // Group 9: New adversarial admission tests
+    RUN_TEST(test_continuation_no_slot_rejected);
+    RUN_TEST(test_continuation_wrong_tid_rejected);
+    RUN_TEST(test_continuation_wrong_iface_rejected);
+    RUN_TEST(test_zero_timeout_duplicates_accepted);
 
     return UNITY_END();
 }

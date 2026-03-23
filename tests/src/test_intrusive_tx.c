@@ -1005,6 +1005,728 @@ static void test_0v1_respond_can_id_compliance(void)
     free_all_transfers(&self);
 }
 
+// =============================================
+// Group A: tx_spool boundary/CRC tests
+// =============================================
+
+// Verify single/multi frame boundary at Classic CAN MTU=8.
+// 7 bytes payload: 7 < 8, single-frame. 8 bytes payload: 8 is NOT < 8, multiframe.
+static void test_tx_spool_boundary_single_multi_classic(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+
+    // 7 bytes: single-frame.
+    {
+        init_canard(&self, &ctx, &alloc, 16U);
+        const byte_t               data[7] = { 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+        const canard_bytes_chain_t payload = { .bytes = { .size = 7U, .data = data }, .next = NULL };
+        tx_frame_t* const          head    = tx_spool(&self, CRC_INITIAL, 8U, 0U, 7U, payload);
+        TEST_ASSERT_NOT_NULL(head);
+        TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
+        // frame_size = tx_ceil(7+1) = 8. Tail byte at data[7].
+        TEST_ASSERT_EQUAL_size_t(8U, canard_dlc_to_len[head->dlc]);
+        const byte_t tail = head->data[7];
+        TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_EOT | TAIL_TOGGLE | 0U, tail); // SOT+EOT+toggle, tid=0
+        canard_refcount_dec(&self, tx_frame_view(head));
+        TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    }
+
+    // 8 bytes: multiframe (8 is NOT < 8).
+    {
+        init_canard(&self, &ctx, &alloc, 16U);
+        byte_t data[8];
+        for (size_t i = 0; i < 8U; i++) {
+            data[i] = (byte_t)(0x10U + i);
+        }
+        const canard_bytes_chain_t payload = { .bytes = { .size = 8U, .data = data }, .next = NULL };
+        tx_frame_t* const          head    = tx_spool(&self, CRC_INITIAL, 8U, 0U, 8U, payload);
+        TEST_ASSERT_NOT_NULL(head);
+        TEST_ASSERT_TRUE(count_frames(head) >= 2U);
+        // First frame: SOT set, EOT not set, toggle=1 (Cyphal v1).
+        const byte_t tail0 = head->data[canard_dlc_to_len[head->dlc] - 1U];
+        TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_TOGGLE, tail0 & (TAIL_SOT | TAIL_EOT | TAIL_TOGGLE));
+        // Last frame: EOT set, SOT not set.
+        tx_frame_t* last = head;
+        while (last->next != NULL) {
+            last = last->next;
+        }
+        const byte_t tail_last = last->data[canard_dlc_to_len[last->dlc] - 1U];
+        TEST_ASSERT_NOT_EQUAL(0U, tail_last & TAIL_EOT);
+        TEST_ASSERT_EQUAL_HEX8(0U, tail_last & TAIL_SOT);
+        // Cleanup.
+        tx_frame_t* f = head;
+        while (f != NULL) {
+            tx_frame_t* const next = f->next;
+            canard_refcount_dec(&self, tx_frame_view(f));
+            f = next;
+        }
+        TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    }
+}
+
+// Verify single/multi frame boundary at CAN FD MTU=64.
+// 63 bytes = single-frame. 64 bytes = multiframe.
+static void test_tx_spool_boundary_single_multi_fd(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+
+    // 63 bytes: single-frame (63 < 64).
+    {
+        init_canard(&self, &ctx, &alloc, 16U);
+        byte_t data[63];
+        for (size_t i = 0; i < 63U; i++) {
+            data[i] = (byte_t)i;
+        }
+        const canard_bytes_chain_t payload = { .bytes = { .size = 63U, .data = data }, .next = NULL };
+        tx_frame_t* const          head    = tx_spool(&self, CRC_INITIAL, 64U, 5U, 63U, payload);
+        TEST_ASSERT_NOT_NULL(head);
+        TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
+        // frame_size = tx_ceil(63+1)=64. Tail at data[63].
+        TEST_ASSERT_EQUAL_size_t(64U, canard_dlc_to_len[head->dlc]);
+        const byte_t tail = head->data[63];
+        TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_EOT | TAIL_TOGGLE | 5U, tail);
+        canard_refcount_dec(&self, tx_frame_view(head));
+        TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    }
+
+    // 64 bytes: multiframe (64 is NOT < 64).
+    {
+        init_canard(&self, &ctx, &alloc, 16U);
+        byte_t data[64];
+        for (size_t i = 0; i < 64U; i++) {
+            data[i] = (byte_t)(0x80U + (i & 0x7FU));
+        }
+        const canard_bytes_chain_t payload = { .bytes = { .size = 64U, .data = data }, .next = NULL };
+        tx_frame_t* const          head    = tx_spool(&self, CRC_INITIAL, 64U, 5U, 64U, payload);
+        TEST_ASSERT_NOT_NULL(head);
+        TEST_ASSERT_TRUE(count_frames(head) >= 2U);
+        // First frame: SOT set, EOT not set.
+        const byte_t tail0 = head->data[canard_dlc_to_len[head->dlc] - 1U];
+        TEST_ASSERT_NOT_EQUAL(0U, tail0 & TAIL_SOT);
+        TEST_ASSERT_EQUAL_HEX8(0U, tail0 & TAIL_EOT);
+        // Cleanup.
+        tx_frame_t* f = head;
+        while (f != NULL) {
+            tx_frame_t* const next = f->next;
+            canard_refcount_dec(&self, tx_frame_view(f));
+            f = next;
+        }
+        TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    }
+}
+
+// Verify CRC split across frames with Classic CAN.
+// 13 bytes payload, mtu=8, payload-per-frame=7.
+// size_with_crc=15. Frame layout:
+//   Frame 1: 7 payload bytes + tail  (offset=7)
+//   Frame 2: 6 payload bytes + CRC high byte + tail  (offset=14)
+//   Frame 3: CRC low byte + padding + tail (offset=15)
+static void test_tx_spool_crc_split_across_frames(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    byte_t data[13];
+    for (size_t i = 0; i < 13U; i++) {
+        data[i] = (byte_t)(0xA0U + i);
+    }
+    const canard_bytes_chain_t payload = { .bytes = { .size = 13U, .data = data }, .next = NULL };
+    tx_frame_t* const          head    = tx_spool(&self, CRC_INITIAL, 8U, 2U, 13U, payload);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(3U, count_frames(head));
+
+    // Compute expected CRC over all 13 payload bytes (no padding in this case).
+    const uint16_t crc = crc_add(CRC_INITIAL, 13U, data);
+
+    // Frame 1: 7 payload bytes, tail with SOT.
+    TEST_ASSERT_EQUAL_size_t(8U, canard_dlc_to_len[head->dlc]);
+    for (size_t i = 0; i < 7U; i++) {
+        TEST_ASSERT_EQUAL_HEX8(data[i], head->data[i]);
+    }
+    TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_TOGGLE | 2U, head->data[7]); // SOT, toggle=1
+
+    // Frame 2: 6 payload bytes + CRC high byte, then tail.
+    const tx_frame_t* const f2 = head->next;
+    TEST_ASSERT_NOT_NULL(f2);
+    TEST_ASSERT_EQUAL_size_t(8U, canard_dlc_to_len[f2->dlc]);
+    for (size_t i = 0; i < 6U; i++) {
+        TEST_ASSERT_EQUAL_HEX8(data[7U + i], f2->data[i]);
+    }
+    TEST_ASSERT_EQUAL_HEX8((byte_t)((crc >> 8U) & 0xFFU), f2->data[6]); // CRC high byte
+    TEST_ASSERT_EQUAL_HEX8(2U, f2->data[7] & (TAIL_SOT | TAIL_EOT | TAIL_TOGGLE | CANARD_TRANSFER_ID_MAX));
+    // toggle=0 (second frame)
+
+    // Frame 3: CRC low byte + tail. Frame size = tx_ceil(1+1) = 2.
+    const tx_frame_t* const f3 = f2->next;
+    TEST_ASSERT_NOT_NULL(f3);
+    TEST_ASSERT_EQUAL_size_t(2U, canard_dlc_to_len[f3->dlc]);
+    TEST_ASSERT_EQUAL_HEX8((byte_t)(crc & 0xFFU), f3->data[0]);               // CRC low byte
+    TEST_ASSERT_EQUAL_HEX8(TAIL_EOT | TAIL_TOGGLE | 2U, f3->data[1] & 0xFFU); // EOT, toggle=1 (third frame)
+
+    // Cleanup.
+    tx_frame_t* f = head;
+    while (f != NULL) {
+        tx_frame_t* const next = f->next;
+        canard_refcount_dec(&self, tx_frame_view(f));
+        f = next;
+    }
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Empty payload: single frame with just the tail byte.
+static void test_tx_spool_empty_payload(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    tx_frame_t* const          head    = tx_spool(&self, CRC_INITIAL, 8U, 9U, 0U, payload);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
+    // frame_size = tx_ceil(0+1) = 1. The entire frame is just the tail byte.
+    TEST_ASSERT_EQUAL_size_t(1U, canard_dlc_to_len[head->dlc]);
+    TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_EOT | TAIL_TOGGLE | 9U, head->data[0]);
+
+    canard_refcount_dec(&self, tx_frame_view(head));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Scattered payload with 5 fragments must produce identical frames as a contiguous equivalent.
+static void test_tx_spool_scattered_many_fragments(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+
+    const byte_t frag0[] = { 0x01U, 0x02U };
+    const byte_t frag1[] = { 0x03U, 0x04U };
+    const byte_t frag2[] = { 0x05U, 0x06U };
+    const byte_t frag3[] = { 0x07U, 0x08U };
+    const byte_t frag4[] = { 0x09U, 0x0AU };
+    // Total = 10 bytes, >= 8 => multiframe.
+
+    canard_bytes_chain_t chain4 = { .bytes = { .size = 2U, .data = frag4 }, .next = NULL };
+    canard_bytes_chain_t chain3 = { .bytes = { .size = 2U, .data = frag3 }, .next = &chain4 };
+    canard_bytes_chain_t chain2 = { .bytes = { .size = 2U, .data = frag2 }, .next = &chain3 };
+    canard_bytes_chain_t chain1 = { .bytes = { .size = 2U, .data = frag1 }, .next = &chain2 };
+    canard_bytes_chain_t chain0 = { .bytes = { .size = 2U, .data = frag0 }, .next = &chain1 };
+
+    // Spool scattered payload.
+    init_canard(&self, &ctx, &alloc, 16U);
+    tx_frame_t* const scattered = tx_spool(&self, CRC_INITIAL, 8U, 3U, 10U, chain0);
+    TEST_ASSERT_NOT_NULL(scattered);
+
+    // Spool contiguous equivalent.
+    const byte_t               contig_data[] = { 0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U, 0x09U, 0x0AU };
+    const canard_bytes_chain_t contig        = { .bytes = { .size = 10U, .data = contig_data }, .next = NULL };
+    canard_t                   self2;
+    test_context_t             ctx2;
+    instrumented_allocator_t   alloc2;
+    init_canard(&self2, &ctx2, &alloc2, 16U);
+    tx_frame_t* const contiguous = tx_spool(&self2, CRC_INITIAL, 8U, 3U, 10U, contig);
+    TEST_ASSERT_NOT_NULL(contiguous);
+
+    // Compare frame-by-frame.
+    TEST_ASSERT_EQUAL_size_t(count_frames(scattered), count_frames(contiguous));
+    const tx_frame_t* fs = scattered;
+    const tx_frame_t* fc = contiguous;
+    while ((fs != NULL) && (fc != NULL)) {
+        const size_t sz_s = canard_dlc_to_len[fs->dlc];
+        const size_t sz_c = canard_dlc_to_len[fc->dlc];
+        TEST_ASSERT_EQUAL_size_t(sz_s, sz_c);
+        TEST_ASSERT_EQUAL_HEX8_ARRAY(fc->data, fs->data, sz_s);
+        fs = fs->next;
+        fc = fc->next;
+    }
+
+    // Cleanup.
+    tx_frame_t* f = scattered;
+    while (f != NULL) {
+        tx_frame_t* const next = f->next;
+        canard_refcount_dec(&self, tx_frame_view(f));
+        f = next;
+    }
+    f = contiguous;
+    while (f != NULL) {
+        tx_frame_t* const next = f->next;
+        canard_refcount_dec(&self2, tx_frame_view(f));
+        f = next;
+    }
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc2.allocated_fragments);
+}
+
+// Scattered chain with empty intermediate fragments.
+static void test_tx_spool_scattered_with_empty_fragments(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t         frag_a[] = { 0x11U, 0x22U, 0x33U };
+    const byte_t         frag_b[] = { 0x44U, 0x55U, 0x66U, 0x77U };
+    canard_bytes_chain_t c3       = { .bytes = { .size = 4U, .data = frag_b }, .next = NULL };
+    canard_bytes_chain_t c2       = { .bytes = { .size = 0U, .data = NULL }, .next = &c3 };
+    canard_bytes_chain_t c1       = { .bytes = { .size = 0U, .data = NULL }, .next = &c2 };
+    canard_bytes_chain_t c0       = { .bytes = { .size = 3U, .data = frag_a }, .next = &c1 };
+    // Total = 7 bytes. 7 < 8 => single-frame.
+
+    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, 8U, 1U, 7U, c0);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
+    TEST_ASSERT_EQUAL_size_t(8U, canard_dlc_to_len[head->dlc]); // tx_ceil(7+1)=8
+    TEST_ASSERT_EQUAL_HEX8(0x11U, head->data[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x22U, head->data[1]);
+    TEST_ASSERT_EQUAL_HEX8(0x33U, head->data[2]);
+    TEST_ASSERT_EQUAL_HEX8(0x44U, head->data[3]);
+    TEST_ASSERT_EQUAL_HEX8(0x55U, head->data[4]);
+    TEST_ASSERT_EQUAL_HEX8(0x66U, head->data[5]);
+    TEST_ASSERT_EQUAL_HEX8(0x77U, head->data[6]);
+    TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_EOT | TAIL_TOGGLE | 1U, head->data[7]);
+
+    canard_refcount_dec(&self, tx_frame_view(head));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// OOM midway through multiframe spooling: all frames cleaned up, no leaks.
+static void test_tx_spool_oom_midway(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    byte_t data[20];
+    for (size_t i = 0; i < 20U; i++) {
+        data[i] = (byte_t)i;
+    }
+    const canard_bytes_chain_t payload = { .bytes = { .size = 20U, .data = data }, .next = NULL };
+    // 20 bytes with mtu=8 needs ceil((20+2)/7)=ceil(22/7)=4 frames.
+    // Allow only 2 frame allocations to cause OOM midway.
+    alloc.limit_fragments = 2U;
+
+    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, 8U, 0U, 20U, payload);
+    TEST_ASSERT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Large payload with CAN FD: verify frame count and tail byte progression.
+static void test_tx_spool_large_payload_fd(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 64U);
+
+    byte_t data[300];
+    for (size_t i = 0; i < 300U; i++) {
+        data[i] = (byte_t)(i & 0xFFU);
+    }
+    const canard_bytes_chain_t payload = { .bytes = { .size = 300U, .data = data }, .next = NULL };
+    // 300 >= 64 => multiframe. ceil((300+2)/63)=ceil(302/63)=5 frames.
+    tx_frame_t* const head = tx_spool(&self, CRC_INITIAL, 64U, 7U, 300U, payload);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(5U, count_frames(head));
+
+    // First frame: SOT set, EOT not set, toggle=1.
+    const byte_t tail0 = head->data[canard_dlc_to_len[head->dlc] - 1U];
+    TEST_ASSERT_NOT_EQUAL(0U, tail0 & TAIL_SOT);
+    TEST_ASSERT_EQUAL_HEX8(0U, tail0 & TAIL_EOT);
+    TEST_ASSERT_NOT_EQUAL(0U, tail0 & TAIL_TOGGLE);
+
+    // Walk frames: verify toggle alternation and SOT/EOT correctness.
+    tx_frame_t* f   = head;
+    bool        tog = true;
+    size_t      idx = 0;
+    while (f != NULL) {
+        const size_t sz   = canard_dlc_to_len[f->dlc];
+        const byte_t tail = f->data[sz - 1U];
+        if (tog) {
+            TEST_ASSERT_NOT_EQUAL(0U, tail & TAIL_TOGGLE);
+        } else {
+            TEST_ASSERT_EQUAL_HEX8(0U, tail & TAIL_TOGGLE);
+        }
+        if (idx == 0U) {
+            TEST_ASSERT_NOT_EQUAL(0U, tail & TAIL_SOT);
+        } else {
+            TEST_ASSERT_EQUAL_HEX8(0U, tail & TAIL_SOT);
+        }
+        if (f->next == NULL) {
+            TEST_ASSERT_NOT_EQUAL(0U, tail & TAIL_EOT);
+        } else {
+            TEST_ASSERT_EQUAL_HEX8(0U, tail & TAIL_EOT);
+        }
+        tog = !tog;
+        idx++;
+        f = f->next;
+    }
+    TEST_ASSERT_EQUAL_size_t(5U, idx);
+
+    // Cleanup.
+    f = head;
+    while (f != NULL) {
+        tx_frame_t* const next = f->next;
+        canard_refcount_dec(&self, tx_frame_view(f));
+        f = next;
+    }
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// =============================================
+// Group B: tx_spool_v0 tests
+// =============================================
+
+// v0 single-frame: 6 bytes payload. 6 < 8 => single frame.
+static void test_tx_spool_v0_single_frame(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t               data[]  = { 0x10U, 0x20U, 0x30U, 0x40U, 0x50U, 0x60U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 6U, .data = data }, .next = NULL };
+    tx_frame_t* const          head    = tx_spool_v0(&self, CRC_INITIAL, 4U, 6U, payload);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
+    // v0 single-frame: size = 6+1 = 7. No rounding in v0 single-frame path.
+    TEST_ASSERT_EQUAL_size_t(7U, canard_dlc_to_len[head->dlc]);
+    for (size_t i = 0; i < 6U; i++) {
+        TEST_ASSERT_EQUAL_HEX8(data[i], head->data[i]);
+    }
+    // v0 toggle starts at 0. Tail: SOT+EOT, toggle=0.
+    TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_EOT | 4U, head->data[6]);
+
+    canard_refcount_dec(&self, tx_frame_view(head));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// v0 boundary: 7 bytes single-frame, 8 bytes multiframe.
+static void test_tx_spool_v0_boundary(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+
+    // 7 bytes: 7 < 8 => single-frame.
+    {
+        init_canard(&self, &ctx, &alloc, 16U);
+        const byte_t               data[]  = { 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+        const canard_bytes_chain_t payload = { .bytes = { .size = 7U, .data = data }, .next = NULL };
+        tx_frame_t* const          head    = tx_spool_v0(&self, CRC_INITIAL, 0U, 7U, payload);
+        TEST_ASSERT_NOT_NULL(head);
+        TEST_ASSERT_EQUAL_size_t(1U, count_frames(head));
+        TEST_ASSERT_EQUAL_size_t(8U, canard_dlc_to_len[head->dlc]);      // 7+1=8
+        TEST_ASSERT_EQUAL_HEX8(TAIL_SOT | TAIL_EOT | 0U, head->data[7]); // toggle=0 for v0
+        canard_refcount_dec(&self, tx_frame_view(head));
+        TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    }
+
+    // 8 bytes: 8 is NOT < 8 => multiframe.
+    {
+        init_canard(&self, &ctx, &alloc, 16U);
+        const byte_t               data[]  = { 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U };
+        const canard_bytes_chain_t payload = { .bytes = { .size = 8U, .data = data }, .next = NULL };
+        tx_frame_t* const          head    = tx_spool_v0(&self, CRC_INITIAL, 0U, 8U, payload);
+        TEST_ASSERT_NOT_NULL(head);
+        TEST_ASSERT_TRUE(count_frames(head) >= 2U);
+        // First frame has SOT set, toggle=0 for v0.
+        const byte_t tail0 = head->data[canard_dlc_to_len[head->dlc] - 1U];
+        TEST_ASSERT_NOT_EQUAL(0U, tail0 & TAIL_SOT);
+        TEST_ASSERT_EQUAL_HEX8(0U, tail0 & TAIL_TOGGLE); // v0 toggle starts at 0
+        // Cleanup.
+        tx_frame_t* f = head;
+        while (f != NULL) {
+            tx_frame_t* const next = f->next;
+            canard_refcount_dec(&self, tx_frame_view(f));
+            f = next;
+        }
+        TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+    }
+}
+
+// v0 multiframe: verify CRC byte order is little-endian (low byte first).
+static void test_tx_spool_v0_crc_byte_order(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t               data[]  = { 0x01U, 0x02U, 0x03U, 0x04U, 0x05U, 0x06U, 0x07U, 0x08U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 8U, .data = data }, .next = NULL };
+    // 8 >= 8 => multiframe. CRC is computed over payload and prepended in v0.
+    const uint16_t crc = crc_add(CRC_INITIAL, 8U, data);
+
+    tx_frame_t* const head = tx_spool_v0(&self, CRC_INITIAL, 0U, 8U, payload);
+    TEST_ASSERT_NOT_NULL(head);
+    // v0 prepends CRC in LE: the first 2 bytes of the stream are [crc_low, crc_high].
+    // Frame 1 data[0..6] are the first 7 stream bytes. Stream = [crc_lo, crc_hi, payload...].
+    TEST_ASSERT_EQUAL_HEX8((byte_t)(crc & 0xFFU), head->data[0]);
+    TEST_ASSERT_EQUAL_HEX8((byte_t)((crc >> 8U) & 0xFFU), head->data[1]);
+
+    // Cleanup.
+    tx_frame_t* f = head;
+    while (f != NULL) {
+        tx_frame_t* const next = f->next;
+        canard_refcount_dec(&self, tx_frame_view(f));
+        f = next;
+    }
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// v0 toggle alternation: starts at 0, alternates per frame.
+static void test_tx_spool_v0_toggle_alternation(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    // Need 3 frames in v0. size_total = size + 2 (CRC). mtu=8, bytes_per_frame=7.
+    // 3 frames => size_total in (14,21]. With CRC prepended, size_total = size+2.
+    // Choose size=19 => size_total=21 => ceil(21/7)=3 frames.
+    byte_t data[19];
+    for (size_t i = 0; i < 19U; i++) {
+        data[i] = (byte_t)(i + 1U);
+    }
+    const canard_bytes_chain_t payload = { .bytes = { .size = 19U, .data = data }, .next = NULL };
+    tx_frame_t* const          head    = tx_spool_v0(&self, CRC_INITIAL, 5U, 19U, payload);
+    TEST_ASSERT_NOT_NULL(head);
+    TEST_ASSERT_EQUAL_size_t(3U, count_frames(head));
+
+    // Frame 1: toggle=0 (v0 starts at 0).
+    const byte_t tail1 = head->data[canard_dlc_to_len[head->dlc] - 1U];
+    TEST_ASSERT_EQUAL_HEX8(0U, tail1 & TAIL_TOGGLE);
+    TEST_ASSERT_NOT_EQUAL(0U, tail1 & TAIL_SOT);
+    TEST_ASSERT_EQUAL_HEX8(0U, tail1 & TAIL_EOT);
+
+    // Frame 2: toggle=1.
+    const tx_frame_t* const f2    = head->next;
+    const byte_t            tail2 = f2->data[canard_dlc_to_len[f2->dlc] - 1U];
+    TEST_ASSERT_NOT_EQUAL(0U, tail2 & TAIL_TOGGLE);
+    TEST_ASSERT_EQUAL_HEX8(0U, tail2 & TAIL_SOT);
+    TEST_ASSERT_EQUAL_HEX8(0U, tail2 & TAIL_EOT);
+
+    // Frame 3: toggle=0.
+    const tx_frame_t* const f3    = f2->next;
+    const byte_t            tail3 = f3->data[canard_dlc_to_len[f3->dlc] - 1U];
+    TEST_ASSERT_EQUAL_HEX8(0U, tail3 & TAIL_TOGGLE);
+    TEST_ASSERT_EQUAL_HEX8(0U, tail3 & TAIL_SOT);
+    TEST_ASSERT_NOT_EQUAL(0U, tail3 & TAIL_EOT);
+
+    // Cleanup.
+    tx_frame_t* f = head;
+    while (f != NULL) {
+        tx_frame_t* const next = f->next;
+        canard_refcount_dec(&self, tx_frame_view(f));
+        f = next;
+    }
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// =============================================
+// Group C: tx_push/sacrifice/expire tests
+// =============================================
+
+// The oldest transfer (head of agewise list) is sacrificed when the queue overflows.
+static void test_tx_sacrifice_oldest_first(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 2U); // capacity=2
+
+    const byte_t               d1[] = { 0xAAU };
+    const byte_t               d2[] = { 0xBBU };
+    const byte_t               d3[] = { 0xCCU };
+    const canard_bytes_chain_t pay1 = { .bytes = { .size = 1U, .data = d1 }, .next = NULL };
+    const canard_bytes_chain_t pay2 = { .bytes = { .size = 1U, .data = d2 }, .next = NULL };
+    const canard_bytes_chain_t pay3 = { .bytes = { .size = 1U, .data = d3 }, .next = NULL };
+
+    // Push 2 single-frame transfers. Queue is now full.
+    tx_transfer_t* const tr1 = tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr1);
+    TEST_ASSERT_TRUE(tx_push(&self, tr1, false, 1U, 0U, pay1, CRC_INITIAL));
+
+    tx_transfer_t* const tr2 = tx_transfer_new(&self, 2000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr2);
+    TEST_ASSERT_TRUE(tx_push(&self, tr2, false, 1U, 1U, pay2, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(2U, self.tx.queue_size);
+
+    // Push a third: the oldest (tr1) must be sacrificed.
+    tx_transfer_t* const tr3 = tx_transfer_new(&self, 3000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr3);
+    TEST_ASSERT_TRUE(tx_push(&self, tr3, false, 1U, 2U, pay3, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_sacrifice);
+    TEST_ASSERT_EQUAL_size_t(2U, self.tx.queue_size);
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Sacrificing a multiframe transfer frees all of its frames.
+static void test_tx_sacrifice_multiframe_all_frames(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 4U); // capacity=4
+
+    // Push a multiframe transfer: 8 bytes with mtu=8 => 2 frames. (size>=mtu => multiframe; ceil((8+2)/7)=2 frames)
+    byte_t mf_data[8];
+    for (size_t i = 0; i < 8U; i++) {
+        mf_data[i] = (byte_t)i;
+    }
+    const canard_bytes_chain_t mf_pay = { .bytes = { .size = 8U, .data = mf_data }, .next = NULL };
+    tx_transfer_t* const       mf_tr =
+      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(mf_tr);
+    TEST_ASSERT_TRUE(tx_push(&self, mf_tr, false, 1U, 0U, mf_pay, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(2U, self.tx.queue_size); // 2 frames for multiframe
+
+    // Push single-frame transfers to fill remaining capacity.
+    const byte_t               sf1_d[] = { 0xAAU };
+    const byte_t               sf2_d[] = { 0xBBU };
+    const canard_bytes_chain_t sf1_pay = { .bytes = { .size = 1U, .data = sf1_d }, .next = NULL };
+    const canard_bytes_chain_t sf2_pay = { .bytes = { .size = 1U, .data = sf2_d }, .next = NULL };
+    tx_transfer_t* const       sf1_tr =
+      tx_transfer_new(&self, 2000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(sf1_tr);
+    TEST_ASSERT_TRUE(tx_push(&self, sf1_tr, false, 1U, 1U, sf1_pay, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(3U, self.tx.queue_size);
+
+    tx_transfer_t* const sf2_tr =
+      tx_transfer_new(&self, 3000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(sf2_tr);
+    TEST_ASSERT_TRUE(tx_push(&self, sf2_tr, false, 1U, 2U, sf2_pay, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(4U, self.tx.queue_size); // Full
+
+    // Push another single-frame. The multiframe (oldest, 2 frames) is sacrificed.
+    const byte_t               sf3_d[] = { 0xCCU };
+    const canard_bytes_chain_t sf3_pay = { .bytes = { .size = 1U, .data = sf3_d }, .next = NULL };
+    tx_transfer_t* const       sf3_tr =
+      tx_transfer_new(&self, 4000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(sf3_tr);
+    TEST_ASSERT_TRUE(tx_push(&self, sf3_tr, false, 1U, 3U, sf3_pay, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_sacrifice);
+    // Queue was 4, sacrificed 2 frames (multiframe), added 1 = 3.
+    TEST_ASSERT_EQUAL_size_t(3U, self.tx.queue_size);
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Expiration boundary: deadline=1000, now=1000 survives, now=1001 expires.
+static void test_tx_expire_boundary(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+
+    const byte_t               data[]  = { 0x55U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+
+    // Push with deadline=1000. tx_push calls tx_expire internally but ctx.now=0 at first.
+    ctx.now                  = 0U;
+    tx_transfer_t* const tr1 = tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr1);
+    TEST_ASSERT_TRUE(tx_push(&self, tr1, false, 1U, 0U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
+
+    // Set now=1000 and push another to trigger tx_expire. 1000 > 1000 is false: survives.
+    ctx.now                             = 1000U;
+    const canard_bytes_chain_t payload2 = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+    tx_transfer_t* const tr2 = tx_transfer_new(&self, 5000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr2);
+    TEST_ASSERT_TRUE(tx_push(&self, tr2, false, 1U, 1U, payload2, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(2U, count_enqueued_transfers(&self));
+    TEST_ASSERT_EQUAL_UINT64(0U, self.err.tx_expiration);
+
+    // Set now=1001 and push again. 1001 > 1000 is true: tr1 expires.
+    ctx.now                             = 1001U;
+    const canard_bytes_chain_t payload3 = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+    tx_transfer_t* const tr3 = tx_transfer_new(&self, 5000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr3);
+    TEST_ASSERT_TRUE(tx_push(&self, tr3, false, 1U, 2U, payload3, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_expiration);
+    // tr1 expired, tr2 and tr3 remain.
+    TEST_ASSERT_EQUAL_size_t(2U, count_enqueued_transfers(&self));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Exhaustive test of tx_predict_frame_count against a reference formula.
+static void test_tx_predict_frame_count_exhaustive(void)
+{
+    // Reference: if size < mtu then 1, else ceil((size+2)/(mtu-1)).
+    // Note: tx_predict_frame_count uses transfer_size <= (mtu-1) which is equivalent to size < mtu.
+    const size_t sizes[] = { 0U, 1U, 6U, 7U, 8U, 12U, 13U, 62U, 63U, 64U, 100U, 300U };
+    const size_t mtus[]  = { 8U, 64U };
+
+    for (size_t mi = 0; mi < sizeof(mtus) / sizeof(mtus[0]); mi++) {
+        const size_t mtu = mtus[mi];
+        for (size_t si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
+            const size_t sz = sizes[si];
+            size_t       expected;
+            if (sz < mtu) {
+                expected = 1U;
+            } else {
+                // ceil((sz + 2) / (mtu - 1))
+                expected = (sz + CRC_SIZE_BYTES + (mtu - 1U) - 1U) / (mtu - 1U);
+            }
+            const size_t actual = tx_predict_frame_count(sz, mtu);
+            TEST_ASSERT_EQUAL_size_t(expected, actual);
+        }
+    }
+}
+
+// Pushing with iface_bitmap=0x03 (both interfaces) increments refcount.
+static void test_tx_push_refcount_multi_iface(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+
+    const byte_t               data[]  = { 0x42U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+    tx_transfer_t* const tr = tx_transfer_new(&self, 5000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    // iface_bitmap=0x03 => both interfaces.
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 3U, 0U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
+
+    // The single frame's refcount should be 2 (1 base + 1 for second iface).
+    const tx_frame_t* const frame = tr->cursor[0];
+    TEST_ASSERT_NOT_NULL(frame);
+    TEST_ASSERT_EQUAL_size_t(2U, frame->refcount);
+    TEST_ASSERT_EQUAL_PTR(frame, tr->cursor[1]); // Both cursors point to the same frame.
+
+    // Eject from iface 0. Refcount drops to 1, queue_size stays 1 (refcount > 0).
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_size_t(1U, frame->refcount);
+    TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size); // Frame still alive (iface 1 holds it).
+
+    // Eject from iface 1. Refcount drops to 0, frame is freed.
+    ctx.tx_budget[1] = 1U;
+    tx_eject_pending(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -1051,6 +1773,29 @@ int main(void)
     RUN_TEST(test_0v1_publish_can_id_compliance);
     RUN_TEST(test_0v1_request_can_id_compliance);
     RUN_TEST(test_0v1_respond_can_id_compliance);
+
+    // Group A: tx_spool boundary/CRC tests.
+    RUN_TEST(test_tx_spool_boundary_single_multi_classic);
+    RUN_TEST(test_tx_spool_boundary_single_multi_fd);
+    RUN_TEST(test_tx_spool_crc_split_across_frames);
+    RUN_TEST(test_tx_spool_empty_payload);
+    RUN_TEST(test_tx_spool_scattered_many_fragments);
+    RUN_TEST(test_tx_spool_scattered_with_empty_fragments);
+    RUN_TEST(test_tx_spool_oom_midway);
+    RUN_TEST(test_tx_spool_large_payload_fd);
+
+    // Group B: tx_spool_v0 tests.
+    RUN_TEST(test_tx_spool_v0_single_frame);
+    RUN_TEST(test_tx_spool_v0_boundary);
+    RUN_TEST(test_tx_spool_v0_crc_byte_order);
+    RUN_TEST(test_tx_spool_v0_toggle_alternation);
+
+    // Group C: tx_push/sacrifice/expire tests.
+    RUN_TEST(test_tx_sacrifice_oldest_first);
+    RUN_TEST(test_tx_sacrifice_multiframe_all_frames);
+    RUN_TEST(test_tx_expire_boundary);
+    RUN_TEST(test_tx_predict_frame_count_exhaustive);
+    RUN_TEST(test_tx_push_refcount_multi_iface);
 
     return UNITY_END();
 }
