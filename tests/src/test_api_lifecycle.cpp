@@ -24,7 +24,7 @@ struct tx_record_t
 {
     canard_us_t   deadline;
     uint_least8_t iface_index;
-    bool          fd;
+    bool          fd;  // cppcheck-suppress unusedStructMember
     uint32_t      can_id;
     size_t        can_data_size;
     uint_least8_t tail;
