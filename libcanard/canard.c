@@ -1589,23 +1589,41 @@ static canard_subscription_t* rx_route(const canard_t* const self, const frame_t
 // Builds an acceptance filter that only admits frames that match the subscription.
 static canard_filter_t rx_filter_for_subscription(const canard_t* const self, const canard_subscription_t* const sub)
 {
-    canard_filter_t f = { 0 };
-    (void)self;
-    switch (sub->kind) { // TODO IMPLEMENT
+    CANARD_ASSERT((self != NULL) && (sub != NULL));
+    canard_filter_t f  = { 0 };
+    const uint32_t  id = self->node_id & CANARD_NODE_ID_MAX;
+    switch (sub->kind) {
         case canard_kind_1v1_message:
+            CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX);
+            f.extended_can_id = (sub->port_id << 8U) | (UINT32_C(1) << 7U);
+            f.extended_mask   = 0x03FFFF80U;
             break;
         case canard_kind_1v0_message:
+            CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX_1v0);
+            f.extended_can_id = sub->port_id << 8U;
+            f.extended_mask   = 0x029fff80U;
             break;
         case canard_kind_1v0_response:
+        case canard_kind_1v0_request: {
+            CANARD_ASSERT(sub->port_id <= CANARD_SERVICE_ID_MAX);
+            const uint32_t rnr = (sub->kind == canard_kind_1v0_request) ? (UINT32_C(1) << 24U) : 0U;
+            f.extended_can_id  = (UINT32_C(1) << 25U) | rnr | (sub->port_id << 14U) | (id << 7U);
+            f.extended_mask    = 0x03FFFF80U;
             break;
-        case canard_kind_1v0_request:
-            break;
+        }
         case canard_kind_0v1_message:
+            CANARD_ASSERT(sub->port_id <= 0xFFFFU);
+            f.extended_can_id = (sub->port_id & 0xFFFFU) << 8U;
+            f.extended_mask   = 0x00FFFF80;
             break;
         case canard_kind_0v1_response:
+        case canard_kind_0v1_request: {
+            CANARD_ASSERT(sub->port_id <= 0xFFU);
+            const uint32_t rnr = (sub->kind == canard_kind_0v1_request) ? (UINT32_C(1) << 15U) : 0;
+            f.extended_can_id  = ((sub->port_id & 0xFFU) << 16U) | rnr | (id << 8U) | (UINT32_C(1) << 7U);
+            f.extended_mask    = 0x00FFFF80U;
             break;
-        case canard_kind_0v1_request:
-            break;
+        }
         default:
             CANARD_ASSERT(false);
     }
