@@ -8,7 +8,7 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-static canard_filter_t make_filter(const canard_kind_t kind, const uint32_t port_id, const byte_t node_id)
+static canard_filter_t make_filter(const canard_kind_t kind, const uint16_t port_id, const byte_t node_id)
 {
     canard_t              self;
     canard_subscription_t sub;
@@ -30,10 +30,10 @@ static bool filter_accepts(const canard_filter_t filter, const uint32_t can_id)
 
 static void test_rx_filter_for_subscription_golden_vectors(void)
 {
-    // v1.1 message: subject=0x1ABCD
+    // v1.1 message: subject=0xABCD
     {
-        const canard_filter_t f = make_filter(canard_kind_1v1_message, 0x1ABCDUL, 42U);
-        TEST_ASSERT_EQUAL_HEX32(0x01ABCD80UL, f.extended_can_id);
+        const canard_filter_t f = make_filter(canard_kind_1v1_message, 0xABCDU, 42U);
+        TEST_ASSERT_EQUAL_HEX32(0x00ABCD80UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x03FFFF80UL, f.extended_mask);
     }
 
@@ -85,12 +85,13 @@ static void test_rx_filter_for_subscription_golden_vectors(void)
 
 static void test_rx_filter_for_subscription_v1_1_message_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_1v1_message, 0x18001UL, 55U);
-    TEST_ASSERT_TRUE(filter_accepts(f, 0x018001AAUL));  // same subject, prio=0, src=42
-    TEST_ASSERT_TRUE(filter_accepts(f, 0x1D8001FFUL));  // same subject, prio=7, src=127
-    TEST_ASSERT_FALSE(filter_accepts(f, 0x038001AAUL)); // service bit (25) must be zero
-    TEST_ASSERT_FALSE(filter_accepts(f, 0x0180012AUL)); // message selector bit (7) must be one
-    TEST_ASSERT_FALSE(filter_accepts(f, 0x018002AAUL)); // subject mismatch
+    const canard_filter_t f = make_filter(canard_kind_1v1_message, 0x8001U, 55U);
+    TEST_ASSERT_TRUE(filter_accepts(f, 0x008001AAUL));  // same subject, prio=0, src=42
+    TEST_ASSERT_TRUE(filter_accepts(f, 0x1C8001FFUL));  // same subject, prio=7, src=127
+    TEST_ASSERT_FALSE(filter_accepts(f, 0x028001AAUL)); // service bit (25) must be zero
+    TEST_ASSERT_FALSE(filter_accepts(f, 0x018001AAUL)); // bit 24 must be zero for v1.1
+    TEST_ASSERT_FALSE(filter_accepts(f, 0x0080012AUL)); // message selector bit (7) must be one
+    TEST_ASSERT_FALSE(filter_accepts(f, 0x008002AAUL)); // subject mismatch
 }
 
 static void test_rx_filter_for_subscription_v1_0_message_semantics(void)

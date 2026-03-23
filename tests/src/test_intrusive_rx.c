@@ -67,13 +67,13 @@ static void test_rx_parse_v1_1_message_golden(void)
         TEST_ASSERT_EQUAL_INT(canard_prio_exceptional, v1.priority);
         TEST_ASSERT_EQUAL_UINT8(0, v1.transfer_id);
     }
-    // Max: prio=7, subject=131071 (0x1FFFF), src=127. CAN ID = 0x1DFFFFFF.
+    // Max: prio=7, subject=65535 (0xFFFF), src=127. CAN ID = 0x1CFFFFFF.
     {
         const byte_t         d[] = { 0xFF }; // 0xE0|31 → tid=31
         const canard_bytes_t pl  = { sizeof(d), d };
-        TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x1DFFFFFFUL, pl, &v0, &v1));
+        TEST_ASSERT_EQUAL_UINT8(2, rx_parse(0x1CFFFFFFUL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
-        TEST_ASSERT_EQUAL_UINT32(131071UL, v1.port_id);
+        TEST_ASSERT_EQUAL_UINT32(0xFFFFUL, v1.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v1.dst);
         TEST_ASSERT_EQUAL_HEX8(127, v1.src);
         TEST_ASSERT_EQUAL_INT(canard_prio_optional, v1.priority);
@@ -548,25 +548,25 @@ static void test_rx_parse_v1_1_accepts_bit23(void)
 {
     frame_t v0;
     frame_t v1;
-    // Subject 0x18000: bit 23 of CAN ID is set because (0x18000 << 8) sets bit 23.
-    // CAN ID: (0<<26) | (0x18000<<8) | (1<<7) | 0 = 0x01800080
+    // Subject 0x8000: bit 23 of CAN ID is set because (0x8000 << 8) sets bit 23.
+    // CAN ID: (0<<26) | (0x8000<<8) | (1<<7) | 0 = 0x00800080
     {
         const byte_t         d[] = { 0xE5 }; // v1 single, tid=5
         const canard_bytes_t pl  = { sizeof(d), d };
-        const byte_t         ret = rx_parse(0x01800080UL, pl, &v0, &v1);
+        const byte_t         ret = rx_parse(0x00800080UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret); // accepted despite bit 23
         TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
-        TEST_ASSERT_EQUAL_UINT32(0x18000UL, v1.port_id);
+        TEST_ASSERT_EQUAL_UINT32(0x8000UL, v1.port_id);
     }
-    // Max subject 0x1FFFF also sets bit 23.
-    // CAN ID: (0<<26) | (0x1FFFF<<8) | (1<<7) | 0 = 0x01FFFF80
+    // Max subject 0xFFFF also sets bit 23.
+    // CAN ID: (0<<26) | (0xFFFF<<8) | (1<<7) | 0 = 0x00FFFF80
     {
         const byte_t         d[] = { 0xE0 };
         const canard_bytes_t pl  = { sizeof(d), d };
-        const byte_t         ret = rx_parse(0x01FFFF80UL, pl, &v0, &v1);
+        const byte_t         ret = rx_parse(0x00FFFF80UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret);
         TEST_ASSERT_EQUAL_INT(canard_kind_1v1_message, v1.kind);
-        TEST_ASSERT_EQUAL_UINT32(0x1FFFFUL, v1.port_id);
+        TEST_ASSERT_EQUAL_UINT32(0xFFFFUL, v1.port_id);
     }
 }
 

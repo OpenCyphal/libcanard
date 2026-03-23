@@ -216,12 +216,27 @@ static void test_canard_0v1_publish_requires_node_id()
       canard_0v1_publish(&self, 0, 1, canard_prio_nominal, 1, 0xFFFF, 0, payload, CANARD_USER_CONTEXT_NULL));
 }
 
-static void test_canard_publish_subject_id_out_of_range()
+static void test_canard_publish_max_subject_id_encoding()
 {
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    canard_t                   self    = {};
-    TEST_ASSERT_FALSE(canard_publish(
-      &self, 0, 1, canard_prio_nominal, CANARD_SUBJECT_ID_MAX + 1U, 0, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(
+      &self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX, 0U, payload, CANARD_USER_CONTEXT_NULL));
+
+    canard_poll(&self, 1U);
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    const uint32_t can_id = cap.records[0].can_id;
+    TEST_ASSERT_EQUAL_UINT8((uint8_t)canard_prio_nominal, (uint8_t)((can_id >> 26U) & 7U));
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)((can_id >> 25U) & 1U)); // service=0
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)((can_id >> 24U) & 1U)); // reserved=0
+    TEST_ASSERT_EQUAL_UINT32(CANARD_SUBJECT_ID_MAX, (can_id >> 8U) & 0xFFFFU);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)((can_id >> 7U) & 1U)); // v1.1 message marker
+    TEST_ASSERT_EQUAL_UINT8(42U, (uint8_t)(can_id & CANARD_NODE_ID_MAX));
+
+    canard_destroy(&self);
 }
 
 // Poll only drives interfaces marked writable in the provided bitmap.
@@ -434,7 +449,7 @@ int main()
     RUN_TEST(test_canard_publish_validation);
     RUN_TEST(test_canard_publish_oom);
     RUN_TEST(test_canard_0v1_publish_requires_node_id);
-    RUN_TEST(test_canard_publish_subject_id_out_of_range);
+    RUN_TEST(test_canard_publish_max_subject_id_encoding);
     RUN_TEST(test_canard_poll_ready_bitmap);
     RUN_TEST(test_canard_poll_backpressure);
     RUN_TEST(test_canard_poll_expiration);

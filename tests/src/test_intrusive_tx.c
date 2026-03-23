@@ -498,8 +498,6 @@ static void test_canard_publish_validation(void)
     const canard_bytes_chain_t empty_payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
     TEST_ASSERT_FALSE(
       canard_publish(&self, 1000, 0U, canard_prio_nominal, 10U, 0U, empty_payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_FALSE(canard_publish(
-      &self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX + 1U, 0U, empty_payload, CANARD_USER_CONTEXT_NULL));
 }
 
 // Validate publish CAN-ID composition.
@@ -521,6 +519,31 @@ static void test_canard_publish_basic(void)
     TEST_ASSERT_EQUAL_UINT8(17U, transfer_id_from_cursor(tr, 0U));
     TEST_ASSERT_NOT_EQUAL(0U, can_id & (1UL << 7U));
     TEST_ASSERT_EQUAL_UINT32(1234U, (can_id >> 8U) & CANARD_SUBJECT_ID_MAX);
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validate publish accepts the maximal v1.1 subject-ID and composes CAN ID as specified.
+static void test_canard_publish_max_subject_encoding(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    TEST_ASSERT_TRUE(canard_publish(
+      &self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX, 3U, payload, CANARD_USER_CONTEXT_NULL));
+
+    const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
+    TEST_ASSERT_NOT_NULL(tr);
+    const uint32_t can_id = can_id_from_transfer(tr);
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)canard_prio_nominal, (can_id >> 26U) & 7U);
+    TEST_ASSERT_EQUAL_UINT32(0U, (can_id >> 25U) & 1U); // service=0
+    TEST_ASSERT_EQUAL_UINT32(0U, (can_id >> 24U) & 1U); // reserved=0
+    TEST_ASSERT_EQUAL_UINT32((uint32_t)CANARD_SUBJECT_ID_MAX, (can_id >> 8U) & 0xFFFFU);
+    TEST_ASSERT_EQUAL_UINT32(1U, (can_id >> 7U) & 1U); // v1.1 message marker
 
     free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
@@ -1077,6 +1100,7 @@ int main(void)
     // API-level TX paths.
     RUN_TEST(test_canard_publish_validation);
     RUN_TEST(test_canard_publish_basic);
+    RUN_TEST(test_canard_publish_max_subject_encoding);
     RUN_TEST(test_canard_1v0_publish_basic);
     RUN_TEST(test_canard_0v1_publish_basic);
     RUN_TEST(test_canard_1v0_service_basic);

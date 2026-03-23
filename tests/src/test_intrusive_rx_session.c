@@ -74,7 +74,7 @@ static void on_message_capture(canard_subscription_t* const self,
 
 static void fixture_init(session_fixture_t* const fx,
                          const canard_kind_t      kind,
-                         const uint32_t           port_id,
+                         const uint16_t           port_id,
                          const size_t             extent,
                          const canard_us_t        tid_timeout,
                          const uint16_t           crc_seed)
@@ -98,7 +98,7 @@ static void fixture_init(session_fixture_t* const fx,
 
 static void fixture_init_v1(session_fixture_t* const fx,
                             const canard_kind_t      kind,
-                            const uint32_t           port_id,
+                            const uint16_t           port_id,
                             const size_t             extent)
 {
     fixture_init(fx, kind, port_id, extent, 2 * MEGA, CRC_INITIAL);
@@ -115,7 +115,7 @@ static bool feed(session_fixture_t* const fx, const canard_us_t ts, const frame_
 /// Construct a frame_t for a single-frame transfer (start=true, end=true).
 static frame_t make_single_frame(const canard_prio_t priority,
                                  const canard_kind_t kind,
-                                 const uint32_t      port_id,
+                                 const uint16_t      port_id,
                                  const byte_t        dst,
                                  const byte_t        src,
                                  const byte_t        transfer_id,
@@ -140,7 +140,7 @@ static frame_t make_single_frame(const canard_prio_t priority,
 /// Construct a frame_t for a multi-frame start frame.
 static frame_t make_start_frame(const canard_prio_t priority,
                                 const canard_kind_t kind,
-                                const uint32_t      port_id,
+                                const uint16_t      port_id,
                                 const byte_t        dst,
                                 const byte_t        src,
                                 const byte_t        transfer_id,
@@ -165,7 +165,7 @@ static frame_t make_start_frame(const canard_prio_t priority,
 /// Construct a continuation frame.
 static frame_t make_cont_frame(const canard_prio_t priority,
                                const canard_kind_t kind,
-                               const uint32_t      port_id,
+                               const uint16_t      port_id,
                                const byte_t        dst,
                                const byte_t        src,
                                const byte_t        transfer_id,

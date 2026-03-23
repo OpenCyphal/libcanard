@@ -53,8 +53,8 @@ extern "C"
 #define CANARD_IFACE_BITMAP_ALL ((1U << CANARD_IFACE_COUNT) - 1U)
 
 /// Parameter ranges are inclusive; the lower bound is zero for all.
-#define CANARD_SUBJECT_ID_MAX     0x1FFFFUL
-#define CANARD_SUBJECT_ID_MAX_1v0 8191U // Cyphal v1.0 supports only 13-bit subject-IDs.
+#define CANARD_SUBJECT_ID_MAX     0xFFFFU // Applies to Cyphal v1.1 and UAVCAN v0/DroneCAN message data type IDs.
+#define CANARD_SUBJECT_ID_MAX_1v0 8191U   // Cyphal v1.0 supports only 13-bit subject-IDs.
 #define CANARD_SERVICE_ID_MAX     511U
 #define CANARD_NODE_ID_MAX        127U
 #define CANARD_NODE_ID_CAPACITY   (CANARD_NODE_ID_MAX + 1U)
@@ -251,8 +251,8 @@ struct canard_subscription_t
     canard_tree_t index_port_id; ///< Must be the first member.
 
     canard_us_t   transfer_id_timeout;
-    uint32_t      port_id;  ///< Represents subjects, services, and legacy message- and service type IDs.
     size_t        extent;   ///< Must not be altered after initialization! In v0 includes the CRC.
+    uint16_t      port_id;  ///< Represents subjects, services, and legacy message- and service type IDs.
     uint16_t      crc_seed; ///< For v0 this is set at subscription time, for v1 this is always 0xFFFF.
     canard_kind_t kind;
 
@@ -440,7 +440,7 @@ bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         iface_bitmap,
                     const canard_prio_t         priority,
-                    const uint32_t              subject_id,
+                    const uint16_t              subject_id,
                     const uint_least8_t         transfer_id,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context);
@@ -454,7 +454,7 @@ bool canard_unicast(canard_t* const             self,
 
 bool canard_subscribe(canard_t* const                           self,
                       canard_subscription_t* const              subscription,
-                      const uint32_t                            subject_id,
+                      const uint16_t                            subject_id,
                       const size_t                              extent,
                       const canard_us_t                         transfer_id_timeout,
                       const canard_subscription_vtable_t* const vtable);
@@ -493,7 +493,7 @@ bool canard_1v0_respond(canard_t* const             self,
 
 bool canard_1v0_subscribe(canard_t* const                           self,
                           canard_subscription_t* const              subscription,
-                          const uint16_t                            subject_id, // Narrower than in v1.1
+                          const uint16_t                            subject_id,
                           const size_t                              extent,
                           const canard_us_t                         transfer_id_timeout,
                           const canard_subscription_vtable_t* const vtable);

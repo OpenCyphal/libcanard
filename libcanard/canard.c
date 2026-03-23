@@ -915,18 +915,32 @@ bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         iface_bitmap,
                     const canard_prio_t         priority,
-                    const uint32_t              subject_id,
+                    const uint16_t              subject_id,
                     const uint_least8_t         transfer_id,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context)
 {
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
-      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
-      (subject_id <= CANARD_SUBJECT_ID_MAX);
+      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap));
     if (ok) {
-        const uint32_t       can_id = (((uint32_t)priority) << PRIO_SHIFT) | (subject_id << 8U) | (UINT32_C(1) << 7U);
-        tx_transfer_t* const tr     = tx_transfer_new(self, deadline, can_id, self->tx.fd, context);
+        // v1.1 message format extends the subject-ID to 16 bits, using bit 7 as 1 to discriminate from v1.0,
+        // and designating the anonymous bit as reserved=0. ID bit layout:
+        //
+        //  28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
+        // |prio[3] |sv| 0|                  subject_id[16]               | 1|  source_node_id[7] |
+        //
+        // In DSDL notation:
+        //
+        //  uint3  priority
+        //  bool   service_not_message # =0
+        //  bool   reserved_24         # =0, was anonymous
+        //  uint16 subject_id
+        //  bool   reserved_7          # =1, version discrimination
+        //  uint7  source_node_id
+        const uint32_t can_id =
+          (((uint32_t)priority) << PRIO_SHIFT) | ((uint32_t)subject_id << 8U) | (UINT32_C(1) << 7U);
+        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, context);
         ok = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, transfer_id, payload, CRC_INITIAL);
     }
     return ok;
@@ -1078,7 +1092,7 @@ typedef struct
     canard_prio_t priority;
     canard_kind_t kind;
 
-    uint32_t port_id; // in v0 this stores the data type ID.
+    uint16_t port_id; // in v0 this stores the data type ID.
 
     byte_t dst;
     byte_t src;
@@ -1153,8 +1167,10 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v1->dst       = CANARD_NODE_ID_ANONYMOUS;
             const bool is_1v1 = (can_id & (UINT32_C(1) << 7U)) != 0U;
             if (is_1v1) {
-                out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX;
-                out_v1->kind    = canard_kind_1v1_message;
+                const bool bit_24 = (can_id & (UINT32_C(1) << 24U)) != 0U;
+                is_v1             = is_v1 && !bit_24; // was anonymous
+                out_v1->port_id   = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX;
+                out_v1->kind      = canard_kind_1v1_message;
             } else {
                 is_v1           = is_v1 && !bit_23;
                 out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX_1v0;
@@ -1572,7 +1588,7 @@ static void rx_session_update(canard_subscription_t* const sub,
 
 static int32_t rx_subscription_cavl_compare(const void* const user, const canard_tree_t* const node)
 {
-    return ((int32_t)(*(const uint32_t*)user)) - ((int32_t)((const canard_subscription_t*)(const void*)node)->port_id);
+    return ((int32_t)(*(const uint16_t*)user)) - ((int32_t)((const canard_subscription_t*)(const void*)node)->port_id);
 }
 
 // Locates the appropriate subscription if the destination is matching and there is a subscription.
@@ -1594,26 +1610,24 @@ static canard_filter_t rx_filter_for_subscription(const canard_t* const self, co
     const uint32_t  id = self->node_id & CANARD_NODE_ID_MAX;
     switch (sub->kind) {
         case canard_kind_1v1_message:
-            CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX);
-            f.extended_can_id = (sub->port_id << 8U) | (UINT32_C(1) << 7U);
+            f.extended_can_id = ((uint32_t)sub->port_id << 8U) | (UINT32_C(1) << 7U);
             f.extended_mask   = 0x03FFFF80U;
             break;
         case canard_kind_1v0_message:
             CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX_1v0);
-            f.extended_can_id = sub->port_id << 8U;
+            f.extended_can_id = (uint32_t)sub->port_id << 8U;
             f.extended_mask   = 0x029fff80U;
             break;
         case canard_kind_1v0_response:
         case canard_kind_1v0_request: {
             CANARD_ASSERT(sub->port_id <= CANARD_SERVICE_ID_MAX);
             const uint32_t rnr = (sub->kind == canard_kind_1v0_request) ? (UINT32_C(1) << 24U) : 0U;
-            f.extended_can_id  = (UINT32_C(1) << 25U) | rnr | (sub->port_id << 14U) | (id << 7U);
+            f.extended_can_id  = (UINT32_C(1) << 25U) | rnr | ((uint32_t)sub->port_id << 14U) | (id << 7U);
             f.extended_mask    = 0x03FFFF80U;
             break;
         }
         case canard_kind_0v1_message:
-            CANARD_ASSERT(sub->port_id <= 0xFFFFU);
-            f.extended_can_id = (sub->port_id & 0xFFFFU) << 8U;
+            f.extended_can_id = (uint32_t)sub->port_id << 8U;
             f.extended_mask   = 0x00FFFF80;
             break;
         case canard_kind_0v1_response:
