@@ -468,6 +468,157 @@ static void test_refcount_inc(void)
     TEST_ASSERT_EQUAL_size_t(0, alloc.allocated_fragments);
 }
 
+// =============================================  BITMAP TESTS  =============================================
+
+static void test_bitmap_boundaries(void)
+{
+    // Test the limb boundary bits: 0, 63 (MSB of limb 0), 64 (LSB of limb 1), 127 (MSB of limb 1).
+    const size_t positions[] = { 0, 63, 64, 127 };
+    for (size_t t = 0; t < sizeof(positions) / sizeof(positions[0]); t++) {
+        uint64_t b[2] = { 0, 0 };
+        bitmap_set(b, positions[t]);
+        TEST_ASSERT_TRUE(bitmap_test(b, positions[t]));
+        // Verify neighbors are unaffected.
+        for (size_t i = 0; i < 128; i++) {
+            if (i != positions[t]) {
+                TEST_ASSERT_FALSE(bitmap_test(b, i));
+            }
+        }
+    }
+}
+
+static void test_bitmap_all_bits_round_trip(void)
+{
+    // For each bit position 0..127: zero bitmap, set one bit, verify only that bit reads true.
+    for (size_t i = 0; i < 128; i++) {
+        uint64_t b[2] = { 0, 0 };
+        bitmap_set(b, i);
+        for (size_t j = 0; j < 128; j++) {
+            if (j == i) {
+                TEST_ASSERT_TRUE(bitmap_test(b, j));
+            } else {
+                TEST_ASSERT_FALSE(bitmap_test(b, j));
+            }
+        }
+    }
+}
+
+static void test_bitmap_set_idempotent(void)
+{
+    uint64_t b[2] = { 0, 0 };
+    bitmap_set(b, 42);
+    TEST_ASSERT_EQUAL_UINT8(1, popcount(b[0]) + popcount(b[1]));
+    bitmap_set(b, 42); // no-op
+    TEST_ASSERT_EQUAL_UINT8(1, popcount(b[0]) + popcount(b[1]));
+    TEST_ASSERT_TRUE(bitmap_test(b, 42));
+}
+
+static void test_bitmap_accumulation(void)
+{
+    uint64_t     b[2]        = { 0, 0 };
+    const size_t positions[] = { 0, 1, 42, 63, 64, 127 };
+    const size_t n_positions = sizeof(positions) / sizeof(positions[0]);
+    for (size_t k = 0; k < n_positions; k++) {
+        bitmap_set(b, positions[k]);
+        // After setting k+1 bits, verify all expected bits are set.
+        for (size_t c = 0; c <= k; c++) {
+            TEST_ASSERT_TRUE(bitmap_test(b, positions[c]));
+        }
+        TEST_ASSERT_EQUAL_UINT8((byte_t)(k + 1), popcount(b[0]) + popcount(b[1]));
+    }
+}
+
+// =============================================  RANDOM TESTS  =============================================
+
+static void test_random_bound_zero(void)
+{
+    canard_t self              = { 0 };
+    self.prng_state            = 12345;
+    const uint64_t prng_before = self.prng_state;
+    TEST_ASSERT_EQUAL_UINT64(0, random(&self, 0));
+    // prng_state must be unchanged because splitmix64 is NOT called when bound==0.
+    TEST_ASSERT_EQUAL_UINT64(prng_before, self.prng_state);
+}
+
+static void test_random_bound_one(void)
+{
+    // random(self, 1) must always return 0 since splitmix64(...) % 1 == 0.
+    const uint64_t seeds[] = { 0, 1, 42, UINT64_MAX, 0xDEADBEEFULL };
+    for (size_t i = 0; i < sizeof(seeds) / sizeof(seeds[0]); i++) {
+        canard_t self   = { 0 };
+        self.prng_state = seeds[i];
+        TEST_ASSERT_EQUAL_UINT64(0, random(&self, 1));
+    }
+}
+
+static void test_random_range_exhaustive(void)
+{
+    // For several bounds, verify all results are in [0, bound) and all values appear at least once.
+    const uint64_t bounds[] = { 2, 3, 127, 128 };
+    for (size_t bi = 0; bi < sizeof(bounds) / sizeof(bounds[0]); bi++) {
+        const uint64_t bound = bounds[bi];
+        bool*          seen  = (bool*)calloc((size_t)bound, sizeof(bool));
+        TEST_ASSERT_NOT_NULL(seen);
+        canard_t self   = { 0 };
+        self.prng_state = 0;
+        for (int i = 0; i < 2000; i++) {
+            const uint64_t r = random(&self, bound);
+            TEST_ASSERT_TRUE(r < bound);
+            seen[r] = true;
+        }
+        for (uint64_t v = 0; v < bound; v++) {
+            TEST_ASSERT_TRUE(seen[v]);
+        }
+        free(seen);
+    }
+}
+
+// =============================================  CHANCE TESTS  =============================================
+
+static void test_chance_deterministic_edges(void)
+{
+    // chance(self, 0): random(self, 0) returns 0, so 0==0 is true.
+    for (int i = 0; i < 10; i++) {
+        canard_t self   = { 0 };
+        self.prng_state = (uint64_t)i;
+        TEST_ASSERT_TRUE(chance(&self, 0));
+    }
+    // chance(self, 1): random(self, 1) returns 0, so 0==0 is true.
+    for (int i = 0; i < 10; i++) {
+        canard_t self   = { 0 };
+        self.prng_state = (uint64_t)i;
+        TEST_ASSERT_TRUE(chance(&self, 1));
+    }
+}
+
+static void test_chance_statistical(void)
+{
+    // p_reciprocal=2: expect ~50% true.
+    {
+        canard_t self   = { 0 };
+        self.prng_state = 0;
+        int count       = 0;
+        for (int i = 0; i < 10000; i++) {
+            if (chance(&self, 2)) {
+                count++;
+            }
+        }
+        TEST_ASSERT_TRUE(count > 4500 && count < 5500);
+    }
+    // p_reciprocal=10: expect ~10% true.
+    {
+        canard_t self   = { 0 };
+        self.prng_state = 0;
+        int count       = 0;
+        for (int i = 0; i < 10000; i++) {
+            if (chance(&self, 10)) {
+                count++;
+            }
+        }
+        TEST_ASSERT_TRUE(count > 500 && count < 1500);
+    }
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -485,5 +636,14 @@ int main(void)
     RUN_TEST(test_list_enlist_tail);
     RUN_TEST(test_list_enlist_after_before);
     RUN_TEST(test_refcount_inc);
+    RUN_TEST(test_bitmap_boundaries);
+    RUN_TEST(test_bitmap_all_bits_round_trip);
+    RUN_TEST(test_bitmap_set_idempotent);
+    RUN_TEST(test_bitmap_accumulation);
+    RUN_TEST(test_random_bound_zero);
+    RUN_TEST(test_random_bound_one);
+    RUN_TEST(test_random_range_exhaustive);
+    RUN_TEST(test_chance_deterministic_edges);
+    RUN_TEST(test_chance_statistical);
     return UNITY_END();
 }
