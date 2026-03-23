@@ -10,6 +10,8 @@
 /// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
 /// bit, little- and big-endian, RTOS-based or baremetal, etc., as long as there is a standards-compliant C compiler.
 ///
+/// The library offers a non-blocking callback-based API.
+///
 /// The library is intended to be integrated into the end application by simply copying its source files into the
 /// source tree of the project; it does not require any special compilation options and should work out of the box.
 /// There are build-time configuration parameters defined near the top of canard.c, but they are safe to ignore.
@@ -364,7 +366,7 @@ struct canard_t
     canard_mem_set_t mem;
     uint64_t         prng_state;
 
-    /// Unicast subscription.
+    /// Unicast subscription used to process messages received with the service-ID set to CANARD_SERVICE_ID_UNICAST.
     canard_subscription_t unicast_sub;
 
     /// Unicast transfer-ID tracking for transmission per remote node.
@@ -434,8 +436,11 @@ bool canard_ingest_frame(canard_t* const      self,
 void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 
+/// Enqueue a message transfer on the specified interfaces.
 /// Message ordering observed on the bus is guaranteed per subject as long as the priority of later messages is
 /// not higher (numerically not lower) than that of earlier messages.
+/// The context is passed into the tx() vtable function.
+/// Returns zero on success, false on OOM (error counters updated) or if any of the arguments are invalid.
 bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         iface_bitmap,
@@ -445,6 +450,8 @@ bool canard_publish(canard_t* const             self,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context);
 
+/// Enqueue a unicast message transfer to the specified destination node.
+/// See publish function for details.
 bool canard_unicast(canard_t* const             self,
                     const canard_us_t           deadline,
                     const uint_least8_t         destination_node_id,
@@ -452,6 +459,9 @@ bool canard_unicast(canard_t* const             self,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context);
 
+/// Register a new subscription on a v1.1 subject. The subscription instance must not be moved while in use.
+/// The extent specifies the maximum message size that can be received from the subject; longer messages will be
+/// truncated per the implicit truncation rule (see the Spec).
 bool canard_subscribe(canard_t* const                           self,
                       canard_subscription_t* const              subscription,
                       const uint16_t                            subject_id,
@@ -464,6 +474,7 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 
 // -----------------------------------------   Cyphal v1.0 compatibility API   -----------------------------------------
 
+/// Cyphal v1.0 limits the subject-ID to [0, CANARD_SUBJECT_ID_MAX_1v0].
 bool canard_1v0_publish(canard_t* const             self,
                         const canard_us_t           deadline,
                         const uint_least8_t         iface_bitmap,
@@ -540,7 +551,11 @@ bool canard_1v0_subscribe_response(canard_t* const                           sel
 /// as the above emission constraints are satisfied.
 
 /// The legacy UAVCAN v0 protocol has 5-bit priority, which is obtained from 3-bit priority by left-shifting.
+///
 /// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
+///
+/// To obtain the CRC seed, use canard_0v1_crc_seed_from_data_type_signature(); if the payload does not exceed 7 bytes,
+/// the CRC seed can be arbitrary since it is not needed for single-frame transfers.
 bool canard_0v1_publish(canard_t* const             self,
                         const canard_us_t           deadline,
                         const uint_least8_t         iface_bitmap,
