@@ -117,10 +117,9 @@ static bool tx_test_tx(canard_t* const             self,
 }
 
 static const canard_vtable_t tx_test_vtable = {
-    .now        = tx_test_now,
-    .on_unicast = NULL,
-    .tx         = tx_test_tx,
-    .filter     = NULL,
+    .now    = tx_test_now,
+    .tx     = tx_test_tx,
+    .filter = NULL,
 };
 
 // Build an instance suitable for TX tests: vtable + allocators set up.

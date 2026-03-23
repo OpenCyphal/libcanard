@@ -68,9 +68,6 @@ extern "C"
 /// Cyphal v1.1 does not support anonymous messages so this value is never used there.
 #define CANARD_NODE_ID_ANONYMOUS 0xFFU
 
-/// Cyphal/CAN v1.1 uses a dedicated service-ID for unicast messages with the request-not-response bit set.
-#define CANARD_SERVICE_ID_UNICAST 511U
-
 /// This is the recommended transfer-ID timeout value given in the Cyphal Specification. The application may choose
 /// different values per subscription (i.e., per data specifier) depending on its timing requirements.
 /// Within this timeout, the library will refuse to accept a transfer with the same transfer-ID as the last one
@@ -270,15 +267,6 @@ typedef struct canard_vtable_t
     /// The current monotonic time in microseconds. Must be a non-negative non-decreasing value.
     canard_us_t (*now)(const canard_t*);
 
-    /// A new unicast message is received.
-    /// The handler takes ownership of the payload; it must free it after use using the corresponding memory resource.
-    void (*on_unicast)(canard_t*,
-                       canard_us_t      timestamp,
-                       canard_prio_t    priority,
-                       uint_least8_t    source_node_id,
-                       uint_least8_t    transfer_id,
-                       canard_payload_t payload);
-
     /// Submit one CAN frame for transmission via the specified interface.
     /// If the data is empty (size==0), the data pointer may be NULL.
     /// Returns true if the frame was accepted for transmission, false if there is no free mailbox (try again later).
@@ -366,12 +354,6 @@ struct canard_t
     canard_mem_set_t mem;
     uint64_t         prng_state;
 
-    /// Unicast subscription used to process messages received with the service-ID set to CANARD_SERVICE_ID_UNICAST.
-    canard_subscription_t unicast_sub;
-
-    /// Unicast transfer-ID tracking for transmission per remote node.
-    uint_least8_t unicast_transfer_id[CANARD_NODE_ID_CAPACITY];
-
     const canard_vtable_t* vtable;
 
     void* user_context;
@@ -449,20 +431,30 @@ bool canard_publish(canard_t* const             self,
                     const uint_least8_t         iface_bitmap,
                     const canard_prio_t         priority,
                     const uint16_t              subject_id,
+                    const bool                  rev_1v0, ///< If set, subject-ID must be in [0,8192).
                     const uint_least8_t         transfer_id,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context);
 
-/// Enqueue a unicast message transfer to the specified destination node.
-/// See publish function for details.
-bool canard_unicast(canard_t* const             self,
+bool canard_request(canard_t* const             self,
                     const canard_us_t           deadline,
-                    const uint_least8_t         destination_node_id,
                     const canard_prio_t         priority,
+                    const uint16_t              service_id,
+                    const uint_least8_t         server_node_id,
+                    const uint_least8_t         transfer_id,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context);
 
-/// Register a new subscription on a v1.1 subject. The subscription instance must not be moved while in use.
+bool canard_respond(canard_t* const             self,
+                    const canard_us_t           deadline,
+                    const canard_prio_t         priority,
+                    const uint16_t              service_id,
+                    const uint_least8_t         client_node_id,
+                    const uint_least8_t         transfer_id,
+                    const canard_bytes_chain_t  payload,
+                    const canard_user_context_t context);
+
+/// Register a new subscription on a v1.1 or v1.0 subject. The subscription instance must not be moved while in use.
 /// The extent specifies the maximum message size that can be received from the subject; longer messages will be
 /// truncated per the implicit truncation rule (see the Spec).
 /// There may be at most one subscription per subject-ID.
@@ -471,62 +463,29 @@ bool canard_unicast(canard_t* const             self,
 bool canard_subscribe(canard_t* const                           self,
                       canard_subscription_t* const              subscription,
                       const uint16_t                            subject_id,
+                      const bool                                rev_1v0, ///< If set, subject-ID must be in [0,8192).
                       const size_t                              extent,
                       const canard_us_t                         transfer_id_timeout,
                       const canard_subscription_vtable_t* const vtable);
 
-/// This can be used to undo all kinds of subscriptions, incl. all v1.0 ones.
+/// Unicast transfers in Cyphal/CAN v1.1 are supposed to be modeled as requests to service-ID 511, with a 128-element
+/// array of transfer-ID counters, one per remote. Some large nonzero transfer-ID timeout is required to satisfy the
+/// deduplication requirement. This is outside of the scope of this library so it's not implemented here.
+bool canard_subscribe_request(canard_t* const                           self,
+                              canard_subscription_t* const              subscription,
+                              const uint16_t                            service_id,
+                              const size_t                              extent,
+                              const canard_us_t                         transfer_id_timeout,
+                              const canard_subscription_vtable_t* const vtable);
+
+bool canard_subscribe_response(canard_t* const                           self,
+                               canard_subscription_t* const              subscription,
+                               const uint16_t                            service_id,
+                               const size_t                              extent,
+                               const canard_subscription_vtable_t* const vtable);
+
+/// This can be used to undo all kinds of subscriptions, incl. v0.
 void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subscription);
-
-// -----------------------------------------   Cyphal v1.0 compatibility API   -----------------------------------------
-
-/// Cyphal v1.0 limits the subject-ID to [0, CANARD_SUBJECT_ID_MAX_1v0].
-bool canard_1v0_publish(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const uint_least8_t         iface_bitmap,
-                        const canard_prio_t         priority,
-                        const uint16_t              subject_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context);
-
-bool canard_1v0_request(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const canard_prio_t         priority,
-                        const uint16_t              service_id,
-                        const uint_least8_t         server_node_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context);
-
-bool canard_1v0_respond(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const canard_prio_t         priority,
-                        const uint16_t              service_id,
-                        const uint_least8_t         client_node_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context);
-
-bool canard_1v0_subscribe(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            subject_id,
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable);
-
-bool canard_1v0_subscribe_request(canard_t* const                           self,
-                                  canard_subscription_t* const              subscription,
-                                  const uint16_t                            service_id,
-                                  const size_t                              extent,
-                                  const canard_us_t                         transfer_id_timeout,
-                                  const canard_subscription_vtable_t* const vtable);
-
-bool canard_1v0_subscribe_response(canard_t* const                           self,
-                                   canard_subscription_t* const              subscription,
-                                   const uint16_t                            service_id,
-                                   const size_t                              extent,
-                                   const canard_subscription_vtable_t* const vtable);
 
 // ---------------------------------   UAVCAN v0 & DroneCAN legacy compatibility API   ---------------------------------
 
