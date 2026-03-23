@@ -9,6 +9,8 @@
 typedef struct
 {
     canard_us_t now;
+    byte_t      tx_budget[CANARD_IFACE_COUNT];
+    size_t      tx_count;
 } test_context_t;
 
 // Monotonic time callback.
@@ -18,8 +20,34 @@ static canard_us_t mock_now(const canard_t* const self)
     return (ctx != NULL) ? ctx->now : 0;
 }
 
+// Test TX callback with per-interface frame budgets.
+static bool mock_tx(canard_t* const             self,
+                    const canard_user_context_t user_context,
+                    const canard_us_t           deadline,
+                    const uint_least8_t         iface_index,
+                    const bool                  fd,
+                    const uint32_t              extended_can_id,
+                    const canard_bytes_t        can_data)
+{
+    (void)user_context;
+    (void)deadline;
+    (void)fd;
+    (void)extended_can_id;
+    (void)can_data;
+    test_context_t* const ctx = (test_context_t*)self->user_context;
+    if ((ctx == NULL) || (iface_index >= CANARD_IFACE_COUNT)) {
+        return false;
+    }
+    ctx->tx_count++;
+    if (ctx->tx_budget[iface_index] == 0U) {
+        return false;
+    }
+    ctx->tx_budget[iface_index]--;
+    return true;
+}
+
 // Minimal vtable used by tests.
-static const canard_vtable_t test_vtable = { .now = mock_now, .on_unicast = NULL, .tx = NULL, .filter = NULL };
+static const canard_vtable_t test_vtable = { .now = mock_now, .on_unicast = NULL, .tx = mock_tx, .filter = NULL };
 
 // Build a minimal instance with instrumented allocators.
 static void init_canard(canard_t* const                 self,
@@ -60,7 +88,35 @@ static size_t count_frames(const tx_frame_t* head)
 }
 
 // Reconstructs the CAN-ID template from an enqueued transfer.
-static uint32_t can_id_from_transfer(const tx_transfer_t* const tr) { return ((uint32_t)tr->can_id_msb) << 7U; }
+static uint32_t can_id_from_transfer(const tx_transfer_t* const tr)
+{
+    // Clangd/Clang-Tidy bug: bitfield integer promotion rules are modeled incorrectly -- the cast is not redundant.
+    return ((uint32_t)tr->can_id_msb << 7U); // NOLINT(*-readability-casting)
+}
+
+// Returns the transfer-ID from the tail byte of the current frame on the given interface.
+static byte_t transfer_id_from_cursor(const tx_transfer_t* const tr, const uint_least8_t iface_index)
+{
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(iface_index < CANARD_IFACE_COUNT);
+    TEST_ASSERT_NOT_NULL(tr->cursor[iface_index]);
+    const tx_frame_t* const frame = tr->cursor[iface_index];
+    const size_t            size  = canard_dlc_to_len[frame->dlc];
+    TEST_ASSERT_TRUE(size > 0U);
+    return frame->data[size - 1U] & CANARD_TRANSFER_ID_MAX;
+}
+
+// Counts enqueued transfers.
+static size_t count_enqueued_transfers(const canard_t* const self)
+{
+    size_t               count = 0;
+    const tx_transfer_t* tr    = LIST_HEAD(self->tx.agewise, tx_transfer_t, list_agewise);
+    while (tr != NULL) {
+        count++;
+        tr = LIST_NEXT(tr, tx_transfer_t, list_agewise);
+    }
+    return count;
+}
 
 // Validate single-frame spooling.
 static void test_tx_spool_single_frame(void)
@@ -125,9 +181,9 @@ static void test_tx_push_basic(void)
     const byte_t               data[]  = { 0xAAU };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
     tx_transfer_t* const       tr =
-      tx_transfer_new(&self, 1000, 5U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
     TEST_ASSERT_NOT_NULL(tr);
-    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, payload, CRC_INITIAL));
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 5U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
     TEST_ASSERT_NOT_NULL(LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise));
     TEST_ASSERT_TRUE(cavl2_is_inserted(self.tx.pending[0], &tr->index_pending[0]));
@@ -146,9 +202,9 @@ static void test_tx_push_capacity_reject(void)
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
     tx_transfer_t* const       tr =
-      tx_transfer_new(&self, 1000, 1U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
     TEST_ASSERT_NOT_NULL(tr);
-    TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, payload, CRC_INITIAL));
+    TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, 1U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
@@ -167,10 +223,267 @@ static void test_tx_push_oom(void)
     const byte_t               data[]  = { 1U, 2U, 3U, 4U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
     tx_transfer_t* const       tr =
-      tx_transfer_new(&self, 1000, 3U, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
     TEST_ASSERT_NOT_NULL(tr);
-    TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, payload, CRC_INITIAL));
+    TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, 3U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.oom);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// first_frame_departed flips only after a successful first-frame ejection.
+static void test_tx_first_frame_departure_flag(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    const uint32_t             can_id  = (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (123U << 8U) | (1UL << 7U);
+    tx_transfer_t* const       tr      = tx_transfer_new(&self, 1000, can_id, false, CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 21U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->multi_frame);
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->first_frame_departed);
+
+    tx_eject_pending(&self, 0U); // Backpressure: budget is zero by default.
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->first_frame_departed);
+    TEST_ASSERT_EQUAL_size_t(1U, ctx.tx_count);
+
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->first_frame_departed);
+    TEST_ASSERT_EQUAL_size_t(3U, ctx.tx_count); // one accepted frame + one rejected retry
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Purge keeps unstarted multi-frame transfers.
+static void test_tx_purge_continuations_keeps_unstarted_multi_frame(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (1U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 1U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->multi_frame);
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->first_frame_departed);
+
+    tx_purge_continuations(&self);
+    TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
+    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &tr->list_agewise));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Purge removes started multi-frame transfers.
+static void test_tx_purge_continuations_removes_started_multi_frame(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (2U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 2U, payload, CRC_INITIAL));
+
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->first_frame_departed);
+    TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
+
+    tx_purge_continuations(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, count_enqueued_transfers(&self));
+    TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Purge does not affect started single-frame transfers.
+static void test_tx_purge_continuations_keeps_started_single_frame(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+
+    const byte_t               data[]  = { 0xAAU };
+    const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (3U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 3U, 3U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->multi_frame);
+
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->first_frame_departed);
+    TEST_ASSERT_TRUE(cavl2_is_inserted(self.tx.pending[1], &tr->index_pending[1]));
+
+    tx_purge_continuations(&self);
+    TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
+    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &tr->list_agewise));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Purge removes only started multi-frame transfers from a mixed queue.
+static void test_tx_purge_continuations_mixed_queue(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 32U);
+
+    const byte_t               mf_a[]    = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+    const byte_t               mf_b[]    = { 8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U };
+    const byte_t               sf[]      = { 0x55U };
+    const canard_bytes_chain_t payload_a = { .bytes = { .size = sizeof(mf_a), .data = mf_a }, .next = NULL };
+    const canard_bytes_chain_t payload_b = { .bytes = { .size = sizeof(mf_b), .data = mf_b }, .next = NULL };
+    const canard_bytes_chain_t payload_c = { .bytes = { .size = sizeof(sf), .data = sf }, .next = NULL };
+    tx_transfer_t* const       started_multi =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_optional) << PRIO_SHIFT) | (500U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const unstarted_multi =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (200U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const started_single =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_exceptional) << PRIO_SHIFT) | (1U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(started_multi);
+    TEST_ASSERT_NOT_NULL(unstarted_multi);
+    TEST_ASSERT_NOT_NULL(started_single);
+
+    TEST_ASSERT_TRUE(tx_push(&self, started_multi, false, 1U, 10U, payload_a, CRC_INITIAL));
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U); // Start the first multi-frame transfer.
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)started_multi->first_frame_departed);
+
+    TEST_ASSERT_TRUE(tx_push(&self, unstarted_multi, false, 1U, 11U, payload_b, CRC_INITIAL));
+    TEST_ASSERT_TRUE(tx_push(&self, started_single, false, 3U, 12U, payload_c, CRC_INITIAL));
+
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U); // Start the single-frame transfer on iface 0.
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)started_single->first_frame_departed);
+    TEST_ASSERT_EQUAL_size_t(3U, count_enqueued_transfers(&self));
+
+    tx_purge_continuations(&self);
+    TEST_ASSERT_EQUAL_size_t(2U, count_enqueued_transfers(&self));
+    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &unstarted_multi->list_agewise));
+    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &started_single->list_agewise));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Node-ID change purges started multi-frame continuations but keeps unstarted ones.
+static void test_canard_set_node_id_purges_started_multiframe_only(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+    self.node_id = 10U;
+
+    const byte_t               started_data[]  = { 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U };
+    const byte_t               fresh_data[]    = { 8U, 7U, 6U, 5U, 4U, 3U, 2U, 1U };
+    const canard_bytes_chain_t payload_started = { .bytes = { .size = sizeof(started_data), .data = started_data },
+                                                   .next  = NULL };
+    const canard_bytes_chain_t payload_fresh   = { .bytes = { .size = sizeof(fresh_data), .data = fresh_data },
+                                                   .next  = NULL };
+    tx_transfer_t* const       started_multi =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (10U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const fresh_multi =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (11U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(started_multi);
+    TEST_ASSERT_NOT_NULL(fresh_multi);
+
+    TEST_ASSERT_TRUE(tx_push(&self, started_multi, false, 1U, 20U, payload_started, CRC_INITIAL));
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)started_multi->first_frame_departed);
+
+    TEST_ASSERT_TRUE(tx_push(&self, fresh_multi, false, 1U, 21U, payload_fresh, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(2U, count_enqueued_transfers(&self));
+
+    TEST_ASSERT_TRUE(canard_set_node_id(&self, 11U));
+    TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
+    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &fresh_multi->list_agewise));
+
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Node-ID assignment to the same value does not purge.
+static void test_canard_set_node_id_same_value_keeps_queue(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+    self.node_id = 10U;
+
+    const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
+    tx_transfer_t* const       tr =
+      tx_transfer_new(&self,
+                      1000,
+                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (12U << 8U) | (1UL << 7U),
+                      false,
+                      CANARD_USER_CONTEXT_NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 22U, payload, CRC_INITIAL));
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->first_frame_departed);
+
+    TEST_ASSERT_TRUE(canard_set_node_id(&self, 10U));
+    TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
+    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &tr->list_agewise));
+
+    free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -204,8 +517,8 @@ static void test_canard_publish_basic(void)
 
     const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
-    const uint32_t can_id = ((uint32_t)tr->can_id_msb) << 7U;
-    TEST_ASSERT_EQUAL_UINT8(17U, (uint8_t)tr->transfer_id);
+    const uint32_t can_id = (uint32_t)(tr->can_id_msb << 7U);
+    TEST_ASSERT_EQUAL_UINT8(17U, transfer_id_from_cursor(tr, 0U));
     TEST_ASSERT_NOT_EQUAL(0U, can_id & (1UL << 7U));
     TEST_ASSERT_EQUAL_UINT32(1234U, (can_id >> 8U) & CANARD_SUBJECT_ID_MAX);
 
@@ -227,7 +540,7 @@ static void test_canard_1v0_publish_basic(void)
 
     const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
-    const uint32_t can_id = ((uint32_t)tr->can_id_msb) << 7U;
+    const uint32_t can_id = (uint32_t)(tr->can_id_msb << 7U);
     TEST_ASSERT_EQUAL_UINT32(3UL, (can_id >> 21U) & 3UL);
 
     free_all_transfers(&self);
@@ -288,8 +601,8 @@ static void test_canard_1v0_service_basic(void)
                                      (1UL << 25U) | ((uint32_t)430U << 14U) | ((uint32_t)24U << 7U);
     TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)req->fd);
     TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)res->fd);
-    TEST_ASSERT_EQUAL_UINT8(5U, (uint8_t)req->transfer_id);
-    TEST_ASSERT_EQUAL_UINT8(6U, (uint8_t)res->transfer_id);
+    TEST_ASSERT_EQUAL_UINT8(5U, transfer_id_from_cursor(req, 0U));
+    TEST_ASSERT_EQUAL_UINT8(6U, transfer_id_from_cursor(res, 0U));
     TEST_ASSERT_EQUAL_UINT32(expected_req_id, can_id_from_transfer(req));
     TEST_ASSERT_EQUAL_UINT32(expected_res_id, can_id_from_transfer(res));
 
@@ -374,8 +687,8 @@ static void test_canard_0v1_service_basic(void)
                                      ((uint32_t)0x37U << 16U) | ((uint32_t)24U << 8U) | (1UL << 7U);
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)req->fd);
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)res->fd);
-    TEST_ASSERT_EQUAL_UINT8(5U, (uint8_t)req->transfer_id);
-    TEST_ASSERT_EQUAL_UINT8(6U, (uint8_t)res->transfer_id);
+    TEST_ASSERT_EQUAL_UINT8(5U, transfer_id_from_cursor(req, 0U));
+    TEST_ASSERT_EQUAL_UINT8(6U, transfer_id_from_cursor(res, 0U));
     TEST_ASSERT_EQUAL_UINT32(expected_req_id, can_id_from_transfer(req));
     TEST_ASSERT_EQUAL_UINT32(expected_res_id, can_id_from_transfer(res));
 
@@ -753,6 +1066,13 @@ int main(void)
     RUN_TEST(test_tx_push_basic);
     RUN_TEST(test_tx_push_capacity_reject);
     RUN_TEST(test_tx_push_oom);
+    RUN_TEST(test_tx_first_frame_departure_flag);
+    RUN_TEST(test_tx_purge_continuations_keeps_unstarted_multi_frame);
+    RUN_TEST(test_tx_purge_continuations_removes_started_multi_frame);
+    RUN_TEST(test_tx_purge_continuations_keeps_started_single_frame);
+    RUN_TEST(test_tx_purge_continuations_mixed_queue);
+    RUN_TEST(test_canard_set_node_id_purges_started_multiframe_only);
+    RUN_TEST(test_canard_set_node_id_same_value_keeps_queue);
 
     // API-level TX paths.
     RUN_TEST(test_canard_publish_validation);

@@ -306,9 +306,9 @@ typedef struct canard_vtable_t
     /// filter_count is guaranteed to not exceed the value given at initialization and CANARD_FILTERS_MAX,
     /// whichever is smaller.
     /// This function may be NULL if the CAN controller/driver does not support filtering or it is not desired.
-    /// The implementation is assumed to be infallible; if error handling is necessary, it must be implemented
-    /// on the application side, perhaps with retries.
-    void (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
+    /// This function is only invoked from canard_poll().
+    /// Returns true on success, false on failure.
+    bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
 
 /// None of the fields should be mutated by the application, unless explicitly allowed.
@@ -357,6 +357,7 @@ struct canard_t
         canard_tree_t* subscriptions[CANARD_KIND_COUNT];
         canard_list_t  list_session_by_animation; ///< Oldest at the head.
         size_t         filter_count;              ///< At most CANARD_FILTERS_MAX.
+        bool           filters_dirty;             ///< Pending filter update at next poll.
     } rx;
 
     /// Error counters incremented automatically when the corresponding error condition occurs.
