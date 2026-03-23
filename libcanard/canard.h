@@ -462,6 +462,9 @@ bool canard_unicast(canard_t* const             self,
 /// Register a new subscription on a v1.1 subject. The subscription instance must not be moved while in use.
 /// The extent specifies the maximum message size that can be received from the subject; longer messages will be
 /// truncated per the implicit truncation rule (see the Spec).
+/// There may be at most one subscription per subject-ID.
+/// Returns true on success, false if any of the arguments are invalid or if there is already a subscription for the
+/// given subject-ID.
 bool canard_subscribe(canard_t* const                           self,
                       canard_subscription_t* const              subscription,
                       const uint16_t                            subject_id,
