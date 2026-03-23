@@ -94,13 +94,7 @@ const uint_least8_t canard_len_to_dlc[65] = {
 };
 
 static size_t      smaller(const size_t a, const size_t b) { return (a < b) ? a : b; }
-static size_t      larger(const size_t a, const size_t b) { return (a > b) ? a : b; }
-static uint64_t    min_u64(const uint64_t a, const uint64_t b) { return (a < b) ? a : b; }
-static uint64_t    max_u64(const uint64_t a, const uint64_t b) { return (a > b) ? a : b; }
-static int64_t     min_i64(const int64_t a, const int64_t b) { return (a < b) ? a : b; }
-static int64_t     max_i64(const int64_t a, const int64_t b) { return (a > b) ? a : b; }
-static canard_us_t sooner(const canard_us_t a, const canard_us_t b) { return min_i64(a, b); }
-static canard_us_t later(const canard_us_t a, const canard_us_t b) { return max_i64(a, b); }
+static canard_us_t later(const canard_us_t a, const canard_us_t b) { return (a > b) ? a : b; }
 
 // Used if intrinsics are not available.
 // http://en.wikipedia.org/wiki/Hamming_weight#Efficient_implementation
@@ -1976,8 +1970,7 @@ static void ingest_frame(canard_t* const     self,
                          const uint_least8_t iface_index,
                          const frame_t       frame)
 {
-    // Update the node-ID occupancy/collision monitoring states before routing the message.
-    // We do this only on start frames only mostly to manage load.
+    // Update the node-ID occupancy/collision before routing. Only on start frames to manage load.
     if (frame.start) {
         node_id_occupancy_update(self, frame.src);
     }

@@ -85,16 +85,6 @@ static void test_popcount(byte_t (*const popcnt)(uint64_t))
 static void test_popcount_emulated(void) { test_popcount(popcount_emulated); }
 static void test_popcount_intrinsics(void) { test_popcount(popcount); }
 
-// =============================================  MATH/CTZ TESTS  =============================================
-
-static void test_math_helpers(void)
-{
-    TEST_ASSERT_EQUAL_size_t(3, smaller(3, 5));
-    TEST_ASSERT_EQUAL_size_t(5, larger(3, 5));
-    TEST_ASSERT_EQUAL_INT64(-4, min_i64(-4, 2));
-    TEST_ASSERT_EQUAL_INT64(-4, sooner(-4, 2));
-}
-
 // ==============================================  CRC TESTS  ==============================================
 
 static void test_crc_add(void)
@@ -628,7 +618,6 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_popcount_emulated);
     RUN_TEST(test_popcount_intrinsics);
-    RUN_TEST(test_math_helpers);
     RUN_TEST(test_crc_add);
     RUN_TEST(test_crc_add_chain);
     RUN_TEST(test_bytes_chain);
