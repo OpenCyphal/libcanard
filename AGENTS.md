@@ -1,7 +1,6 @@
 # LibCANard instructions for AI agents
 
-Read `README.md` for general information about the library, and `CONTRIBUTING.md` for development-related notes.
-Read all README files in all subdirectories except for `lib/`.
+Read all README files in the project root and in all subdirectories except for `lib/`.
 
 The applicable specifications can be found here:
 - **Cyphal v1**: https://github.com/OpenCyphal/specification
@@ -34,3 +33,12 @@ The build system will reject code that is not clang-formatted; use build target 
 Practice an adversarial approach to testing: the purpose of a test case is not to provide coverage, but to empirically prove correctness of the tested code. Always treat the code as suspect; you will be rewarded for pointing out flaws in it. If the code does not appear to be correct, refuse to test it and provide evidence of its defects instead of proceeding with testing.
 
 When using subagents to implement tests, always instruct them to summarize their findings concerning the correctness of the tested code and its possible limitations at the end of their run. At the end of the turn, provide a summary of the findings.
+
+To run tests with coverage measurement:
+
+```bash
+cmake -B build -DENABLE_COVERAGE=ON     # Optionally, add  -DNO_STATIC_ANALYSIS=ON
+cmake --build build -j$(nproc)
+cd build && ctest && make coverage
+xdg-open coverage-html/index.html
+```

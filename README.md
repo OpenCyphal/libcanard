@@ -57,6 +57,8 @@ reused in the target application to speed up the design of the media IO layer (d
 
 ## Revisions
 
+To release a new version, simply publish a new release on GitHub.
+
 ### v5.0 [WORK IN PROGRESS]
 
 - Added support for Cyphal v1.1 alongside v1.0.

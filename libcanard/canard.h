@@ -436,10 +436,13 @@ bool canard_ingest_frame(canard_t* const      self,
 void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 
-/// Enqueue a message transfer on the specified interfaces.
+/// Enqueue a message transfer on the specified interfaces. Use CANARD_IFACE_BITMAP_ALL to send on all interfaces.
+///
 /// Message ordering observed on the bus is guaranteed per subject as long as the priority of later messages is
 /// not higher (numerically not lower) than that of earlier messages.
+///
 /// The context is passed into the tx() vtable function.
+///
 /// Returns zero on success, false on OOM (error counters updated) or if any of the arguments are invalid.
 bool canard_publish(canard_t* const             self,
                     const canard_us_t           deadline,
