@@ -215,8 +215,6 @@ static void test_rx_v1_multiframe_2frame_classic()
     // For v1 multiframe CRC, compute over all payload bytes, then the CRC residue is checked.
     // The library accumulates crc_add(seed, payload_of_each_frame) where the last frame includes padding+crc.
     // For the residue to be 0, we compute CRC over the payload, then append the CRC big-endian.
-    uint16_t crc = crc16_ccitt(0xFFFFU, payload, 8U);
-
     // Frame 1: 7 payload bytes + tail.
     uint_least8_t frame1[8];
     std::memcpy(frame1, payload, 7U);
@@ -231,10 +229,10 @@ static void test_rx_v1_multiframe_2frame_classic()
     // The CRC covers: all payload(8) + padding(4) bytes, then the CRC result is appended.
     // Recompute: crc_over_all = crc16(0xFFFF, payload(8) + padding(4))
     const uint_least8_t padding[4] = { 0, 0, 0, 0 };
-    crc                            = crc16_ccitt(0xFFFFU, payload, 8U);
+    uint16_t            crc        = crc16_ccitt(0xFFFFU, payload, 8U);
     crc                            = crc16_ccitt(crc, padding, 4U);
-    const uint_least8_t crc_hi     = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo     = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi              = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo              = static_cast<uint_least8_t>(crc & 0xFFU);
 
     uint_least8_t frame2[8];
     frame2[0] = payload[7]; // last payload byte
@@ -297,8 +295,8 @@ static void test_rx_v1_multiframe_3frame()
     const uint_least8_t pad[4] = { 0, 0, 0, 0 };
     uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 15U);
     crc                        = crc16_ccitt(crc, pad, 4U);
-    const uint_least8_t crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
 
     uint_least8_t frame1[8];
     std::memcpy(frame1, payload, 7U);
@@ -371,8 +369,8 @@ static void test_rx_v1_multiframe_fd()
     const uint_least8_t pad[52] = {};
     uint16_t            crc     = crc16_ccitt(0xFFFFU, payload, 70U);
     crc                         = crc16_ccitt(crc, pad, 52U);
-    const uint_least8_t crc_hi  = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo  = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi           = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo           = static_cast<uint_least8_t>(crc & 0xFFU);
 
     // Frame 1 (64 bytes).
     uint_least8_t frame1[64];
@@ -407,9 +405,9 @@ static void test_rx_v1_multiframe_fd()
     // we can choose the exact frame size. Let me use a compact last frame (no padding).
 
     // Recompute CRC without padding.
-    crc                         = crc16_ccitt(0xFFFFU, payload, 70U);
-    const uint_least8_t crc_hi2 = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo2 = static_cast<uint_least8_t>(crc & 0xFFU);
+    crc                = crc16_ccitt(0xFFFFU, payload, 70U);
+    const auto crc_hi2 = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo2 = static_cast<uint_least8_t>(crc & 0xFFU);
 
     // Frame 2 (10 bytes): 7 payload + CRC(2) + tail.
     uint_least8_t frame2b[10];
@@ -457,8 +455,8 @@ static void test_rx_multiframe_crc_error()
     crc                        = crc16_ccitt(crc, pad, 4U);
 
     // Corrupt the CRC by flipping the low byte.
-    const uint_least8_t bad_crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t bad_crc_lo = static_cast<uint_least8_t>((crc & 0xFFU) ^ 0x01U); // flipped bit
+    const auto bad_crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto bad_crc_lo = static_cast<uint_least8_t>((crc & 0xFFU) ^ 0x01U); // flipped bit
 
     uint_least8_t frame1[8];
     std::memcpy(frame1, payload, 7U);
@@ -508,8 +506,8 @@ static void test_rx_multiframe_single_bit_flip()
     const uint_least8_t pad[4] = {};
     uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
     crc                        = crc16_ccitt(crc, pad, 4U);
-    const uint_least8_t crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
 
     // Frame 1 with a single bit flip in byte 3.
     uint_least8_t frame1[8];
@@ -597,8 +595,8 @@ static void test_rx_extent_truncation_multiframe()
     const uint_least8_t pad[4] = {};
     uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
     crc                        = crc16_ccitt(crc, pad, 4U);
-    const uint_least8_t crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
 
     uint_least8_t frame1[8];
     std::memcpy(frame1, payload, 7U);
@@ -853,8 +851,8 @@ static void test_rx_priority_preemption_interleaved()
     const uint32_t can_id_hi = make_v1v1_msg_can_id(canard_prio_fast, 2100U, 10U);
 
     // Build frames for both transfers.
-    uint16_t crc_lo = crc16_ccitt(crc16_ccitt(0xFFFFU, payload_lo, 8U), pad, 4U);
-    uint16_t crc_hi = crc16_ccitt(crc16_ccitt(0xFFFFU, payload_hi, 8U), pad, 4U);
+    const uint16_t crc_lo = crc16_ccitt(crc16_ccitt(0xFFFFU, payload_lo, 8U), pad, 4U);
+    const uint16_t crc_hi = crc16_ccitt(crc16_ccitt(0xFFFFU, payload_hi, 8U), pad, 4U);
 
     uint_least8_t f1_lo[8];
     uint_least8_t f2_lo[8];
@@ -1019,8 +1017,8 @@ static void test_rx_wrong_toggle_rejected()
     const uint_least8_t pad[4] = {};
     uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
     crc                        = crc16_ccitt(crc, pad, 4U);
-    const uint_least8_t crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
 
     // Frame 1 (SOT): toggle=1 (correct for v1).
     uint_least8_t frame1[8];
@@ -1067,8 +1065,8 @@ static void test_rx_interface_affinity()
     const uint_least8_t pad[4] = {};
     uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
     crc                        = crc16_ccitt(crc, pad, 4U);
-    const uint_least8_t crc_hi = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
-    const uint_least8_t crc_lo = static_cast<uint_least8_t>(crc & 0xFFU);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
 
     uint_least8_t frame1[8];
     std::memcpy(frame1, payload, 7U);
@@ -1161,7 +1159,7 @@ static void test_rx_v0_multiframe_roundtrip()
     const uint32_t      can_id     = make_v0_msg_can_id(canard_prio_nominal, 1000U, 10U);
 
     // v0 multiframe CRC: computed over the user payload only, then prepended little-endian.
-    uint16_t v0crc = crc16_ccitt(crc_seed, payload, 8U);
+    const uint16_t v0crc = crc16_ccitt(crc_seed, payload, 8U);
 
     // Total stream data: [crc_lo, crc_hi, payload[0..7]]  = 10 bytes.
     // Classic CAN MTU=8, 7 data bytes per frame + tail byte.
