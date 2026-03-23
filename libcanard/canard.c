@@ -1640,22 +1640,37 @@ static canard_filter_t rx_filter_fuse(const canard_filter_t a, const canard_filt
 // Filter selectivity metric; see the Cyphal/CAN specification. Greater values ==> stronger filter.
 static byte_t rx_filter_rank(const canard_filter_t a) { return popcount(a.extended_mask); }
 
-// Modifies the filter array such that the new filter is accepted. See Cyphal/CAN Spec.
+// Modifies the filter array such that the new filter is accepted. See Cyphal/CAN Spec. Requires count>0.
 static void rx_filter_coalesce_into(const size_t count, canard_filter_t* const into, const canard_filter_t new)
 {
-    // Currently we're using a simplified fast algorithm that doesn't attempt fusing existing entries with each other.
-    // This may result in suboptimal configurations but is faster.
-    size_t index     = 0;
-    byte_t best_rank = 0;
+    CANARD_ASSERT((count > 0U) && (into != NULL));
+    // Find the most similar pair by trying all pair combinations (including the incoming filter).
+    // This is O(N^2) but yields better final filter quality than fusing only with the incoming filter.
+    // The complexity is acceptable because N is controlled by the application and is small;
+    // plus, this behavior can be disabled completely by using at least as many filters as there are subscriptions.
+    bool            initialized = false;
+    size_t          best_i      = 0;
+    size_t          best_j      = count;
+    byte_t          best_rank   = 0;
+    canard_filter_t best_fuse   = { 0 };
     for (size_t i = 0; i < count; i++) {
-        const byte_t fused_rank = rx_filter_rank(rx_filter_fuse(into[i], new));
-        if (fused_rank >= best_rank) { // use >= to prefer later filters where v0 is
-            best_rank = fused_rank;
-            index     = i;
+        for (size_t j = i + 1U; j <= count; j++) { // j==count denotes the incoming filter
+            const canard_filter_t f = rx_filter_fuse(into[i], (j < count) ? into[j] : new);
+            const byte_t          r = rx_filter_rank(f);
+            if ((!initialized) || (r >= best_rank)) { // use >= to prefer later filters where v0 is
+                initialized = true;
+                best_i      = i;
+                best_j      = j;
+                best_rank   = r;
+                best_fuse   = f;
+            }
         }
     }
-    CANARD_ASSERT(index < count);
-    into[index] = rx_filter_fuse(into[index], new);
+    CANARD_ASSERT(initialized && (best_i < count) && (best_j <= count));
+    into[best_i] = best_fuse;
+    if (best_j < count) {
+        into[best_j] = new;
+    }
 }
 
 // Recompute the filter configuration and apply. Returns true on success, false on driver error.

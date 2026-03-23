@@ -236,6 +236,21 @@ static void test_rx_filter_coalesce_into_tie_prefers_later_index(void)
     TEST_ASSERT_EQUAL_HEX32(fused_index1.extended_mask, into[1].extended_mask);
 }
 
+static void test_rx_filter_coalesce_into_merges_existing_pair_when_best(void)
+{
+    canard_filter_t into[2] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter     = { .extended_can_id = 0xFUL, .extended_mask = 0xFUL };
+    const canard_filter_t fused_existing = rx_filter_fuse(into[0], into[1]);
+    rx_filter_coalesce_into(2U, into, new_filter);
+    TEST_ASSERT_EQUAL_HEX32(fused_existing.extended_can_id, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(fused_existing.extended_mask, into[0].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(new_filter.extended_can_id, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(new_filter.extended_mask, into[1].extended_mask);
+}
+
 static void test_rx_filter_coalesce_into_single_entry(void)
 {
     canard_filter_t       into[1]       = { { .extended_can_id = 0x3UL, .extended_mask = 0xFUL } };
@@ -268,6 +283,7 @@ int main(void)
 
     RUN_TEST(test_rx_filter_coalesce_into_selects_best_rank);
     RUN_TEST(test_rx_filter_coalesce_into_tie_prefers_later_index);
+    RUN_TEST(test_rx_filter_coalesce_into_merges_existing_pair_when_best);
     RUN_TEST(test_rx_filter_coalesce_into_single_entry);
 
     return UNITY_END();

@@ -386,12 +386,12 @@ struct canard_t
 /// and collisions, and will automatically migrate to a free node-ID shall a collision be detected.
 /// If manual allocation is desired, use the corresponding function to set the node-ID after initialization.
 ///
-/// The filter count is the number of CAN acceptance filters that the library can utilize. If there are fewer filters
-/// than subscriptions, similar filters will be coalesced. It is possible to pass zero filters if filtering is
-/// unneeded/unsupported. When the number of active subscriptions exceeds the number of available filters,
-/// filter coalescence is performed, which however has a high complexity bound; it is thus recommended that the number
-/// of filters is either large enough to accommodate all subscriptions, or small enough in the single digits where
-/// the load remains low.
+/// The filter count is the number of CAN acceptance filters that the stack can utilize. It is possible to pass zero
+/// filters if filtering is unneeded/unsupported. When the number of active subscriptions exceeds the number of
+/// available filters, filter coalescence is performed, which however has a high complexity bound; it is thus
+/// recommended that the number of filters is either large enough to accommodate all subscriptions,
+/// or small enough in the single digits where the coalescence load remains low. The filter configuration is
+/// recomputed and applied on every poll() following a change in the subscription set or local node-ID.
 ///
 /// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///
