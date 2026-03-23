@@ -1608,6 +1608,9 @@ static void node_id_occupancy_reset(canard_t* const self)
 // Records the seen node-ID and reallocates the local node if a collision is found.
 static void node_id_occupancy_update(canard_t* const self, const byte_t src)
 {
+    if (src == CANARD_NODE_ID_ANONYMOUS) {
+        return;
+    }
     // Update the node-ID occupancy bitmap. We cannot detect departures of an individual node, so in the presence of
     // churn the slots will be eventually exhausted. We mitigate this by applying probabilistic purge once the
     // population count exceeds some threshold, such that the purge probability becomes 1 when the bitmap is almost
