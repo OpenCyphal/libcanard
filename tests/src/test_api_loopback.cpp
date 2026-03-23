@@ -12,7 +12,8 @@
 #include <vector>
 #include <cmath>
 
-// ============================================== Test Infrastructure ======================================================
+// ============================================== Test Infrastructure
+// ======================================================
 
 static void* std_alloc_mem(const canard_mem_t, const size_t size) { return std::malloc(size); }
 static void  std_free_mem(const canard_mem_t, const size_t, void* const pointer) { std::free(pointer); }
@@ -28,27 +29,30 @@ static canard_mem_set_t make_std_memory()
 // TX frame capture for loopback
 struct loopback_frame_t
 {
-    uint32_t extended_can_id;
+    uint32_t             extended_can_id;
     std::vector<uint8_t> data;
 };
 
 struct loopback_tx_capture_t
 {
     std::vector<loopback_frame_t> frames;
-    bool accept_frames;
+    bool                          accept_frames;
 
-    loopback_tx_capture_t() : accept_frames(true) {}
+    loopback_tx_capture_t()
+      : accept_frames(true)
+    {
+    }
     void clear() { frames.clear(); }
 };
 
 static loopback_tx_capture_t loopback_tx_capture;
 
 static bool loopback_tx_callback(canard_t*,
-                                 const canard_user_context_t,
+                                 void* const,
                                  const canard_us_t,
                                  const uint_least8_t,
                                  const bool,
-                                 const uint32_t extended_can_id,
+                                 const uint32_t       extended_can_id,
                                  const canard_bytes_t can_data)
 {
     if (loopback_tx_capture.accept_frames) {
@@ -63,25 +67,35 @@ static bool loopback_tx_callback(canard_t*,
 // RX capture for loopback receiver
 struct loopback_rx_capture_t
 {
-    size_t        call_count;
-    canard_us_t   timestamp;
-    canard_prio_t priority;
-    uint_least8_t source_node_id;
-    uint_least8_t transfer_id;
+    size_t               call_count;
+    canard_us_t          timestamp;
+    canard_prio_t        priority;
+    uint_least8_t        source_node_id;
+    uint_least8_t        transfer_id;
     std::vector<uint8_t> payload;
 
-    loopback_rx_capture_t() : call_count(0), timestamp(0), priority(canard_prio_nominal),
-                              source_node_id(0), transfer_id(0) {}
-    void clear() { call_count = 0; payload.clear(); }
+    loopback_rx_capture_t()
+      : call_count(0)
+      , timestamp(0)
+      , priority(canard_prio_nominal)
+      , source_node_id(0)
+      , transfer_id(0)
+    {
+    }
+    void clear()
+    {
+        call_count = 0;
+        payload.clear();
+    }
 };
 
 static loopback_rx_capture_t loopback_rx_capture;
 
 static void loopback_on_message(canard_subscription_t*,
-                                const canard_us_t            timestamp,
-                                const canard_prio_t          priority,
-                                const uint_least8_t          source_node_id,
-                                const uint_least8_t          transfer_id,
+                                const canard_us_t      timestamp,
+                                const canard_prio_t    priority,
+                                const uint_least8_t    source_node_id,
+                                const uint_least8_t    transfer_id,
                                 const canard_payload_t payload)
 {
     loopback_rx_capture.call_count++;
@@ -91,9 +105,8 @@ static void loopback_on_message(canard_subscription_t*,
     loopback_rx_capture.transfer_id    = transfer_id;
 
     if (payload.view.size > 0 && payload.view.data != nullptr) {
-        loopback_rx_capture.payload.assign(
-            static_cast<const uint8_t*>(payload.view.data),
-            static_cast<const uint8_t*>(payload.view.data) + payload.view.size);
+        loopback_rx_capture.payload.assign(static_cast<const uint8_t*>(payload.view.data),
+                                           static_cast<const uint8_t*>(payload.view.data) + payload.view.size);
     }
 
     // Free multi-frame origin if present
@@ -127,8 +140,8 @@ static void seed_prng(uint64_t seed) { prng_state = seed; }
 static uint64_t splitmix64()
 {
     uint64_t z = (prng_state += 0x9E3779B97F4A7C15ULL);
-    z = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
-    z = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
+    z          = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
+    z          = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
     return z ^ (z >> 31U);
 }
 
@@ -136,13 +149,19 @@ static uint64_t random_uint64() { return splitmix64(); }
 
 static size_t random_range(size_t min, size_t max)
 {
-    if (min >= max) return min;
+    if (min >= max)
+        return min;
     return min + (size_t)(random_uint64() % (max - min + 1));
 }
 
-// ============================================== Tests ===================================================================
+// ============================================== Tests
+// ===================================================================
 
-void setUp(void) { loopback_tx_capture.clear(); loopback_rx_capture.clear(); }
+void setUp(void)
+{
+    loopback_tx_capture.clear();
+    loopback_rx_capture.clear();
+}
 void tearDown(void) {}
 
 // Main stochastic loopback test
@@ -150,21 +169,21 @@ static void test_stochastic_loopback_property_test(void)
 {
     // Read RANDOM_SEED env var if present
     const char* seed_str = std::getenv("RANDOM_SEED");
-    uint64_t seed = 12345ULL;
+    uint64_t    seed     = 12345ULL;
     if (seed_str != nullptr) {
         seed = std::strtoull(seed_str, nullptr, 10);
     }
     seed_prng(seed);
 
     // Sender: node 10
-    canard_t sender;
+    canard_t    sender;
     canard_us_t sender_now = 0;
     TEST_ASSERT_TRUE(canard_new(&sender, &loopback_vtable, make_std_memory(), 512U, seed, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(&sender, 10));
     sender.user_context = &sender_now;
 
     // Receiver: node 20
-    canard_t receiver;
+    canard_t    receiver;
     canard_us_t receiver_now = 0;
     TEST_ASSERT_TRUE(canard_new(&receiver, &loopback_vtable, make_std_memory(), 512U, seed + 1, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(&receiver, 20));
@@ -176,16 +195,17 @@ static void test_stochastic_loopback_property_test(void)
     // Run 1000 iterations
     const size_t num_iterations = 1000;
     for (size_t iter = 0; iter < num_iterations; iter++) {
-        sender_now = static_cast<canard_us_t>(iter) * 1000;
+        sender_now   = static_cast<canard_us_t>(iter) * 1000;
         receiver_now = sender_now;
 
         // Pick transfer kind
-        canard_kind_t kind = static_cast<canard_kind_t>(random_range(0, 4)); // v1.1 msg, v1.0 msg, v1.1 req, v1.1 resp, v0 msg
-        uint_least8_t tid = tid_counters[kind];
+        canard_kind_t kind =
+          static_cast<canard_kind_t>(random_range(0, 4)); // v1.1 msg, v1.0 msg, v1.1 req, v1.1 resp, v0 msg
+        uint_least8_t tid  = tid_counters[kind];
         tid_counters[kind] = static_cast<uint_least8_t>((tid_counters[kind] + 1) % 32);
 
         // Pick payload size: 0-200 bytes to cover all DLC boundaries
-        size_t payload_size = random_range(0, 200);
+        size_t               payload_size = random_range(0, 200);
         std::vector<uint8_t> payload(payload_size);
         for (size_t i = 0; i < payload_size; i++) {
             payload[i] = (uint8_t)(random_uint64() & 0xFF);
@@ -199,68 +219,94 @@ static void test_stochastic_loopback_property_test(void)
 
         canard_bytes_chain_t payload_chain = {
             .bytes = { .size = payload_size, .data = payload_size > 0 ? payload.data() : nullptr },
-            .next = nullptr,
+            .next  = nullptr,
         };
 
         bool published = false;
 
         // Publish based on kind
         if (kind == canard_kind_1v1_message) {
-            published = canard_publish(&sender, sender_now + 1000000, CANARD_IFACE_BITMAP_ALL, priority,
-                                      100U, false, tid, payload_chain, CANARD_USER_CONTEXT_NULL);
+            published = canard_publish(
+              &sender, sender_now + 1000000, CANARD_IFACE_BITMAP_ALL, priority, 100U, false, tid, payload_chain, NULL);
 
             // Subscribe receiver to messages
             static bool subscribed_to_msg = false;
             if (!subscribed_to_msg) {
                 static canard_subscription_t msg_sub = {};
-                TEST_ASSERT_TRUE(canard_subscribe(&receiver, &msg_sub, 100U, false, extent,
-                                                 CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
+                TEST_ASSERT_TRUE(canard_subscribe(&receiver,
+                                                  &msg_sub,
+                                                  100U,
+                                                  false,
+                                                  extent,
+                                                  CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
+                                                  &loopback_sub_vtable));
                 subscribed_to_msg = true;
             }
         } else if (kind == canard_kind_1v0_message) {
-            published = canard_publish(&sender, sender_now + 1000000, CANARD_IFACE_BITMAP_ALL, priority,
-                                      101U, true, tid, payload_chain, CANARD_USER_CONTEXT_NULL); // rev_1v0=true
+            published = canard_publish(&sender,
+                                       sender_now + 1000000,
+                                       CANARD_IFACE_BITMAP_ALL,
+                                       priority,
+                                       101U,
+                                       true,
+                                       tid,
+                                       payload_chain,
+                                       NULL); // rev_1v0=true
 
             static bool subscribed_to_msg_1v0 = false;
             if (!subscribed_to_msg_1v0) {
                 static canard_subscription_t msg_sub_1v0 = {};
-                TEST_ASSERT_TRUE(canard_subscribe(&receiver, &msg_sub_1v0, 101U, true, extent,
-                                                 CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
+                TEST_ASSERT_TRUE(canard_subscribe(&receiver,
+                                                  &msg_sub_1v0,
+                                                  101U,
+                                                  true,
+                                                  extent,
+                                                  CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
+                                                  &loopback_sub_vtable));
                 subscribed_to_msg_1v0 = true;
             }
         } else if (kind == canard_kind_1v0_request) {
-            published = canard_request(&sender, sender_now + 1000000, priority, 50U, 20, tid,
-                                      payload_chain, CANARD_USER_CONTEXT_NULL);
+            published = canard_request(&sender, sender_now + 1000000, priority, 50U, 20, tid, payload_chain, NULL);
 
             static bool subscribed_to_req = false;
             if (!subscribed_to_req) {
                 static canard_subscription_t req_sub = {};
-                TEST_ASSERT_TRUE(canard_subscribe_request(&receiver, &req_sub, 50U, extent,
-                                                         CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
+                TEST_ASSERT_TRUE(canard_subscribe_request(
+                  &receiver, &req_sub, 50U, extent, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
                 subscribed_to_req = true;
             }
         } else if (kind == canard_kind_1v0_response) {
-            published = canard_respond(&sender, sender_now + 1000000, priority, 50U, 20, tid,
-                                      payload_chain, CANARD_USER_CONTEXT_NULL);
+            published = canard_respond(&sender, sender_now + 1000000, priority, 50U, 20, tid, payload_chain, NULL);
 
             static bool subscribed_to_resp = false;
             if (!subscribed_to_resp) {
                 static canard_subscription_t resp_sub = {};
-                TEST_ASSERT_TRUE(canard_subscribe_response(&receiver, &resp_sub, 50U, extent,
-                                                          &loopback_sub_vtable));
+                TEST_ASSERT_TRUE(canard_subscribe_response(&receiver, &resp_sub, 50U, extent, &loopback_sub_vtable));
                 subscribed_to_resp = true;
             }
         } else { // canard_kind_0v1_message
             uint16_t crc_seed = canard_0v1_crc_seed_from_data_type_signature(0xDEADBEEF123ULL);
-            published = canard_0v1_publish(&sender, sender_now + 1000000, CANARD_IFACE_BITMAP_ALL, priority,
-                                          102U, crc_seed, tid, payload_chain, CANARD_USER_CONTEXT_NULL);
+            published         = canard_0v1_publish(&sender,
+                                           sender_now + 1000000,
+                                           CANARD_IFACE_BITMAP_ALL,
+                                           priority,
+                                           102U,
+                                           crc_seed,
+                                           tid,
+                                           payload_chain,
+                                           NULL);
 
             static bool subscribed_to_v0_msg = false;
             if (!subscribed_to_v0_msg) {
-                uint16_t crc_seed = canard_0v1_crc_seed_from_data_type_signature(0xDEADBEEF123ULL);
+                uint16_t                     crc_seed = canard_0v1_crc_seed_from_data_type_signature(0xDEADBEEF123ULL);
                 static canard_subscription_t v0_msg_sub = {};
-                TEST_ASSERT_TRUE(canard_0v1_subscribe(&receiver, &v0_msg_sub, 102U, crc_seed, extent,
-                                                      CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
+                TEST_ASSERT_TRUE(canard_0v1_subscribe(&receiver,
+                                                      &v0_msg_sub,
+                                                      102U,
+                                                      crc_seed,
+                                                      extent,
+                                                      CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
+                                                      &loopback_sub_vtable));
                 subscribed_to_v0_msg = true;
             }
         }
@@ -279,7 +325,10 @@ static void test_stochastic_loopback_property_test(void)
         size_t frame_count_iface0 = loopback_tx_capture.frames.size();
 
         for (const auto& frame : loopback_tx_capture.frames) {
-            TEST_ASSERT_TRUE(canard_ingest_frame(&receiver, receiver_now, 0U, frame.extended_can_id,
+            TEST_ASSERT_TRUE(canard_ingest_frame(&receiver,
+                                                 receiver_now,
+                                                 0U,
+                                                 frame.extended_can_id,
                                                  { .size = frame.data.size(), .data = frame.data.data() }));
             receiver_now += 100; // Time gap between frames
         }
@@ -315,7 +364,10 @@ static void test_stochastic_loopback_property_test(void)
         if (frame_count_iface0 > 0) {
             loopback_rx_capture.clear();
             for (const auto& frame : loopback_tx_capture.frames) {
-                TEST_ASSERT_TRUE(canard_ingest_frame(&receiver, receiver_now, 1U, frame.extended_can_id,
+                TEST_ASSERT_TRUE(canard_ingest_frame(&receiver,
+                                                     receiver_now,
+                                                     1U,
+                                                     frame.extended_can_id,
                                                      { .size = frame.data.size(), .data = frame.data.data() }));
                 receiver_now += 100;
             }
@@ -332,14 +384,14 @@ static void test_stochastic_loopback_property_test(void)
 static void test_interleaved_multiframe_transfers(void)
 {
     // Sender: node 10
-    canard_t sender;
+    canard_t    sender;
     canard_us_t sender_now = 0;
     TEST_ASSERT_TRUE(canard_new(&sender, &loopback_vtable, make_std_memory(), 512U, 99999ULL, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(&sender, 10));
     sender.user_context = &sender_now;
 
     // Receiver: node 20
-    canard_t receiver;
+    canard_t    receiver;
     canard_us_t receiver_now = 0;
     TEST_ASSERT_TRUE(canard_new(&receiver, &loopback_vtable, make_std_memory(), 512U, 88888ULL, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(&receiver, 20));
@@ -347,19 +399,20 @@ static void test_interleaved_multiframe_transfers(void)
 
     // Subscribe to messages from all 3 sources
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&receiver, &sub, 200U, false, 1024U,
-                                     CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe(
+      &receiver, &sub, 200U, false, 1024U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &loopback_sub_vtable));
 
     // Publish 3 large messages from 3 different source nodes
     // (We emulate this by publishing, collecting frames, then manually feeding them with different source IDs)
-    struct interleave_msg_t {
+    struct interleave_msg_t
+    {
         std::vector<loopback_frame_t> frames;
-        std::vector<uint8_t> payload;
-        uint_least8_t source_id;
+        std::vector<uint8_t>          payload;
+        uint_least8_t                 source_id;
     } messages[3];
 
     for (int msg_idx = 0; msg_idx < 3; msg_idx++) {
-        messages[msg_idx].source_id = static_cast<uint_least8_t>(30 + msg_idx); // 30, 31, 32
+        messages[msg_idx].source_id = static_cast<uint_least8_t>(30 + msg_idx);     // 30, 31, 32
         messages[msg_idx].payload.resize(static_cast<size_t>(80 + (msg_idx * 10))); // 80, 90, 100 bytes
         for (size_t i = 0; i < messages[msg_idx].payload.size(); i++) {
             messages[msg_idx].payload[i] = static_cast<uint8_t>(i ^ static_cast<size_t>(msg_idx));
@@ -368,12 +421,19 @@ static void test_interleaved_multiframe_transfers(void)
         // Publish from sender
         canard_bytes_chain_t chain = {
             .bytes = { .size = messages[msg_idx].payload.size(), .data = messages[msg_idx].payload.data() },
-            .next = nullptr,
+            .next  = nullptr,
         };
 
         sender_now = (canard_us_t)msg_idx * 10000;
-        TEST_ASSERT_TRUE(canard_publish(&sender, sender_now + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal,
-                                        200U, false, (uint_least8_t)msg_idx, chain, CANARD_USER_CONTEXT_NULL));
+        TEST_ASSERT_TRUE(canard_publish(&sender,
+                                        sender_now + 1000000,
+                                        CANARD_IFACE_BITMAP_ALL,
+                                        canard_prio_nominal,
+                                        200U,
+                                        false,
+                                        (uint_least8_t)msg_idx,
+                                        chain,
+                                        NULL));
 
         // Collect frames
         loopback_tx_capture.clear();
@@ -393,15 +453,18 @@ static void test_interleaved_multiframe_transfers(void)
     const size_t maxframes0 = messages[0].frames.size();
     const size_t maxframes1 = messages[1].frames.size();
     const size_t maxframes2 = messages[2].frames.size();
-    size_t max_frames = maxframes0 > maxframes1 ? maxframes0 : maxframes1;
-    max_frames = max_frames > maxframes2 ? max_frames : maxframes2;
+    size_t       max_frames = maxframes0 > maxframes1 ? maxframes0 : maxframes1;
+    max_frames              = max_frames > maxframes2 ? max_frames : maxframes2;
 
     for (size_t frame_idx = 0; frame_idx < max_frames; frame_idx++) {
         for (int msg_idx = 0; msg_idx < 3; msg_idx++) {
             if (frame_idx < messages[msg_idx].frames.size()) {
                 const auto& frame = messages[msg_idx].frames[frame_idx];
                 loopback_rx_capture.clear();
-                TEST_ASSERT_TRUE(canard_ingest_frame(&receiver, receiver_now, 0U, frame.extended_can_id,
+                TEST_ASSERT_TRUE(canard_ingest_frame(&receiver,
+                                                     receiver_now,
+                                                     0U,
+                                                     frame.extended_can_id,
                                                      { .size = frame.data.size(), .data = frame.data.data() }));
                 receiver_now += 1000;
 

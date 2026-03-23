@@ -17,7 +17,7 @@ static canard_us_t mock_now(const canard_t* const self)
     return (self->user_context != nullptr) ? *static_cast<const canard_us_t*>(self->user_context) : 0;
 }
 static bool mock_tx(canard_t* const,
-                    const canard_user_context_t,
+                    void* const,
                     const canard_us_t,
                     const uint_least8_t,
                     const bool,
@@ -65,7 +65,7 @@ static void capture_on_message(canard_subscription_t* const self,
                                // cppcheck-suppress passedByValueCallback
                                const canard_payload_t payload)
 {
-    auto* const cap = static_cast<rx_capture_t*>(self->user_context.ptr[0]);
+    auto* const cap = static_cast<rx_capture_t*>(self->user_context);
     cap->count++;
     cap->timestamp      = timestamp;
     cap->priority       = priority;
@@ -244,7 +244,7 @@ static void test_v1v1_message_reception()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1234U, false, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // Construct a single-frame v1.1 message from node 10, priority nominal, transfer-ID 7.
     const uint32_t can_id = make_v1v1_msg_can_id(canard_prio_nominal, 1234U, 10U);
@@ -279,7 +279,7 @@ static void test_service_request_reception()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_subscribe_request(&self, &sub, 100U, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // Service request from node 10 to node 42 (us), service-ID 100, transfer-ID 3.
     const uint32_t       can_id   = make_v1_svc_can_id(canard_prio_nominal, 100U, true, 42U, 10U);
@@ -311,7 +311,7 @@ static void test_service_response_reception()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_subscribe_response(&self, &sub, 200U, 256U, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // Service response from node 99 to node 42 (us), service-ID 200, transfer-ID 5.
     const uint32_t       can_id   = make_v1_svc_can_id(canard_prio_nominal, 200U, false, 42U, 99U);
@@ -343,7 +343,7 @@ static void test_unsubscribe_stops_delivery()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 500U, false, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // First frame: should be delivered.
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 500U, 10U);
@@ -372,7 +372,7 @@ static void capture_on_message_simple(canard_subscription_t* const self,
                                       // cppcheck-suppress passedByValueCallback
                                       const canard_payload_t payload)
 {
-    auto* const cap = static_cast<rx_capture_t*>(self->user_context.ptr[0]);
+    auto* const cap = static_cast<rx_capture_t*>(self->user_context);
     cap->count++;
     cap->source_node_id = source_node_id;
     cap->transfer_id    = transfer_id;
@@ -393,9 +393,9 @@ static void test_multiple_subscriptions_routing()
     canard_subscription_t sub_a = {};
     canard_subscription_t sub_b = {};
     TEST_ASSERT_TRUE(canard_subscribe(&self, &sub_a, 300U, false, 256U, 2000000, &simple_sub_vtable));
-    sub_a.user_context = make_user_context(&cap_a);
+    sub_a.user_context = (&cap_a);
     TEST_ASSERT_TRUE(canard_subscribe(&self, &sub_b, 400U, false, 256U, 2000000, &simple_sub_vtable));
-    sub_b.user_context = make_user_context(&cap_b);
+    sub_b.user_context = (&cap_b);
 
     // Message for subject 300.
     {
@@ -438,7 +438,7 @@ static void test_unsubscribe_cleans_up_sessions()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 600U, false, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // Receive messages from two different remote nodes to create two sessions.
     for (uint_least8_t src = 10U; src <= 11U; src++) {
@@ -577,7 +577,7 @@ static void test_0v1_message_reception()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 1000U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // Single-frame v0 message from node 10, priority nominal, transfer-ID 3.
     const uint32_t       can_id   = make_v0_msg_can_id(canard_prio_nominal, 1000U, 10U);
@@ -611,7 +611,7 @@ static void test_0v1_service_request_reception()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_0v1_subscribe_request(&self, &sub, 0x37U, 0xBEEFU, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // v0 service request from node 10 to node 42 (us), data_type_id 0x37, transfer-ID 5.
     const uint32_t       can_id   = make_v0_svc_can_id(canard_prio_nominal, 0x37U, true, 42U, 10U);
@@ -643,7 +643,7 @@ static void test_0v1_service_response_reception()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_0v1_subscribe_response(&self, &sub, 0x55U, 0xFACEU, 256U, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // v0 service response from node 99 to node 42 (us), data_type_id 0x55, transfer-ID 7.
     const uint32_t       can_id   = make_v0_svc_can_id(canard_prio_nominal, 0x55U, false, 42U, 99U);
@@ -675,7 +675,7 @@ static void test_0v1_unsubscribe_stops_delivery()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 500U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
-    sub.user_context = make_user_context(&cap);
+    sub.user_context = (&cap);
 
     // First frame: should be delivered.
     const uint32_t       can_id   = make_v0_msg_can_id(canard_prio_nominal, 500U, 10U);

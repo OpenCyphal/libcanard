@@ -423,6 +423,7 @@ typedef struct tx_transfer_t
     canard_listed_t list_agewise;
 
     // Constant fields.
+    void*       user_context;
     canard_us_t deadline;
     uint64_t    seqno;
     uint32_t    can_id_msb : CAN_ID_MSb_BITS;
@@ -432,18 +433,15 @@ typedef struct tx_transfer_t
     // Mutable fields that change as the transfer is making progress.
     uint32_t    first_frame_departed : 1;
     tx_frame_t* cursor[CANARD_IFACE_COUNT];
-
-    // Application context.
-    canard_user_context_t user_context;
 } tx_transfer_t;
 static_assert((CANARD_IFACE_COUNT > 2) || (sizeof(void*) > 4) || (sizeof(tx_transfer_t) <= 120),
               "On a 32-bit platform with a half-fit heap, the TX transfer object should fit in a 128-byte block");
 
-static tx_transfer_t* tx_transfer_new(canard_t* const             self,
-                                      const canard_us_t           deadline,
-                                      const uint32_t              can_id_template,
-                                      const bool                  fd,
-                                      const canard_user_context_t user_context)
+static tx_transfer_t* tx_transfer_new(canard_t* const   self,
+                                      const canard_us_t deadline,
+                                      const uint32_t    can_id_template,
+                                      const bool        fd,
+                                      void* const       user_context)
 {
     tx_transfer_t* const tr = mem_alloc_zero(self->mem.tx_transfer, sizeof(tx_transfer_t));
     if (tr != NULL) {
@@ -452,6 +450,7 @@ static tx_transfer_t* tx_transfer_new(canard_t* const             self,
         }
         tr->index_deadline       = TREE_NULL;
         tr->list_agewise         = LIST_NULL;
+        tr->user_context         = user_context;
         tr->deadline             = deadline;
         tr->seqno                = self->tx.seqno++;
         tr->can_id_msb           = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
@@ -461,7 +460,6 @@ static tx_transfer_t* tx_transfer_new(canard_t* const             self,
         FOREACH_IFACE (i) {
             tr->cursor[i] = NULL;
         }
-        tr->user_context = user_context;
     }
     return tr;
 }
@@ -830,8 +828,8 @@ static void tx_eject_pending(canard_t* const self, const byte_t iface_index)
         CANARD_ASSERT(tr->cursor[iface_index] != NULL);
 
         // Try to eject one frame.
-        tx_frame_t* const frame      = tr->cursor[iface_index];
-        tx_frame_t* const frame_next = frame->next;
+        const tx_frame_t* const frame      = tr->cursor[iface_index];
+        tx_frame_t* const       frame_next = frame->next;
         // Clangd/Clang-Tidy bug: bitfield integer promotion rules are modeled incorrectly -- the cast is not redundant.
         const uint32_t can_id  = ((uint32_t)tr->can_id_msb << 7U) | self->node_id; // NOLINT(*-readability-casting)
         const bool     ejected = self->vtable->tx(
@@ -883,15 +881,15 @@ uint_least8_t canard_pending_ifaces(const canard_t* const self)
     return out;
 }
 
-bool canard_publish(canard_t* const             self,
-                    const canard_us_t           deadline,
-                    const uint_least8_t         iface_bitmap,
-                    const canard_prio_t         priority,
-                    const uint16_t              subject_id,
-                    const bool                  rev_1v0, ///< Publish a v1.0 message; subject-ID must be in [0,8192).
-                    const uint_least8_t         transfer_id,
-                    const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context)
+bool canard_publish(canard_t* const            self,
+                    const canard_us_t          deadline,
+                    const uint_least8_t        iface_bitmap,
+                    const canard_prio_t        priority,
+                    const uint16_t             subject_id,
+                    const bool                 rev_1v0, ///< Publish a v1.0 message; subject-ID must be in [0,8192).
+                    const uint_least8_t        transfer_id,
+                    const canard_bytes_chain_t payload,
+                    void* const                user_context)
 {
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
@@ -916,26 +914,26 @@ bool canard_publish(canard_t* const             self,
             //  uint7  source_node_id
             const uint32_t can_id =
               (((uint32_t)priority) << PRIO_SHIFT) | ((uint32_t)subject_id << 8U) | (UINT32_C(1) << 7U);
-            tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, context);
+            tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
         } else {
             const uint32_t can_id =
               (((uint32_t)priority) << PRIO_SHIFT) | (UINT32_C(3) << 21U) | (((uint32_t)subject_id) << 8U);
-            tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, context);
+            tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
         }
         ok = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, transfer_id, payload, CRC_INITIAL);
     }
     return ok;
 }
 
-static bool tx_1v0_service(canard_t* const             self,
-                           const canard_us_t           deadline,
-                           const canard_prio_t         priority,
-                           const uint16_t              service_id,
-                           const uint_least8_t         destination_node_id,
-                           const bool                  request_not_response,
-                           const uint_least8_t         transfer_id,
-                           const canard_bytes_chain_t  payload,
-                           const canard_user_context_t context)
+static bool tx_1v0_service(canard_t* const            self,
+                           const canard_us_t          deadline,
+                           const canard_prio_t        priority,
+                           const uint16_t             service_id,
+                           const uint_least8_t        destination_node_id,
+                           const bool                 request_not_response,
+                           const uint_least8_t        transfer_id,
+                           const canard_bytes_chain_t payload,
+                           void* const                user_context)
 {
     bool ok = (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
               (service_id <= CANARD_SERVICE_ID_MAX) && (destination_node_id <= CANARD_NODE_ID_MAX);
@@ -943,45 +941,47 @@ static bool tx_1v0_service(canard_t* const             self,
         const uint32_t can_id = (((uint32_t)priority) << PRIO_SHIFT) | (UINT32_C(1) << 25U) |
                                 (request_not_response ? (UINT32_C(1) << 24U) : 0U) | (((uint32_t)service_id) << 14U) |
                                 (((uint32_t)destination_node_id) << 7U);
-        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, context);
+        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
         ok = (tr != NULL) && tx_push(self, tr, false, CANARD_IFACE_BITMAP_ALL, transfer_id, payload, CRC_INITIAL);
     }
     return ok;
 }
 
-bool canard_request(canard_t* const             self,
-                    const canard_us_t           deadline,
-                    const canard_prio_t         priority,
-                    const uint16_t              service_id,
-                    const uint_least8_t         server_node_id,
-                    const uint_least8_t         transfer_id,
-                    const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context)
+bool canard_request(canard_t* const            self,
+                    const canard_us_t          deadline,
+                    const canard_prio_t        priority,
+                    const uint16_t             service_id,
+                    const uint_least8_t        server_node_id,
+                    const uint_least8_t        transfer_id,
+                    const canard_bytes_chain_t payload,
+                    void* const                user_context)
 {
-    return tx_1v0_service(self, deadline, priority, service_id, server_node_id, true, transfer_id, payload, context);
+    return tx_1v0_service(
+      self, deadline, priority, service_id, server_node_id, true, transfer_id, payload, user_context);
 }
 
-bool canard_respond(canard_t* const             self,
-                    const canard_us_t           deadline,
-                    const canard_prio_t         priority,
-                    const uint16_t              service_id,
-                    const uint_least8_t         client_node_id,
-                    const uint_least8_t         transfer_id,
-                    const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context)
+bool canard_respond(canard_t* const            self,
+                    const canard_us_t          deadline,
+                    const canard_prio_t        priority,
+                    const uint16_t             service_id,
+                    const uint_least8_t        client_node_id,
+                    const uint_least8_t        transfer_id,
+                    const canard_bytes_chain_t payload,
+                    void* const                user_context)
 {
-    return tx_1v0_service(self, deadline, priority, service_id, client_node_id, false, transfer_id, payload, context);
+    return tx_1v0_service(
+      self, deadline, priority, service_id, client_node_id, false, transfer_id, payload, user_context);
 }
 
-bool canard_0v1_publish(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const uint_least8_t         iface_bitmap,
-                        const canard_prio_t         priority,
-                        const uint16_t              data_type_id,
-                        const uint16_t              crc_seed,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context)
+bool canard_0v1_publish(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             data_type_id,
+                        const uint16_t             crc_seed,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context)
 {
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
@@ -989,22 +989,22 @@ bool canard_0v1_publish(canard_t* const             self,
       (self->node_id != 0);
     if (ok) {
         const uint32_t       can_id = (((uint32_t)priority) << PRIO_SHIFT) | ((uint32_t)data_type_id << 8U);
-        tx_transfer_t* const tr     = tx_transfer_new(self, deadline, can_id, false, context);
+        tx_transfer_t* const tr     = tx_transfer_new(self, deadline, can_id, false, user_context);
         ok = (tr != NULL) && tx_push(self, tr, true, iface_bitmap, transfer_id, payload, crc_seed);
     }
     return ok;
 }
 
-static bool tx_0v1_service(canard_t* const             self,
-                           const canard_us_t           deadline,
-                           const canard_prio_t         priority,
-                           const uint_least8_t         data_type_id,
-                           const uint16_t              crc_seed,
-                           const uint_least8_t         destination_node_id,
-                           const bool                  request_not_response,
-                           const uint_least8_t         transfer_id,
-                           const canard_bytes_chain_t  payload,
-                           const canard_user_context_t context)
+static bool tx_0v1_service(canard_t* const            self,
+                           const canard_us_t          deadline,
+                           const canard_prio_t        priority,
+                           const uint_least8_t        data_type_id,
+                           const uint16_t             crc_seed,
+                           const uint_least8_t        destination_node_id,
+                           const bool                 request_not_response,
+                           const uint_least8_t        transfer_id,
+                           const canard_bytes_chain_t payload,
+                           void* const                user_context)
 {
     bool ok = (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) && (self->node_id != 0U) &&
               (destination_node_id > 0U) && (destination_node_id <= CANARD_NODE_ID_MAX);
@@ -1012,38 +1012,38 @@ static bool tx_0v1_service(canard_t* const             self,
         const uint32_t can_id = (((uint32_t)priority) << PRIO_SHIFT) | (((uint32_t)data_type_id) << 16U) |
                                 (request_not_response ? (UINT32_C(1) << 15U) : 0U) |
                                 (((uint32_t)destination_node_id) << 8U) | (UINT32_C(1) << 7U);
-        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, false, context);
+        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, false, user_context);
         ok = (tr != NULL) && tx_push(self, tr, true, CANARD_IFACE_BITMAP_ALL, transfer_id, payload, crc_seed);
     }
     return ok;
 }
 
-bool canard_0v1_request(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const canard_prio_t         priority,
-                        const uint_least8_t         data_type_id,
-                        const uint16_t              crc_seed,
-                        const uint_least8_t         server_node_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context)
+bool canard_0v1_request(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint_least8_t        data_type_id,
+                        const uint16_t             crc_seed,
+                        const uint_least8_t        server_node_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context)
 {
     return tx_0v1_service(
-      self, deadline, priority, data_type_id, crc_seed, server_node_id, true, transfer_id, payload, context);
+      self, deadline, priority, data_type_id, crc_seed, server_node_id, true, transfer_id, payload, user_context);
 }
 
-bool canard_0v1_respond(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const canard_prio_t         priority,
-                        const uint_least8_t         data_type_id,
-                        const uint16_t              crc_seed,
-                        const uint_least8_t         client_node_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context)
+bool canard_0v1_respond(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint_least8_t        data_type_id,
+                        const uint16_t             crc_seed,
+                        const uint_least8_t        client_node_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context)
 {
     return tx_0v1_service(
-      self, deadline, priority, data_type_id, crc_seed, client_node_id, false, transfer_id, payload, context);
+      self, deadline, priority, data_type_id, crc_seed, client_node_id, false, transfer_id, payload, user_context);
 }
 
 // ---------------------------------------------            RX             ---------------------------------------------

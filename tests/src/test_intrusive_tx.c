@@ -21,13 +21,13 @@ static canard_us_t mock_now(const canard_t* const self)
 }
 
 // Test TX callback with per-interface frame budgets.
-static bool mock_tx(canard_t* const             self,
-                    const canard_user_context_t user_context,
-                    const canard_us_t           deadline,
-                    const uint_least8_t         iface_index,
-                    const bool                  fd,
-                    const uint32_t              extended_can_id,
-                    const canard_bytes_t        can_data)
+static bool mock_tx(canard_t* const      self,
+                    void* const          user_context,
+                    const canard_us_t    deadline,
+                    const uint_least8_t  iface_index,
+                    const bool           fd,
+                    const uint32_t       extended_can_id,
+                    const canard_bytes_t can_data)
 {
     (void)user_context;
     (void)deadline;
@@ -180,8 +180,7 @@ static void test_tx_push_basic(void)
 
     const byte_t               data[]  = { 0xAAU };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const tr = tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 5U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
@@ -201,8 +200,7 @@ static void test_tx_push_capacity_reject(void)
     init_canard(&self, &ctx, &alloc, 0U);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const tr = tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, 1U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
@@ -222,8 +220,7 @@ static void test_tx_push_oom(void)
 
     const byte_t               data[]  = { 1U, 2U, 3U, 4U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const tr = tx_transfer_new(&self, 1000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, 3U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.oom);
@@ -241,7 +238,7 @@ static void test_tx_first_frame_departure_flag(void)
     const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
     const uint32_t             can_id  = (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (123U << 8U) | (1UL << 7U);
-    tx_transfer_t* const       tr      = tx_transfer_new(&self, 1000, can_id, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr      = tx_transfer_new(&self, 1000, can_id, false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 21U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->multi_frame);
@@ -270,12 +267,8 @@ static void test_tx_purge_continuations_keeps_unstarted_multi_frame(void)
 
     const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (1U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr      = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (1U << 8U) | (1UL << 7U), false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 1U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT8(1U, (uint8_t)tr->multi_frame);
@@ -299,12 +292,8 @@ static void test_tx_purge_continuations_removes_started_multi_frame(void)
 
     const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (2U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr      = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (2U << 8U) | (1UL << 7U), false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 2U, payload, CRC_INITIAL));
 
@@ -329,12 +318,8 @@ static void test_tx_purge_continuations_keeps_started_single_frame(void)
 
     const byte_t               data[]  = { 0xAAU };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (3U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr      = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (3U << 8U) | (1UL << 7U), false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 3U, 3U, payload, CRC_INITIAL));
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->multi_frame);
@@ -360,30 +345,18 @@ static void test_tx_purge_continuations_mixed_queue(void)
     instrumented_allocator_t alloc;
     init_canard(&self, &ctx, &alloc, 32U);
 
-    const byte_t               mf_a[]    = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
-    const byte_t               mf_b[]    = { 8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U };
-    const byte_t               sf[]      = { 0x55U };
-    const canard_bytes_chain_t payload_a = { .bytes = { .size = sizeof(mf_a), .data = mf_a }, .next = NULL };
-    const canard_bytes_chain_t payload_b = { .bytes = { .size = sizeof(mf_b), .data = mf_b }, .next = NULL };
-    const canard_bytes_chain_t payload_c = { .bytes = { .size = sizeof(sf), .data = sf }, .next = NULL };
-    tx_transfer_t* const       started_multi =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_optional) << PRIO_SHIFT) | (500U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
-    tx_transfer_t* const unstarted_multi =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (200U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
-    tx_transfer_t* const started_single =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_exceptional) << PRIO_SHIFT) | (1U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
+    const byte_t               mf_a[]        = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
+    const byte_t               mf_b[]        = { 8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U };
+    const byte_t               sf[]          = { 0x55U };
+    const canard_bytes_chain_t payload_a     = { .bytes = { .size = sizeof(mf_a), .data = mf_a }, .next = NULL };
+    const canard_bytes_chain_t payload_b     = { .bytes = { .size = sizeof(mf_b), .data = mf_b }, .next = NULL };
+    const canard_bytes_chain_t payload_c     = { .bytes = { .size = sizeof(sf), .data = sf }, .next = NULL };
+    tx_transfer_t* const       started_multi = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_optional) << PRIO_SHIFT) | (500U << 8U) | (1UL << 7U), false, NULL);
+    tx_transfer_t* const unstarted_multi = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (200U << 8U) | (1UL << 7U), false, NULL);
+    tx_transfer_t* const started_single = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_exceptional) << PRIO_SHIFT) | (1U << 8U) | (1UL << 7U), false, NULL);
     TEST_ASSERT_NOT_NULL(started_multi);
     TEST_ASSERT_NOT_NULL(unstarted_multi);
     TEST_ASSERT_NOT_NULL(started_single);
@@ -425,18 +398,10 @@ static void test_canard_set_node_id_purges_started_multiframe_only(void)
                                                    .next  = NULL };
     const canard_bytes_chain_t payload_fresh   = { .bytes = { .size = sizeof(fresh_data), .data = fresh_data },
                                                    .next  = NULL };
-    tx_transfer_t* const       started_multi =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (10U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
-    tx_transfer_t* const fresh_multi =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (11U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       started_multi   = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (10U << 8U) | (1UL << 7U), false, NULL);
+    tx_transfer_t* const fresh_multi = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (11U << 8U) | (1UL << 7U), false, NULL);
     TEST_ASSERT_NOT_NULL(started_multi);
     TEST_ASSERT_NOT_NULL(fresh_multi);
 
@@ -467,12 +432,8 @@ static void test_canard_set_node_id_same_value_keeps_queue(void)
 
     const byte_t               data[]  = { 0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
-    tx_transfer_t* const       tr =
-      tx_transfer_new(&self,
-                      1000,
-                      (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (12U << 8U) | (1UL << 7U),
-                      false,
-                      CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t* const       tr      = tx_transfer_new(
+      &self, 1000, (((uint32_t)canard_prio_nominal) << PRIO_SHIFT) | (12U << 8U) | (1UL << 7U), false, NULL);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_TRUE(tx_push(&self, tr, false, 1U, 22U, payload, CRC_INITIAL));
     ctx.tx_budget[0] = 1U;
@@ -496,8 +457,7 @@ static void test_canard_publish_validation(void)
     init_canard(&self, &ctx, &alloc, 8U);
 
     const canard_bytes_chain_t empty_payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(
-      canard_publish(&self, 1000, 0U, canard_prio_nominal, 10U, false, 0U, empty_payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_publish(&self, 1000, 0U, canard_prio_nominal, 10U, false, 0U, empty_payload, NULL));
 }
 
 // Validate publish CAN-ID composition.
@@ -511,8 +471,7 @@ static void test_canard_publish_basic(void)
     const byte_t               data[]  = { 0x55U };
     const canard_bytes_chain_t payload = { .bytes = { .size = sizeof(data), .data = data }, .next = NULL };
 
-    TEST_ASSERT_TRUE(
-      canard_publish(&self, 1000, 1U, canard_prio_high, 1234U, false, 17U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_high, 1234U, false, 17U, payload, NULL));
 
     const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
@@ -534,8 +493,8 @@ static void test_canard_publish_max_subject_encoding(void)
     init_canard(&self, &ctx, &alloc, 8U);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_TRUE(canard_publish(
-      &self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX, false, 3U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(
+      canard_publish(&self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX, false, 3U, payload, NULL));
 
     const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
@@ -559,8 +518,7 @@ static void test_canard_1v0_publish_basic(void)
     init_canard(&self, &ctx, &alloc, 8U);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_TRUE(
-      canard_publish(&self, 1000, 1U, canard_prio_nominal, 42U, true, 7U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_nominal, 42U, true, 7U, payload, NULL));
 
     const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
@@ -583,13 +541,11 @@ static void test_canard_0v1_publish_basic(void)
 
     // Node-ID zero is rejected.
     self.node_id = 0U;
-    TEST_ASSERT_FALSE(
-      canard_0v1_publish(&self, 1000, 1U, canard_prio_nominal, 11U, 0xFFFFU, 3U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_0v1_publish(&self, 1000, 1U, canard_prio_nominal, 11U, 0xFFFFU, 3U, payload, NULL));
 
     // Non-zero node-ID is accepted.
     self.node_id = 1U;
-    TEST_ASSERT_TRUE(
-      canard_0v1_publish(&self, 1000, 1U, canard_prio_nominal, 11U, 0xFFFFU, 3U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_publish(&self, 1000, 1U, canard_prio_nominal, 11U, 0xFFFFU, 3U, payload, NULL));
     const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(tr);
     TEST_ASSERT_EQUAL_UINT8(0U, (uint8_t)tr->fd);
@@ -609,10 +565,8 @@ static void test_canard_1v0_service_basic(void)
     self.node_id = 11U;
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_TRUE(
-      canard_request(&self, 1000, canard_prio_nominal, 430U, 24U, 5U, payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_TRUE(
-      canard_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_request(&self, 1000, canard_prio_nominal, 430U, 24U, 5U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 6U, payload, NULL));
 
     const tx_transfer_t* const req = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(req);
@@ -644,11 +598,11 @@ static void test_canard_1v0_service_validation(void)
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
     const canard_bytes_chain_t bad     = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
 
-    TEST_ASSERT_FALSE(canard_request(
-      &self, 1000, canard_prio_nominal, CANARD_SERVICE_ID_MAX + 1U, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_FALSE(canard_respond(
-      &self, 1000, canard_prio_nominal, 430U, CANARD_NODE_ID_MAX + 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_FALSE(canard_request(&self, 1000, canard_prio_nominal, 430U, 24U, 0U, bad, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(
+      canard_request(&self, 1000, canard_prio_nominal, CANARD_SERVICE_ID_MAX + 1U, 24U, 0U, payload, NULL));
+    TEST_ASSERT_FALSE(
+      canard_respond(&self, 1000, canard_prio_nominal, 430U, CANARD_NODE_ID_MAX + 1U, 0U, payload, NULL));
+    TEST_ASSERT_FALSE(canard_request(&self, 1000, canard_prio_nominal, 430U, 24U, 0U, bad, NULL));
 
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
@@ -663,8 +617,7 @@ static void test_canard_1v0_service_oom(void)
     alloc.limit_fragments = 0U;
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(
-      canard_request(&self, 1000, canard_prio_nominal, 430U, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_request(&self, 1000, canard_prio_nominal, 430U, 24U, 1U, payload, NULL));
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -677,8 +630,7 @@ static void test_canard_1v0_service_capacity(void)
     init_canard(&self, &ctx, &alloc, 0U);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(
-      canard_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_respond(&self, 1000, canard_prio_nominal, 430U, 24U, 1U, payload, NULL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
@@ -694,10 +646,8 @@ static void test_canard_0v1_service_basic(void)
     self.node_id = 11U;
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_TRUE(
-      canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_TRUE(
-      canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, NULL));
 
     const tx_transfer_t* const req = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
     TEST_ASSERT_NOT_NULL(req);
@@ -730,15 +680,12 @@ static void test_canard_0v1_service_validation(void)
     const canard_bytes_chain_t bad     = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
 
     self.node_id = 0U;
-    TEST_ASSERT_FALSE(
-      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, payload, NULL));
     self.node_id = 1U;
+    TEST_ASSERT_FALSE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, payload, NULL));
     TEST_ASSERT_FALSE(
-      canard_0v1_respond(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_FALSE(canard_0v1_request(
-      &self, 1000, canard_prio_nominal, 1U, 0xFFFFU, CANARD_NODE_ID_MAX + 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
-    TEST_ASSERT_FALSE(
-      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, bad, CANARD_USER_CONTEXT_NULL));
+      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, CANARD_NODE_ID_MAX + 1U, 0U, payload, NULL));
+    TEST_ASSERT_FALSE(canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, bad, NULL));
 
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
@@ -754,8 +701,7 @@ static void test_canard_0v1_service_oom(void)
     self.node_id          = 1U;
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(
-      canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xBEEFU, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_0v1_request(&self, 1000, canard_prio_nominal, 1U, 0xBEEFU, 24U, 1U, payload, NULL));
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -769,8 +715,7 @@ static void test_canard_0v1_service_capacity(void)
     self.node_id = 1U;
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(
-      canard_0v1_respond(&self, 1000, canard_prio_nominal, 1U, 0xBEEFU, 24U, 1U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 1U, 0xBEEFU, 24U, 1U, payload, NULL));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
@@ -792,8 +737,7 @@ static void test_1v0_publish_can_id_compliance(void)
 
     // Case A: prio=exceptional(0), subject_id=0
     init_canard(&self, &ctx, &alloc, 8U);
-    TEST_ASSERT_TRUE(
-      canard_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, true, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, true, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -811,8 +755,7 @@ static void test_1v0_publish_can_id_compliance(void)
 
     // Case B: prio=optional(7), subject_id=8191
     init_canard(&self, &ctx, &alloc, 8U);
-    TEST_ASSERT_TRUE(
-      canard_publish(&self, 1000, 1U, canard_prio_optional, 8191U, true, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_optional, 8191U, true, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -825,8 +768,7 @@ static void test_1v0_publish_can_id_compliance(void)
 
     // Case C: prio=high(3), subject_id=42
     init_canard(&self, &ctx, &alloc, 8U);
-    TEST_ASSERT_TRUE(
-      canard_publish(&self, 1000, 1U, canard_prio_high, 42U, true, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_high, 42U, true, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -850,8 +792,7 @@ static void test_1v0_request_can_id_compliance(void)
     // Case A: prio=exceptional(0), service_id=0, dest=1
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 10U;
-    TEST_ASSERT_TRUE(
-      canard_request(&self, 1000, canard_prio_exceptional, 0U, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_request(&self, 1000, canard_prio_exceptional, 0U, 1U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -869,8 +810,7 @@ static void test_1v0_request_can_id_compliance(void)
     // Case B: prio=optional(7), service_id=511, dest=127
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 10U;
-    TEST_ASSERT_TRUE(
-      canard_request(&self, 1000, canard_prio_optional, 511U, 127U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_request(&self, 1000, canard_prio_optional, 511U, 127U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -895,7 +835,7 @@ static void test_1v0_respond_can_id_compliance(void)
     // Case A: prio=fast(2), service_id=430, dest=24
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 11U;
-    TEST_ASSERT_TRUE(canard_respond(&self, 1000, canard_prio_fast, 430U, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_respond(&self, 1000, canard_prio_fast, 430U, 24U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -912,7 +852,7 @@ static void test_1v0_respond_can_id_compliance(void)
     // Case B: prio=nominal(4), service_id=1, dest=1
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 11U;
-    TEST_ASSERT_TRUE(canard_respond(&self, 1000, canard_prio_nominal, 1U, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_respond(&self, 1000, canard_prio_nominal, 1U, 1U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -937,8 +877,7 @@ static void test_0v1_publish_can_id_compliance(void)
     // Case A: prio=exceptional(0), dtid=0
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 1U;
-    TEST_ASSERT_TRUE(
-      canard_0v1_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_publish(&self, 1000, 1U, canard_prio_exceptional, 0U, 0xFFFFU, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -952,8 +891,7 @@ static void test_0v1_publish_can_id_compliance(void)
     // Case B: prio=optional(7), dtid=0xFFFF
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 1U;
-    TEST_ASSERT_TRUE(canard_0v1_publish(
-      &self, 1000, 1U, canard_prio_optional, 0xFFFFU, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_publish(&self, 1000, 1U, canard_prio_optional, 0xFFFFU, 0xFFFFU, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -967,8 +905,7 @@ static void test_0v1_publish_can_id_compliance(void)
     // Case C: prio=nominal(4), dtid=0x040A
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 1U;
-    TEST_ASSERT_TRUE(canard_0v1_publish(
-      &self, 1000, 1U, canard_prio_nominal, 0x040AU, 0xFFFFU, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_publish(&self, 1000, 1U, canard_prio_nominal, 0x040AU, 0xFFFFU, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -992,8 +929,7 @@ static void test_0v1_request_can_id_compliance(void)
     // Case A: prio=exceptional(0), dti=1, dest=1
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 10U;
-    TEST_ASSERT_TRUE(
-      canard_0v1_request(&self, 1000, canard_prio_exceptional, 1U, 0xFFFFU, 1U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_request(&self, 1000, canard_prio_exceptional, 1U, 0xFFFFU, 1U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -1010,8 +946,7 @@ static void test_0v1_request_can_id_compliance(void)
     // Case B: prio=optional(7), dti=255, dest=127
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 10U;
-    TEST_ASSERT_TRUE(canard_0v1_request(
-      &self, 1000, canard_prio_optional, 255U, 0xFFFFU, 127U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_request(&self, 1000, canard_prio_optional, 255U, 0xFFFFU, 127U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -1038,8 +973,7 @@ static void test_0v1_respond_can_id_compliance(void)
     // Case A: prio=nominal(4), dti=0x37, dest=24
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 11U;
-    TEST_ASSERT_TRUE(
-      canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xFFFFU, 24U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xFFFFU, 24U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);
@@ -1056,8 +990,7 @@ static void test_0v1_respond_can_id_compliance(void)
     // Case B: prio=immediate(1), dti=200, dest=42
     init_canard(&self, &ctx, &alloc, 8U);
     self.node_id = 11U;
-    TEST_ASSERT_TRUE(canard_0v1_respond(
-      &self, 1000, canard_prio_immediate, 200U, 0xFFFFU, 42U, 0U, payload, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_respond(&self, 1000, canard_prio_immediate, 200U, 0xFFFFU, 42U, 0U, payload, NULL));
     {
         const tx_transfer_t* const tr = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
         TEST_ASSERT_NOT_NULL(tr);

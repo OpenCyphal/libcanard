@@ -98,13 +98,13 @@ static canard_us_t tx_test_now(const canard_t* const self)
     return (ctx != NULL) ? ctx->now : 0;
 }
 
-static bool tx_test_tx(canard_t* const             self,
-                       const canard_user_context_t user_context,
-                       const canard_us_t           deadline,
-                       const uint_least8_t         iface_index,
-                       const bool                  fd,
-                       const uint32_t              extended_can_id,
-                       const canard_bytes_t        can_data)
+static bool tx_test_tx(canard_t* const      self,
+                       void* const          user_context,
+                       const canard_us_t    deadline,
+                       const uint_least8_t  iface_index,
+                       const bool           fd,
+                       const uint32_t       extended_can_id,
+                       const canard_bytes_t can_data)
 {
     (void)self;
     (void)user_context;
@@ -154,7 +154,7 @@ static tx_transfer_t* enqueue_transfer(canard_t* self, const bool multi_frame_pa
     const size_t  sz           = multi_frame_payload ? sizeof(data_large) : sizeof(data_small);
     const canard_bytes_chain_t payload = { .bytes = { .size = sz, .data = d }, .next = NULL };
     const uint32_t             can_id  = ((uint32_t)canard_prio_nominal) << PRIO_SHIFT;
-    tx_transfer_t*             tr      = tx_transfer_new(self, 1000000LL, can_id, false, CANARD_USER_CONTEXT_NULL);
+    tx_transfer_t*             tr      = tx_transfer_new(self, 1000000LL, can_id, false, NULL);
     if (tr != NULL) {
         if (!tx_push(self, tr, false, CANARD_IFACE_BITMAP_ALL, 5U, payload, CRC_INITIAL)) {
             tr = NULL; // tx_push already freed tr on failure

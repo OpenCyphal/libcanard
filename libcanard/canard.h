@@ -191,22 +191,6 @@ typedef struct canard_payload_t
     canard_bytes_mut_t origin; ///< Use this to free the memory, unless NULL/empty.
 } canard_payload_t;
 
-/// The library carries the user-provided context from inputs to outputs without interpreting it,
-/// allowing the application to associate its own data with various entities inside the library.
-/// The size can be changed arbitrarily. This value is compromise between copy size and footprint and utility.
-#define CANARD_USER_CONTEXT_PTR_COUNT 2
-typedef union canard_user_context_t
-{
-    void*         ptr[CANARD_USER_CONTEXT_PTR_COUNT];
-    unsigned char bytes[sizeof(void*) * CANARD_USER_CONTEXT_PTR_COUNT];
-} canard_user_context_t;
-#ifdef __cplusplus
-#define CANARD_USER_CONTEXT_NULL \
-    canard_user_context_t {}
-#else
-#define CANARD_USER_CONTEXT_NULL ((canard_user_context_t){ .ptr = { NULL } })
-#endif
-
 /// The filter only matches extended CAN IDs on data frames (no std/rtr). Bits above 29 are always zero.
 typedef struct canard_filter_t
 {
@@ -259,7 +243,7 @@ struct canard_subscription_t
     canard_tree_t*                      sessions;
     const canard_subscription_vtable_t* vtable;
 
-    canard_user_context_t user_context;
+    void* user_context;
 };
 
 typedef struct canard_vtable_t
@@ -273,7 +257,7 @@ typedef struct canard_vtable_t
     /// The callback must not mutate the TX pipeline (no publish/cancel/free/etc).
     /// If the can_data needs to be retained for later retransmission, use canard_refcount_inc()/canard_refcount_dec().
     bool (*tx)(canard_t*,
-               canard_user_context_t,
+               void*          user_context,
                canard_us_t    deadline,
                uint_least8_t  iface_index,
                bool           fd,
@@ -426,33 +410,33 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 /// The context is passed into the tx() vtable function.
 ///
 /// Returns zero on success, false on OOM (error counters updated) or if any of the arguments are invalid.
-bool canard_publish(canard_t* const             self,
-                    const canard_us_t           deadline,
-                    const uint_least8_t         iface_bitmap,
-                    const canard_prio_t         priority,
-                    const uint16_t              subject_id,
-                    const bool                  rev_1v0, ///< If set, subject-ID must be in [0,8192).
-                    const uint_least8_t         transfer_id,
-                    const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context);
+bool canard_publish(canard_t* const            self,
+                    const canard_us_t          deadline,
+                    const uint_least8_t        iface_bitmap,
+                    const canard_prio_t        priority,
+                    const uint16_t             subject_id,
+                    const bool                 rev_1v0, ///< If set, subject-ID must be in [0,8192).
+                    const uint_least8_t        transfer_id,
+                    const canard_bytes_chain_t payload,
+                    void* const                user_context);
 
-bool canard_request(canard_t* const             self,
-                    const canard_us_t           deadline,
-                    const canard_prio_t         priority,
-                    const uint16_t              service_id,
-                    const uint_least8_t         server_node_id,
-                    const uint_least8_t         transfer_id,
-                    const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context);
+bool canard_request(canard_t* const            self,
+                    const canard_us_t          deadline,
+                    const canard_prio_t        priority,
+                    const uint16_t             service_id,
+                    const uint_least8_t        server_node_id,
+                    const uint_least8_t        transfer_id,
+                    const canard_bytes_chain_t payload,
+                    void* const                user_context);
 
-bool canard_respond(canard_t* const             self,
-                    const canard_us_t           deadline,
-                    const canard_prio_t         priority,
-                    const uint16_t              service_id,
-                    const uint_least8_t         client_node_id,
-                    const uint_least8_t         transfer_id,
-                    const canard_bytes_chain_t  payload,
-                    const canard_user_context_t context);
+bool canard_respond(canard_t* const            self,
+                    const canard_us_t          deadline,
+                    const canard_prio_t        priority,
+                    const uint16_t             service_id,
+                    const uint_least8_t        client_node_id,
+                    const uint_least8_t        transfer_id,
+                    const canard_bytes_chain_t payload,
+                    void* const                user_context);
 
 /// Register a new subscription on a v1.1 or v1.0 subject. The subscription instance must not be moved while in use.
 /// The extent specifies the maximum message size that can be received from the subject; longer messages will be
@@ -521,35 +505,35 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 ///
 /// To obtain the CRC seed, use canard_0v1_crc_seed_from_data_type_signature(); if the payload does not exceed 7 bytes,
 /// the CRC seed can be arbitrary since it is not needed for single-frame transfers.
-bool canard_0v1_publish(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const uint_least8_t         iface_bitmap,
-                        const canard_prio_t         priority,
-                        const uint16_t              data_type_id,
-                        const uint16_t              crc_seed,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context);
+bool canard_0v1_publish(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             data_type_id,
+                        const uint16_t             crc_seed,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context);
 
-bool canard_0v1_request(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const canard_prio_t         priority,
-                        const uint_least8_t         data_type_id,
-                        const uint16_t              crc_seed,
-                        const uint_least8_t         server_node_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context);
+bool canard_0v1_request(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint_least8_t        data_type_id,
+                        const uint16_t             crc_seed,
+                        const uint_least8_t        server_node_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context);
 
-bool canard_0v1_respond(canard_t* const             self,
-                        const canard_us_t           deadline,
-                        const canard_prio_t         priority,
-                        const uint_least8_t         data_type_id,
-                        const uint16_t              crc_seed,
-                        const uint_least8_t         client_node_id,
-                        const uint_least8_t         transfer_id,
-                        const canard_bytes_chain_t  payload,
-                        const canard_user_context_t context);
+bool canard_0v1_respond(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const canard_prio_t        priority,
+                        const uint_least8_t        data_type_id,
+                        const uint16_t             crc_seed,
+                        const uint_least8_t        client_node_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context);
 
 bool canard_0v1_subscribe(canard_t* const                           self,
                           canard_subscription_t* const              subscription,

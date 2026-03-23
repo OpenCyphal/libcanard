@@ -10,7 +10,8 @@
 #include <cstring>
 #include <vector>
 
-// ============================================== Test Allocators & Helpers ==============================================
+// ============================================== Test Allocators & Helpers
+// ==============================================
 
 static void* std_alloc_mem(const canard_mem_t, const size_t size) { return std::malloc(size); }
 static void  std_free_mem(const canard_mem_t, const size_t, void* const pointer) { std::free(pointer); }
@@ -48,25 +49,29 @@ static constexpr uint16_t crc_table[256] = {
 struct tx_capture_t
 {
     std::vector<std::pair<uint32_t, std::vector<uint8_t>>> frames; // <CAN-ID, data>
-    bool accept_frames = true;
-    size_t call_count = 0;
+    bool                                                   accept_frames = true;
+    size_t                                                 call_count    = 0;
 
-    void clear() { frames.clear(); call_count = 0; }
+    void clear()
+    {
+        frames.clear();
+        call_count = 0;
+    }
 };
 
 static tx_capture_t tx_capture_state;
 
 static bool capturing_tx(canard_t*,
-                         const canard_user_context_t,
+                         void* const,
                          const canard_us_t,
                          const uint_least8_t,
                          const bool,
-                         const uint32_t extended_can_id,
+                         const uint32_t       extended_can_id,
                          const canard_bytes_t can_data)
 {
     tx_capture_state.call_count++;
     if (tx_capture_state.accept_frames) {
-        const uint8_t* data_ptr = can_data.data ? static_cast<const uint8_t*>(can_data.data) : nullptr;
+        const uint8_t*       data_ptr = can_data.data ? static_cast<const uint8_t*>(can_data.data) : nullptr;
         std::vector<uint8_t> data(data_ptr, data_ptr ? (data_ptr + can_data.size) : nullptr);
         tx_capture_state.frames.emplace_back(extended_can_id, data);
         return true;
@@ -84,24 +89,29 @@ static bool null_filter(canard_t*, size_t, const canard_filter_t*) { return true
 // Capturing RX callback state
 struct rx_capture_t
 {
-    size_t        call_count = 0;
-    canard_us_t   timestamp = 0;
-    canard_prio_t priority = canard_prio_nominal;
-    uint_least8_t source_node_id = 0;
-    uint_least8_t transfer_id = 0;
-    size_t        payload_size = 0;
+    size_t               call_count     = 0;
+    canard_us_t          timestamp      = 0;
+    canard_prio_t        priority       = canard_prio_nominal;
+    uint_least8_t        source_node_id = 0;
+    uint_least8_t        transfer_id    = 0;
+    size_t               payload_size   = 0;
     std::vector<uint8_t> payload_buf;
 
-    void clear() { call_count = 0; payload_size = 0; payload_buf.clear(); }
+    void clear()
+    {
+        call_count   = 0;
+        payload_size = 0;
+        payload_buf.clear();
+    }
 };
 
 static rx_capture_t rx_capture_state;
 
 static void capturing_on_message(canard_subscription_t* const,
-                                 const canard_us_t            timestamp,
-                                 const canard_prio_t          priority,
-                                 const uint_least8_t          source_node_id,
-                                 const uint_least8_t          transfer_id,
+                                 const canard_us_t      timestamp,
+                                 const canard_prio_t    priority,
+                                 const uint_least8_t    source_node_id,
+                                 const uint_least8_t    transfer_id,
                                  const canard_payload_t payload)
 {
     rx_capture_state.call_count++;
@@ -152,7 +162,8 @@ static void init_canard(canard_t* const self, canard_us_t* const now_val, const 
 
 static uint16_t crc_add_byte(uint16_t crc, uint8_t byte)
 {
-    return static_cast<uint16_t>(static_cast<uint16_t>(crc << 8U) ^ crc_table[static_cast<uint16_t>(static_cast<uint16_t>(crc >> 8U) ^ byte) & 0xFFU]);
+    return static_cast<uint16_t>(static_cast<uint16_t>(crc << 8U) ^
+                                 crc_table[static_cast<uint16_t>(static_cast<uint16_t>(crc >> 8U) ^ byte) & 0xFFU]);
 }
 
 static uint16_t compute_crc(const uint16_t seed, const uint8_t* data, const size_t size)
@@ -164,22 +175,27 @@ static uint16_t compute_crc(const uint16_t seed, const uint8_t* data, const size
     return crc;
 }
 
-// ============================================== Tests ===================================================================================
+// ============================================== Tests
+// ===================================================================================
 
-void setUp(void) { tx_capture_state.clear(); rx_capture_state.clear(); }
+void setUp(void)
+{
+    tx_capture_state.clear();
+    rx_capture_state.clear();
+}
 void tearDown(void) {}
 
 // Test 1: canard_new with invalid arguments
 static void test_canard_new_validation()
 {
-    canard_t instance;
+    canard_t               instance;
     const canard_mem_set_t mem = make_std_memory();
 
     // Null vtable
     TEST_ASSERT_FALSE(canard_new(&instance, nullptr, mem, 128U, 1234U, 0U));
 
     // Null mem vtable
-    canard_mem_set_t bad_mem = mem;
+    canard_mem_set_t bad_mem  = mem;
     bad_mem.rx_payload.vtable = nullptr;
     TEST_ASSERT_FALSE(canard_new(&instance, &test_vtable, bad_mem, 128U, 1234U, 0U));
 
@@ -194,7 +210,7 @@ static void test_canard_new_validation()
 // Test 2: Multi-frame TX (8-65 byte payloads)
 static void test_multiframe_tx_with_crc(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 42);
 
@@ -212,9 +228,17 @@ static void test_multiframe_tx_with_crc(void)
         }
 
         // Publish
-        canard_bytes_chain_t payload_chain = { .bytes = { .size = payload_size, .data = payload.data() }, .next = nullptr };
-        TEST_ASSERT_TRUE(canard_publish(&instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal,
-                                        100U, false, 5U, payload_chain, CANARD_USER_CONTEXT_NULL));
+        canard_bytes_chain_t payload_chain = { .bytes = { .size = payload_size, .data = payload.data() },
+                                               .next  = nullptr };
+        TEST_ASSERT_TRUE(canard_publish(&instance,
+                                        now_val + 1000000,
+                                        CANARD_IFACE_BITMAP_ALL,
+                                        canard_prio_nominal,
+                                        100U,
+                                        false,
+                                        5U,
+                                        payload_chain,
+                                        NULL));
 
         // Poll to drive TX
         canard_poll(&instance, CANARD_IFACE_BITMAP_ALL);
@@ -223,8 +247,8 @@ static void test_multiframe_tx_with_crc(void)
         TEST_ASSERT_GREATER_THAN(0U, tx_capture_state.frames.size());
 
         // Verify last frame has tail byte and proper structure
-        size_t last_frame_idx = tx_capture_state.frames.size() - 1;
-        const auto& last_frame = tx_capture_state.frames[last_frame_idx];
+        size_t      last_frame_idx = tx_capture_state.frames.size() - 1;
+        const auto& last_frame     = tx_capture_state.frames[last_frame_idx];
         TEST_ASSERT_GREATER_THAN(0U, last_frame.second.size()); // Has tail byte at minimum
 
         // For multi-frame, verify CRC in the last frame
@@ -244,14 +268,14 @@ static void test_multiframe_tx_with_crc(void)
 // Test 3: Multi-frame RX with payload ownership
 static void test_multiframe_rx_payload_ownership(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 20);
 
     // Subscribe to a subject
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&instance, &sub, 100U, false, 1024U,
-                                     CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe(
+      &instance, &sub, 100U, false, 1024U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
 
     // Manually construct a 2-frame transfer: 20 bytes total
     // Frame 1: SOF=1, data bytes 0-7
@@ -267,17 +291,17 @@ static void test_multiframe_rx_payload_ownership(void)
     // Frame 1: v1.1 message, SOF, 8 data bytes
     // CAN ID: prio[28:26]=nominal(4) | subject[25:8]=100 | bit7=1(v1.1) | src[6:0]=10
     uint32_t can_id_1 = (4U << 26U) | (100U << 8U) | (1U << 7U) | 10U;
-    uint8_t frame1_data[8];
+    uint8_t  frame1_data[8];
     std::memcpy(frame1_data, payload_data, 8);
     frame1_data[7] = 0xE0U | 5U; // tail: SOF=1, EOT=0, TOGGLE=1, TID=5
 
     // Frame 2: EOF, 7 data bytes + 2 CRC bytes
     uint32_t can_id_2 = can_id_1;
-    uint8_t frame2_data[10];
+    uint8_t  frame2_data[10];
     std::memcpy(frame2_data, payload_data + 8, 7);
-    frame2_data[7] = (uint8_t)(crc & 0xFFU);       // CRC low byte
+    frame2_data[7] = (uint8_t)(crc & 0xFFU);         // CRC low byte
     frame2_data[8] = (uint8_t)((crc >> 8U) & 0xFFU); // CRC high byte
-    frame2_data[9] = 0x60U | 5U;                   // tail: SOF=0, EOF=1, TOGGLE=1, TID=5
+    frame2_data[9] = 0x60U | 5U;                     // tail: SOF=0, EOF=1, TOGGLE=1, TID=5
 
     // Ingest frames
     TEST_ASSERT_TRUE(canard_ingest_frame(&instance, now_val, 0U, can_id_1, { .size = 8, .data = frame1_data }));
@@ -299,22 +323,21 @@ static void test_multiframe_rx_payload_ownership(void)
 // Test 4: Payload truncation at extent boundary
 static void test_payload_truncation_single_and_multiframe(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 30);
 
     // Subscribe with extent=4
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&instance, &sub, 200U, false, 4U,
-                                     CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(
+      canard_subscribe(&instance, &sub, 200U, false, 4U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
 
     // Single-frame with 10 bytes -> should truncate to 4
-    uint8_t single_frame_data[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-    uint32_t can_id = (4U << 26U) | (200U << 8U) | (1U << 7U) | 40U;
+    uint8_t  single_frame_data[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    uint32_t can_id                = (4U << 26U) | (200U << 8U) | (1U << 7U) | 40U;
 
     rx_capture_state.clear();
-    TEST_ASSERT_TRUE(canard_ingest_frame(&instance, now_val, 0U, can_id,
-                                         { .size = 10, .data = single_frame_data }));
+    TEST_ASSERT_TRUE(canard_ingest_frame(&instance, now_val, 0U, can_id, { .size = 10, .data = single_frame_data }));
 
     // Callback should fire; payload truncated to 4 bytes
     TEST_ASSERT_EQUAL(1U, rx_capture_state.call_count);
@@ -329,7 +352,7 @@ static void test_payload_truncation_single_and_multiframe(void)
 // Test 5: canard_request and canard_respond OOM
 static void test_request_respond_oom(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
 
     // Initialize with dummy (always-failing) allocator
@@ -339,17 +362,17 @@ static void test_request_respond_oom(void)
     instance.user_context = &now_val;
 
     // Try to publish a request -> should fail with OOM
-    uint8_t payload[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    uint8_t              payload[10]   = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
     canard_bytes_chain_t payload_chain = { .bytes = { .size = 10, .data = payload }, .next = nullptr };
 
-    TEST_ASSERT_FALSE(canard_request(&instance, now_val + 1000000, canard_prio_nominal, 50U, 20U, 3U,
-                                     payload_chain, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(
+      canard_request(&instance, now_val + 1000000, canard_prio_nominal, 50U, 20U, 3U, payload_chain, NULL));
     TEST_ASSERT_GREATER_THAN(0U, instance.err.oom);
 
     // Try to respond -> should also fail with OOM
     uint64_t oom_before = instance.err.oom;
-    TEST_ASSERT_FALSE(canard_respond(&instance, now_val + 1000000, canard_prio_nominal, 50U, 20U, 3U,
-                                     payload_chain, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_FALSE(
+      canard_respond(&instance, now_val + 1000000, canard_prio_nominal, 50U, 20U, 3U, payload_chain, NULL));
     TEST_ASSERT_GREATER_THAN(oom_before, instance.err.oom);
 
     canard_destroy(&instance);
@@ -359,26 +382,26 @@ static void test_request_respond_oom(void)
 static void test_service_request_wrong_destination_dropped(void)
 {
     // Sender: node 10
-    canard_t sender;
+    canard_t    sender;
     canard_us_t sender_now = 0;
     init_canard(&sender, &sender_now, 10);
 
     // Receiver: node 20
-    canard_t receiver;
+    canard_t    receiver;
     canard_us_t receiver_now = 0;
     init_canard(&receiver, &receiver_now, 20);
 
     // Receiver subscribes to requests on service 50 -> node 20
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_request(&receiver, &sub, 50U, 1024U,
-                                              CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_request(
+      &receiver, &sub, 50U, 1024U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
 
     // Sender publishes a request to service 50, addressed to node 99 (NOT 20)
-    uint8_t payload[5] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
+    uint8_t              payload[5]    = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
     canard_bytes_chain_t payload_chain = { .bytes = { .size = 5, .data = payload }, .next = nullptr };
 
-    TEST_ASSERT_TRUE(canard_request(&sender, sender_now + 1000000, canard_prio_nominal, 50U, 99U, 2U,
-                                    payload_chain, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(
+      canard_request(&sender, sender_now + 1000000, canard_prio_nominal, 50U, 99U, 2U, payload_chain, NULL));
 
     // Sender polls to generate the frame
     canard_poll(&sender, CANARD_IFACE_BITMAP_ALL);
@@ -387,8 +410,8 @@ static void test_service_request_wrong_destination_dropped(void)
     // Receiver ingests the frame -> should be silently dropped (wrong destination)
     const auto& frame = tx_capture_state.frames[0];
     rx_capture_state.clear();
-    TEST_ASSERT_TRUE(canard_ingest_frame(&receiver, receiver_now, 0U, frame.first,
-                                         { .size = frame.second.size(), .data = frame.second.data() }));
+    TEST_ASSERT_TRUE(canard_ingest_frame(
+      &receiver, receiver_now, 0U, frame.first, { .size = frame.second.size(), .data = frame.second.data() }));
 
     // Callback should NOT have fired
     TEST_ASSERT_EQUAL(0U, rx_capture_state.call_count);
@@ -401,7 +424,7 @@ static void test_service_request_wrong_destination_dropped(void)
 // Test 7: canard_destroy with pending TX transfers
 static void test_destroy_with_pending_transfers(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 5);
 
@@ -409,21 +432,21 @@ static void test_destroy_with_pending_transfers(void)
     uint8_t payload1[20];
     std::memset(payload1, 0x11, sizeof(payload1));
     canard_bytes_chain_t chain1 = { .bytes = { .size = sizeof(payload1), .data = payload1 }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal,
-                                    100U, false, 1U, chain1, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(
+      &instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal, 100U, false, 1U, chain1, NULL));
 
     uint8_t payload2[15];
     std::memset(payload2, 0x22, sizeof(payload2));
     canard_bytes_chain_t chain2 = { .bytes = { .size = sizeof(payload2), .data = payload2 }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal,
-                                    101U, false, 2U, chain2, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_publish(
+      &instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal, 101U, false, 2U, chain2, NULL));
 
     // Destroy WITHOUT polling -> must clean up all pending transfers
     // If memory leaks, instrumented allocator or static analysis will catch it
     canard_destroy(&instance);
 
     // Verify we can still allocate/free normally (no corruption)
-    canard_t instance2;
+    canard_t    instance2;
     canard_us_t now_val2 = 0;
     init_canard(&instance2, &now_val2, 6);
     canard_destroy(&instance2);
@@ -432,7 +455,7 @@ static void test_destroy_with_pending_transfers(void)
 // Test 8: TX sacrifice on capacity limit
 static void test_tx_sacrifice_on_capacity(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
 
     // Initialize with very small queue (1 frame capacity)
@@ -442,16 +465,16 @@ static void test_tx_sacrifice_on_capacity(void)
     instance.user_context = &now_val;
 
     // Publish first transfer (fits)
-    uint8_t payload1[5] = { 0x11, 0x22, 0x33, 0x44, 0x55 };
-    canard_bytes_chain_t chain1 = { .bytes = { .size = 5, .data = payload1 }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_high,
-                                    100U, false, 1U, chain1, CANARD_USER_CONTEXT_NULL));
+    uint8_t              payload1[5] = { 0x11, 0x22, 0x33, 0x44, 0x55 };
+    canard_bytes_chain_t chain1      = { .bytes = { .size = 5, .data = payload1 }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_publish(
+      &instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_high, 100U, false, 1U, chain1, NULL));
 
     // Publish second transfer -> should sacrifice the first (capacity exhausted)
-    uint8_t payload2[5] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
-    canard_bytes_chain_t chain2 = { .bytes = { .size = 5, .data = payload2 }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_high,
-                                    101U, false, 2U, chain2, CANARD_USER_CONTEXT_NULL));
+    uint8_t              payload2[5] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
+    canard_bytes_chain_t chain2      = { .bytes = { .size = 5, .data = payload2 }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_publish(
+      &instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_high, 101U, false, 2U, chain2, NULL));
 
     // Verify sacrifice counter incremented
     TEST_ASSERT_EQUAL(1U, instance.err.tx_sacrifice);
@@ -462,17 +485,17 @@ static void test_tx_sacrifice_on_capacity(void)
 // Test 9: TX expiration via canard_poll
 static void test_tx_expiration(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 12);
 
     // Publish with deadline in the past
-    uint8_t payload[5] = { 0x12, 0x34, 0x56, 0x78, 0x9A };
-    canard_bytes_chain_t chain = { .bytes = { .size = 5, .data = payload }, .next = nullptr };
+    uint8_t              payload[5] = { 0x12, 0x34, 0x56, 0x78, 0x9A };
+    canard_bytes_chain_t chain      = { .bytes = { .size = 5, .data = payload }, .next = nullptr };
 
     now_val = 1000000;
-    TEST_ASSERT_TRUE(canard_publish(&instance, 500000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal,
-                                    102U, false, 1U, chain, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(
+      canard_publish(&instance, 500000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal, 102U, false, 1U, chain, NULL));
 
     // Poll -> should expire the transfer
     tx_capture_state.clear();
@@ -488,15 +511,15 @@ static void test_tx_expiration(void)
 // Test 10: Node-ID collision detection
 static void test_node_id_collision_detection(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 25);
     uint_least8_t original_node_id = instance.node_id;
 
     // Ingest a frame from another node claiming the same node-ID (25)
     // v1.1 message: priority=nominal | subject=300 | v1.1 bit | src=25
-    uint32_t can_id = (4U << 26U) | (300U << 8U) | (1U << 7U) | 25U;
-    uint8_t frame_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0xE0U | 0U }; // TID=0, SOF|EOF|TOGGLE
+    uint32_t can_id        = (4U << 26U) | (300U << 8U) | (1U << 7U) | 25U;
+    uint8_t  frame_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0xE0U | 0U }; // TID=0, SOF|EOF|TOGGLE
 
     TEST_ASSERT_TRUE(canard_ingest_frame(&instance, now_val, 0U, can_id, { .size = 8, .data = frame_data }));
 
@@ -512,7 +535,7 @@ static void test_node_id_collision_detection(void)
 // Test 11: v0 multi-frame with CRC
 static void test_v0_multiframe_with_crc(void)
 {
-    canard_t instance;
+    canard_t    instance;
     canard_us_t now_val = 0;
     init_canard(&instance, &now_val, 11);
 
@@ -521,8 +544,8 @@ static void test_v0_multiframe_with_crc(void)
 
     // Subscribe to a v0 message
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_0v1_subscribe(&instance, &sub, 50U, crc_seed, 1024U,
-                                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(
+      &instance, &sub, 50U, crc_seed, 1024U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
 
     // Publish a v0 message with 20-byte payload (will be multi-frame)
     uint8_t payload[20];
@@ -532,26 +555,26 @@ static void test_v0_multiframe_with_crc(void)
     canard_bytes_chain_t chain = { .bytes = { .size = 20, .data = payload }, .next = nullptr };
 
     now_val = 0;
-    TEST_ASSERT_TRUE(canard_0v1_publish(&instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal,
-                                        50U, crc_seed, 3U, chain, CANARD_USER_CONTEXT_NULL));
+    TEST_ASSERT_TRUE(canard_0v1_publish(
+      &instance, now_val + 1000000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal, 50U, crc_seed, 3U, chain, NULL));
 
     // Poll to generate frames
     canard_poll(&instance, CANARD_IFACE_BITMAP_ALL);
     TEST_ASSERT_GREATER_THAN(0U, tx_capture_state.frames.size());
 
     // Now feed the frames back to a receiver
-    canard_t receiver;
+    canard_t    receiver;
     canard_us_t receiver_now = 0;
     init_canard(&receiver, &receiver_now, 12);
 
     canard_subscription_t rx_sub = {};
-    TEST_ASSERT_TRUE(canard_0v1_subscribe(&receiver, &rx_sub, 50U, crc_seed, 1024U,
-                                          CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(
+      &receiver, &rx_sub, 50U, crc_seed, 1024U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &capture_sub_vtable));
 
     rx_capture_state.clear();
     for (const auto& frame : tx_capture_state.frames) {
-        TEST_ASSERT_TRUE(canard_ingest_frame(&receiver, receiver_now, 0U, frame.first,
-                                             { .size = frame.second.size(), .data = frame.second.data() }));
+        TEST_ASSERT_TRUE(canard_ingest_frame(
+          &receiver, receiver_now, 0U, frame.first, { .size = frame.second.size(), .data = frame.second.data() }));
         receiver_now += 100;
     }
 
