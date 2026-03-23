@@ -633,8 +633,8 @@ static void test_crc_residue_property(void)
     // Append CRC in big-endian order.
     uint8_t augmented[sizeof(data) + CRC_SIZE_BYTES];
     memcpy(augmented, data, sizeof(data));
-    augmented[sizeof(data)]     = (uint8_t)(crc >> 8U);   // high byte
-    augmented[sizeof(data) + 1] = (uint8_t)(crc & 0xFFU); // low byte
+    augmented[sizeof(data)]     = (uint8_t)((unsigned)crc >> 8U);   // high byte
+    augmented[sizeof(data) + 1] = (uint8_t)((unsigned)crc & 0xFFU); // low byte
     const uint16_t residue      = crc_add(CRC_INITIAL, sizeof(augmented), augmented);
     TEST_ASSERT_EQUAL_HEX16(CRC_RESIDUE, residue);
 

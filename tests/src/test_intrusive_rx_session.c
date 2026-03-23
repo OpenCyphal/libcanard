@@ -2103,7 +2103,7 @@ static void test_transfer_id_rollover_31_to_0(void)
     TEST_ASSERT_EQUAL_UINT8(0, fx.capture.transfer_id);
 
     // Duplicate TID=0 → rejected (same TID, same prio, within timeout).
-    TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA + 1, &fr0, 0));
+    TEST_ASSERT_TRUE(feed(&fx, (2 * MEGA) + 1, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count); // No new callback.
 
     fixture_destroy_all_sessions(&fx);
@@ -2131,7 +2131,7 @@ static void test_session_timeout_exact_boundary(void)
 
     // At ts=3000001: stale = (3000001 - 2000000) > 1000000 = true. Stale.
     // affine && stale → 2 of 3 → admit.
-    TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA + 1, &fr5, 0));
+    TEST_ASSERT_TRUE(feed(&fx, (3 * MEGA) + 1, &fr5, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(5, fx.capture.transfer_id);
 

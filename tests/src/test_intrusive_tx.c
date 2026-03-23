@@ -1158,7 +1158,7 @@ static void test_tx_spool_crc_split_across_frames(void)
     for (size_t i = 0; i < 6U; i++) {
         TEST_ASSERT_EQUAL_HEX8(data[7U + i], f2->data[i]);
     }
-    TEST_ASSERT_EQUAL_HEX8((byte_t)((crc >> 8U) & 0xFFU), f2->data[6]); // CRC high byte
+    TEST_ASSERT_EQUAL_HEX8((byte_t)(((unsigned)crc >> 8U) & 0xFFU), f2->data[6]); // CRC high byte
     TEST_ASSERT_EQUAL_HEX8(2U, f2->data[7] & (TAIL_SOT | TAIL_EOT | TAIL_TOGGLE | CANARD_TRANSFER_ID_MAX));
     // toggle=0 (second frame)
 
@@ -1166,7 +1166,7 @@ static void test_tx_spool_crc_split_across_frames(void)
     const tx_frame_t* const f3 = f2->next;
     TEST_ASSERT_NOT_NULL(f3);
     TEST_ASSERT_EQUAL_size_t(2U, canard_dlc_to_len[f3->dlc]);
-    TEST_ASSERT_EQUAL_HEX8((byte_t)(crc & 0xFFU), f3->data[0]);               // CRC low byte
+    TEST_ASSERT_EQUAL_HEX8((byte_t)((unsigned)crc & 0xFFU), f3->data[0]);     // CRC low byte
     TEST_ASSERT_EQUAL_HEX8(TAIL_EOT | TAIL_TOGGLE | 2U, f3->data[1] & 0xFFU); // EOT, toggle=1 (third frame)
 
     // Cleanup.
@@ -1471,8 +1471,8 @@ static void test_tx_spool_v0_crc_byte_order(void)
     TEST_ASSERT_NOT_NULL(head);
     // v0 prepends CRC in LE: the first 2 bytes of the stream are [crc_low, crc_high].
     // Frame 1 data[0..6] are the first 7 stream bytes. Stream = [crc_lo, crc_hi, payload...].
-    TEST_ASSERT_EQUAL_HEX8((byte_t)(crc & 0xFFU), head->data[0]);
-    TEST_ASSERT_EQUAL_HEX8((byte_t)((crc >> 8U) & 0xFFU), head->data[1]);
+    TEST_ASSERT_EQUAL_HEX8((byte_t)((unsigned)crc & 0xFFU), head->data[0]);
+    TEST_ASSERT_EQUAL_HEX8((byte_t)(((unsigned)crc >> 8U) & 0xFFU), head->data[1]);
 
     // Cleanup.
     tx_frame_t* f = head;
@@ -1678,8 +1678,8 @@ static void test_tx_predict_frame_count_exhaustive(void)
     for (size_t mi = 0; mi < sizeof(mtus) / sizeof(mtus[0]); mi++) {
         const size_t mtu = mtus[mi];
         for (size_t si = 0; si < sizeof(sizes) / sizeof(sizes[0]); si++) {
-            const size_t sz = sizes[si];
-            size_t       expected;
+            const size_t sz       = sizes[si];
+            size_t       expected = 0U;
             if (sz < mtu) {
                 expected = 1U;
             } else {

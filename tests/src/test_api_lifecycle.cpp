@@ -225,7 +225,8 @@ static uint16_t crc16_add(uint16_t crc, const void* data, const size_t size)
 {
     const auto* p = static_cast<const uint_least8_t*>(data);
     for (size_t i = 0; i < size; i++) {
-        crc = static_cast<uint16_t>((crc << 8U) ^ crc_table[((crc >> 8U) ^ p[i]) & 0xFFU]);
+        crc = static_cast<uint16_t>((static_cast<unsigned>(crc) << 8U) ^
+                                    crc_table[(static_cast<unsigned>(crc) >> 8U) ^ p[i]]);
     }
     return crc;
 }
@@ -819,7 +820,7 @@ static void test_redundant_rx_dedup_multiframe()
     // Frame 2: 1 payload byte + CRC hi + CRC lo + padding(4) + tail (SOT=0, EOT=1, toggle=0, TID=2).
     uint_least8_t frame2[8];
     frame2[0] = payload[7];
-    frame2[1] = static_cast<uint_least8_t>((crc >> 8U) & 0xFFU);
+    frame2[1] = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
     frame2[2] = static_cast<uint_least8_t>(crc & 0xFFU);
     frame2[3] = 0x00U; // padding
     frame2[4] = 0x00U;

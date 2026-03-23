@@ -57,7 +57,8 @@ static uint16_t crc16_ccitt(uint16_t crc, const void* data, const size_t len)
 {
     const auto* p = static_cast<const uint_least8_t*>(data);
     for (size_t i = 0; i < len; i++) {
-        crc = static_cast<uint16_t>((crc << 8U) ^ crc_lut[((crc >> 8U) ^ p[i]) & 0xFFU]);
+        crc = static_cast<uint16_t>((static_cast<unsigned>(crc) << 8U) ^
+                                    crc_lut[(static_cast<unsigned>(crc) >> 8U) ^ p[i]]);
     }
     return crc;
 }
@@ -731,16 +732,23 @@ static void test_roundtrip_all_transfer_ids()
       &rx_inst, &sub, 700U, false, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
-    for (uint_least8_t tid = 0; tid <= CANARD_TRANSFER_ID_MAX; tid++) {
+    for (unsigned tid = 0; tid <= CANARD_TRANSFER_ID_MAX; tid++) {
         tx_cap = full_tx_capture_t{};
         rx_cap = rx_capture_t{};
         // Advance the RX clock past the TID timeout so same TID is accepted again.
         rx_ctx.now_val = static_cast<canard_us_t>(tid) * (CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us + 1);
 
-        const uint_least8_t        payload_data[1] = { static_cast<uint_least8_t>(tid) };
+        const uint_least8_t        payload_data[1] = { static_cast<uint_least8_t>(tid & 0xFFU) };
         const canard_bytes_chain_t payload         = { .bytes = { .size = 1, .data = payload_data }, .next = nullptr };
-        TEST_ASSERT_TRUE(canard_publish(
-          &tx_inst, DEADLINE + rx_ctx.now_val, 1U, canard_prio_nominal, 700U, false, tid, payload, nullptr));
+        TEST_ASSERT_TRUE(canard_publish(&tx_inst,
+                                        DEADLINE + rx_ctx.now_val,
+                                        1U,
+                                        canard_prio_nominal,
+                                        700U,
+                                        false,
+                                        static_cast<uint_least8_t>(tid),
+                                        payload,
+                                        nullptr));
 
         canard_poll(&tx_inst, 1U);
         feed_captured_frames(&rx_inst, tx_cap, rx_ctx.now_val);
