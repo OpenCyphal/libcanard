@@ -53,12 +53,11 @@ Main changes:
 - Automatic CAN acceptance filter configuration based on the current subscription set.
   The configuration is refreshed whenever the subscription set is modified or the local node-ID is changed.
 
-- New TX pipeline to use per-transfer queue granularity with efficient CAN frame deduplication across redundant
-  interfaces, which resulted in a major reduction of the heap memory footprint in non-redundant interface
-  configurations, and even more so in applications using redundant interfaces (typ. over 2x heap use reduction).
+- New TX pipeline using per-transfer queue granularity with efficient CAN frame deduplication across redundant
+  interfaces, which resulted in a major reduction of heap memory footprint (typ. x2+ reduction).
 
-- New RX pipeline to support priority level preemption without transfer loss and reduce memory consumption.
-  The old v4 revision was susceptible to transfer loss when the remote initiated a higher-priority multi-frame
+- New RX pipeline supporting priority level preemption without transfer loss and reduced memory consumption.
+  The old revision was susceptible to transfer loss when the remote initiated a higher-priority multi-frame
   transfer while a lower-priority multi-frame transfer was in flight. The v5 revision maintains concurrent
   reassemblers per priority level, enabling arbitrary priority nesting.
 
