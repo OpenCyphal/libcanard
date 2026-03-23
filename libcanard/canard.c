@@ -1620,8 +1620,8 @@ static void node_id_occupancy_update(canard_t* const self, const byte_t src)
     bitmap_set(self->node_id_occupancy_bitmap, src);
     const byte_t cap   = CANARD_NODE_ID_CAPACITY;
     const byte_t pc    = popcount(self->node_id_occupancy_bitmap[0]) + popcount(self->node_id_occupancy_bitmap[1]);
-    const byte_t zc    = cap - pc;                                             // zero count, the number of free slots
-    const bool   purge = (pc > (cap / 2)) && chance(self, max_u64(zc, 1) - 1); // purge when dense but before full
+    const byte_t zc    = cap - pc;                             // zero count, the number of free slots
+    const bool   purge = (pc > (cap / 2)) && chance(self, zc); // purge when dense but before full
     CANARD_ASSERT(zc > 0); // at least one free slot is guaranteed because we add at most one bit per update
 
     // Check for collision, reroll if needed. This must be done before we purge the occupancy map.
