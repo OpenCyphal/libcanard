@@ -127,6 +127,29 @@ static byte_t popcount(const uint64_t x)
 #endif
 }
 
+// The splitmix64 PRNG algorithm. Original work by Sebastiano Vigna, released under CC0-1.0 (public domain dedication).
+// Source http://xoshiro.di.unimi.it/splitmix64.c.
+static uint64_t splitmix64(uint64_t* const state)
+{
+    uint64_t z = (*state += 0x9E3779B97F4A7C15ULL);
+    z          = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
+    z          = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31U);
+}
+
+// Obtains a decent-quality pseudo-random number in [0, bound). Returns 0 if bound<=1
+static uint64_t random(canard_t* const self, const uint64_t bound)
+{
+    return (bound > 0) ? (splitmix64(&self->prng_state) % bound) : 0;
+}
+
+// Returns true with a probability of approximately 1/p_reciprocal. If p_reciprocal<=1, result is always true.
+static bool chance(canard_t* const self, const uint64_t p_reciprocal) { return random(self, p_reciprocal) == 0; }
+
+// Least significant bit at limb #0, bit #0.
+static void bitmap_set(uint64_t* const b, const size_t i) { b[i / 64U] |= (UINT64_C(1) << (i % 64U)); }
+static bool bitmap_test(const uint64_t* const b, const size_t i) { return (b[i / 64U] & (1ULL << (i % 64U))) != 0; }
+
 static void* mem_alloc(const canard_mem_t memory, const size_t size) { return memory.vtable->alloc(memory, size); }
 static void* mem_alloc_zero(const canard_mem_t memory, const size_t size)
 {
@@ -842,6 +865,7 @@ static void tx_eject_pending(canard_t* const self, const byte_t iface_index)
 // This is needed to allow safe node-ID change on collision detection, such that remotes don't reassemble multiframe
 // frankentransfers from different nodes sharing the same ID.
 // The complexity is linear in the number of enqueued transfers (not frames!).
+// This is safe to invoke from any context since it doesn't reach anywhere outside of the TX pipeline.
 static void tx_purge_continuations(canard_t* const self)
 {
     tx_transfer_t* tr = LIST_HEAD(self->tx.agewise, tx_transfer_t, list_agewise);
@@ -1575,23 +1599,6 @@ static bool rx_filter_configure(const canard_t* const self)
 
 // ---------------------------------------------           MISC            ---------------------------------------------
 
-// The splitmix64 PRNG algorithm. Original work by Sebastiano Vigna, released under CC0-1.0 (public domain dedication).
-// Source http://xoshiro.di.unimi.it/splitmix64.c.
-static uint64_t splitmix64(uint64_t* const state)
-{
-    uint64_t z = (*state += 0x9E3779B97F4A7C15ULL);
-    z          = (z ^ (z >> 30U)) * 0xBF58476D1CE4E5B9ULL;
-    z          = (z ^ (z >> 27U)) * 0x94D049BB133111EBULL;
-    return z ^ (z >> 31U);
-}
-
-// Obtains a decent-quality pseudo-random number in [0, cardinality).
-static uint64_t random(canard_t* const self, const uint64_t cardinality)
-{
-    CANARD_ASSERT(cardinality > 0);
-    return splitmix64(&self->prng_state) % cardinality;
-}
-
 static void node_id_occupancy_reset(canard_t* const self)
 {
     self->node_id_occupancy_bitmap[0] = 1; // Reserve 0 for compatibility with v0
@@ -1599,14 +1606,50 @@ static void node_id_occupancy_reset(canard_t* const self)
 }
 
 // Records the seen node-ID and reallocates the local node if a collision is found.
-static void node_id_occupancy_update(canard_t* const self, const byte_t src, const byte_t dst)
+static void node_id_occupancy_update(canard_t* const self, const byte_t src)
 {
-    (void)self;
-    (void)src;
-    (void)dst;
-    // TODO not implemented.
-    // TODO purge pending TX transfers that have already emitted the first frame.
-    rx_filter_configure(self);
+    // Update the node-ID occupancy bitmap. We cannot detect departures of an individual node, so in the presence of
+    // churn the slots will be eventually exhausted. We mitigate this by applying probabilistic purge once the
+    // population count exceeds some threshold, such that the purge probability becomes 1 when the bitmap is almost
+    // full. Such non-deterministic purge is preferable because it avoids spurious synchronization effects.
+    if (!bitmap_test(self->node_id_occupancy_bitmap, src) || (self->node_id == src)) {
+        bitmap_set(self->node_id_occupancy_bitmap, src);
+        const byte_t cap   = CANARD_NODE_ID_CAPACITY;
+        const byte_t pc    = popcount(self->node_id_occupancy_bitmap[0]) + popcount(self->node_id_occupancy_bitmap[1]);
+        const byte_t zc    = cap - pc;                             // zero count, i.e., the number of free slots
+        const bool   purge = (pc > (cap / 2)) && chance(self, zc); // deny purge unless getting dense
+        CANARD_ASSERT(zc > 0);                                     // the algorithm guarantees some free slots always
+
+        // Check for collision, reroll if needed. This must be done before we purge the occupancy map.
+        if (self->node_id == src) {
+            // Uniformly pick a cleared bit from the bitmap. It will become our new node-ID.
+            size_t cleared_bit_index = (size_t)random(self, zc);
+            CANARD_ASSERT(cleared_bit_index < zc);
+            size_t bit_index = 0;
+            while (cleared_bit_index > 0) {
+                if (!bitmap_test(self->node_id_occupancy_bitmap, bit_index++)) {
+                    cleared_bit_index--;
+                }
+                CANARD_ASSERT(bit_index < CANARD_NODE_ID_CAPACITY);
+            }
+
+            // Assign the new ID.
+            CANARD_ASSERT((0 < bit_index) && (bit_index < CANARD_NODE_ID_CAPACITY));
+            self->node_id = (byte_t)bit_index;
+            CANARD_ASSERT(!bitmap_test(self->node_id_occupancy_bitmap, self->node_id));
+
+            // Update dependent states.
+            tx_purge_continuations(self);
+            self->rx.filters_dirty = true;
+            self->err.collision++;
+        }
+
+        // The purge is delayed because we need the original occupancy map for reallocation.
+        if (purge) {
+            node_id_occupancy_reset(self);
+            bitmap_set(self->node_id_occupancy_bitmap, src);
+        }
+    }
 }
 
 bool canard_new(canard_t* const              self,
@@ -1701,11 +1744,9 @@ static void ingest_frame(canard_t* const     self,
                          const frame_t       frame)
 {
     // Update the node-ID occupancy/collision monitoring states before routing the message.
-    // We do this only on start frames because non-start frames have the version detection ambiguity,
-    // which is not a problem for the routing logic (new states can only be created on start frames),
-    // but it may cause phantom occupancy detection. Also, doing it only on start frames reduces the load.
+    // We do this only on start frames only mostly to manage load.
     if (frame.start) {
-        node_id_occupancy_update(self, frame.src, frame.dst);
+        node_id_occupancy_update(self, frame.src);
     }
     // Route the frame to the appropriate destination internally.
     canard_subscription_t* const sub = rx_route(self, &frame);
