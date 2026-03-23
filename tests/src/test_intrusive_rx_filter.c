@@ -263,6 +263,546 @@ static void test_rx_filter_coalesce_into_single_entry(void)
 }
 
 // =====================================================================================================================
+// Acceptance-invariant helpers for adversarial coalescence testing.
+// The fundamental correctness property: after coalescence, every CAN ID accepted by any original filter
+// or the new filter must still be accepted by at least one filter in the result array.
+
+static void assert_coverage_invariant(const size_t           count,
+                                      const canard_filter_t* original,
+                                      const canard_filter_t  new_filter,
+                                      const canard_filter_t* result,
+                                      const unsigned         domain_bits)
+{
+    const uint32_t domain = UINT32_C(1) << domain_bits;
+    for (uint32_t x = 0; x < domain; x++) {
+        bool was_accepted = filter_accepts(new_filter, x);
+        for (size_t k = 0; !was_accepted && (k < count); k++) {
+            was_accepted = filter_accepts(original[k], x);
+        }
+        if (was_accepted) {
+            bool is_accepted = false;
+            for (size_t k = 0; !is_accepted && (k < count); k++) {
+                is_accepted = filter_accepts(result[k], x);
+            }
+            TEST_ASSERT_TRUE(is_accepted);
+        }
+    }
+}
+
+// Copy-coalesce-check wrapper. Modifies `into` in place and verifies the invariant.
+static void coalesce_and_check(const size_t          count,
+                               canard_filter_t*      into,
+                               const canard_filter_t new_filter,
+                               const unsigned        domain_bits)
+{
+    canard_filter_t original[8];
+    TEST_ASSERT_TRUE(count <= 8U);
+    memcpy(original, into, count * sizeof(canard_filter_t));
+    rx_filter_coalesce_into(count, into, new_filter);
+    assert_coverage_invariant(count, original, new_filter, into, domain_bits);
+}
+
+// =====================================================================================================================
+// Group 6: Exhaustive small-domain invariant tests
+
+static void test_coalesce_coverage_count1_exhaustive(void)
+{
+    // Exhaustively test all 4-bit filter combinations for count=1 (65536 combos).
+    for (uint32_t im = 0; im <= 0xFU; im++) {
+        for (uint32_t ii = 0; ii <= 0xFU; ii++) {
+            for (uint32_t nm = 0; nm <= 0xFU; nm++) {
+                for (uint32_t ni = 0; ni <= 0xFU; ni++) {
+                    canard_filter_t       into[1] = { { .extended_can_id = ii & im, .extended_mask = im } };
+                    const canard_filter_t nf      = { .extended_can_id = ni & nm, .extended_mask = nm };
+                    coalesce_and_check(1U, into, nf, 4U);
+                }
+            }
+        }
+    }
+}
+
+static void test_coalesce_coverage_count2_sampled(void)
+{
+    // Sample 4-bit combinations for count=2.
+    static const uint32_t masks[] = { 0x0U, 0x3U, 0x5U, 0x7U, 0x9U, 0xCU, 0xFU };
+    static const uint32_t ids[]   = { 0x0U, 0x3U, 0x5U, 0x7U, 0xAU, 0xCU, 0xFU };
+    const size_t          nm      = sizeof(masks) / sizeof(masks[0]);
+    const size_t          ni      = sizeof(ids) / sizeof(ids[0]);
+    for (size_t a = 0; a < nm; a++) {
+        for (size_t b = 0; b < ni; b++) {
+            for (size_t c = 0; c < nm; c++) {
+                for (size_t d = 0; d < ni; d++) {
+                    canard_filter_t into[2] = {
+                        { .extended_can_id = 0x5U & 0xFU, .extended_mask = 0xFU },
+                        { .extended_can_id = ids[b] & masks[a], .extended_mask = masks[a] },
+                    };
+                    const canard_filter_t nf = { .extended_can_id = ids[d] & masks[c], .extended_mask = masks[c] };
+                    coalesce_and_check(2U, into, nf, 4U);
+                }
+            }
+        }
+    }
+}
+
+static void test_coalesce_coverage_count3_targeted(void)
+{
+    // Targeted configurations for count=3 verifying the invariant.
+    {
+        canard_filter_t into[3] = {
+            { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0x2UL, .extended_mask = 0xFUL },
+        };
+        coalesce_and_check(3U, into, (canard_filter_t){ .extended_can_id = 0x4UL, .extended_mask = 0xFUL }, 4U);
+    }
+    {
+        canard_filter_t into[3] = {
+            { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0x3UL, .extended_mask = 0xFUL },
+        };
+        coalesce_and_check(3U, into, (canard_filter_t){ .extended_can_id = 0x7UL, .extended_mask = 0xFUL }, 4U);
+    }
+    {
+        canard_filter_t into[3] = {
+            { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0x8UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0xCUL, .extended_mask = 0xFUL },
+        };
+        coalesce_and_check(3U, into, (canard_filter_t){ .extended_can_id = 0xEUL, .extended_mask = 0xFUL }, 4U);
+    }
+    { // wildcard at position 0
+        canard_filter_t into[3] = {
+            { .extended_can_id = 0x0UL, .extended_mask = 0x0UL },
+            { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+            { .extended_can_id = 0xAUL, .extended_mask = 0xFUL },
+        };
+        coalesce_and_check(3U, into, (canard_filter_t){ .extended_can_id = 0xFUL, .extended_mask = 0xFUL }, 4U);
+    }
+    { // mixed mask widths
+        canard_filter_t into[3] = {
+            { .extended_can_id = 0x4UL, .extended_mask = 0xCUL },
+            { .extended_can_id = 0x1UL, .extended_mask = 0x3UL },
+            { .extended_can_id = 0xFUL, .extended_mask = 0xFUL },
+        };
+        coalesce_and_check(3U, into, (canard_filter_t){ .extended_can_id = 0x8UL, .extended_mask = 0x8UL }, 4U);
+    }
+}
+
+// =====================================================================================================================
+// Group 7: Structural tests (count >= 3)
+
+static void test_coalesce_count3_fuses_existing_pair(void)
+{
+    // into[0] and into[1] are most similar; new is dissimilar.
+    // Expect: into[0]=fuse(into[0],into[1]), into[1]=new, into[2] unchanged.
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xAUL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter     = { .extended_can_id = 0xFUL, .extended_mask = 0xFUL };
+    const canard_filter_t fused_existing = rx_filter_fuse(into[0], into[1]);
+    // fuse(0,1) rank=3, all other pairs rank<=2 (verified in planning).
+    coalesce_and_check(3U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(fused_existing.extended_can_id, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(fused_existing.extended_mask, into[0].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(new_filter.extended_can_id, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(new_filter.extended_mask, into[1].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0xAUL, into[2].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0xFUL, into[2].extended_mask);
+}
+
+static void test_coalesce_count3_fuses_with_new_at_last(void)
+{
+    // into[2] and new are most similar; best_j==count, only into[2] changes.
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xCUL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter    = { .extended_can_id = 0xDUL, .extended_mask = 0xFUL };
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[2], new_filter); // rank=3, best
+    coalesce_and_check(3U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0xFUL, into[0].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x5UL, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0xFUL, into[1].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[2].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[2].extended_mask);
+}
+
+static void test_coalesce_count3_fuses_with_new_at_first(void)
+{
+    // into[0] and new are strictly the best pair; best_i=0, best_j==count.
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0xEUL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter    = { .extended_can_id = 0xFUL, .extended_mask = 0xFUL };
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[0], new_filter); // rank=3
+    // fuse(1,new)=fuse(0x5,0xF,0xF,0xF): mask=0xF & ~0xA = 0x5, r=2. So (0,count) wins.
+    // But fuse(1,count) has r=2, while fuse(0,count) has r=3. Check (0,1): mask=0xF & ~(0xE^0x5)=0xF & ~0xB=0x4, r=1.
+    // (0,2): mask=0xF & ~0xE=0x1, r=1. (1,2): mask=0xF & ~0x5=0xA, r=2. So best is (0,count) with r=3.
+    coalesce_and_check(3U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[0].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x5UL, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0xFUL, into[1].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[2].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0xFUL, into[2].extended_mask);
+}
+
+static void test_coalesce_count4_middle_best_i(void)
+{
+    // best_i at middle position (index 2), best_j==count.
+    canard_filter_t into[4] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x6UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xAUL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter = { .extended_can_id = 0x7UL, .extended_mask = 0xFUL };
+    // fuse(2,new): mask=0xF & ~0x1=0xE, r=3. fuse(1,new): mask=0xF & ~0x2=0xD, r=3.
+    // Tie at r=3; (2,count) enumerated after (1,count), so (2,count) wins via >=.
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[2], new_filter);
+    coalesce_and_check(4U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0x5UL, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[2].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[2].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0xAUL, into[3].extended_can_id);
+}
+
+static void test_coalesce_count5(void)
+{
+    canard_filter_t into[5] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL }, { .extended_can_id = 0x2UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x4UL, .extended_mask = 0xFUL }, { .extended_can_id = 0x8UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xCUL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter = { .extended_can_id = 0xDUL, .extended_mask = 0xFUL };
+    // Multiple rank-3 pairs exist; (4,count) is last enumerated tie → wins via >=.
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[4], new_filter);
+    coalesce_and_check(5U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0x2UL, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0x4UL, into[2].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0x8UL, into[3].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[4].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[4].extended_mask);
+}
+
+// =====================================================================================================================
+// Group 8: Degenerate cases
+
+static void test_coalesce_all_identical(void)
+{
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+    };
+    coalesce_and_check(3U, into, (canard_filter_t){ .extended_can_id = 0x5UL, .extended_mask = 0xFUL }, 4U);
+    // All identical → fuse is identity → array unchanged.
+    for (size_t k = 0; k < 3; k++) {
+        TEST_ASSERT_EQUAL_HEX32(0x5UL, into[k].extended_can_id);
+        TEST_ASSERT_EQUAL_HEX32(0xFUL, into[k].extended_mask);
+    }
+}
+
+static void test_coalesce_wildcard_existing(void)
+{
+    canard_filter_t into[2] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0x0UL }, // wildcard
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+    };
+    coalesce_and_check(2U, into, (canard_filter_t){ .extended_can_id = 0xAUL, .extended_mask = 0xFUL }, 4U);
+}
+
+static void test_coalesce_new_is_wildcard(void)
+{
+    canard_filter_t into[2] = {
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xAUL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t nf = { .extended_can_id = 0x0UL, .extended_mask = 0x0UL };
+    coalesce_and_check(2U, into, nf, 4U);
+}
+
+static void test_coalesce_fully_specified_29bit(void)
+{
+    canard_filter_t into[2] = {
+        { .extended_can_id = 0x1FFFFFFEUL, .extended_mask = 0x1FFFFFFFUL },
+        { .extended_can_id = 0x10000000UL, .extended_mask = 0x1FFFFFFFUL },
+    };
+    const canard_filter_t new_filter    = { .extended_can_id = 0x1FFFFFFFUL, .extended_mask = 0x1FFFFFFFUL };
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[0], new_filter);
+    // fuse(0,new): mask=0x1FFFFFFF & ~0x01 = 0x1FFFFFFE, r=28. Best by far.
+    rx_filter_coalesce_into(2U, into, new_filter);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[0].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x10000000UL, into[1].extended_can_id); // unchanged
+    // Verify acceptance of specific CAN IDs.
+    TEST_ASSERT_TRUE(filter_accepts(into[0], 0x1FFFFFFEUL));
+    TEST_ASSERT_TRUE(filter_accepts(into[0], 0x1FFFFFFFUL));
+    TEST_ASSERT_FALSE(filter_accepts(into[0], 0x1FFFFFFCUL));
+}
+
+static void test_coalesce_new_identical_to_existing(void)
+{
+    canard_filter_t into[2] = {
+        { .extended_can_id = 0x3UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xAUL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter = { .extended_can_id = 0xAUL, .extended_mask = 0xFUL };
+    // fuse(into[1], new) is identity: rank=4 (best possible for 4-bit). Wins easily.
+    coalesce_and_check(2U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(0x3UL, into[0].extended_can_id); // unchanged
+    TEST_ASSERT_EQUAL_HEX32(0xAUL, into[1].extended_can_id); // identity fuse
+    TEST_ASSERT_EQUAL_HEX32(0xFUL, into[1].extended_mask);
+}
+
+static void test_coalesce_worst_case_expansion(void)
+{
+    // Maximally dissimilar: all ID bits differ → fuse produces wildcard.
+    canard_filter_t       into[1]    = { { .extended_can_id = 0x0UL, .extended_mask = 0xFUL } };
+    const canard_filter_t new_filter = { .extended_can_id = 0xFUL, .extended_mask = 0xFUL };
+    coalesce_and_check(1U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[0].extended_mask); // wildcard
+    for (uint32_t x = 0; x < 16U; x++) {
+        TEST_ASSERT_TRUE(filter_accepts(into[0], x));
+    }
+}
+
+// =====================================================================================================================
+// Group 9: Tie-breaking
+
+static void test_coalesce_tie_prefers_later_pair_count3(void)
+{
+    // Four pairs tie at rank 3; the last enumerated (2,count) must win.
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x2UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x8UL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t new_filter    = { .extended_can_id = 0xAUL, .extended_mask = 0xFUL };
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[2], new_filter);
+    // Pairs at rank 3: (0,1) mask=0xD, (0,2) mask=0x7, (1,count) mask=0x7, (2,count) mask=0xD.
+    // Due to >=, (2,count) wins. best_j==count so only into[2] changes.
+    coalesce_and_check(3U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(0x0UL, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(0x2UL, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[2].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[2].extended_mask);
+}
+
+// =====================================================================================================================
+// Group 10: Multi-step coalescence
+
+static void test_coalesce_sequential_invariant_4bit(void)
+{
+    // Simulate rx_filter_configure: fill 3 slots, then coalesce 5 more filters.
+    // Track the cumulative set of required CAN IDs and verify after each step.
+    canard_filter_t filters[3] = {
+        { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x3UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x5UL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t extras[] = {
+        { .extended_can_id = 0x7UL, .extended_mask = 0xFUL }, { .extended_can_id = 0x9UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xBUL, .extended_mask = 0xFUL }, { .extended_can_id = 0xDUL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0xFUL, .extended_mask = 0xFUL },
+    };
+    // Build the cumulative required-acceptance set.
+    bool required[16] = { false };
+    for (size_t k = 0; k < 3U; k++) {
+        for (uint32_t x = 0; x < 16U; x++) {
+            if (filter_accepts(filters[k], x)) {
+                required[x] = true;
+            }
+        }
+    }
+    for (size_t step = 0; step < 5U; step++) {
+        for (uint32_t x = 0; x < 16U; x++) {
+            if (filter_accepts(extras[step], x)) {
+                required[x] = true;
+            }
+        }
+        rx_filter_coalesce_into(3U, filters, extras[step]);
+        // Verify cumulative invariant.
+        for (uint32_t x = 0; x < 16U; x++) {
+            if (required[x]) {
+                bool found = false;
+                for (size_t k = 0; !found && (k < 3U); k++) {
+                    found = filter_accepts(filters[k], x);
+                }
+                TEST_ASSERT_TRUE(found);
+            }
+        }
+    }
+}
+
+static void test_coalesce_sequential_realistic_cyphal(void)
+{
+    // 3 filter slots, 6 subscriptions → 3 direct + 3 coalesced.
+    canard_filter_t filters[3] = {
+        make_filter(canard_kind_1v1_message, 100U, 42U),
+        make_filter(canard_kind_1v0_request, 200U, 42U),
+        make_filter(canard_kind_0v1_message, 300U, 42U),
+    };
+    const canard_filter_t extras[] = {
+        make_filter(canard_kind_1v1_message, 101U, 42U),
+        make_filter(canard_kind_0v1_request, 50U, 42U),
+        make_filter(canard_kind_1v0_response, 200U, 42U),
+    };
+    // For each subscription, generate a representative CAN ID that must be accepted.
+    // v1.1 msg subject=100: (100<<8)|0x80 | src=1 → 0x00006481
+    // v1.0 req svc=200 dst=42: (1<<25)|(1<<24)|(200<<14)|(42<<7)|src=1 → 0x03321501
+    // v0.1 msg dtype=300: (300<<8)|src=1 → 0x00012C01
+    // v1.1 msg subject=101: (101<<8)|0x80|src=1 → 0x00006581
+    // v0.1 req dtype=50 dst=42: (50<<16)|(1<<15)|(42<<8)|0x80|src=1 → 0x0032AA81
+    // v1.0 resp svc=200 dst=42: (1<<25)|(200<<14)|(42<<7)|src=1 → 0x02321501
+    const uint32_t must_accept[] = {
+        0x00006481UL, 0x03321501UL, 0x00012C01UL, 0x00006581UL, 0x0032AA81UL, 0x02321501UL,
+    };
+    for (size_t step = 0; step < 3U; step++) {
+        rx_filter_coalesce_into(3U, filters, extras[step]);
+        // All CAN IDs introduced so far must still be accepted.
+        for (size_t a = 0; a < 3U + step + 1U; a++) {
+            bool found = false;
+            for (size_t k = 0; !found && (k < 3U); k++) {
+                found = filter_accepts(filters[k], must_accept[a]);
+            }
+            TEST_ASSERT_TRUE(found);
+        }
+    }
+}
+
+// =====================================================================================================================
+// Group 11: Realistic Cyphal filters
+
+static void test_coalesce_v1_messages_pair(void)
+{
+    // Two adjacent v1.1 message subjects: subjects 100 and 101.
+    canard_filter_t       into[1]    = { make_filter(canard_kind_1v1_message, 100U, 42U) };
+    const canard_filter_t new_filter = make_filter(canard_kind_1v1_message, 101U, 42U);
+    rx_filter_coalesce_into(1U, into, new_filter);
+    // The fused filter must accept both subjects (arbitrary src node).
+    TEST_ASSERT_TRUE(filter_accepts(into[0], 0x00006481UL));  // subject 100
+    TEST_ASSERT_TRUE(filter_accepts(into[0], 0x00006581UL));  // subject 101
+    TEST_ASSERT_FALSE(filter_accepts(into[0], 0x00006681UL)); // subject 102 should not match
+}
+
+static void test_coalesce_v1_request_response_pair(void)
+{
+    // Request and response for service 0x1A5, node 42.
+    canard_filter_t       into[1]    = { make_filter(canard_kind_1v0_request, 0x1A5U, 42U) };
+    const canard_filter_t new_filter = make_filter(canard_kind_1v0_response, 0x1A5U, 42U);
+    rx_filter_coalesce_into(1U, into, new_filter);
+    TEST_ASSERT_TRUE(filter_accepts(into[0], 0x0369552AUL)); // request (src=42)
+    TEST_ASSERT_TRUE(filter_accepts(into[0], 0x02695511UL)); // response (src=17)
+}
+
+static void test_coalesce_mixed_versions(void)
+{
+    // Cross-version coalescence: v1.1 + v1.0 + v0.
+    canard_filter_t into[2] = {
+        make_filter(canard_kind_1v1_message, 100U, 42U),
+        make_filter(canard_kind_1v0_message, 42U, 55U),
+    };
+    const canard_filter_t new_filter = make_filter(canard_kind_0v1_message, 300U, 42U);
+    canard_filter_t       original[2];
+    memcpy(original, into, sizeof(original));
+    rx_filter_coalesce_into(2U, into, new_filter);
+    // Verify specific CAN IDs from each subscription are still accepted.
+    const uint32_t ids[] = { 0x00006481UL, 0x00002A01UL, 0x00012C01UL };
+    for (size_t a = 0; a < 3U; a++) {
+        bool found = false;
+        for (size_t k = 0; !found && (k < 2U); k++) {
+            found = filter_accepts(into[k], ids[a]);
+        }
+        TEST_ASSERT_TRUE(found);
+    }
+}
+
+// =====================================================================================================================
+// Group 12: Adversarial
+
+static void test_coalesce_adversarial_bit_pattern(void)
+{
+    // Checkerboard patterns in 8-bit domain.
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0x55UL, .extended_mask = 0xFFUL },
+        { .extended_can_id = 0xAAUL, .extended_mask = 0xFFUL },
+        { .extended_can_id = 0x33UL, .extended_mask = 0xFFUL },
+    };
+    const canard_filter_t new_filter = { .extended_can_id = 0xCCUL, .extended_mask = 0xFFUL };
+    // fuse(0,1) rank=0, fuse(0,2) rank=4, fuse(1,new) rank=4; (1,count) is last tie → wins.
+    const canard_filter_t expected_fuse = rx_filter_fuse(into[1], new_filter);
+    coalesce_and_check(3U, into, new_filter, 8U);
+    TEST_ASSERT_EQUAL_HEX32(0x55UL, into[0].extended_can_id); // unchanged
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_can_id, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(expected_fuse.extended_mask, into[1].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x33UL, into[2].extended_can_id); // unchanged
+}
+
+static void test_coalesce_best_i_zero_best_j_one(void)
+{
+    // Force best pair to be (0,1) strictly: fuse(0,1) rank=3, all others <=2.
+    canard_filter_t into[3] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x6UL, .extended_mask = 0x7UL },
+    };
+    const canard_filter_t new_filter = { .extended_can_id = 0x4UL, .extended_mask = 0x7UL };
+    // fuse(0,1): mask=0xE, r=3. fuse(0,2): r=1. fuse(0,new): r=2. fuse(1,2): r=0.
+    // fuse(1,new): r=1. fuse(2,new): r=2. Strictly best is (0,1).
+    const canard_filter_t fused01 = rx_filter_fuse(into[0], into[1]);
+    coalesce_and_check(3U, into, new_filter, 4U);
+    TEST_ASSERT_EQUAL_HEX32(fused01.extended_can_id, into[0].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(fused01.extended_mask, into[0].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(new_filter.extended_can_id, into[1].extended_can_id);
+    TEST_ASSERT_EQUAL_HEX32(new_filter.extended_mask, into[1].extended_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x6UL, into[2].extended_can_id); // unchanged
+}
+
+static void test_coalesce_greedy_multistep_degradation(void)
+{
+    // Multi-step coalescence where greedy choices accumulate: verify the invariant still holds.
+    canard_filter_t into[2] = {
+        { .extended_can_id = 0x0UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x1UL, .extended_mask = 0xFUL },
+    };
+    const canard_filter_t extras[] = {
+        { .extended_can_id = 0x2UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x4UL, .extended_mask = 0xFUL },
+        { .extended_can_id = 0x8UL, .extended_mask = 0xFUL },
+    };
+    bool required[16] = { false };
+    for (uint32_t x = 0; x < 16U; x++) {
+        if (filter_accepts(into[0], x) || filter_accepts(into[1], x)) {
+            required[x] = true;
+        }
+    }
+    for (size_t step = 0; step < 3U; step++) {
+        for (uint32_t x = 0; x < 16U; x++) {
+            if (filter_accepts(extras[step], x)) {
+                required[x] = true;
+            }
+        }
+        rx_filter_coalesce_into(2U, into, extras[step]);
+        for (uint32_t x = 0; x < 16U; x++) {
+            if (required[x]) {
+                TEST_ASSERT_TRUE(filter_accepts(into[0], x) || filter_accepts(into[1], x));
+            }
+        }
+    }
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -286,6 +826,36 @@ int main(void)
     RUN_TEST(test_rx_filter_coalesce_into_tie_prefers_later_index);
     RUN_TEST(test_rx_filter_coalesce_into_merges_existing_pair_when_best);
     RUN_TEST(test_rx_filter_coalesce_into_single_entry);
+
+    RUN_TEST(test_coalesce_coverage_count1_exhaustive);
+    RUN_TEST(test_coalesce_coverage_count2_sampled);
+    RUN_TEST(test_coalesce_coverage_count3_targeted);
+
+    RUN_TEST(test_coalesce_count3_fuses_existing_pair);
+    RUN_TEST(test_coalesce_count3_fuses_with_new_at_last);
+    RUN_TEST(test_coalesce_count3_fuses_with_new_at_first);
+    RUN_TEST(test_coalesce_count4_middle_best_i);
+    RUN_TEST(test_coalesce_count5);
+
+    RUN_TEST(test_coalesce_all_identical);
+    RUN_TEST(test_coalesce_wildcard_existing);
+    RUN_TEST(test_coalesce_new_is_wildcard);
+    RUN_TEST(test_coalesce_fully_specified_29bit);
+    RUN_TEST(test_coalesce_new_identical_to_existing);
+    RUN_TEST(test_coalesce_worst_case_expansion);
+
+    RUN_TEST(test_coalesce_tie_prefers_later_pair_count3);
+
+    RUN_TEST(test_coalesce_sequential_invariant_4bit);
+    RUN_TEST(test_coalesce_sequential_realistic_cyphal);
+
+    RUN_TEST(test_coalesce_v1_messages_pair);
+    RUN_TEST(test_coalesce_v1_request_response_pair);
+    RUN_TEST(test_coalesce_mixed_versions);
+
+    RUN_TEST(test_coalesce_adversarial_bit_pattern);
+    RUN_TEST(test_coalesce_best_i_zero_best_j_one);
+    RUN_TEST(test_coalesce_greedy_multistep_degradation);
 
     return UNITY_END();
 }
