@@ -1608,50 +1608,54 @@ static void node_id_occupancy_reset(canard_t* const self)
 // Records the seen node-ID and reallocates the local node if a collision is found.
 static void node_id_occupancy_update(canard_t* const self, const byte_t src)
 {
-    if (src == CANARD_NODE_ID_ANONYMOUS) {
+    if ((src == CANARD_NODE_ID_ANONYMOUS) ||
+        (bitmap_test(self->node_id_occupancy_bitmap, src) && (self->node_id != src))) {
         return;
     }
+
     // Update the node-ID occupancy bitmap. We cannot detect departures of an individual node, so in the presence of
     // churn the slots will be eventually exhausted. We mitigate this by applying probabilistic purge once the
-    // population count exceeds some threshold, such that the purge probability becomes 1 when the bitmap is almost
-    // full. Such non-deterministic purge is preferable because it avoids spurious synchronization effects.
-    if (!bitmap_test(self->node_id_occupancy_bitmap, src) || (self->node_id == src)) {
-        bitmap_set(self->node_id_occupancy_bitmap, src);
-        const byte_t cap   = CANARD_NODE_ID_CAPACITY;
-        const byte_t pc    = popcount(self->node_id_occupancy_bitmap[0]) + popcount(self->node_id_occupancy_bitmap[1]);
-        const byte_t zc    = cap - pc;                             // zero count, i.e., the number of free slots
-        const bool   purge = (pc > (cap / 2)) && chance(self, zc); // deny purge unless getting dense
-        CANARD_ASSERT(zc > 0);                                     // the algorithm guarantees some free slots always
+    // population count exceeds some threshold, such that the purge probability is 1 when the bitmap is almost full.
+    // Such non-deterministic purge is preferable because it avoids spurious synchronization effects.
+    bitmap_set(self->node_id_occupancy_bitmap, src);
+    const byte_t cap   = CANARD_NODE_ID_CAPACITY;
+    const byte_t pc    = popcount(self->node_id_occupancy_bitmap[0]) + popcount(self->node_id_occupancy_bitmap[1]);
+    const byte_t zc    = cap - pc;                                             // zero count, the number of free slots
+    const bool   purge = (pc > (cap / 2)) && chance(self, max_u64(zc, 1) - 1); // purge when dense but before full
+    CANARD_ASSERT(zc > 0); // at least one free slot is guaranteed because we add at most one bit per update
 
-        // Check for collision, reroll if needed. This must be done before we purge the occupancy map.
-        if (self->node_id == src) {
-            // Uniformly pick a cleared bit from the bitmap. It will become our new node-ID.
-            size_t cleared_bit_index = (size_t)random(self, zc);
-            CANARD_ASSERT(cleared_bit_index < zc);
-            size_t bit_index = 0;
-            while (cleared_bit_index > 0) {
-                if (!bitmap_test(self->node_id_occupancy_bitmap, bit_index++)) {
-                    cleared_bit_index--;
-                }
-                CANARD_ASSERT(bit_index < CANARD_NODE_ID_CAPACITY);
+    // Check for collision, reroll if needed. This must be done before we purge the occupancy map.
+    if (self->node_id == src) {
+        // Uniformly pick a cleared bit from the bitmap. It will become our new node-ID.
+        size_t id = 0;
+        size_t z  = (size_t)random(self, zc);
+        CANARD_ASSERT(z < zc);
+        while (z > 0) {
+            if (!bitmap_test(self->node_id_occupancy_bitmap, id++)) {
+                z--;
             }
-
-            // Assign the new ID.
-            CANARD_ASSERT((0 < bit_index) && (bit_index < CANARD_NODE_ID_CAPACITY));
-            self->node_id = (byte_t)bit_index;
-            CANARD_ASSERT(!bitmap_test(self->node_id_occupancy_bitmap, self->node_id));
-
-            // Update dependent states.
-            tx_purge_continuations(self);
-            self->rx.filters_dirty = true;
-            self->err.collision++;
+            CANARD_ASSERT(id < CANARD_NODE_ID_CAPACITY);
+        }
+        while (bitmap_test(self->node_id_occupancy_bitmap, id)) {
+            id++;
+            CANARD_ASSERT(id < CANARD_NODE_ID_CAPACITY);
         }
 
-        // The purge is delayed because we need the original occupancy map for reallocation.
-        if (purge) {
-            node_id_occupancy_reset(self);
-            bitmap_set(self->node_id_occupancy_bitmap, src);
-        }
+        // Assign the new ID.
+        CANARD_ASSERT((0 < id) && (id < CANARD_NODE_ID_CAPACITY));
+        self->node_id = (byte_t)id;
+        CANARD_ASSERT(!bitmap_test(self->node_id_occupancy_bitmap, self->node_id));
+
+        // Update dependent states.
+        tx_purge_continuations(self);
+        self->rx.filters_dirty = true;
+        self->err.collision++;
+    }
+
+    // The purge is delayed because we need the original occupancy map for reallocation.
+    if (purge) {
+        node_id_occupancy_reset(self);
+        bitmap_set(self->node_id_occupancy_bitmap, src);
     }
 }
 
