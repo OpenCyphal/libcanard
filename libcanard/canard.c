@@ -444,22 +444,24 @@ static tx_transfer_t* tx_transfer_new(canard_t* const   self,
                                       void* const       user_context)
 {
     tx_transfer_t* const tr = mem_alloc_zero(self->mem.tx_transfer, sizeof(tx_transfer_t));
-    if (tr != NULL) {
-        FOREACH_IFACE (i) {
-            tr->index_pending[i] = TREE_NULL;
-        }
-        tr->index_deadline       = TREE_NULL;
-        tr->list_agewise         = LIST_NULL;
-        tr->user_context         = user_context;
-        tr->deadline             = deadline;
-        tr->seqno                = self->tx.seqno++;
-        tr->can_id_msb           = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
-        tr->fd                   = fd ? 1U : 0U;
-        tr->multi_frame          = 0U;
-        tr->first_frame_departed = 0U;
-        FOREACH_IFACE (i) {
-            tr->cursor[i] = NULL;
-        }
+    if (tr == NULL) {
+        self->err.oom++;
+        return NULL;
+    }
+    FOREACH_IFACE (i) {
+        tr->index_pending[i] = TREE_NULL;
+    }
+    tr->index_deadline       = TREE_NULL;
+    tr->list_agewise         = LIST_NULL;
+    tr->user_context         = user_context;
+    tr->deadline             = deadline;
+    tr->seqno                = self->tx.seqno++;
+    tr->can_id_msb           = (can_id_template >> (29U - CAN_ID_MSb_BITS)) & ((1U << CAN_ID_MSb_BITS) - 1U);
+    tr->fd                   = fd ? 1U : 0U;
+    tr->multi_frame          = 0U;
+    tr->first_frame_departed = 0U;
+    FOREACH_IFACE (i) {
+        tr->cursor[i] = NULL;
     }
     return tr;
 }
