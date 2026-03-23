@@ -1770,6 +1770,47 @@ bool canard_subscribe_response(canard_t* const                           self,
            rx_subscribe(self, subscription, canard_kind_1v0_response, service_id, CRC_INITIAL, extent, 0, vtable);
 }
 
+bool canard_0v1_subscribe(canard_t* const                           self,
+                          canard_subscription_t* const              subscription,
+                          const uint16_t                            data_type_id,
+                          const uint16_t                            crc_seed,
+                          const size_t                              extent,
+                          const canard_us_t                         transfer_id_timeout,
+                          const canard_subscription_vtable_t* const vtable)
+{
+    return rx_subscribe(
+      self, subscription, canard_kind_0v1_message, data_type_id, crc_seed, extent, transfer_id_timeout, vtable);
+}
+
+bool canard_0v1_subscribe_request(canard_t* const                           self,
+                                  canard_subscription_t* const              subscription,
+                                  const uint_least8_t                       data_type_id,
+                                  const uint16_t                            crc_seed,
+                                  const size_t                              extent,
+                                  const canard_us_t                         transfer_id_timeout,
+                                  const canard_subscription_vtable_t* const vtable)
+{
+    return rx_subscribe(self,
+                        subscription,
+                        canard_kind_0v1_request,
+                        (uint16_t)data_type_id,
+                        crc_seed,
+                        extent,
+                        transfer_id_timeout,
+                        vtable);
+}
+
+bool canard_0v1_subscribe_response(canard_t* const                           self,
+                                   canard_subscription_t* const              subscription,
+                                   const uint_least8_t                       data_type_id,
+                                   const uint16_t                            crc_seed,
+                                   const size_t                              extent,
+                                   const canard_subscription_vtable_t* const vtable)
+{
+    return rx_subscribe(
+      self, subscription, canard_kind_0v1_response, (uint16_t)data_type_id, crc_seed, extent, 0, vtable);
+}
+
 void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subscription)
 {
     CANARD_ASSERT((self != NULL) && (subscription != NULL) && (subscription->owner == self));

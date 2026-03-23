@@ -104,6 +104,28 @@ static uint32_t make_v1_svc_can_id(const canard_prio_t prio,
 // Single-frame tail byte for v1: start=1, end=1, toggle=1 (v1 starts toggle=1).
 static uint_least8_t make_v1_single_tail(const uint_least8_t tid) { return 0xE0U | (tid & 0x1FU); }
 
+// v0 message: priority[28:26] | data_type_id[23:8] | bit7=0 | src[6:0]
+static uint32_t make_v0_msg_can_id(const canard_prio_t prio, const uint16_t data_type_id, const uint_least8_t src)
+{
+    return (static_cast<uint32_t>(prio) << 26U) | (static_cast<uint32_t>(data_type_id) << 8U) |
+           (static_cast<uint32_t>(src) & 0x7FU);
+}
+
+// v0 service: priority[28:26] | data_type_id[23:16] | rnr[15] | dst[14:8] | bit7=1(svc) | src[6:0]
+static uint32_t make_v0_svc_can_id(const canard_prio_t prio,
+                                   const uint_least8_t data_type_id,
+                                   const bool          request_not_response,
+                                   const uint_least8_t dst,
+                                   const uint_least8_t src)
+{
+    return (static_cast<uint32_t>(prio) << 26U) | (static_cast<uint32_t>(data_type_id) << 16U) |
+           (request_not_response ? (UINT32_C(1) << 15U) : 0U) | (static_cast<uint32_t>(dst) << 8U) |
+           (UINT32_C(1) << 7U) | (static_cast<uint32_t>(src) & 0x7FU);
+}
+
+// Single-frame tail byte for v0: start=1, end=1, toggle=0 (v0 starts toggle=0).
+static uint_least8_t make_v0_single_tail(const uint_least8_t tid) { return 0xC0U | (tid & 0x1FU); }
+
 // -------------------------------------------  Argument Validation  ---------------------------------------------------
 
 static void test_subscribe_null_args()
@@ -435,6 +457,243 @@ static void test_unsubscribe_cleans_up_sessions()
     canard_destroy(&self);
 }
 
+// -------------------------------------------  v0 Argument Validation  ------------------------------------------------
+
+static void test_0v1_subscribe_null_args()
+{
+    canard_t              self = {};
+    canard_subscription_t sub  = {};
+    TEST_ASSERT_FALSE(canard_0v1_subscribe(nullptr, &sub, 100U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_FALSE(canard_0v1_subscribe(&self, nullptr, 100U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_FALSE(canard_0v1_subscribe(&self, &sub, 100U, 0xBEEFU, 64U, 2000000, nullptr));
+
+    const canard_subscription_vtable_t bad_vtable = { .on_message = nullptr };
+    TEST_ASSERT_FALSE(canard_0v1_subscribe(&self, &sub, 100U, 0xBEEFU, 64U, 2000000, &bad_vtable));
+}
+
+static void test_0v1_subscribe_request_null_args()
+{
+    canard_t              self = {};
+    canard_subscription_t sub  = {};
+    TEST_ASSERT_FALSE(canard_0v1_subscribe_request(nullptr, &sub, 10U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_FALSE(canard_0v1_subscribe_request(&self, nullptr, 10U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_FALSE(canard_0v1_subscribe_request(&self, &sub, 10U, 0xBEEFU, 64U, 2000000, nullptr));
+}
+
+static void test_0v1_subscribe_response_null_args()
+{
+    canard_t              self = {};
+    canard_subscription_t sub  = {};
+    TEST_ASSERT_FALSE(canard_0v1_subscribe_response(nullptr, &sub, 10U, 0xBEEFU, 64U, &capture_sub_vtable));
+    TEST_ASSERT_FALSE(canard_0v1_subscribe_response(&self, nullptr, 10U, 0xBEEFU, 64U, &capture_sub_vtable));
+    TEST_ASSERT_FALSE(canard_0v1_subscribe_response(&self, &sub, 10U, 0xBEEFU, 64U, nullptr));
+}
+
+// -------------------------------------------  v0 Port-ID Range  ------------------------------------------------------
+
+static void test_0v1_subscribe_port_id_range()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    // v0 message data_type_id: full uint16 range is valid.
+    canard_subscription_t sub1 = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub1, 0xFFFFU, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub1);
+
+    // v0 service data_type_id: 0xFF is valid.
+    canard_subscription_t sub2 = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe_request(&self, &sub2, 0xFFU, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub2);
+
+    canard_subscription_t sub3 = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe_response(&self, &sub3, 0xFFU, 0x1234U, 64U, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub3);
+
+    canard_destroy(&self);
+}
+
+// -------------------------------------------  v0 Duplicate Rejection  ------------------------------------------------
+
+static void test_0v1_subscribe_duplicate_rejection()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    canard_subscription_t sub1 = {};
+    canard_subscription_t sub2 = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub1, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    // Same data_type_id, same kind: must fail.
+    TEST_ASSERT_FALSE(canard_0v1_subscribe(&self, &sub2, 100U, 0x5678U, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub1);
+
+    // Different kinds (v0 message vs v0 request) with same numeric ID: must succeed.
+    canard_subscription_t sub_msg = {};
+    canard_subscription_t sub_req = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub_msg, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_0v1_subscribe_request(&self, &sub_req, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub_req);
+    canard_unsubscribe(&self, &sub_msg);
+
+    // v0 and v1 subscriptions with the same numeric port_id coexist (separate kind trees).
+    canard_subscription_t sub_v0 = {};
+    canard_subscription_t sub_v1 = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub_v0, 200U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub_v1, 200U, false, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub_v1);
+    canard_unsubscribe(&self, &sub_v0);
+
+    canard_destroy(&self);
+}
+
+// -------------------------------------------  v0 Subscribe/Unsubscribe Lifecycle  ------------------------------------
+
+static void test_0v1_subscribe_unsubscribe_resubscribe()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 300U, 0xAAAAU, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub);
+    // Re-subscribe to the same data_type_id must succeed.
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 300U, 0xAAAAU, 64U, 2000000, &capture_sub_vtable));
+    canard_unsubscribe(&self, &sub);
+
+    canard_destroy(&self);
+}
+
+// -------------------------------------------  v0 Single-Frame Message Reception  -------------------------------------
+
+static void test_0v1_message_reception()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 1000U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
+    sub.user_context = make_user_context(&cap);
+
+    // Single-frame v0 message from node 10, priority nominal, transfer-ID 3.
+    const uint32_t       can_id   = make_v0_msg_can_id(canard_prio_nominal, 1000U, 10U);
+    const uint_least8_t  frame[]  = { 0xDEU, 0xADU, make_v0_single_tail(3U) };
+    const canard_bytes_t can_data = { .size = sizeof(frame), .data = frame };
+
+    now_val = 1000;
+    TEST_ASSERT_TRUE(canard_ingest_frame(&self, 1000, 0U, can_id, can_data));
+
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_INT64(1000, cap.timestamp);
+    TEST_ASSERT_EQUAL_UINT8(canard_prio_nominal, cap.priority);
+    TEST_ASSERT_EQUAL_UINT8(10U, cap.source_node_id);
+    TEST_ASSERT_EQUAL_UINT8(3U, cap.transfer_id);
+    TEST_ASSERT_EQUAL_size_t(2U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8(0xDEU, cap.payload_buf[0]);
+    TEST_ASSERT_EQUAL_UINT8(0xADU, cap.payload_buf[1]);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// -------------------------------------------  v0 Service Request Reception  ------------------------------------------
+
+static void test_0v1_service_request_reception()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe_request(&self, &sub, 0x37U, 0xBEEFU, 256U, 2000000, &capture_sub_vtable));
+    sub.user_context = make_user_context(&cap);
+
+    // v0 service request from node 10 to node 42 (us), data_type_id 0x37, transfer-ID 5.
+    const uint32_t       can_id   = make_v0_svc_can_id(canard_prio_nominal, 0x37U, true, 42U, 10U);
+    const uint_least8_t  frame[]  = { 0xCAU, 0xFEU, make_v0_single_tail(5U) };
+    const canard_bytes_t can_data = { .size = sizeof(frame), .data = frame };
+
+    now_val = 2000;
+    TEST_ASSERT_TRUE(canard_ingest_frame(&self, 2000, 0U, can_id, can_data));
+
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(10U, cap.source_node_id);
+    TEST_ASSERT_EQUAL_UINT8(5U, cap.transfer_id);
+    TEST_ASSERT_EQUAL_size_t(2U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8(0xCAU, cap.payload_buf[0]);
+    TEST_ASSERT_EQUAL_UINT8(0xFEU, cap.payload_buf[1]);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// -------------------------------------------  v0 Service Response Reception  -----------------------------------------
+
+static void test_0v1_service_response_reception()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe_response(&self, &sub, 0x55U, 0xFACEU, 256U, &capture_sub_vtable));
+    sub.user_context = make_user_context(&cap);
+
+    // v0 service response from node 99 to node 42 (us), data_type_id 0x55, transfer-ID 7.
+    const uint32_t       can_id   = make_v0_svc_can_id(canard_prio_nominal, 0x55U, false, 42U, 99U);
+    const uint_least8_t  frame[]  = { 0xBEU, 0xEFU, make_v0_single_tail(7U) };
+    const canard_bytes_t can_data = { .size = sizeof(frame), .data = frame };
+
+    now_val = 3000;
+    TEST_ASSERT_TRUE(canard_ingest_frame(&self, 3000, 0U, can_id, can_data));
+
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_UINT8(99U, cap.source_node_id);
+    TEST_ASSERT_EQUAL_UINT8(7U, cap.transfer_id);
+    TEST_ASSERT_EQUAL_size_t(2U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8(0xBEU, cap.payload_buf[0]);
+    TEST_ASSERT_EQUAL_UINT8(0xEFU, cap.payload_buf[1]);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// -------------------------------------------  v0 Unsubscribe Stops Delivery  -----------------------------------------
+
+static void test_0v1_unsubscribe_stops_delivery()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 500U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
+    sub.user_context = make_user_context(&cap);
+
+    // First frame: should be delivered.
+    const uint32_t       can_id   = make_v0_msg_can_id(canard_prio_nominal, 500U, 10U);
+    const uint_least8_t  frame[]  = { 0xAAU, make_v0_single_tail(0U) };
+    const canard_bytes_t can_data = { .size = sizeof(frame), .data = frame };
+    now_val                       = 100;
+    TEST_ASSERT_TRUE(canard_ingest_frame(&self, 100, 0U, can_id, can_data));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+
+    // Unsubscribe, then ingest again: callback must NOT fire.
+    canard_unsubscribe(&self, &sub);
+    cap = {};
+    TEST_ASSERT_TRUE(canard_ingest_frame(&self, 200, 0U, can_id, can_data));
+    TEST_ASSERT_EQUAL_size_t(0U, cap.count);
+
+    canard_destroy(&self);
+}
+
 // -------------------------------------------  Harness  ---------------------------------------------------------------
 
 extern "C" void setUp() {}
@@ -463,6 +722,24 @@ int main()
     RUN_TEST(test_unsubscribe_stops_delivery);
     RUN_TEST(test_multiple_subscriptions_routing);
     RUN_TEST(test_unsubscribe_cleans_up_sessions);
+
+    // v0 argument validation.
+    RUN_TEST(test_0v1_subscribe_null_args);
+    RUN_TEST(test_0v1_subscribe_request_null_args);
+    RUN_TEST(test_0v1_subscribe_response_null_args);
+    RUN_TEST(test_0v1_subscribe_port_id_range);
+
+    // v0 subscription management.
+    RUN_TEST(test_0v1_subscribe_duplicate_rejection);
+    RUN_TEST(test_0v1_subscribe_unsubscribe_resubscribe);
+
+    // v0 end-to-end reception.
+    RUN_TEST(test_0v1_message_reception);
+    RUN_TEST(test_0v1_service_request_reception);
+    RUN_TEST(test_0v1_service_response_reception);
+
+    // v0 unsubscribe behavior.
+    RUN_TEST(test_0v1_unsubscribe_stops_delivery);
 
     return UNITY_END();
 }
