@@ -460,6 +460,7 @@ static void test_poll_filter_after_unsubscribe()
     // Unsubscribe and poll again. Dirty should be set, filter called again.
     canard_unsubscribe(&self, &sub);
     canard_poll(&self, 0U);
+    // cppcheck-suppress knownConditionTrueFalse  ; canard_poll invokes the callback, mutating invocation_count
     TEST_ASSERT_TRUE(cap.filter_rec.invocation_count > calls_after_subscribe);
 
     canard_destroy(&self);
