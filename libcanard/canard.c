@@ -953,17 +953,16 @@ bool canard_unicast(canard_t* const             self,
                     const canard_bytes_chain_t  payload,
                     const canard_user_context_t context)
 {
-    const bool ok = (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
-                    (destination_node_id <= CANARD_NODE_ID_MAX);
-    return ok && tx_1v0_service(self,
-                                deadline,
-                                priority,
-                                CANARD_SERVICE_ID_UNICAST,
-                                destination_node_id,
-                                true,
-                                self->unicast_transfer_id[destination_node_id]++,
-                                payload,
-                                context);
+    return (self != NULL) && (destination_node_id <= CANARD_NODE_ID_MAX) &&
+           tx_1v0_service(self,
+                          deadline,
+                          priority,
+                          CANARD_SERVICE_ID_UNICAST,
+                          destination_node_id,
+                          true,
+                          self->unicast_transfer_id[destination_node_id]++,
+                          payload,
+                          context);
 }
 
 bool canard_1v0_publish(canard_t* const             self,
