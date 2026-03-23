@@ -118,8 +118,8 @@ static void test_canard_pending_ifaces()
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
     TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
-    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_nominal, 10U, false, 0U, payload, NULL));
-    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 2U, canard_prio_nominal, 11U, false, 1U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_nominal, 10U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 2U, canard_prio_nominal, 11U, false, 1U, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT8(3U, canard_pending_ifaces(&self));
 
     canard_destroy(&self);
@@ -182,11 +182,11 @@ static void test_canard_publish_validation()
 
     // Invalid interface bitmap.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_publish(&self, 0, 0, canard_prio_nominal, 0, false, 0, payload, NULL));
+    TEST_ASSERT_FALSE(canard_publish(&self, 0, 0, canard_prio_nominal, 0, false, 0, payload, nullptr));
 
     // Invalid payload.
     const canard_bytes_chain_t bad_payload = { .bytes = { .size = 1, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, false, 0, bad_payload, NULL));
+    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, false, 0, bad_payload, nullptr));
 }
 
 static void test_canard_publish_oom()
@@ -200,7 +200,7 @@ static void test_canard_publish_oom()
 
     // Allocation failure in txfer_new should return false.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, false, 0, payload, NULL));
+    TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, false, 0, payload, nullptr));
 }
 
 static void test_canard_0v1_publish_requires_node_id()
@@ -209,7 +209,7 @@ static void test_canard_0v1_publish_requires_node_id()
 
     // Node-ID zero should reject the request.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_0v1_publish(&self, 0, 1, canard_prio_nominal, 1, 0xFFFF, 0, payload, NULL));
+    TEST_ASSERT_FALSE(canard_0v1_publish(&self, 0, 1, canard_prio_nominal, 1, 0xFFFF, 0, payload, nullptr));
 }
 
 static void test_canard_publish_max_subject_id_encoding()
@@ -220,7 +220,7 @@ static void test_canard_publish_max_subject_id_encoding()
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
     TEST_ASSERT_TRUE(
-      canard_publish(&self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX, false, 0U, payload, NULL));
+      canard_publish(&self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX, false, 0U, payload, nullptr));
 
     canard_poll(&self, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, cap.count);
@@ -243,7 +243,7 @@ static void test_canard_poll_ready_bitmap()
     init_with_capture(&self, &cap);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 3U, canard_prio_nominal, 10U, false, 0U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 3U, canard_prio_nominal, 10U, false, 0U, payload, nullptr));
 
     canard_poll(&self, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, cap.count);
@@ -274,7 +274,7 @@ static void test_canard_poll_backpressure()
     init_with_capture(&self, &cap);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_nominal, 10U, false, 0U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 1000, 1U, canard_prio_nominal, 10U, false, 0U, payload, nullptr));
 
     cap.accept_tx = false;
     canard_poll(&self, 1U);
@@ -299,7 +299,7 @@ static void test_canard_poll_expiration()
     init_with_capture(&self, &cap);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&self, 10, 1U, canard_prio_nominal, 10U, false, 0U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_publish(&self, 10, 1U, canard_prio_nominal, 10U, false, 0U, payload, nullptr));
 
     cap.now = 11;
     canard_poll(&self, 1U);
@@ -318,12 +318,14 @@ static void test_canard_request_unicast_model_validation()
     init_with_capture(&self, &cap);
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_request(nullptr, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX, 1U, 0U, payload, NULL));
+    TEST_ASSERT_FALSE(canard_request(nullptr, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX, 1U, 0U, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_request(
+      &self, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX, CANARD_NODE_ID_MAX + 1U, 0U, payload, nullptr));
     TEST_ASSERT_FALSE(
-      canard_request(&self, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX, CANARD_NODE_ID_MAX + 1U, 0U, payload, NULL));
-    TEST_ASSERT_FALSE(canard_request(&self, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX + 1U, 1U, 0U, payload, NULL));
+      canard_request(&self, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX + 1U, 1U, 0U, payload, nullptr));
     const canard_bytes_chain_t bad_payload = { .bytes = { .size = 1, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_request(&self, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX, 1U, 0U, bad_payload, NULL));
+    TEST_ASSERT_FALSE(
+      canard_request(&self, 0, canard_prio_nominal, CANARD_SERVICE_ID_MAX, 1U, 0U, bad_payload, nullptr));
 
     canard_destroy(&self);
 }
@@ -339,11 +341,11 @@ static void test_canard_request_unicast_model_encoding_and_transfer_id()
     transfer_id_by_destination[10]                                    = CANARD_TRANSFER_ID_MAX;
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
     TEST_ASSERT_TRUE(canard_request(
-      &self, 1000, canard_prio_high, CANARD_SERVICE_ID_MAX, 10U, transfer_id_by_destination[10]++, payload, NULL));
+      &self, 1000, canard_prio_high, CANARD_SERVICE_ID_MAX, 10U, transfer_id_by_destination[10]++, payload, nullptr));
     TEST_ASSERT_TRUE(canard_request(
-      &self, 1000, canard_prio_high, CANARD_SERVICE_ID_MAX, 10U, transfer_id_by_destination[10]++, payload, NULL));
+      &self, 1000, canard_prio_high, CANARD_SERVICE_ID_MAX, 10U, transfer_id_by_destination[10]++, payload, nullptr));
     TEST_ASSERT_TRUE(canard_request(
-      &self, 1000, canard_prio_high, CANARD_SERVICE_ID_MAX, 11U, transfer_id_by_destination[11]++, payload, NULL));
+      &self, 1000, canard_prio_high, CANARD_SERVICE_ID_MAX, 11U, transfer_id_by_destination[11]++, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT8(1U, transfer_id_by_destination[10] & CANARD_TRANSFER_ID_MAX);
     TEST_ASSERT_EQUAL_UINT8(1U, transfer_id_by_destination[11] & CANARD_TRANSFER_ID_MAX);
 
@@ -379,7 +381,7 @@ static void test_canard_1v0_service_can_id_golden()
     canard_t     req_self = {};
     tx_capture_t req_cap  = {};
     init_with_capture_node_id(&req_self, &req_cap, 123U);
-    TEST_ASSERT_TRUE(canard_request(&req_self, 1000, canard_prio_nominal, 430U, 42U, 1U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_request(&req_self, 1000, canard_prio_nominal, 430U, 42U, 1U, payload, nullptr));
     canard_poll(&req_self, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, req_cap.count);
     TEST_ASSERT_EQUAL_UINT32(0x136B957BU, req_cap.records[0].can_id);
@@ -390,7 +392,7 @@ static void test_canard_1v0_service_can_id_golden()
     canard_t     res_self = {};
     tx_capture_t res_cap  = {};
     init_with_capture_node_id(&res_self, &res_cap, 42U);
-    TEST_ASSERT_TRUE(canard_respond(&res_self, 1000, canard_prio_nominal, 430U, 123U, 1U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_respond(&res_self, 1000, canard_prio_nominal, 430U, 123U, 1U, payload, nullptr));
     canard_poll(&res_self, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, res_cap.count);
     TEST_ASSERT_EQUAL_UINT32(0x126BBDAAU, res_cap.records[0].can_id);
@@ -405,17 +407,19 @@ static void test_canard_0v1_service_node_id_rule_and_encoding()
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = nullptr }, .next = nullptr };
 
     canard_t self_zero = {};
-    TEST_ASSERT_FALSE(canard_0v1_request(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, NULL));
-    TEST_ASSERT_FALSE(canard_0v1_respond(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, NULL));
+    TEST_ASSERT_FALSE(
+      canard_0v1_request(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, nullptr));
+    TEST_ASSERT_FALSE(
+      canard_0v1_respond(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, nullptr));
 
     canard_t     self = {};
     tx_capture_t cap  = {};
     init_with_capture_node_id(&self, &cap, 11U);
 
-    TEST_ASSERT_TRUE(canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, nullptr));
     canard_poll(&self, 1U);
 
-    TEST_ASSERT_TRUE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, NULL));
+    TEST_ASSERT_TRUE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, nullptr));
     canard_poll(&self, 1U);
 
     TEST_ASSERT_EQUAL_size_t(2U, cap.count);
