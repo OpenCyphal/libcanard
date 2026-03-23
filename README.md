@@ -2,11 +2,7 @@
 
 # Cyphal/CAN transport in C
 
-[![Main Workflow](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=alert_status)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=coverage)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=ncloc)](https://sonarcloud.io/dashboard?id=libcanard)
+[![CI](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
 [![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.opencyphal.org&color=1700b3)](https://forum.opencyphal.org)
 
 </div>
@@ -14,46 +10,23 @@
 -----
 
 Libcanard is a robust implementation of the Cyphal/CAN transport layer in C for high-integrity real-time embedded systems.
-Supports Cyphal v1.1, Cyphal v1.0, and legacy protocols: UAVCAN v0 and DroneCAN; works with Classic CAN and CAN FD.
+Supports Cyphal v1.1, v1.0, and legacy UAVCAN v0 aka DroneCAN.
 
-[Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
-communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
+The library supports both Classic CAN and CAN FD, in redundant and non-redundant configurations.
 
-**Read the docs in [`libcanard/canard.h`](/libcanard/canard.h).**
+The library is compatible with 8/16/32/64-bit platforms, including extremely resource-constrained
+baremetal MCU platforms starting from 32K ROM and 32K RAM.
 
-## Features
-
-- Full test coverage and extensive static analysis.
-- Compliance with automatically enforceable MISRA C rules (reach out to <https://forum.opencyphal.org> for details).
-- Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
-- Support for the Classic CAN and CAN FD.
-- Support for redundant network interfaces.
-- Compatibility with 8/16/32/64-bit platforms.
-- Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 32K RAM.
-- Implemented in ≈1000 SLoC.
-
-## Platforms
-
-The library is designed to be usable out of the box with any conventional 8/16/32/64-bit platform,
-including deeply embedded baremetal platforms, as long as there is a standard-compliant compiler available.
-The platform-specific media IO layer (driver) is supposed to be provided by the application:
-
-    +---------------------------------+
-    |           Application           |
-    +-------+-----------------+-------+
-            |                 |
-    +-------+-------+ +-------+-------+
-    |   Libcanard   | |   CAN driver  |
-    +---------------+ +-------+-------+
-                              |
-                      +-------+-------+
-                      | CAN controller|
-                      +---------------+
-
+The interface with the underlying platform is very clean and minimal, enabling quick adaptation to any CAN-enabled MCU.
 The OpenCyphal Development Team maintains a collection of various platform-specific components in a separate repository
 at <https://github.com/OpenCyphal/platform_specific_components>.
 Users are encouraged to search through that repository for drivers, examples, and other pieces that may be
 reused in the target application to speed up the design of the media IO layer (driver) for the application.
+
+[Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
+communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
+
+**Read the docs in [`libcanard/canard.h`](libcanard/canard.h).**
 
 ## Revisions
 
@@ -61,8 +34,33 @@ To release a new version, simply publish a new release on GitHub.
 
 ### v5.0 [WORK IN PROGRESS]
 
-- Added support for Cyphal v1.1 alongside v1.0.
-- Added support for legacy protocols: UAVCAN v0 and DroneCAN.
+v5 is a major rework based on the experience gained from extensive production use of the previous revisions.
+The API has been redesigned from scratch and as such there is no migration guide available;
+please read the new `canard.h` to see how to use the library -- the new API is simpler than the old one.
+
+Main changes:
+
+- Support for new protocols alongside Cyphal v1.0:
+  - Cyphal/CAN v1.1, which adds support for 16-bit subject-IDs (like in UAVCAN v0) via a new CAN ID layout format.
+  - UAVCAN v0 aka DroneCAN, a legacy predecessor to Cyphal v1.0 that is still widely used.
+
+- Anonymous messages can no longer be transmitted, but they can still be received.
+
+- A new passive node-ID autoconfiguration based on a simple occupancy observer.
+  This method is decentralized and is compatible with old nodes.
+  A node-ID can still be assigned manually if needed.
+
+- Automatic CAN acceptance filter configuration based on the current subscription set.
+  The configuration is refreshed whenever the subscription set is modified or the local node-ID is changed.
+
+- New TX pipeline to use per-transfer queue granularity with efficient CAN frame deduplication across redundant
+  interfaces, which resulted in a major reduction of the heap memory footprint in non-redundant interface
+  configurations, and even more so in applications using redundant interfaces (typ. over 2x heap use reduction).
+
+- New RX pipeline to support priority level preemption without transfer loss and reduce memory consumption.
+  The old v4 revision was susceptible to transfer loss when the remote initiated a higher-priority multi-frame
+  transfer while a lower-priority multi-frame transfer was in flight. The v5 revision maintains concurrent
+  reassemblers per priority level, enabling arbitrary priority nesting.
 
 ### v4.0
 
