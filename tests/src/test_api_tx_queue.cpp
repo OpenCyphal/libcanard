@@ -529,9 +529,9 @@ static void test_tx_scattered_gather_3_fragments()
     // Fragment 3: {0x44, 0x55}
     const uint_least8_t frag3[] = { 0x44U, 0x55U };
 
-    canard_bytes_chain_t chain3 = { .bytes = { .size = sizeof(frag3), .data = frag3 }, .next = nullptr };
-    canard_bytes_chain_t chain2 = { .bytes = { .size = sizeof(frag2), .data = frag2 }, .next = &chain3 };
-    canard_bytes_chain_t chain1 = { .bytes = { .size = sizeof(frag1), .data = frag1 }, .next = &chain2 };
+    const canard_bytes_chain_t chain3 = { .bytes = { .size = sizeof(frag3), .data = frag3 }, .next = nullptr };
+    const canard_bytes_chain_t chain2 = { .bytes = { .size = sizeof(frag2), .data = frag2 }, .next = &chain3 };
+    const canard_bytes_chain_t chain1 = { .bytes = { .size = sizeof(frag1), .data = frag1 }, .next = &chain2 };
 
     TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 1200U, false, 7U, chain1, nullptr));
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);

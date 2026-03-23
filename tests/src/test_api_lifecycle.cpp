@@ -810,7 +810,7 @@ static void test_redundant_rx_dedup_multiframe()
     const uint_least8_t payload[8] = { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
 
     // Compute CRC over payload.
-    uint16_t crc = crc16_add(0xFFFFU, payload, sizeof(payload));
+    const uint16_t crc = crc16_add(0xFFFFU, payload, sizeof(payload));
 
     // Frame 1: 7 payload bytes + tail (SOT=1, EOT=0, toggle=1, TID=2).
     uint_least8_t frame1[8];
