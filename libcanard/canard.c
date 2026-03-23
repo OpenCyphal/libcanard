@@ -1693,6 +1693,42 @@ static bool rx_filter_configure(canard_t* const self)
     return ok;
 }
 
+// Common subscribe logic: validate, initialize, insert into tree, mark filters dirty.
+static bool rx_subscribe(canard_t* const                           self,
+                         canard_subscription_t* const              subscription,
+                         const canard_kind_t                       kind,
+                         const uint16_t                            port_id,
+                         const uint16_t                            crc_seed,
+                         const size_t                              extent,
+                         const canard_us_t                         transfer_id_timeout,
+                         const canard_subscription_vtable_t* const vtable)
+{
+    bool ok = (self != NULL) && (subscription != NULL) && (vtable != NULL) && (vtable->on_message != NULL) &&
+              (transfer_id_timeout >= 0);
+    if (ok) {
+        (void)memset(subscription, 0, sizeof(*subscription));
+        subscription->transfer_id_timeout   = transfer_id_timeout;
+        subscription->extent                = extent;
+        subscription->port_id               = port_id;
+        subscription->crc_seed              = crc_seed;
+        subscription->kind                  = kind;
+        subscription->owner                 = self;
+        subscription->vtable                = vtable;
+        const canard_tree_t* const existing = cavl2_find_or_insert(&self->rx.subscriptions[kind],
+                                                                   &subscription->port_id,
+                                                                   rx_subscription_cavl_compare,
+                                                                   &subscription->index_port_id,
+                                                                   cavl2_trivial_factory);
+        if (existing != &subscription->index_port_id) {
+            (void)memset(subscription, 0, sizeof(*subscription)); // Undo partial init on duplicate.
+            ok = false;
+        } else {
+            self->rx.filters_dirty = true;
+        }
+    }
+    return ok;
+}
+
 // ---------------------------------------------           MISC            ---------------------------------------------
 
 static void node_id_occupancy_reset(canard_t* const self)
@@ -1895,4 +1931,55 @@ uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_s
         sig >>= 8U;
     }
     return crc;
+}
+
+bool canard_subscribe(canard_t* const                           self,
+                      canard_subscription_t* const              subscription,
+                      const uint16_t                            subject_id,
+                      const bool                                rev_1v0,
+                      const size_t                              extent,
+                      const canard_us_t                         transfer_id_timeout,
+                      const canard_subscription_vtable_t* const vtable)
+{
+    return (!rev_1v0 || (subject_id <= CANARD_SUBJECT_ID_MAX_1v0)) &&
+           rx_subscribe(self,
+                        subscription,
+                        rev_1v0 ? canard_kind_1v0_message : canard_kind_1v1_message,
+                        subject_id,
+                        CRC_INITIAL,
+                        extent,
+                        transfer_id_timeout,
+                        vtable);
+}
+
+bool canard_subscribe_request(canard_t* const                           self,
+                              canard_subscription_t* const              subscription,
+                              const uint16_t                            service_id,
+                              const size_t                              extent,
+                              const canard_us_t                         transfer_id_timeout,
+                              const canard_subscription_vtable_t* const vtable)
+{
+    return (service_id <= CANARD_SERVICE_ID_MAX) &&
+           rx_subscribe(
+             self, subscription, canard_kind_1v0_request, service_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
+}
+
+bool canard_subscribe_response(canard_t* const                           self,
+                               canard_subscription_t* const              subscription,
+                               const uint16_t                            service_id,
+                               const size_t                              extent,
+                               const canard_subscription_vtable_t* const vtable)
+{
+    return (service_id <= CANARD_SERVICE_ID_MAX) &&
+           rx_subscribe(self, subscription, canard_kind_1v0_response, service_id, CRC_INITIAL, extent, 0, vtable);
+}
+
+void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subscription)
+{
+    CANARD_ASSERT((self != NULL) && (subscription != NULL) && (subscription->owner == self));
+    while (subscription->sessions != NULL) {
+        rx_session_destroy((rx_session_t*)(void*)cavl2_min(subscription->sessions));
+    }
+    cavl2_remove(&self->rx.subscriptions[subscription->kind], &subscription->index_port_id);
+    self->rx.filters_dirty = true;
 }
