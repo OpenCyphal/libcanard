@@ -1630,7 +1630,7 @@ static canard_filter_t rx_filter_for_subscription(const canard_t* const self, co
     return f;
 }
 
-// Make a new filter that will accept frames accepted by both of the arguments.
+// Make a new filter that will accept frames accepted by either of the arguments (minimal superset).
 static canard_filter_t rx_filter_fuse(const canard_filter_t a, const canard_filter_t b)
 {
     const uint32_t mask = a.extended_mask & b.extended_mask & ~(a.extended_can_id ^ b.extended_can_id);
