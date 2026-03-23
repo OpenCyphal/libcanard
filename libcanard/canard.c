@@ -1586,15 +1586,97 @@ static canard_subscription_t* rx_route(const canard_t* const self, const frame_t
       self->rx.subscriptions[fr->kind], &fr->port_id, rx_subscription_cavl_compare);
 }
 
-// Recompute the filter configuration and apply. Returns true on success, false on driver error.
-static bool rx_filter_configure(const canard_t* const self)
+// Builds an acceptance filter that only admits frames that match the subscription.
+static canard_filter_t rx_filter_for_subscription(const canard_t* const self, const canard_subscription_t* const sub)
 {
-    if ((self->vtable->filter == NULL) || (self->rx.filter_count == 0)) {
+    canard_filter_t f = { 0 };
+    (void)self;
+    switch (sub->kind) { // TODO IMPLEMENT
+        case canard_kind_1v1_message:
+            break;
+        case canard_kind_1v0_message:
+            break;
+        case canard_kind_1v0_response:
+            break;
+        case canard_kind_1v0_request:
+            break;
+        case canard_kind_0v1_message:
+            break;
+        case canard_kind_0v1_response:
+            break;
+        case canard_kind_0v1_request:
+            break;
+        default:
+            CANARD_ASSERT(false);
+    }
+    return f;
+}
+
+// Make a new filter that will accept frames accepted by both of the arguments.
+static canard_filter_t rx_filter_fuse(const canard_filter_t a, const canard_filter_t b)
+{
+    const uint32_t mask = a.extended_mask & b.extended_mask & ~(a.extended_can_id ^ b.extended_can_id);
+    return (canard_filter_t){ .extended_can_id = a.extended_can_id & mask, .extended_mask = mask };
+}
+
+// Filter selectivity metric; see the Cyphal/CAN specification. Greater values ==> stronger filter.
+static byte_t rx_filter_rank(const canard_filter_t a) { return popcount(a.extended_mask); }
+
+// Modifies the filter array such that the new filter is accepted. See Cyphal/CAN Spec.
+static void rx_filter_coalesce_into(const size_t count, canard_filter_t* const into, const canard_filter_t new)
+{
+    // Currently we're using a simplified fast algorithm that doesn't attempt fusing existing entries with each other.
+    // This may result in suboptimal configurations but is faster.
+    size_t index     = 0;
+    byte_t best_rank = 0;
+    for (size_t i = 0; i < count; i++) {
+        const byte_t fused_rank = rx_filter_rank(rx_filter_fuse(into[i], new));
+        if (fused_rank >= best_rank) { // use >= to prefer later filters where v0 is
+            best_rank = fused_rank;
+            index     = i;
+        }
+    }
+    CANARD_ASSERT(index < count);
+    into[index] = rx_filter_fuse(into[index], new);
+}
+
+// Recompute the filter configuration and apply. Returns true on success, false on driver error.
+static bool rx_filter_configure(canard_t* const self)
+{
+    if (self->rx.filter_count == 0) {
         return true; // No filtering support, nothing to do.
     }
-    (void)self;
-    // TODO not implemented.
-    return true;
+    CANARD_ASSERT((self->vtable->filter != NULL) && mem_valid(self->mem.rx_filters));
+
+    // Allocate the temporary filter storage. Depending on the CAN hardware, it may be fairly large.
+    // Ideally we should cap it by the actual number of filters needed but we don't store that currently.
+    const size_t           capacity = self->rx.filter_count;
+    canard_filter_t* const filters  = mem_alloc_zero(self->mem.rx_filters, capacity * sizeof(canard_filter_t));
+    if (filters == NULL) {
+        self->err.oom++;
+        return false;
+    }
+
+    // Build the filter array. Use optimal coalescence if we have more subscriptions than filters available.
+    size_t n = 0;
+    for (size_t kind = 0; kind < CANARD_KIND_COUNT; kind++) {
+        for (const canard_subscription_t* sub = (canard_subscription_t*)(void*)cavl2_min(self->rx.subscriptions[kind]);
+             sub != NULL;
+             sub = (canard_subscription_t*)(void*)cavl2_next_greater((canard_tree_t*)sub)) {
+            const canard_filter_t f = rx_filter_for_subscription(self, sub);
+            if (n < capacity) {
+                filters[n++] = f;
+            } else {
+                rx_filter_coalesce_into(n, filters, f);
+            }
+        }
+    }
+    CANARD_ASSERT(n <= capacity);
+
+    // Apply the filters.
+    const bool ok = self->vtable->filter(self, n, filters);
+    mem_free(self->mem.rx_filters, capacity * sizeof(canard_filter_t), filters);
+    return ok;
 }
 
 // ---------------------------------------------           MISC            ---------------------------------------------
@@ -1667,14 +1749,16 @@ bool canard_new(canard_t* const              self,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count)
 {
+    const bool filter_ok = (filter_count == 0) || //
+                           ((vtable != NULL) && (vtable->filter != NULL) && mem_valid(memory.rx_filters));
     const bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
                     mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) && mem_valid(memory.rx_session) &&
-                    mem_valid(memory.rx_payload);
+                    mem_valid(memory.rx_payload) && filter_ok;
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
         self->tx.fd                     = true;
         self->tx.queue_capacity         = tx_queue_capacity;
-        self->rx.filter_count           = (vtable->filter == NULL) ? 0 : smaller(filter_count, CANARD_FILTERS_MAX);
+        self->rx.filter_count           = filter_count;
         self->mem                       = memory;
         self->prng_state                = prng_seed ^ (uintptr_t)self;
         self->vtable                    = vtable;

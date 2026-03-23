@@ -80,16 +80,6 @@ extern "C"
 #define CANARD_MTU_CAN_CLASSIC 8U
 #define CANARD_MTU_CAN_FD      64U
 
-/// If CAN acceptance filter configuration is enabled, the library will be able to configure at most this many filters.
-/// The application can configure a smaller limit at runtime if necessary; this value only affects a stack array size.
-/// The default value is large enough to utilize all available filters in most CAN controllers out there,
-/// considering that we use filters in the extended ID&mask mode which tends to consume more hardware resources.
-/// This value can be reduced to reduce the stack pressure on the filter configuration update path,
-/// or increased if more filters are available (e.g., Bosch M_CAN or ST FDCAN support up to 64, SocketCAN up to 512).
-#ifndef CANARD_FILTERS_MAX
-#define CANARD_FILTERS_MAX 32U
-#endif
-
 /// All valid transfer kind and version combinations.
 typedef enum canard_kind_t
 {
@@ -233,7 +223,8 @@ typedef struct canard_mem_set_t
     canard_mem_t tx_transfer; ///< TX transfer objects, fixed-size, one per enqueued transfer.
     canard_mem_t tx_frame;    ///< One per enqueued frame, at least one per TX transfer, size MTU+overhead.
     canard_mem_t rx_session;  ///< Remote-associated sessions per subscriber, fixed-size.
-    canard_mem_t rx_payload;  ///< Variable-size, max size extent+sizeof(slot).
+    canard_mem_t rx_payload;  ///< Variable-size, max size extent+sizeof(rx_slot_t).
+    canard_mem_t rx_filters;  ///< For canard_filter_t[filter_count] temporary storage. Not needed if filters not used.
 } canard_mem_set_t;
 
 typedef struct canard_subscription_t        canard_subscription_t;
@@ -261,11 +252,9 @@ struct canard_subscription_t
 
     canard_us_t   transfer_id_timeout;
     uint32_t      port_id;  ///< Represents subjects, services, and legacy message- and service type IDs.
-    size_t        extent;   ///< Must not be altered after initialization!
+    size_t        extent;   ///< Must not be altered after initialization! In v0 includes the CRC.
     uint16_t      crc_seed; ///< For v0 this is set at subscription time, for v1 this is always 0xFFFF.
     canard_kind_t kind;
-
-    canard_filter_t filter; ///< Precomputed for quick acceptance filter configuration.
 
     canard_t*                           owner;
     canard_tree_t*                      sessions;
@@ -303,8 +292,7 @@ typedef struct canard_vtable_t
 
     /// Reconfigure the acceptance filters of the CAN controller hardware.
     /// The prior configuration, if any, is replaced entirely.
-    /// filter_count is guaranteed to not exceed the value given at initialization and CANARD_FILTERS_MAX,
-    /// whichever is smaller.
+    /// filter_count is guaranteed to not exceed the value given at initialization.
     /// This function may be NULL if the CAN controller/driver does not support filtering or it is not desired.
     /// This function is only invoked from canard_poll().
     /// Returns true on success, false on failure.
@@ -356,8 +344,8 @@ struct canard_t
     {
         canard_tree_t* subscriptions[CANARD_KIND_COUNT];
         canard_list_t  list_session_by_animation; ///< Oldest at the head.
-        size_t         filter_count;              ///< At most CANARD_FILTERS_MAX.
-        bool           filters_dirty;             ///< Pending filter update at next poll.
+        size_t         filter_count;
+        bool           filters_dirty; ///< Set when subscribed/unsubscribed or node-ID is changed.
     } rx;
 
     /// Error counters incremented automatically when the corresponding error condition occurs.
@@ -399,8 +387,11 @@ struct canard_t
 /// If manual allocation is desired, use the corresponding function to set the node-ID after initialization.
 ///
 /// The filter count is the number of CAN acceptance filters that the library can utilize. If there are fewer filters
-/// than subscriptions, similar filters will be coalesced. The value will be clamped to CANARD_FILTERS_MAX.
-/// It is possible to pass zero filters if filtering is unneeded/unsupported.
+/// than subscriptions, similar filters will be coalesced. It is possible to pass zero filters if filtering is
+/// unneeded/unsupported. When the number of active subscriptions exceeds the number of available filters,
+/// filter coalescence is performed, which however has a high complexity bound; it is thus recommended that the number
+/// of filters is either large enough to accommodate all subscriptions, or small enough in the single digits where
+/// the load remains low.
 ///
 /// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///

@@ -93,7 +93,7 @@ static const canard_vtable_t capture_vtable = { .now        = capture_now,
 static canard_mem_set_t make_std_memory()
 {
     const canard_mem_t r = { .vtable = &std_mem_vtable, .context = nullptr };
-    return canard_mem_set_t{ .tx_transfer = r, .tx_frame = r, .rx_session = r, .rx_payload = r };
+    return canard_mem_set_t{ .tx_transfer = r, .tx_frame = r, .rx_session = r, .rx_payload = r, .rx_filters = r };
 }
 
 static void init_with_capture_node_id(canard_t* const self, tx_capture_t* const capture, const uint_least8_t node_id)
