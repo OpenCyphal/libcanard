@@ -388,6 +388,7 @@ bool canard_new(canard_t* const              self,
                 const size_t                 filter_count);
 
 /// The application MUST destroy all subscriptions before invoking this (this is asserted).
+/// The application MUST also release all retained TX frame views before invoking this.
 /// The TX queue will be purged automatically if not empty.
 void canard_destroy(canard_t* const self);
 
@@ -422,7 +423,8 @@ bool canard_ingest_frame(canard_t* const      self,
                          const uint32_t       extended_can_id,
                          const canard_bytes_t can_data);
 
-/// Retain a TX frame view obtained from tx() so it may outlive the callback. No effect if obj.data is NULL.
+/// Retain a TX frame view obtained from tx() so it may outlive the callback and the TX queue entry.
+/// The retained view must be released before canard_destroy() is invoked on the owning instance.
 /// This is not applicable to RX payload views.
 void canard_refcount_inc(const canard_bytes_t obj);
 
