@@ -18,6 +18,8 @@ Language targets: C99 for the library, C99 and C++20 for the test harness. Stric
 
 Naming patterns: `canard_*` functions, `canard_*_t` types, `CANARD_*` macros. Internal definitions need no prefixing. Enums and constants are `lower_snake_case`. Uppercase only for macros.
 
+Variables that are not mutated MUST be declared const, otherwise CI will reject the code.
+
 Keep code compact and add brief comments before non-obvious logic.
 
 Treat warnings as errors and keep compatibility with strict warning flags.
@@ -26,7 +28,7 @@ Treat warnings as errors and keep compatibility with strict warning flags.
 
 For agent-authored commits, set `GIT_AUTHOR_NAME="Agent"` and `GIT_COMMITTER_NAME="Agent"`.
 
-The build system will reject code that is not clang-formatted; use build target `format` to invoke clang-format.
+The build system will reject code that is not clang-formatted; use build target `format` to invoke clang-format. This MUST be done before pushing code to avoid CI breakage.
 
 ## Adversarial validation and verification
 
