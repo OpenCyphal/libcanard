@@ -102,6 +102,7 @@ jobs:
       - run: |
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install -y gcc-multilib g++-multilib lcov
+          pip install --break-system-packages gcovr
       - run: >
           cmake
           -B ${{ github.workspace }}/build
@@ -114,6 +115,25 @@ jobs:
           make -j$(nproc)
           make test
           make coverage
+      # Export Cobertura report for Coveralls, tracking only libcanard/canard.c.
+      - run: |
+          cd "${{ github.workspace }}/build"
+          gcovr \
+            --root "${{ github.workspace }}" \
+            --filter '.*/libcanard/canard\.c$' \
+            --xml-pretty \
+            --output "${{ github.workspace }}/build/coverage-canard.cobertura.xml" \
+            --print-summary
+      - id: coveralls_upload
+        uses: coverallsapp/github-action@v2
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/coverage-canard.cobertura.xml
+          format: cobertura
+      - if: ${{ steps.coveralls_upload.outcome == 'failure' }}
+        run: |
+          echo "::warning::Coveralls upload failed (likely Coveralls API issue). Continuing without failing CI."
       - uses: actions/upload-artifact@v7
         if: always()
         with:

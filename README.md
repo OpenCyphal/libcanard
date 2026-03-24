@@ -3,6 +3,7 @@
 # Cyphal/CAN transport in C
 
 [![CI](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
+[![Coverage](https://coveralls.io/repos/github/OpenCyphal/libcanard/badge.svg)](https://coveralls.io/github/OpenCyphal/libcanard)
 [![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.opencyphal.org&color=1700b3)](https://forum.opencyphal.org)
 
 </div>
