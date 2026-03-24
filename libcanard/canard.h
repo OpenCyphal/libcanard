@@ -437,15 +437,22 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 ///
 /// Returns true on success; false on invalid arguments, OOM, or TX queue exhaustion.
 /// See err.oom and err.tx_capacity for the enqueue failure cause.
-bool canard_publish(canard_t* const            self,
-                    const canard_us_t          deadline,
-                    const uint_least8_t        iface_bitmap,
-                    const canard_prio_t        priority,
-                    const uint16_t             subject_id,
-                    const bool                 rev_1v0, ///< If set, subject-ID must be in [0,8192).
-                    const uint_least8_t        transfer_id,
-                    const canard_bytes_chain_t payload,
-                    void* const                context);
+bool canard_publish_16b(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             subject_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context);
+bool canard_publish_13b(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             subject_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context);
 
 /// Enqueue a service request on all ifaces; other semantics, failure modes, and memory model match canard_publish().
 bool canard_request(canard_t* const            self,
@@ -455,7 +462,7 @@ bool canard_request(canard_t* const            self,
                     const uint_least8_t        server_node_id,
                     const uint_least8_t        transfer_id,
                     const canard_bytes_chain_t payload,
-                    void* const                context);
+                    void* const                user_context);
 
 /// Enqueue a service response on all ifaces; other semantics, failure modes, and memory model match canard_publish().
 bool canard_respond(canard_t* const            self,

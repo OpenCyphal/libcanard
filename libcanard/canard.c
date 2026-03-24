@@ -882,45 +882,58 @@ uint_least8_t canard_pending_ifaces(const canard_t* const self)
     return out;
 }
 
-bool canard_publish(canard_t* const            self,
-                    const canard_us_t          deadline,
-                    const uint_least8_t        iface_bitmap,
-                    const canard_prio_t        priority,
-                    const uint16_t             subject_id,
-                    const bool                 rev_1v0, ///< Publish a v1.0 message; subject-ID must be in [0,8192).
-                    const uint_least8_t        transfer_id,
-                    const canard_bytes_chain_t payload,
-                    void* const                user_context)
+bool canard_publish_16b(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             subject_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context)
+{
+    bool ok =
+      (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
+      (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap));
+    if (ok) {
+        // v1.1 16-bit message format extends the subject-ID to 16 bits, using bit 7 as 1 to discriminate from v1.0,
+        // and designating the anonymous bit as reserved=0. ID bit layout:
+        //
+        //  28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
+        // |prio[3] |sv| 0|                  subject_id[16]               | 1|  source_node_id[7] |
+        //
+        // In DSDL notation:
+        //
+        //  uint7  source_node_id
+        //  bool   reserved_7          # =1, version discrimination
+        //  uint16 subject_id
+        //  bool   reserved_24         # =0, was anonymous
+        //  bool   service_not_message # =0
+        //  uint3  priority
+        const uint32_t can_id =
+          (((uint32_t)priority) << PRIO_SHIFT) | ((uint32_t)subject_id << 8U) | (UINT32_C(1) << 7U);
+        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
+        ok = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, transfer_id, payload, CRC_INITIAL);
+    }
+    return ok;
+}
+
+bool canard_publish_13b(canard_t* const            self,
+                        const canard_us_t          deadline,
+                        const uint_least8_t        iface_bitmap,
+                        const canard_prio_t        priority,
+                        const uint16_t             subject_id,
+                        const uint_least8_t        transfer_id,
+                        const canard_bytes_chain_t payload,
+                        void* const                user_context)
 {
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
-      (!rev_1v0 || (subject_id <= CANARD_SUBJECT_ID_MAX_13b));
+      (subject_id <= CANARD_SUBJECT_ID_MAX_13b);
     if (ok) {
-        tx_transfer_t* tr = NULL;
-        if (!rev_1v0) {
-            // v1.1 16-bit message format extends the subject-ID to 16 bits, using bit 7 as 1 to discriminate from v1.0,
-            // and designating the anonymous bit as reserved=0. ID bit layout:
-            //
-            //  28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
-            // |prio[3] |sv| 0|                  subject_id[16]               | 1|  source_node_id[7] |
-            //
-            // In DSDL notation:
-            //
-            //  uint3  priority
-            //  bool   service_not_message # =0
-            //  bool   reserved_24         # =0, was anonymous
-            //  uint16 subject_id
-            //  bool   reserved_7          # =1, version discrimination
-            //  uint7  source_node_id
-            const uint32_t can_id =
-              (((uint32_t)priority) << PRIO_SHIFT) | ((uint32_t)subject_id << 8U) | (UINT32_C(1) << 7U);
-            tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
-        } else {
-            const uint32_t can_id =
-              (((uint32_t)priority) << PRIO_SHIFT) | (UINT32_C(3) << 21U) | (((uint32_t)subject_id) << 8U);
-            tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
-        }
+        const uint32_t can_id =
+          (((uint32_t)priority) << PRIO_SHIFT) | (UINT32_C(3) << 21U) | (((uint32_t)subject_id) << 8U);
+        tx_transfer_t* const tr = tx_transfer_new(self, deadline, can_id, self->tx.fd, user_context);
         ok = (tr != NULL) && tx_push(self, tr, false, iface_bitmap, transfer_id, payload, CRC_INITIAL);
     }
     return ok;
@@ -1222,7 +1235,7 @@ static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* c
 static void rx_slot_advance(rx_slot_t* const slot, const size_t extent, const canard_bytes_t payload)
 {
     if (slot->total_size < extent) {
-        const size_t copy_size = smaller(payload.size, (size_t)(extent - slot->total_size));
+        const size_t copy_size = smaller(payload.size, (size_t)(extent - slot->total_size)); // NOLINT(*-casting)
         (void)memcpy(&slot->payload[slot->total_size], payload.data, copy_size);
     }
     slot->total_size = (uint32_t)(slot->total_size + payload.size); // Before truncation.
