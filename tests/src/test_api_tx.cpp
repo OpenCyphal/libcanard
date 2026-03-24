@@ -126,7 +126,7 @@ static void test_canard_pending_ifaces()
 }
 
 // Golden signatures generated from pydronecan (dronecan 1.0.24), standard uavcan.* types.
-static void test_canard_0v1_crc_seed_from_data_type_signature_golden()
+static void test_canard_v0_crc_seed_from_data_type_signature_golden()
 {
     struct test_vector_t
     {
@@ -172,7 +172,7 @@ static void test_canard_0v1_crc_seed_from_data_type_signature_golden()
         { .signature = 0x463B10CCCBE51C3DULL, .expected_seed = 0x1D70U },
     };
     for (const test_vector_t& vector : vectors) {
-        TEST_ASSERT_EQUAL_HEX16(vector.expected_seed, canard_0v1_crc_seed_from_data_type_signature(vector.signature));
+        TEST_ASSERT_EQUAL_HEX16(vector.expected_seed, canard_v0_crc_seed_from_data_type_signature(vector.signature));
     }
 }
 
@@ -203,13 +203,13 @@ static void test_canard_publish_oom()
     TEST_ASSERT_FALSE(canard_publish(&self, 0, 1, canard_prio_nominal, 0, false, 0, payload, nullptr));
 }
 
-static void test_canard_0v1_publish_requires_node_id()
+static void test_canard_v0_publish_requires_node_id()
 {
     canard_t self = {};
 
     // Node-ID zero should reject the request.
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_FALSE(canard_0v1_publish(&self, 0, 1, canard_prio_nominal, 1, 0xFFFF, 0, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_v0_publish(&self, 0, 1, canard_prio_nominal, 1, 0xFFFF, 0, payload, nullptr));
 }
 
 static void test_canard_publish_max_subject_id_encoding()
@@ -402,24 +402,22 @@ static void test_canard_1v0_service_can_id_golden()
 }
 
 // Validate legacy v0 service rules and CAN-ID encoding.
-static void test_canard_0v1_service_node_id_rule_and_encoding()
+static void test_canard_v0_service_node_id_rule_and_encoding()
 {
     const canard_bytes_chain_t payload = { .bytes = { .size = 0U, .data = nullptr }, .next = nullptr };
 
     canard_t self_zero = {};
-    TEST_ASSERT_FALSE(
-      canard_0v1_request(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, nullptr));
-    TEST_ASSERT_FALSE(
-      canard_0v1_respond(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_v0_request(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_v0_respond(&self_zero, 0, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, nullptr));
 
     canard_t     self = {};
     tx_capture_t cap  = {};
     init_with_capture_node_id(&self, &cap, 11U);
 
-    TEST_ASSERT_TRUE(canard_0v1_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_v0_request(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 5U, payload, nullptr));
     canard_poll(&self, 1U);
 
-    TEST_ASSERT_TRUE(canard_0v1_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_v0_respond(&self, 1000, canard_prio_nominal, 0x37U, 0xBEEFU, 24U, 6U, payload, nullptr));
     canard_poll(&self, 1U);
 
     TEST_ASSERT_EQUAL_size_t(2U, cap.count);
@@ -442,12 +440,12 @@ int main()
 
     // Utility API coverage.
     RUN_TEST(test_canard_pending_ifaces);
-    RUN_TEST(test_canard_0v1_crc_seed_from_data_type_signature_golden);
+    RUN_TEST(test_canard_v0_crc_seed_from_data_type_signature_golden);
 
     // TX API validation checks.
     RUN_TEST(test_canard_publish_validation);
     RUN_TEST(test_canard_publish_oom);
-    RUN_TEST(test_canard_0v1_publish_requires_node_id);
+    RUN_TEST(test_canard_v0_publish_requires_node_id);
     RUN_TEST(test_canard_publish_max_subject_id_encoding);
     RUN_TEST(test_canard_poll_ready_bitmap);
     RUN_TEST(test_canard_poll_backpressure);
@@ -455,7 +453,7 @@ int main()
     RUN_TEST(test_canard_request_unicast_model_validation);
     RUN_TEST(test_canard_request_unicast_model_encoding_and_transfer_id);
     RUN_TEST(test_canard_1v0_service_can_id_golden);
-    RUN_TEST(test_canard_0v1_service_node_id_rule_and_encoding);
+    RUN_TEST(test_canard_v0_service_node_id_rule_and_encoding);
 
     return UNITY_END();
 }

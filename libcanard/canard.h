@@ -10,14 +10,17 @@
 /// The library is designed to be compatible with any target platform and instruction set architecture, from 8 to 64
 /// bit, little- and big-endian, RTOS-based or baremetal, etc., as long as there is a standards-compliant C compiler.
 ///
-/// The library offers a non-blocking callback-based API.
+/// The library offers a non-blocking callback-based API. It is not thread-safe: if used in a concurrent environment,
+/// it is the responsibility of the application to provide adequate synchronization.
+///
+/// The library supports both Cyphal v1 and the legacy UAVCAN v0 (aka DroneCAN) protocol versions,
+/// which can be used simultaneously on the same bus, with one limitation that a single node cannot send transfers
+/// of both versions simultaneously (unless certain constraints are satisfied as discussed below). If an application
+/// needs to send transfers of both versions simultaneously, the recommended solution is to run two node instances.
 ///
 /// The library is intended to be integrated into the end application by simply copying its source files into the
 /// source tree of the project; it does not require any special compilation options and should work out of the box.
 /// There are build-time configuration parameters defined near the top of canard.c, but they are safe to ignore.
-///
-/// The library is not thread-safe: if used in a concurrent environment, it is the responsibility of the application
-/// to provide adequate synchronization.
 ///
 /// --------------------------------------------------------------------------------------------------------------------
 /// This software is distributed under the terms of the MIT License.
@@ -56,8 +59,8 @@ extern "C"
 
 /// Parameter ranges are inclusive; the lower bound is zero for all.
 #define CANARD_SUBJECT_ID_MAX     0xFFFFU // Applies to Cyphal v1.1 and UAVCAN v0/DroneCAN message data type IDs.
-#define CANARD_SUBJECT_ID_MAX_1v0 8191U   // Cyphal v1.0 supports only 13-bit subject-IDs.
-#define CANARD_SERVICE_ID_MAX     511U
+#define CANARD_SUBJECT_ID_MAX_13b 8191U   // Cyphal v1.0 supports only 13-bit subject-IDs.
+#define CANARD_SERVICE_ID_MAX     511U    // Applies to Cyphal, all versions. In v0 this is narrower.
 #define CANARD_NODE_ID_MAX        127U
 #define CANARD_NODE_ID_CAPACITY   (CANARD_NODE_ID_MAX + 1U)
 #define CANARD_TRANSFER_ID_BITS   5U
@@ -65,7 +68,8 @@ extern "C"
 #define CANARD_TRANSFER_ID_MAX    (CANARD_TRANSFER_ID_MODULO - 1U)
 
 /// This is used only with Cyphal v1.0 and legacy v0 protocols to indicate anonymous messages.
-/// Cyphal v1.1 does not support anonymous messages so this value is never used there.
+/// This library can receive anonymous messages but it cannot transmit them; it implements a new, simpler stateless
+/// node-ID autoconfiguration protocol instead that makes anonymous messages unnecessary.
 #define CANARD_NODE_ID_ANONYMOUS 0xFFU
 
 /// This is the recommended transfer-ID timeout value given in the Cyphal Specification. The application may choose
@@ -80,20 +84,27 @@ extern "C"
 #define CANARD_MTU_CAN_FD      64U
 
 /// All valid transfer kind and version combinations.
+///
+/// Distinct message types use separate ID spaces; i.e., any given ID may be used with distinct message kinds without
+/// collision/ambiguity. For example, in the original Cyphal v1.0, subject-ID 7509 is assigned to the heartbeat message,
+/// while in v1.1 there are no fixed subject-IDs at all and 7509 has no special meaning. Likewise, the data type ID
+/// of the legacy UAVCAN v0 is a separate ID space.
+///
+/// Request and response under the same protocol version share the same ID space.
 typedef enum canard_kind_t
 {
-    canard_kind_1v1_message  = 0,
-    canard_kind_1v0_message  = 1,
-    canard_kind_1v0_response = 2,
-    canard_kind_1v0_request  = 3,
-    // v0.1
-    canard_kind_0v1_message  = 4,
-    canard_kind_0v1_response = 5,
-    canard_kind_0v1_request  = 6,
+    canard_kind_message_16b = 0, ///< 16-bit subject-ID message introduced in Cyphal v1.1. Isolated subject-ID space.
+    canard_kind_message_13b = 1, ///< 13-bit subject-ID message originally defined in Cyphal v1.0.
+    canard_kind_response    = 2, ///< Cyphal v1 RPC-service response.
+    canard_kind_request     = 3, ///< Cyphal v1 RPC-service request.
+    // Legacy DroneCAN/UAVCAN v0 transfer kinds.
+    canard_kind_v0_message  = 4,
+    canard_kind_v0_response = 5,
+    canard_kind_v0_request  = 6,
 } canard_kind_t;
 #define CANARD_KIND_COUNT 7
 
-static uint_least8_t canard_kind_version(const canard_kind_t kind) { return (kind < canard_kind_0v1_message) ? 1 : 0; }
+static uint_least8_t canard_kind_version(const canard_kind_t kind) { return (kind < canard_kind_v0_message) ? 1 : 0; }
 
 typedef struct canard_t canard_t;
 
@@ -235,7 +246,7 @@ struct canard_subscription_t
 
     canard_us_t   transfer_id_timeout;
     size_t        extent;   ///< Must not be altered after initialization! In v0 includes the CRC.
-    uint16_t      port_id;  ///< Represents subjects, services, and legacy message- and service type IDs.
+    uint16_t      port_id;  ///< Represents subjects, services, and legacy message- and service data type IDs.
     uint16_t      crc_seed; ///< For v0 this is set at subscription time, for v1 this is always 0xFFFF.
     canard_kind_t kind;
 
@@ -418,7 +429,7 @@ bool canard_publish(canard_t* const            self,
                     const bool                 rev_1v0, ///< If set, subject-ID must be in [0,8192).
                     const uint_least8_t        transfer_id,
                     const canard_bytes_chain_t payload,
-                    void* const                user_context);
+                    void* const                context);
 
 bool canard_request(canard_t* const            self,
                     const canard_us_t          deadline,
@@ -427,7 +438,7 @@ bool canard_request(canard_t* const            self,
                     const uint_least8_t        server_node_id,
                     const uint_least8_t        transfer_id,
                     const canard_bytes_chain_t payload,
-                    void* const                user_context);
+                    void* const                context);
 
 bool canard_respond(canard_t* const            self,
                     const canard_us_t          deadline,
@@ -438,19 +449,27 @@ bool canard_respond(canard_t* const            self,
                     const canard_bytes_chain_t payload,
                     void* const                user_context);
 
-/// Register a new subscription on a v1.1 or v1.0 subject. The subscription instance must not be moved while in use.
+/// Register a new subscription on a subject with 13-bit or 16-bit ID.
+/// There may be at most one subscription per subject-ID under each ID size; IDs of different sizes do not collide.
+/// The subscription instance must not be moved while in use.
+///
 /// The extent specifies the maximum message size that can be received from the subject; longer messages will be
 /// truncated per the implicit truncation rule (see the Spec).
-/// There may be at most one subscription per subject-ID.
+///
 /// Returns true on success, false if any of the arguments are invalid or if there is already a subscription for the
 /// given subject-ID.
-bool canard_subscribe(canard_t* const                           self,
-                      canard_subscription_t* const              subscription,
-                      const uint16_t                            subject_id,
-                      const bool                                rev_1v0, ///< If set, subject-ID must be in [0,8192).
-                      const size_t                              extent,
-                      const canard_us_t                         transfer_id_timeout,
-                      const canard_subscription_vtable_t* const vtable);
+bool canard_subscribe_16b(canard_t* const                           self,
+                          canard_subscription_t* const              subscription,
+                          const uint16_t                            subject_id,
+                          const size_t                              extent,
+                          const canard_us_t                         transfer_id_timeout,
+                          const canard_subscription_vtable_t* const vtable);
+bool canard_subscribe_13b(canard_t* const                           self,
+                          canard_subscription_t* const              subscription,
+                          const uint16_t                            subject_id, // [0,8191]
+                          const size_t                              extent,
+                          const canard_us_t                         transfer_id_timeout,
+                          const canard_subscription_vtable_t* const vtable);
 
 /// Unicast transfers in Cyphal/CAN v1.1 are supposed to be modeled as requests to service-ID 511, with a 128-element
 /// array of transfer-ID counters, one per remote. Some large nonzero transfer-ID timeout is required to satisfy the
@@ -504,64 +523,64 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 ///
 /// All legacy transfers are always sent in Classic CAN mode regardless of the FD flag.
 ///
-/// To obtain the CRC seed, use canard_0v1_crc_seed_from_data_type_signature(); if the payload does not exceed 7 bytes,
+/// To obtain the CRC seed, use canard_v0_crc_seed_from_data_type_signature(); if the payload does not exceed 7 bytes,
 /// the CRC seed can be arbitrary since it is not needed for single-frame transfers.
-bool canard_0v1_publish(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const uint_least8_t        iface_bitmap,
-                        const canard_prio_t        priority,
-                        const uint16_t             data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload,
-                        void* const                user_context);
+bool canard_v0_publish(canard_t* const            self,
+                       const canard_us_t          deadline,
+                       const uint_least8_t        iface_bitmap,
+                       const canard_prio_t        priority,
+                       const uint16_t             data_type_id,
+                       const uint16_t             crc_seed,
+                       const uint_least8_t        transfer_id,
+                       const canard_bytes_chain_t payload,
+                       void* const                user_context);
 
-bool canard_0v1_request(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint_least8_t        data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        server_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload,
-                        void* const                user_context);
+bool canard_v0_request(canard_t* const            self,
+                       const canard_us_t          deadline,
+                       const canard_prio_t        priority,
+                       const uint_least8_t        data_type_id,
+                       const uint16_t             crc_seed,
+                       const uint_least8_t        server_node_id,
+                       const uint_least8_t        transfer_id,
+                       const canard_bytes_chain_t payload,
+                       void* const                user_context);
 
-bool canard_0v1_respond(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint_least8_t        data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        client_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload,
-                        void* const                user_context);
+bool canard_v0_respond(canard_t* const            self,
+                       const canard_us_t          deadline,
+                       const canard_prio_t        priority,
+                       const uint_least8_t        data_type_id,
+                       const uint16_t             crc_seed,
+                       const uint_least8_t        client_node_id,
+                       const uint_least8_t        transfer_id,
+                       const canard_bytes_chain_t payload,
+                       void* const                user_context);
 
-bool canard_0v1_subscribe(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            data_type_id,
-                          const uint16_t                            crc_seed,
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable);
+bool canard_v0_subscribe(canard_t* const                           self,
+                         canard_subscription_t* const              subscription,
+                         const uint16_t                            data_type_id,
+                         const uint16_t                            crc_seed,
+                         const size_t                              extent,
+                         const canard_us_t                         transfer_id_timeout,
+                         const canard_subscription_vtable_t* const vtable);
 
-bool canard_0v1_subscribe_request(canard_t* const                           self,
+bool canard_v0_subscribe_request(canard_t* const                           self,
+                                 canard_subscription_t* const              subscription,
+                                 const uint_least8_t                       data_type_id,
+                                 const uint16_t                            crc_seed,
+                                 const size_t                              extent,
+                                 const canard_us_t                         transfer_id_timeout,
+                                 const canard_subscription_vtable_t* const vtable);
+
+bool canard_v0_subscribe_response(canard_t* const                           self,
                                   canard_subscription_t* const              subscription,
                                   const uint_least8_t                       data_type_id,
                                   const uint16_t                            crc_seed,
                                   const size_t                              extent,
-                                  const canard_us_t                         transfer_id_timeout,
                                   const canard_subscription_vtable_t* const vtable);
-
-bool canard_0v1_subscribe_response(canard_t* const                           self,
-                                   canard_subscription_t* const              subscription,
-                                   const uint_least8_t                       data_type_id,
-                                   const uint16_t                            crc_seed,
-                                   const size_t                              extent,
-                                   const canard_subscription_vtable_t* const vtable);
 
 /// Computes the CRC-16/CCITT-FALSE checksum of the data type signature in the little-endian byte order.
 /// This value is then used to seed the transfer CRC for UAVCAN v0 and DroneCAN transfers.
-uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature);
+uint16_t canard_v0_crc_seed_from_data_type_signature(const uint64_t data_type_signature);
 
 #ifdef __cplusplus
 }

@@ -212,7 +212,7 @@ static void fixture_check_alloc_balance(const session_fixture_t* const fx)
 static void test_slot_new_v1(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 64);
     rx_slot_t* const slot = rx_slot_new(&fx.sub, 1 * MEGA, 5, 0);
     TEST_ASSERT_NOT_NULL(slot);
     TEST_ASSERT_EQUAL_UINT16(0xFFFF, slot->crc);
@@ -229,8 +229,8 @@ static void test_slot_new_v1(void)
 static void test_slot_new_v0(void)
 {
     session_fixture_t fx;
-    const uint16_t    seed = canard_0v1_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL);
-    fixture_init(&fx, canard_kind_0v1_message, 1001, 64, 2 * MEGA, seed);
+    const uint16_t    seed = canard_v0_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL);
+    fixture_init(&fx, canard_kind_v0_message, 1001, 64, 2 * MEGA, seed);
     rx_slot_t* const slot = rx_slot_new(&fx.sub, 2 * MEGA, 17, 1);
     TEST_ASSERT_NOT_NULL(slot);
     TEST_ASSERT_EQUAL_UINT16(seed, slot->crc);
@@ -246,7 +246,7 @@ static void test_slot_new_v0(void)
 static void test_slot_new_oom(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 64);
     fx.alloc_payload.limit_fragments = 0; // No allocations allowed.
     rx_slot_t* const slot            = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
     TEST_ASSERT_NULL(slot);
@@ -257,7 +257,7 @@ static void test_slot_new_oom(void)
 static void test_slot_advance_and_truncation(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 2222, 10);
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 10);
     rx_slot_t* const slot = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
     TEST_ASSERT_NOT_NULL(slot);
 
@@ -284,7 +284,7 @@ static void test_slot_advance_and_truncation(void)
 static void test_slot_advance_zero_extent(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 2222, 0);
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 0);
     // Cannot allocate a slot with extent=0 through the normal path, so allocate directly.
     // rx_slot_new allocates RX_SLOT_OVERHEAD + extent bytes. With extent=0, this is just the overhead.
     rx_slot_t* const slot = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
@@ -308,13 +308,13 @@ static void test_slot_advance_zero_extent(void)
 static void test_golden_v1_heartbeat(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 32085, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 32085, 64);
     fx.canard.node_id = CANARD_NODE_ID_ANONYMOUS; // Messages are broadcast, node_id doesn't matter.
 
     // Frame data WITHOUT tail byte. The tail byte 0xE0 is SOT|EOT|toggle=1|TID=0.
     const byte_t payload[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xA1 };
     frame_t      fr        = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 32085, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 32085, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
 
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -335,13 +335,13 @@ static void test_golden_v1_heartbeat(void)
 static void test_golden_v1_heartbeat_tid_sequence(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 32085, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 32085, 64);
 
     const byte_t payload[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0xA1 };
     canard_us_t  ts        = 1 * MEGA;
     for (byte_t tid = 0; tid < 4; tid++) {
         frame_t fr = make_single_frame(canard_prio_nominal,
-                                       canard_kind_1v1_message,
+                                       canard_kind_message_16b,
                                        32085,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        42,
@@ -357,7 +357,7 @@ static void test_golden_v1_heartbeat_tid_sequence(void)
     // Duplicate of TID=3 should be rejected (same TID, same priority, within timeout).
     {
         frame_t fr = make_single_frame(canard_prio_nominal,
-                                       canard_kind_1v1_message,
+                                       canard_kind_message_16b,
                                        32085,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        42,
@@ -377,12 +377,12 @@ static void test_golden_v1_heartbeat_tid_sequence(void)
 static void test_golden_v1_duck(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     // Frame was {0x44, 0x55, 0x43, 0x4B, 0xE1}; tail 0xE1 = SOT|EOT|toggle=1|TID=1. Payload = first 4 bytes.
     const byte_t payload[] = { 0x44, 0x55, 0x43, 0x4B };
     frame_t      fr        = make_single_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, payload, sizeof(payload));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, payload, sizeof(payload));
 
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -401,11 +401,11 @@ static void test_golden_v1_duck(void)
 
 /// Spec NodeInfo response (v1.0), 11 Classic CAN frames.
 // Source: Cyphal/CAN specification, section 8.3 (CAN ID=0x126BBDAA)
-// service_id=430, dst=123, src=42, prio=nominal, kind=canard_kind_1v0_response, TID=1
+// service_id=430, dst=123, src=42, prio=nominal, kind=canard_kind_response, TID=1
 static void test_golden_v1_nodeinfo_11_frames(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_response, 430, 256);
+    fixture_init_v1(&fx, canard_kind_response, 430, 256);
     fx.canard.node_id = 123;
 
     // Payloads without the tail byte (last byte stripped from each frame).
@@ -435,7 +435,7 @@ static void test_golden_v1_nodeinfo_11_frames(void)
     const canard_us_t ts = 1 * MEGA;
 
     // Frame 0: start
-    frame_t fr0 = make_start_frame(canard_prio_nominal, canard_kind_1v0_response, 430, 123, 42, 1, f0, sizeof(f0));
+    frame_t fr0 = make_start_frame(canard_prio_nominal, canard_kind_response, 430, 123, 42, 1, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
 
@@ -444,7 +444,7 @@ static void test_golden_v1_nodeinfo_11_frames(void)
     bool          cont_toggle = false; // After start toggle=1, next is 0.
     for (size_t i = 0; i < 9; i++) {
         frame_t fc = make_cont_frame(
-          canard_prio_nominal, canard_kind_1v0_response, 430, 123, 42, 1, false, cont_toggle, cont_data[i], 7);
+          canard_prio_nominal, canard_kind_response, 430, 123, 42, 1, false, cont_toggle, cont_data[i], 7);
         TEST_ASSERT_TRUE(feed(&fx, ts, &fc, 0));
         TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
         cont_toggle = !cont_toggle;
@@ -452,7 +452,7 @@ static void test_golden_v1_nodeinfo_11_frames(void)
 
     // Frame 10: end
     frame_t fr10 =
-      make_cont_frame(canard_prio_nominal, canard_kind_1v0_response, 430, 123, 42, 1, true, true, f10, sizeof(f10));
+      make_cont_frame(canard_prio_nominal, canard_kind_response, 430, 123, 42, 1, true, true, f10, sizeof(f10));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr10, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
     TEST_ASSERT_EQUAL_INT(canard_prio_nominal, fx.capture.priority);
@@ -494,7 +494,7 @@ static void test_golden_v1_nodeinfo_11_frames(void)
 static void test_golden_v1_seq14_3_frames(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     // Frame 0: {0x01..0x07}, tail=0xA2 (SOT, toggle=1, TID=2)
     const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
@@ -506,15 +506,15 @@ static void test_golden_v1_seq14_3_frames(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, false, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, false, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     frame_t fr2 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, true, true, f2, sizeof(f2));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, true, true, f2, sizeof(f2));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr2, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -534,7 +534,7 @@ static void test_golden_v1_seq14_3_frames(void)
 static void test_golden_v1_seq100_fd(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 256);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 256);
 
     // Frame 0: {0x00..0x3E} = 63 data bytes, tail=0xA3 (SOT, toggle=1, TID=3). Payload = 63 bytes.
     byte_t f0[63];
@@ -557,11 +557,11 @@ static void test_golden_v1_seq100_fd(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 3, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 3, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 3, true, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 3, true, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -596,7 +596,7 @@ static void test_golden_v1_seq100_fd(void)
 static void test_golden_v4_3frame_truncated(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 16);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 16);
 
     // Frame 0: {0x06*7}, tail: SOT, toggle=1, TID=13
     const byte_t f0[] = { 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06 };
@@ -609,15 +609,15 @@ static void test_golden_v4_3frame_truncated(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 13, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 13, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 13, false, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 13, false, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     frame_t fr2 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 13, true, true, f2, sizeof(f2));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 13, true, true, f2, sizeof(f2));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr2, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -641,7 +641,7 @@ static void test_golden_v4_3frame_truncated(void)
 static void test_golden_v4_crc_split(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     // User payload: 6 bytes of 0x0E. CRC(0xFFFF, 6x0x0E) = 0x3A81.
     // But the total transfer data is 8 bytes: {user_data(6), CRC_MSB(0x3A), CRC_LSB(0x81)}.
@@ -653,11 +653,11 @@ static void test_golden_v4_crc_split(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, true, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, true, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -686,7 +686,7 @@ static void test_golden_v4_crc_split(void)
 static void test_golden_v4_bad_crc(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t f0[] = { 0x0E, 0x0E, 0x0E, 0x0E, 0x0E, 0x0E, 0x0E };
     const byte_t f1[] = { 0xD8 }; // Bad CRC byte.
@@ -694,11 +694,11 @@ static void test_golden_v4_bad_crc(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, true, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, true, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     // No callback: bad CRC.
@@ -715,7 +715,7 @@ static void test_golden_v4_bad_crc(void)
 static void test_golden_v1_crc_full_in_last(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t data[7] = { 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA };
 
@@ -735,11 +735,11 @@ static void test_golden_v1_crc_full_in_last(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, true, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, true, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -760,13 +760,13 @@ static void test_golden_v0_single_frame_pressure(void)
 {
     session_fixture_t fx;
     // v0 single-frame: any crc_seed, doesn't matter (no CRC for single-frame).
-    fixture_init(&fx, canard_kind_0v1_message, 1028, 64, 2 * MEGA, 0);
+    fixture_init(&fx, canard_kind_v0_message, 1028, 64, 2 * MEGA, 0);
 
     // Frame raw: {0x00, 0x80, 0xC3, 0x47, 0x40, 0x56, 0xC0}
     // Tail 0xC0 = SOT|EOT|toggle=0|TID=0. Payload = first 6 bytes.
     const byte_t payload[] = { 0x00, 0x80, 0xC3, 0x47, 0x40, 0x56 };
     frame_t      fr        = make_single_frame(canard_prio_exceptional,
-                                   canard_kind_0v1_message,
+                                   canard_kind_v0_message,
                                    1028,
                                    CANARD_NODE_ID_ANONYMOUS,
                                    125,
@@ -791,13 +791,13 @@ static void test_golden_v0_single_frame_pressure(void)
 static void test_golden_v0_single_frame_temperature(void)
 {
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_0v1_message, 1029, 64, 2 * MEGA, 0);
+    fixture_init(&fx, canard_kind_v0_message, 1029, 64, 2 * MEGA, 0);
 
     // Frame raw: {0xBE, 0x5C, 0x00, 0x44, 0xC0}
     // Tail 0xC0 = SOT|EOT|toggle=0|TID=0. Payload = first 4 bytes.
     const byte_t payload[] = { 0xBE, 0x5C, 0x00, 0x44 };
     frame_t      fr        = make_single_frame(canard_prio_exceptional,
-                                   canard_kind_0v1_message,
+                                   canard_kind_v0_message,
                                    1029,
                                    CANARD_NODE_ID_ANONYMOUS,
                                    125,
@@ -820,7 +820,7 @@ static void test_golden_v0_single_frame_temperature(void)
 /// Screenshot MagneticFieldStrength (DTID=1001, 2-frame, src=125).
 // Source: UAVCAN v0 bus capture screenshot
 // Data type signature: 0xe2a7d4a9460bc2f2ULL
-// CRC seed = canard_0v1_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL)
+// CRC seed = canard_v0_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL)
 // 2-frame multi-frame (TID=17):
 // Frame 0 raw: {0x35, 0xB1, 0x2E, 0x2C, 0xB7, 0xB3, 0x4D, 0x91}
 //   tail 0x91: SOT=1,EOT=0,toggle=0,TID=17. Payload (7 bytes) = {0x35, 0xB1, 0x2E, 0x2C, 0xB7, 0xB3, 0x4D}
@@ -830,10 +830,10 @@ static void test_golden_v0_single_frame_temperature(void)
 // Expected user payload (after CRC strip): {0x2E, 0x2C, 0xB7, 0xB3, 0x4D, 0x3A, 0x1F, 0x1D} (8 bytes)
 static void test_golden_v0_screenshot_magfield(void)
 {
-    const uint16_t    crc_seed = canard_0v1_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL);
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL);
     session_fixture_t fx;
     // v0 multi-frame: extent must include 2 bytes for CRC that are stored at the beginning.
-    fixture_init(&fx, canard_kind_0v1_message, 1001, 64, 2 * MEGA, crc_seed);
+    fixture_init(&fx, canard_kind_v0_message, 1001, 64, 2 * MEGA, crc_seed);
 
     // Frame 0: 7 payload bytes (no tail).
     const byte_t f0[] = { 0x35, 0xB1, 0x2E, 0x2C, 0xB7, 0xB3, 0x4D };
@@ -844,12 +844,12 @@ static void test_golden_v0_screenshot_magfield(void)
 
     // Start frame: toggle=0 for v0
     frame_t fr0 = make_start_frame(
-      canard_prio_exceptional, canard_kind_0v1_message, 1001, CANARD_NODE_ID_ANONYMOUS, 125, 17, f0, sizeof(f0));
+      canard_prio_exceptional, canard_kind_v0_message, 1001, CANARD_NODE_ID_ANONYMOUS, 125, 17, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     // End frame: toggle=1
     frame_t fr1 = make_cont_frame(canard_prio_exceptional,
-                                  canard_kind_0v1_message,
+                                  canard_kind_v0_message,
                                   1001,
                                   CANARD_NODE_ID_ANONYMOUS,
                                   125,
@@ -880,9 +880,9 @@ static void test_golden_v0_screenshot_magfield(void)
 // Data type signature: 0x54c1572b9e07f297ULL
 static void test_golden_v0_screenshot_gnss_fix(void)
 {
-    const uint16_t    crc_seed = canard_0v1_crc_seed_from_data_type_signature(0x54c1572b9e07f297ULL);
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(0x54c1572b9e07f297ULL);
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_0v1_message, 1060, 256, 2 * MEGA, crc_seed);
+    fixture_init(&fx, canard_kind_v0_message, 1060, 256, 2 * MEGA, crc_seed);
 
     // 8 frames, each 7-byte payload except last. Tail bytes stripped.
     // Frame 0: SOT,toggle=0,TID=10
@@ -906,7 +906,7 @@ static void test_golden_v0_screenshot_gnss_fix(void)
 
     // Frame 0: start
     frame_t fr0 = make_start_frame(
-      canard_prio_exceptional, canard_kind_0v1_message, 1060, CANARD_NODE_ID_ANONYMOUS, 125, 10, f0, sizeof(f0));
+      canard_prio_exceptional, canard_kind_v0_message, 1060, CANARD_NODE_ID_ANONYMOUS, 125, 10, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     // Frames 1-6: continuation
@@ -914,7 +914,7 @@ static void test_golden_v0_screenshot_gnss_fix(void)
     bool                toggle      = true; // After v0 start toggle=0, next is 1.
     for (size_t i = 0; i < 6; i++) {
         frame_t fc = make_cont_frame(canard_prio_exceptional,
-                                     canard_kind_0v1_message,
+                                     canard_kind_v0_message,
                                      1060,
                                      CANARD_NODE_ID_ANONYMOUS,
                                      125,
@@ -929,7 +929,7 @@ static void test_golden_v0_screenshot_gnss_fix(void)
 
     // Frame 7: end
     frame_t fr7 = make_cont_frame(canard_prio_exceptional,
-                                  canard_kind_0v1_message,
+                                  canard_kind_v0_message,
                                   1060,
                                   CANARD_NODE_ID_ANONYMOUS,
                                   125,
@@ -979,9 +979,9 @@ static void test_golden_v0_synthetic_multi_frame(void)
 {
     // Use a well-known data type signature for CRC seeding.
     const uint64_t    dts      = 0xABCDEF0123456789ULL;
-    const uint16_t    crc_seed = canard_0v1_crc_seed_from_data_type_signature(dts);
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(dts);
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_0v1_message, 999, 64, 2 * MEGA, crc_seed);
+    fixture_init(&fx, canard_kind_v0_message, 999, 64, 2 * MEGA, crc_seed);
 
     // User payload: {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
     const byte_t user_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
@@ -1008,11 +1008,11 @@ static void test_golden_v0_synthetic_multi_frame(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, f0, sizeof(f0));
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, true, true, f1, sizeof(f1));
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, true, true, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -1030,9 +1030,9 @@ static void test_golden_v0_synthetic_multi_frame(void)
 static void test_golden_v0_bad_crc(void)
 {
     const uint64_t    dts      = 0xABCDEF0123456789ULL;
-    const uint16_t    crc_seed = canard_0v1_crc_seed_from_data_type_signature(dts);
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(dts);
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_0v1_message, 999, 64, 2 * MEGA, crc_seed);
+    fixture_init(&fx, canard_kind_v0_message, 999, 64, 2 * MEGA, crc_seed);
 
     const byte_t   user_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
     const uint16_t crc          = crc_add(crc_seed, 8, user_data);
@@ -1053,11 +1053,11 @@ static void test_golden_v0_bad_crc(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, f0, sizeof(f0));
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, true, true, f1, sizeof(f1));
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, true, true, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
@@ -1074,14 +1074,14 @@ static void test_golden_v0_bad_crc(void)
 static void test_session_creation_on_start(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     // No sessions initially.
     TEST_ASSERT_NULL(fx.sub.sessions);
 
     const byte_t payload[] = { 0xAA };
     frame_t      fr        = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
 
@@ -1102,13 +1102,13 @@ static void test_session_creation_on_start(void)
 static void test_session_reuse(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xBB };
 
     for (byte_t tid = 0; tid < 3; tid++) {
         frame_t fr = make_single_frame(canard_prio_nominal,
-                                       canard_kind_1v1_message,
+                                       canard_kind_message_16b,
                                        100,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        42,
@@ -1129,11 +1129,11 @@ static void test_session_reuse(void)
 static void test_continuation_without_session(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t data[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     frame_t      fr     = make_cont_frame(canard_prio_nominal,
-                                 canard_kind_1v1_message,
+                                 canard_kind_message_16b,
                                  100,
                                  CANARD_NODE_ID_ANONYMOUS,
                                  42,
@@ -1153,17 +1153,17 @@ static void test_continuation_without_session(void)
 static void test_continuation_toggle_mismatch(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     frame_t      fr0  = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f0, sizeof(f0));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
 
     // Continuation with wrong toggle: expected toggle=0 (after start toggle=1), but we send toggle=1.
     const byte_t f1[] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
     frame_t      fr1  = make_cont_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, false, true, f1, sizeof(f1));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, false, true, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0)); // Rejected silently.
     TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
 
@@ -1175,17 +1175,17 @@ static void test_continuation_toggle_mismatch(void)
 static void test_continuation_iface_mismatch(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     frame_t      fr0  = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f0, sizeof(f0));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0)); // Starts on iface 0.
 
     // Continuation from iface 1: should be rejected because slot iface_index is 0.
     const byte_t f1[] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
     frame_t      fr1  = make_cont_frame(canard_prio_nominal,
-                                  canard_kind_1v0_message,
+                                  canard_kind_message_13b,
                                   2222,
                                   CANARD_NODE_ID_ANONYMOUS,
                                   42,
@@ -1205,11 +1205,11 @@ static void test_continuation_iface_mismatch(void)
 static void test_duplicate_tid_rejection(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xCC };
     frame_t      fr        = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
 
     // First: accepted.
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
@@ -1227,20 +1227,20 @@ static void test_duplicate_tid_rejection(void)
 static void test_iface_failover_after_timeout(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xDD };
 
     // TID=0 on iface 0.
     frame_t fr0 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
 
     // TID=1 on iface 1, within timeout but fresh TID: fresh && !affine → need stale too.
     // At ts=2*MEGA, stale = (2*MEGA - 2*MEGA) > 1*MEGA = false. fresh && !affine && !stale → only 1 of 3 → reject.
     frame_t fr1 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 1, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 1, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr1, 1));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // Rejected.
 
@@ -1257,12 +1257,12 @@ static void test_iface_failover_after_timeout(void)
 static void test_zero_tid_timeout(void)
 {
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_1v1_message, 100, 64, 0, CRC_INITIAL);
+    fixture_init(&fx, canard_kind_message_16b, 100, 64, 0, CRC_INITIAL);
 
     const byte_t payload[] = { 0xEE };
 
     frame_t fr = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
 
     // First: accepted.
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
@@ -1287,7 +1287,7 @@ static void test_zero_tid_timeout(void)
 static void test_preemption_independent_slots(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t f_hi[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     const byte_t f_lo[] = { 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
@@ -1296,12 +1296,12 @@ static void test_preemption_independent_slots(void)
 
     // Start a low-priority multi-frame transfer.
     frame_t fr_lo = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f_lo, sizeof(f_lo));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, f_lo, sizeof(f_lo));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr_lo, 0));
 
     // Start a high-priority multi-frame transfer (different priority, same TID is fresh due to prio change).
     frame_t fr_hi = make_start_frame(
-      canard_prio_immediate, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f_hi, sizeof(f_hi));
+      canard_prio_immediate, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f_hi, sizeof(f_hi));
     TEST_ASSERT_TRUE(feed(&fx, ts + 1, &fr_hi, 0));
 
     // Both slots should be allocated (at prio_slow and prio_immediate).
@@ -1313,7 +1313,7 @@ static void test_preemption_independent_slots(void)
     f_hi_end[0]       = (byte_t)(crc_hi >> 8U);
     f_hi_end[1]       = (byte_t)(crc_hi & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr_hi_end = make_cont_frame(canard_prio_immediate,
-                                        canard_kind_1v0_message,
+                                        canard_kind_message_13b,
                                         2222,
                                         CANARD_NODE_ID_ANONYMOUS,
                                         42,
@@ -1334,7 +1334,7 @@ static void test_preemption_independent_slots(void)
     f_lo_end[0]       = (byte_t)(crc_lo >> 8U);
     f_lo_end[1]       = (byte_t)(crc_lo & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr_lo_end = make_cont_frame(canard_prio_slow,
-                                        canard_kind_1v0_message,
+                                        canard_kind_message_13b,
                                         2222,
                                         CANARD_NODE_ID_ANONYMOUS,
                                         42,
@@ -1356,19 +1356,19 @@ static void test_preemption_independent_slots(void)
 static void test_preemption_same_priority_replaces(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t      data[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     const canard_us_t ts     = 1 * MEGA;
 
     // Start multi-frame at prio_nominal, TID=0.
     frame_t fr0 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
 
     // New start at same prio, different TID: replaces the old slot.
     frame_t fr1 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts + 1, &fr1, 0));
     // Only 1 payload allocation should be outstanding (old was destroyed, new created).
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
@@ -1379,7 +1379,7 @@ static void test_preemption_same_priority_replaces(void)
     f_end[0]       = (byte_t)(crc >> 8U);
     f_end[1]       = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr_end = make_cont_frame(canard_prio_nominal,
-                                     canard_kind_1v0_message,
+                                     canard_kind_message_13b,
                                      2222,
                                      CANARD_NODE_ID_ANONYMOUS,
                                      42,
@@ -1400,7 +1400,7 @@ static void test_preemption_same_priority_replaces(void)
 static void test_all_8_priorities(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t data[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };
     canard_us_t  ts     = 1 * MEGA;
@@ -1408,7 +1408,7 @@ static void test_all_8_priorities(void)
     // Start one multi-frame transfer at each priority level.
     for (byte_t prio = 0; prio < CANARD_PRIO_COUNT; prio++) {
         frame_t fr = make_start_frame(
-          (canard_prio_t)prio, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, prio, data, sizeof(data));
+          (canard_prio_t)prio, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, prio, data, sizeof(data));
         TEST_ASSERT_TRUE(feed(&fx, ts, &fr, 0));
         ts += 1;
     }
@@ -1423,7 +1423,7 @@ static void test_all_8_priorities(void)
         f_end[1] = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
         // Toggle: after start at toggle=1 (v1), next is 0.
         frame_t fr_end = make_cont_frame((canard_prio_t)prio,
-                                         canard_kind_1v0_message,
+                                         canard_kind_message_13b,
                                          2222,
                                          CANARD_NODE_ID_ANONYMOUS,
                                          42,
@@ -1448,12 +1448,12 @@ static void test_all_8_priorities(void)
 static void test_oom_session_creation(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
     fx.alloc_session.limit_fragments = 0; // Prevent session allocation.
 
     const byte_t payload[] = { 0xAA };
     frame_t      fr        = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
     // Start frame that needs session creation fails with OOM.
     TEST_ASSERT_FALSE(feed(&fx, 1 * MEGA, &fr, 0));
     TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
@@ -1466,21 +1466,21 @@ static void test_oom_session_creation(void)
 static void test_oom_slot_creation(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
 
     // First, successfully feed a single-frame to create the session.
     const byte_t sf[]  = { 0xAA };
     frame_t      sf_fr = make_single_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, sf, sizeof(sf));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, sf, sizeof(sf));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &sf_fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
 
     // Now prevent payload allocation and try a multi-frame start.
     fx.alloc_payload.limit_fragments = 0;
     frame_t fr0                      = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f0, sizeof(f0));
     TEST_ASSERT_FALSE(feed(&fx, 2 * MEGA, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // No new callback.
     TEST_ASSERT_EQUAL_UINT64(1, fx.canard.err.oom);
@@ -1493,7 +1493,7 @@ static void test_oom_slot_creation(void)
 static void test_bad_crc_frees_slot(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t f0[] = { 0x0E, 0x0E, 0x0E, 0x0E, 0x0E, 0x0E, 0x0E };
     const byte_t f1[] = { 0xD8 }; // Bad CRC.
@@ -1501,13 +1501,13 @@ static void test_bad_crc_frees_slot(void)
     const canard_us_t ts = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr0, 0));
     // One payload allocation for the slot.
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, true, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 55, 0, true, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr1, 0));
 
     // Slot freed after bad CRC.
@@ -1523,11 +1523,11 @@ static void test_bad_crc_frees_slot(void)
 static void test_single_frame_no_payload_alloc(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0x11, 0x22, 0x33 };
     frame_t      fr        = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
     // No payload allocation.
@@ -1542,11 +1542,11 @@ static void test_single_frame_no_payload_alloc(void)
 static void test_multi_frame_allocate_then_free(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t data[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     frame_t      fr0    = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
 
@@ -1556,7 +1556,7 @@ static void test_multi_frame_allocate_then_free(void)
     f_end[0]    = (byte_t)(crc >> 8U);
     f_end[1]    = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr1 = make_cont_frame(canard_prio_nominal,
-                                  canard_kind_1v0_message,
+                                  canard_kind_message_13b,
                                   2222,
                                   CANARD_NODE_ID_ANONYMOUS,
                                   42,
@@ -1581,14 +1581,14 @@ static void test_multi_frame_allocate_then_free(void)
 static void test_cleanup_destroys_stale(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t      data[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };
     const canard_us_t ts0    = 1 * MEGA;
 
     // Start a multi-frame transfer at prio_slow.
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts0, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
 
@@ -1598,7 +1598,7 @@ static void test_cleanup_destroys_stale(void)
     // Slot start_ts = 1*MEGA = 1s. deadline = (31s+1us+1s) - 30s = 2s+1us. slot->start_ts=1s < 2s+1us → stale.
     const canard_us_t ts1 = ts0 + (31 * MEGA) + 1;
     frame_t           fr1 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts1, &fr1, 0));
     // The old stale slot should have been cleaned up, and a new one allocated.
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
@@ -1611,14 +1611,14 @@ static void test_cleanup_destroys_stale(void)
 static void test_cleanup_preserves_fresh(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t      data[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };
     const canard_us_t ts0    = 1 * MEGA;
 
     // Start a multi-frame transfer at prio_slow.
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts0, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
 
@@ -1626,7 +1626,7 @@ static void test_cleanup_preserves_fresh(void)
     // Use ts only slightly after ts0: the old slot should NOT be cleaned up.
     const canard_us_t ts1 = ts0 + MEGA;
     frame_t           fr1 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts1, &fr1, 0));
     // Both slots should exist now.
     TEST_ASSERT_EQUAL_size_t(2, fx.alloc_payload.allocated_fragments);
@@ -1640,13 +1640,13 @@ static void test_cleanup_uses_max_timeout(void)
 {
     session_fixture_t fx;
     // Use a very large tid_timeout (60s), which is larger than RX_SESSION_TIMEOUT (30s).
-    fixture_init(&fx, canard_kind_1v0_message, 2222, 64, 60 * MEGA, CRC_INITIAL);
+    fixture_init(&fx, canard_kind_message_13b, 2222, 64, 60 * MEGA, CRC_INITIAL);
 
     const byte_t      data[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };
     const canard_us_t ts0    = 1 * MEGA;
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts0, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.alloc_payload.allocated_fragments);
 
@@ -1654,14 +1654,14 @@ static void test_cleanup_uses_max_timeout(void)
     // deadline = (ts0+31s) - 60s = 1s+31s-60s = -28s. slot->start_ts=1s > -28s → not stale.
     const canard_us_t ts1 = ts0 + (31 * MEGA);
     frame_t           fr1 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts1, &fr1, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.alloc_payload.allocated_fragments); // Both survive.
 
     // At ts0 + 61s+1: deadline = (1s+61s+1us) - 60s = 2s+1us. slot start_ts=1s < 2s+1us → stale.
     const canard_us_t ts2 = ts0 + (61 * MEGA) + 1;
     frame_t           fr2 = make_start_frame(
-      canard_prio_high, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, data, sizeof(data));
+      canard_prio_high, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts2, &fr2, 0));
     // The old stale slow-prio slot should be cleaned up. Nominal may or may not be stale depending on its start_ts.
     // fr1 started at ts1=32*MEGA. deadline= (62*MEGA+1) - 60*MEGA = 2*MEGA+1.
@@ -1677,18 +1677,18 @@ static void test_cleanup_uses_max_timeout(void)
 static void test_cleanup_triggered_by_start(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t      data[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };
     const canard_us_t ts0    = 1 * MEGA;
 
     // Start two multi-frame transfers at different priorities.
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts0, &fr0, 0));
 
     frame_t fr1 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts0 + 1, &fr1, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.alloc_payload.allocated_fragments);
 
@@ -1697,7 +1697,7 @@ static void test_cleanup_triggered_by_start(void)
     const canard_us_t ts_late = ts0 + (31 * MEGA) + 2;
     const byte_t      cont[]  = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77 };
     frame_t           fr_c    = make_cont_frame(canard_prio_nominal,
-                                   canard_kind_1v0_message,
+                                   canard_kind_message_13b,
                                    2222,
                                    CANARD_NODE_ID_ANONYMOUS,
                                    42,
@@ -1722,11 +1722,11 @@ static void test_extent_zero_multiframe(void)
 {
     session_fixture_t fx;
     // Extent=0 is unusual but must not crash.
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 0);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 0);
 
     const byte_t data[] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00 };
     frame_t      fr0    = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
 
     // CRC for 7 bytes of data with seed 0xFFFF.
@@ -1735,7 +1735,7 @@ static void test_extent_zero_multiframe(void)
     f_end[0]    = (byte_t)(crc >> 8U);
     f_end[1]    = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr1 = make_cont_frame(canard_prio_nominal,
-                                  canard_kind_1v0_message,
+                                  canard_kind_message_13b,
                                   2222,
                                   CANARD_NODE_ID_ANONYMOUS,
                                   42,
@@ -1757,7 +1757,7 @@ static void test_extent_zero_multiframe(void)
 static void test_extent_exact(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 14);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 14);
 
     // Reuse the {1..14} 3-frame vector.
     const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
@@ -1765,15 +1765,15 @@ static void test_extent_exact(void)
     const byte_t f2[] = { 0x32, 0xF8 }; // CRC big-endian
 
     frame_t fr0 = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, false, false, f1, sizeof(f1));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, false, false, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
 
     frame_t fr2 = make_cont_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, true, true, f2, sizeof(f2));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, true, true, f2, sizeof(f2));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr2, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -1790,20 +1790,20 @@ static void test_extent_exact(void)
 static void test_tid_rollover(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xAA };
 
     // Send TID=31.
     frame_t fr31 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 31, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 31, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr31, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(31, fx.capture.transfer_id);
 
     // Send TID=0: fresh because 0 != 31.
     frame_t fr0 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(0, fx.capture.transfer_id);
@@ -1816,27 +1816,27 @@ static void test_tid_rollover(void)
 static void test_multiple_sources(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0x11 };
 
     // src=10
     frame_t fr10 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 10, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 10, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr10, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(10, fx.capture.source_node_id);
 
     // src=20
     frame_t fr20 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 20, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 20, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr20, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(20, fx.capture.source_node_id);
 
     // src=30
     frame_t fr30 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 30, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 30, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr30, 0));
     TEST_ASSERT_EQUAL_size_t(3, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(30, fx.capture.source_node_id);
@@ -1853,14 +1853,14 @@ static void test_multiple_sources(void)
 static void test_session_animation_ordering(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xAA };
 
     // Create sessions for src=10, src=20, src=30.
     for (byte_t src = 10; src <= 30; src = (byte_t)(src + 10)) {
         frame_t fr = make_single_frame(canard_prio_nominal,
-                                       canard_kind_1v1_message,
+                                       canard_kind_message_16b,
                                        100,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        src,
@@ -1876,7 +1876,7 @@ static void test_session_animation_ordering(void)
 
     // Send a new transfer from src=10 to move it to the tail.
     frame_t fr10 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 10, 1, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 10, 1, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr10, 0));
 
     // Now head should be src=20 (the next oldest).
@@ -1892,15 +1892,15 @@ static void test_session_animation_ordering(void)
 static void test_all_7_kinds(void)
 {
     const canard_kind_t kinds[7] = {
-        canard_kind_1v1_message, canard_kind_1v0_message,  canard_kind_1v0_response, canard_kind_1v0_request,
-        canard_kind_0v1_message, canard_kind_0v1_response, canard_kind_0v1_request,
+        canard_kind_message_16b, canard_kind_message_13b, canard_kind_response,   canard_kind_request,
+        canard_kind_v0_message,  canard_kind_v0_response, canard_kind_v0_request,
     };
 
     for (size_t k = 0; k < 7; k++) {
         session_fixture_t fx;
         const bool        is_v1  = canard_kind_version(kinds[k]) == 1;
-        const bool        is_svc = (kinds[k] == canard_kind_1v0_response) || (kinds[k] == canard_kind_1v0_request) ||
-                            (kinds[k] == canard_kind_0v1_response) || (kinds[k] == canard_kind_0v1_request);
+        const bool        is_svc = (kinds[k] == canard_kind_response) || (kinds[k] == canard_kind_request) ||
+                            (kinds[k] == canard_kind_v0_response) || (kinds[k] == canard_kind_v0_request);
         fixture_init(&fx, kinds[k], 42, 64, 2 * MEGA, is_v1 ? CRC_INITIAL : 0x1234);
 
         const byte_t dst = is_svc ? 123 : CANARD_NODE_ID_ANONYMOUS;
@@ -1929,7 +1929,7 @@ static void test_all_7_kinds(void)
 static void test_interleaved_multiframe_two_sources(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t d10[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     const byte_t d20[] = { 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10 };
@@ -1938,27 +1938,27 @@ static void test_interleaved_multiframe_two_sources(void)
 
     // N10-F1: Start frame from node 10, TID=0.
     frame_t fr10_0 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 10, 0, d10, sizeof(d10));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 10, 0, d10, sizeof(d10));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr10_0, 0));
     ts += 1;
 
     // N20-F1: Start frame from node 20, TID=0.
     frame_t fr20_0 = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 20, 0, d20, sizeof(d20));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 20, 0, d20, sizeof(d20));
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr20_0, 0));
     ts += 1;
 
     // N10-F2: Continuation from node 10, toggle=0.
     const byte_t d10b[] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
     frame_t      fr10_1 = make_cont_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 10, 0, false, false, d10b, 7);
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 10, 0, false, false, d10b, 7);
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr10_1, 0));
     ts += 1;
 
     // N20-F2: Continuation from node 20, toggle=0.
     const byte_t d20b[] = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
     frame_t      fr20_1 = make_cont_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 20, 0, false, false, d20b, 7);
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 20, 0, false, false, d20b, 7);
     TEST_ASSERT_TRUE(feed(&fx, ts, &fr20_1, 0));
     ts += 1;
 
@@ -1970,7 +1970,7 @@ static void test_interleaved_multiframe_two_sources(void)
     f10_end[0]       = (byte_t)(crc10 >> 8U);
     f10_end[1]       = (byte_t)(crc10 & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr10_end = make_cont_frame(canard_prio_nominal,
-                                       canard_kind_1v0_message,
+                                       canard_kind_message_13b,
                                        2222,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        10,
@@ -1991,7 +1991,7 @@ static void test_interleaved_multiframe_two_sources(void)
     f20_end[0]       = (byte_t)(crc20 >> 8U);
     f20_end[1]       = (byte_t)(crc20 & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr20_end = make_cont_frame(canard_prio_nominal,
-                                       canard_kind_1v0_message,
+                                       canard_kind_message_13b,
                                        2222,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        20,
@@ -2017,21 +2017,21 @@ static void test_interleaved_multiframe_two_sources(void)
 static void test_preemption_during_multiframe(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     const byte_t      data[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     const canard_us_t ts0    = 1 * MEGA;
 
     // Start nominal-priority multi-frame, TID=0.
     frame_t fr_nom = make_start_frame(
-      canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, data, sizeof(data));
     TEST_ASSERT_TRUE(feed(&fx, ts0, &fr_nom, 0));
     TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
 
     // Now a high-priority start frame preempts (different slot), TID=1.
     const byte_t hi_data[] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
     frame_t      fr_hi     = make_start_frame(
-      canard_prio_high, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, hi_data, sizeof(hi_data));
+      canard_prio_high, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, hi_data, sizeof(hi_data));
     TEST_ASSERT_TRUE(feed(&fx, ts0 + 1, &fr_hi, 0));
     // Two slots allocated (nominal and high).
     TEST_ASSERT_EQUAL_size_t(2, fx.alloc_payload.allocated_fragments);
@@ -2042,7 +2042,7 @@ static void test_preemption_during_multiframe(void)
     f_hi_end[0]       = (byte_t)(crc_hi >> 8U);
     f_hi_end[1]       = (byte_t)(crc_hi & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr_hi_end = make_cont_frame(canard_prio_high,
-                                        canard_kind_1v0_message,
+                                        canard_kind_message_13b,
                                         2222,
                                         CANARD_NODE_ID_ANONYMOUS,
                                         42,
@@ -2062,7 +2062,7 @@ static void test_preemption_during_multiframe(void)
     f_nom_end[0]       = (byte_t)(crc_nom >> 8U);
     f_nom_end[1]       = (byte_t)(crc_nom & 0xFF); // NOLINT(hicpp-signed-bitwise)
     frame_t fr_nom_end = make_cont_frame(canard_prio_nominal,
-                                         canard_kind_1v0_message,
+                                         canard_kind_message_13b,
                                          2222,
                                          CANARD_NODE_ID_ANONYMOUS,
                                          42,
@@ -2084,20 +2084,20 @@ static void test_preemption_during_multiframe(void)
 static void test_transfer_id_rollover_31_to_0(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xAA };
 
     // Send TID=31.
     frame_t fr31 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 31, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 31, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr31, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(31, fx.capture.transfer_id);
 
     // Send TID=0: must be accepted (0 != 31 → fresh).
     frame_t fr0 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 0, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr0, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(0, fx.capture.transfer_id);
@@ -2114,13 +2114,13 @@ static void test_transfer_id_rollover_31_to_0(void)
 static void test_session_timeout_exact_boundary(void)
 {
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_1v1_message, 100, 64, 2 * MEGA, CRC_INITIAL);
+    fixture_init(&fx, canard_kind_message_16b, 100, 64, 2 * MEGA, CRC_INITIAL);
 
     const byte_t payload[] = { 0xBB };
 
     // Admit TID=5 at ts=1000000.
     frame_t fr5 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 42, 5, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr5, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
 
@@ -2143,12 +2143,12 @@ static void test_session_timeout_exact_boundary(void)
 static void test_oom_slot_allocation_session_survives(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v0_message, 2222, 64);
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
 
     // First, create the session with a single-frame transfer.
     const byte_t sf[] = { 0xCC };
     frame_t      sf_fr =
-      make_single_frame(canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, sf, 1);
+      make_single_frame(canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 0, sf, 1);
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &sf_fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
 
@@ -2156,7 +2156,7 @@ static void test_oom_slot_allocation_session_survives(void)
     fx.alloc_payload.limit_fragments = 0;
     const byte_t f0[]                = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     frame_t      fr_mf               = make_start_frame(
-      canard_prio_slow, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f0, sizeof(f0));
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 1, f0, sizeof(f0));
     TEST_ASSERT_FALSE(feed(&fx, 2 * MEGA, &fr_mf, 0)); // OOM on slot alloc.
     TEST_ASSERT_EQUAL_UINT64(1, fx.canard.err.oom);
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // No new callback.
@@ -2168,7 +2168,7 @@ static void test_oom_slot_allocation_session_survives(void)
     // Restore allocation and send a new single-frame transfer.
     fx.alloc_payload.limit_fragments = SIZE_MAX;
     frame_t sf2 =
-      make_single_frame(canard_prio_nominal, canard_kind_1v0_message, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, sf, 1);
+      make_single_frame(canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, sf, 1);
     TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA, &sf2, 0));
     TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(2, fx.capture.transfer_id);
@@ -2181,14 +2181,14 @@ static void test_oom_slot_allocation_session_survives(void)
 static void test_session_animation_ordering_move_to_tail(void)
 {
     session_fixture_t fx;
-    fixture_init_v1(&fx, canard_kind_1v1_message, 100, 64);
+    fixture_init_v1(&fx, canard_kind_message_16b, 100, 64);
 
     const byte_t payload[] = { 0xAA };
 
     // Create sessions for src=10, src=20, src=30.
     for (byte_t src = 10; src <= 30; src = (byte_t)(src + 10)) {
         frame_t fr = make_single_frame(canard_prio_nominal,
-                                       canard_kind_1v1_message,
+                                       canard_kind_message_16b,
                                        100,
                                        CANARD_NODE_ID_ANONYMOUS,
                                        src,
@@ -2206,7 +2206,7 @@ static void test_session_animation_ordering_move_to_tail(void)
 
     // Feed a frame to session 20 → it should move to the tail.
     frame_t fr20 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 20, 1, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 20, 1, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr20, 0));
     TEST_ASSERT_EQUAL_size_t(4, fx.capture.call_count);
 
@@ -2217,7 +2217,7 @@ static void test_session_animation_ordering_move_to_tail(void)
 
     // Feed a frame to session 10 → it should move to the tail.
     frame_t fr10 = make_single_frame(
-      canard_prio_nominal, canard_kind_1v1_message, 100, CANARD_NODE_ID_ANONYMOUS, 10, 1, payload, sizeof(payload));
+      canard_prio_nominal, canard_kind_message_16b, 100, CANARD_NODE_ID_ANONYMOUS, 10, 1, payload, sizeof(payload));
     TEST_ASSERT_TRUE(feed(&fx, 3 * MEGA, &fr10, 0));
 
     // Now head should be src=30 (the oldest untouched session).
@@ -2233,9 +2233,9 @@ static void test_session_animation_ordering_move_to_tail(void)
 static void test_v0_multiframe_crc_validation(void)
 {
     const uint64_t    dts      = 0x1234567890ABCDEFULL;
-    const uint16_t    crc_seed = canard_0v1_crc_seed_from_data_type_signature(dts);
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(dts);
     session_fixture_t fx;
-    fixture_init(&fx, canard_kind_0v1_message, 500, 64, 2 * MEGA, crc_seed);
+    fixture_init(&fx, canard_kind_v0_message, 500, 64, 2 * MEGA, crc_seed);
 
     const byte_t   user_data[8] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE };
     const uint16_t crc          = crc_add(crc_seed, 8, user_data);
@@ -2255,11 +2255,11 @@ static void test_v0_multiframe_crc_validation(void)
 
     // Correct CRC transfer.
     frame_t fr0 = make_start_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 0, f0, sizeof(f0));
+      canard_prio_nominal, canard_kind_v0_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 0, f0, sizeof(f0));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
 
     frame_t fr1 = make_cont_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 0, true, true, f1, sizeof(f1));
+      canard_prio_nominal, canard_kind_v0_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 0, true, true, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
@@ -2272,11 +2272,11 @@ static void test_v0_multiframe_crc_validation(void)
     f0_bad[0] = (byte_t)(crc_lo ^ 0x01U); // Corrupt low CRC byte.
 
     frame_t fr0_bad = make_start_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 1, f0_bad, sizeof(f0_bad));
+      canard_prio_nominal, canard_kind_v0_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 1, f0_bad, sizeof(f0_bad));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr0_bad, 0));
 
     frame_t fr1_bad = make_cont_frame(
-      canard_prio_nominal, canard_kind_0v1_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 1, true, true, f1, sizeof(f1));
+      canard_prio_nominal, canard_kind_v0_message, 500, CANARD_NODE_ID_ANONYMOUS, 10, 1, true, true, f1, sizeof(f1));
     TEST_ASSERT_TRUE(feed(&fx, 2 * MEGA, &fr1_bad, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count); // No new callback.
@@ -2291,11 +2291,11 @@ static void test_v0_single_frame_no_crc(void)
 {
     session_fixture_t fx;
     // Use a non-zero CRC seed; it should not matter for single-frame.
-    fixture_init(&fx, canard_kind_0v1_message, 777, 64, 2 * MEGA, 0xBEEF);
+    fixture_init(&fx, canard_kind_v0_message, 777, 64, 2 * MEGA, 0xBEEF);
 
     const byte_t payload[] = { 0xFF, 0xFE, 0xFD, 0xFC, 0xFB };
     frame_t      fr        = make_single_frame(
-      canard_prio_slow, canard_kind_0v1_message, 777, CANARD_NODE_ID_ANONYMOUS, 50, 3, payload, sizeof(payload));
+      canard_prio_slow, canard_kind_v0_message, 777, CANARD_NODE_ID_ANONYMOUS, 50, 3, payload, sizeof(payload));
 
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr, 0));
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);

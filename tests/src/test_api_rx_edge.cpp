@@ -1148,11 +1148,11 @@ static void test_rx_v0_multiframe_roundtrip()
 
     // v0 data type signature for UAVCAN.protocol.GetNodeInfo (a well-known type).
     const uint64_t data_type_signature = 0xEE468A8121C46A9EULL;
-    const uint16_t crc_seed            = canard_0v1_crc_seed_from_data_type_signature(data_type_signature);
+    const uint16_t crc_seed            = canard_v0_crc_seed_from_data_type_signature(data_type_signature);
 
     // For v0, the extent must include 2 extra bytes for the prepended CRC.
     // We have 8 bytes of user payload; extent = 8 + 2 = 10.
-    TEST_ASSERT_TRUE(canard_0v1_subscribe(&self, &sub, 1000U, crc_seed, 10U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 1000U, crc_seed, 10U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 };

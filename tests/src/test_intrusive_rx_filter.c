@@ -32,49 +32,49 @@ static void test_rx_filter_for_subscription_golden_vectors(void)
 {
     // v1.1 message: subject=0xABCD
     {
-        const canard_filter_t f = make_filter(canard_kind_1v1_message, 0xABCDU, 42U);
+        const canard_filter_t f = make_filter(canard_kind_message_16b, 0xABCDU, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x00ABCD80UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x03FFFF80UL, f.extended_mask);
     }
 
     // v1.0 message: subject=0x1ABC
     {
-        const canard_filter_t f = make_filter(canard_kind_1v0_message, 0x1ABCU, 42U);
+        const canard_filter_t f = make_filter(canard_kind_message_13b, 0x1ABCU, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x001ABC00UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x029FFF80UL, f.extended_mask);
     }
 
     // v1.0 request: service=0x1A5, dst node=42
     {
-        const canard_filter_t f = make_filter(canard_kind_1v0_request, 0x1A5U, 42U);
+        const canard_filter_t f = make_filter(canard_kind_request, 0x1A5U, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x03695500UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x03FFFF80UL, f.extended_mask);
     }
 
     // v1.0 response: service=0x1A5, dst node=42
     {
-        const canard_filter_t f = make_filter(canard_kind_1v0_response, 0x1A5U, 42U);
+        const canard_filter_t f = make_filter(canard_kind_response, 0x1A5U, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x02695500UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x03FFFF80UL, f.extended_mask);
     }
 
     // v0.1 message: data type ID=0xABCD
     {
-        const canard_filter_t f = make_filter(canard_kind_0v1_message, 0xABCDU, 42U);
+        const canard_filter_t f = make_filter(canard_kind_v0_message, 0xABCDU, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x00ABCD00UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x00FFFF80UL, f.extended_mask);
     }
 
     // v0.1 request: data type ID=0x5A, dst node=42
     {
-        const canard_filter_t f = make_filter(canard_kind_0v1_request, 0x5AU, 42U);
+        const canard_filter_t f = make_filter(canard_kind_v0_request, 0x5AU, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x005AAA80UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x00FFFF80UL, f.extended_mask);
     }
 
     // v0.1 response: data type ID=0x5A, dst node=42
     {
-        const canard_filter_t f = make_filter(canard_kind_0v1_response, 0x5AU, 42U);
+        const canard_filter_t f = make_filter(canard_kind_v0_response, 0x5AU, 42U);
         TEST_ASSERT_EQUAL_HEX32(0x005A2A80UL, f.extended_can_id);
         TEST_ASSERT_EQUAL_HEX32(0x00FFFF80UL, f.extended_mask);
     }
@@ -85,7 +85,7 @@ static void test_rx_filter_for_subscription_golden_vectors(void)
 
 static void test_rx_filter_for_subscription_v1_1_message_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_1v1_message, 0x8001U, 55U);
+    const canard_filter_t f = make_filter(canard_kind_message_16b, 0x8001U, 55U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x008001AAUL));  // same subject, prio=0, src=42
     TEST_ASSERT_TRUE(filter_accepts(f, 0x1C8001FFUL));  // same subject, prio=7, src=127
     TEST_ASSERT_FALSE(filter_accepts(f, 0x028001AAUL)); // service bit (25) must be zero
@@ -96,7 +96,7 @@ static void test_rx_filter_for_subscription_v1_1_message_semantics(void)
 
 static void test_rx_filter_for_subscription_v1_0_message_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_1v0_message, 42U, 55U);
+    const canard_filter_t f = make_filter(canard_kind_message_13b, 42U, 55U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x00002A01UL));  // base form
     TEST_ASSERT_TRUE(filter_accepts(f, 0x00602A7FUL));  // reserved bits 22:21 set
     TEST_ASSERT_TRUE(filter_accepts(f, 0x01602A55UL));  // anonymous marker bit 24 set
@@ -108,7 +108,7 @@ static void test_rx_filter_for_subscription_v1_0_message_semantics(void)
 
 static void test_rx_filter_for_subscription_v1_0_request_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_1v0_request, 0x1A5U, 42U);
+    const canard_filter_t f = make_filter(canard_kind_request, 0x1A5U, 42U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x0369550BUL));  // base form
     TEST_ASSERT_TRUE(filter_accepts(f, 0x1B69557FUL));  // different prio and src
     TEST_ASSERT_FALSE(filter_accepts(f, 0x0269550BUL)); // response bit (24=0)
@@ -119,7 +119,7 @@ static void test_rx_filter_for_subscription_v1_0_request_semantics(void)
 
 static void test_rx_filter_for_subscription_v1_0_response_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_1v0_response, 0x1A5U, 42U);
+    const canard_filter_t f = make_filter(canard_kind_response, 0x1A5U, 42U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x02695511UL));  // base form
     TEST_ASSERT_TRUE(filter_accepts(f, 0x1A69557FUL));  // different prio and src
     TEST_ASSERT_FALSE(filter_accepts(f, 0x03695511UL)); // request bit (24=1)
@@ -130,7 +130,7 @@ static void test_rx_filter_for_subscription_v1_0_response_semantics(void)
 
 static void test_rx_filter_for_subscription_v0_message_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_0v1_message, 0x1234U, 55U);
+    const canard_filter_t f = make_filter(canard_kind_v0_message, 0x1234U, 55U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x00123405UL));  // base form
     TEST_ASSERT_TRUE(filter_accepts(f, 0x01123455UL));  // bit 24 set
     TEST_ASSERT_TRUE(filter_accepts(f, 0x0312347FUL));  // bits 24:25 set
@@ -140,7 +140,7 @@ static void test_rx_filter_for_subscription_v0_message_semantics(void)
 
 static void test_rx_filter_for_subscription_v0_request_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_0v1_request, 0x5AU, 42U);
+    const canard_filter_t f = make_filter(canard_kind_v0_request, 0x5AU, 42U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x005AAA87UL));  // base form
     TEST_ASSERT_TRUE(filter_accepts(f, 0x015AAA81UL));  // bit 24 set
     TEST_ASSERT_TRUE(filter_accepts(f, 0x035AAAFFUL));  // bits 24:25 set
@@ -152,7 +152,7 @@ static void test_rx_filter_for_subscription_v0_request_semantics(void)
 
 static void test_rx_filter_for_subscription_v0_response_semantics(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_0v1_response, 0x5AU, 42U);
+    const canard_filter_t f = make_filter(canard_kind_v0_response, 0x5AU, 42U);
     TEST_ASSERT_TRUE(filter_accepts(f, 0x005A2A81UL));  // base form
     TEST_ASSERT_TRUE(filter_accepts(f, 0x015A2A82UL));  // bit 24 set
     TEST_ASSERT_TRUE(filter_accepts(f, 0x035A2AFFUL));  // bits 24:25 set
@@ -649,14 +649,14 @@ static void test_coalesce_sequential_realistic_cyphal(void)
 {
     // 3 filter slots, 6 subscriptions → 3 direct + 3 coalesced.
     canard_filter_t filters[3] = {
-        make_filter(canard_kind_1v1_message, 100U, 42U),
-        make_filter(canard_kind_1v0_request, 200U, 42U),
-        make_filter(canard_kind_0v1_message, 300U, 42U),
+        make_filter(canard_kind_message_16b, 100U, 42U),
+        make_filter(canard_kind_request, 200U, 42U),
+        make_filter(canard_kind_v0_message, 300U, 42U),
     };
     const canard_filter_t extras[] = {
-        make_filter(canard_kind_1v1_message, 101U, 42U),
-        make_filter(canard_kind_0v1_request, 50U, 42U),
-        make_filter(canard_kind_1v0_response, 200U, 42U),
+        make_filter(canard_kind_message_16b, 101U, 42U),
+        make_filter(canard_kind_v0_request, 50U, 42U),
+        make_filter(canard_kind_response, 200U, 42U),
     };
     // For each subscription, generate a representative CAN ID that must be accepted.
     // v1.1 msg subject=100: (100<<8)|0x80 | src=1 → 0x00006481
@@ -687,8 +687,8 @@ static void test_coalesce_sequential_realistic_cyphal(void)
 static void test_coalesce_v1_messages_pair(void)
 {
     // Two adjacent v1.1 message subjects: subjects 100 and 101.
-    canard_filter_t       into[1]    = { make_filter(canard_kind_1v1_message, 100U, 42U) };
-    const canard_filter_t new_filter = make_filter(canard_kind_1v1_message, 101U, 42U);
+    canard_filter_t       into[1]    = { make_filter(canard_kind_message_16b, 100U, 42U) };
+    const canard_filter_t new_filter = make_filter(canard_kind_message_16b, 101U, 42U);
     rx_filter_coalesce_into(1U, into, new_filter);
     // The fused filter must accept both subjects (arbitrary src node).
     TEST_ASSERT_TRUE(filter_accepts(into[0], 0x00006481UL));  // subject 100
@@ -699,8 +699,8 @@ static void test_coalesce_v1_messages_pair(void)
 static void test_coalesce_v1_request_response_pair(void)
 {
     // Request and response for service 0x1A5, node 42.
-    canard_filter_t       into[1]    = { make_filter(canard_kind_1v0_request, 0x1A5U, 42U) };
-    const canard_filter_t new_filter = make_filter(canard_kind_1v0_response, 0x1A5U, 42U);
+    canard_filter_t       into[1]    = { make_filter(canard_kind_request, 0x1A5U, 42U) };
+    const canard_filter_t new_filter = make_filter(canard_kind_response, 0x1A5U, 42U);
     rx_filter_coalesce_into(1U, into, new_filter);
     TEST_ASSERT_TRUE(filter_accepts(into[0], 0x0369552AUL)); // request (src=42)
     TEST_ASSERT_TRUE(filter_accepts(into[0], 0x02695511UL)); // response (src=17)
@@ -710,10 +710,10 @@ static void test_coalesce_mixed_versions(void)
 {
     // Cross-version coalescence: v1.1 + v1.0 + v0.
     canard_filter_t into[2] = {
-        make_filter(canard_kind_1v1_message, 100U, 42U),
-        make_filter(canard_kind_1v0_message, 42U, 55U),
+        make_filter(canard_kind_message_16b, 100U, 42U),
+        make_filter(canard_kind_message_13b, 42U, 55U),
     };
-    const canard_filter_t new_filter = make_filter(canard_kind_0v1_message, 300U, 42U);
+    const canard_filter_t new_filter = make_filter(canard_kind_v0_message, 300U, 42U);
     canard_filter_t       original[2];
     memcpy(original, into, sizeof(original));
     rx_filter_coalesce_into(2U, into, new_filter);

@@ -895,11 +895,11 @@ bool canard_publish(canard_t* const            self,
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
       (((iface_bitmap & CANARD_IFACE_BITMAP_ALL) != 0) && ((iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap)) &&
-      (!rev_1v0 || (subject_id <= CANARD_SUBJECT_ID_MAX_1v0));
+      (!rev_1v0 || (subject_id <= CANARD_SUBJECT_ID_MAX_13b));
     if (ok) {
         tx_transfer_t* tr = NULL;
         if (!rev_1v0) {
-            // v1.1 message format extends the subject-ID to 16 bits, using bit 7 as 1 to discriminate from v1.0,
+            // v1.1 16-bit message format extends the subject-ID to 16 bits, using bit 7 as 1 to discriminate from v1.0,
             // and designating the anonymous bit as reserved=0. ID bit layout:
             //
             //  28 27 26 25 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
@@ -974,15 +974,15 @@ bool canard_respond(canard_t* const            self,
       self, deadline, priority, service_id, client_node_id, false, transfer_id, payload, user_context);
 }
 
-bool canard_0v1_publish(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const uint_least8_t        iface_bitmap,
-                        const canard_prio_t        priority,
-                        const uint16_t             data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload,
-                        void* const                user_context)
+bool canard_v0_publish(canard_t* const            self,
+                       const canard_us_t          deadline,
+                       const uint_least8_t        iface_bitmap,
+                       const canard_prio_t        priority,
+                       const uint16_t             data_type_id,
+                       const uint16_t             crc_seed,
+                       const uint_least8_t        transfer_id,
+                       const canard_bytes_chain_t payload,
+                       void* const                user_context)
 {
     bool ok =
       (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) &&
@@ -996,16 +996,16 @@ bool canard_0v1_publish(canard_t* const            self,
     return ok;
 }
 
-static bool tx_0v1_service(canard_t* const            self,
-                           const canard_us_t          deadline,
-                           const canard_prio_t        priority,
-                           const uint_least8_t        data_type_id,
-                           const uint16_t             crc_seed,
-                           const uint_least8_t        destination_node_id,
-                           const bool                 request_not_response,
-                           const uint_least8_t        transfer_id,
-                           const canard_bytes_chain_t payload,
-                           void* const                user_context)
+static bool tx_v0_service(canard_t* const            self,
+                          const canard_us_t          deadline,
+                          const canard_prio_t        priority,
+                          const uint_least8_t        data_type_id,
+                          const uint16_t             crc_seed,
+                          const uint_least8_t        destination_node_id,
+                          const bool                 request_not_response,
+                          const uint_least8_t        transfer_id,
+                          const canard_bytes_chain_t payload,
+                          void* const                user_context)
 {
     bool ok = (self != NULL) && (priority < CANARD_PRIO_COUNT) && bytes_chain_valid(payload) && (self->node_id != 0U) &&
               (destination_node_id > 0U) && (destination_node_id <= CANARD_NODE_ID_MAX);
@@ -1019,31 +1019,31 @@ static bool tx_0v1_service(canard_t* const            self,
     return ok;
 }
 
-bool canard_0v1_request(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint_least8_t        data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        server_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload,
-                        void* const                user_context)
+bool canard_v0_request(canard_t* const            self,
+                       const canard_us_t          deadline,
+                       const canard_prio_t        priority,
+                       const uint_least8_t        data_type_id,
+                       const uint16_t             crc_seed,
+                       const uint_least8_t        server_node_id,
+                       const uint_least8_t        transfer_id,
+                       const canard_bytes_chain_t payload,
+                       void* const                user_context)
 {
-    return tx_0v1_service(
+    return tx_v0_service(
       self, deadline, priority, data_type_id, crc_seed, server_node_id, true, transfer_id, payload, user_context);
 }
 
-bool canard_0v1_respond(canard_t* const            self,
-                        const canard_us_t          deadline,
-                        const canard_prio_t        priority,
-                        const uint_least8_t        data_type_id,
-                        const uint16_t             crc_seed,
-                        const uint_least8_t        client_node_id,
-                        const uint_least8_t        transfer_id,
-                        const canard_bytes_chain_t payload,
-                        void* const                user_context)
+bool canard_v0_respond(canard_t* const            self,
+                       const canard_us_t          deadline,
+                       const canard_prio_t        priority,
+                       const uint_least8_t        data_type_id,
+                       const uint16_t             crc_seed,
+                       const uint_least8_t        client_node_id,
+                       const uint_least8_t        transfer_id,
+                       const canard_bytes_chain_t payload,
+                       void* const                user_context)
 {
-    return tx_0v1_service(
+    return tx_v0_service(
       self, deadline, priority, data_type_id, crc_seed, client_node_id, false, transfer_id, payload, user_context);
 }
 
@@ -1123,7 +1123,7 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v1->dst     = (byte_t)((can_id >> 7U) & CANARD_NODE_ID_MAX);
             out_v1->port_id = (can_id >> 14U) & CANARD_SERVICE_ID_MAX;
             const bool req  = (can_id & (UINT32_C(1) << 24U)) != 0U;
-            out_v1->kind    = req ? canard_kind_1v0_request : canard_kind_1v0_response;
+            out_v1->kind    = req ? canard_kind_request : canard_kind_response;
             is_v1           = is_v1 && !bit_23 && (out_v1->src != out_v1->dst); // self-addressing not allowed
         } else {
             out_v1->dst       = CANARD_NODE_ID_ANONYMOUS;
@@ -1132,11 +1132,11 @@ static byte_t rx_parse(const uint32_t       can_id,
                 const bool bit_24 = (can_id & (UINT32_C(1) << 24U)) != 0U;
                 is_v1             = is_v1 && !bit_24; // was anonymous
                 out_v1->port_id   = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX;
-                out_v1->kind      = canard_kind_1v1_message;
+                out_v1->kind      = canard_kind_message_16b;
             } else {
                 is_v1           = is_v1 && !bit_23;
-                out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX_1v0;
-                out_v1->kind    = canard_kind_1v0_message;
+                out_v1->port_id = (can_id >> 8U) & CANARD_SUBJECT_ID_MAX_13b;
+                out_v1->kind    = canard_kind_message_13b;
                 if ((can_id & (UINT32_C(1) << 24U)) != 0U) {
                     out_v1->src = CANARD_NODE_ID_ANONYMOUS;
                     is_v1       = is_v1 && start && end; // anonymous can only be single-frame
@@ -1158,13 +1158,13 @@ static byte_t rx_parse(const uint32_t       can_id,
             out_v0->dst      = dst;
             out_v0->port_id  = (can_id >> 16U) & 0xFFU;
             const bool req   = (can_id & (UINT32_C(1) << 15U)) != 0U;
-            out_v0->kind     = req ? canard_kind_0v1_request : canard_kind_0v1_response;
+            out_v0->kind     = req ? canard_kind_v0_request : canard_kind_v0_response;
             // Node-ID 0 reserved for anonymous/broadcast, invalid for services. Self-addressing not allowed.
             is_v0 = is_v0 && (dst != 0) && (src != 0) && (src != dst);
         } else {
             out_v0->dst     = CANARD_NODE_ID_ANONYMOUS;
             out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
-            out_v0->kind    = canard_kind_0v1_message;
+            out_v0->kind    = canard_kind_v0_message;
             if (src == 0) {
                 out_v0->src = CANARD_NODE_ID_ANONYMOUS;
                 is_v0       = is_v0 && start && end; // anonymous can only be single-frame
@@ -1486,10 +1486,10 @@ static void rx_session_update(canard_subscription_t* const sub,
     CANARD_ASSERT((canard_kind_version(sub->kind) != 0) || (sub->extent >= CRC_BYTES)); // v0 CRC reservation
 
     // Anonymous frames are stateless and require special treatment.
-    // They are scheduled to be deprecated in Cyphal v1.1 and their support will be eventually dropped.
+    // They are scheduled to be deprecated in Cyphal v1.1.
     if (frame->src == CANARD_NODE_ID_ANONYMOUS) {
         CANARD_ASSERT(frame->start && frame->end && (frame->dst == CANARD_NODE_ID_ANONYMOUS));
-        CANARD_ASSERT((frame->kind == canard_kind_0v1_message) || (frame->kind == canard_kind_1v0_message));
+        CANARD_ASSERT((frame->kind == canard_kind_v0_message) || (frame->kind == canard_kind_message_13b));
         rx_session_complete_single_frame(sub, ts, frame);
         return;
     }
@@ -1571,31 +1571,31 @@ static canard_filter_t rx_filter_for_subscription(const canard_t* const self, co
     canard_filter_t f  = { 0 };
     const uint32_t  id = self->node_id & CANARD_NODE_ID_MAX;
     switch (sub->kind) {
-        case canard_kind_1v1_message:
+        case canard_kind_message_16b:
             f.extended_can_id = ((uint32_t)sub->port_id << 8U) | (UINT32_C(1) << 7U);
             f.extended_mask   = 0x03FFFF80U;
             break;
-        case canard_kind_1v0_message:
-            CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX_1v0);
+        case canard_kind_message_13b:
+            CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX_13b);
             f.extended_can_id = (uint32_t)sub->port_id << 8U;
             f.extended_mask   = 0x029fff80U;
             break;
-        case canard_kind_1v0_response:
-        case canard_kind_1v0_request: {
+        case canard_kind_response:
+        case canard_kind_request: {
             CANARD_ASSERT(sub->port_id <= CANARD_SERVICE_ID_MAX);
-            const uint32_t rnr = (sub->kind == canard_kind_1v0_request) ? (UINT32_C(1) << 24U) : 0U;
+            const uint32_t rnr = (sub->kind == canard_kind_request) ? (UINT32_C(1) << 24U) : 0U;
             f.extended_can_id  = (UINT32_C(1) << 25U) | rnr | ((uint32_t)sub->port_id << 14U) | (id << 7U);
             f.extended_mask    = 0x03FFFF80U;
             break;
         }
-        case canard_kind_0v1_message:
+        case canard_kind_v0_message:
             f.extended_can_id = (uint32_t)sub->port_id << 8U;
             f.extended_mask   = 0x00FFFF80;
             break;
-        case canard_kind_0v1_response:
-        case canard_kind_0v1_request: {
+        case canard_kind_v0_response:
+        case canard_kind_v0_request: {
             CANARD_ASSERT(sub->port_id <= 0xFFU);
-            const uint32_t rnr = (sub->kind == canard_kind_0v1_request) ? (UINT32_C(1) << 15U) : 0;
+            const uint32_t rnr = (sub->kind == canard_kind_v0_request) ? (UINT32_C(1) << 15U) : 0;
             f.extended_can_id  = ((sub->port_id & 0xFFU) << 16U) | rnr | (id << 8U) | (UINT32_C(1) << 7U);
             f.extended_mask    = 0x00FFFF80U;
             break;
@@ -1724,23 +1724,27 @@ static bool rx_subscribe(canard_t* const                           self,
     return ok;
 }
 
-bool canard_subscribe(canard_t* const                           self,
-                      canard_subscription_t* const              subscription,
-                      const uint16_t                            subject_id,
-                      const bool                                rev_1v0,
-                      const size_t                              extent,
-                      const canard_us_t                         transfer_id_timeout,
-                      const canard_subscription_vtable_t* const vtable)
+bool canard_subscribe_16b(canard_t* const                           self,
+                          canard_subscription_t* const              subscription,
+                          const uint16_t                            subject_id,
+                          const size_t                              extent,
+                          const canard_us_t                         transfer_id_timeout,
+                          const canard_subscription_vtable_t* const vtable)
 {
-    return (!rev_1v0 || (subject_id <= CANARD_SUBJECT_ID_MAX_1v0)) &&
-           rx_subscribe(self,
-                        subscription,
-                        rev_1v0 ? canard_kind_1v0_message : canard_kind_1v1_message,
-                        subject_id,
-                        CRC_INITIAL,
-                        extent,
-                        transfer_id_timeout,
-                        vtable);
+    return rx_subscribe(
+      self, subscription, canard_kind_message_16b, subject_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
+}
+
+bool canard_subscribe_13b(canard_t* const                           self,
+                          canard_subscription_t* const              subscription,
+                          const uint16_t                            subject_id,
+                          const size_t                              extent,
+                          const canard_us_t                         transfer_id_timeout,
+                          const canard_subscription_vtable_t* const vtable)
+{
+    return (subject_id <= CANARD_SUBJECT_ID_MAX_13b) &&
+           rx_subscribe(
+             self, subscription, canard_kind_message_13b, subject_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
 }
 
 bool canard_subscribe_request(canard_t* const                           self,
@@ -1752,7 +1756,7 @@ bool canard_subscribe_request(canard_t* const                           self,
 {
     return (service_id <= CANARD_SERVICE_ID_MAX) &&
            rx_subscribe(
-             self, subscription, canard_kind_1v0_request, service_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
+             self, subscription, canard_kind_request, service_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
 }
 
 bool canard_subscribe_response(canard_t* const                           self,
@@ -1762,20 +1766,20 @@ bool canard_subscribe_response(canard_t* const                           self,
                                const canard_subscription_vtable_t* const vtable)
 {
     return (service_id <= CANARD_SERVICE_ID_MAX) &&
-           rx_subscribe(self, subscription, canard_kind_1v0_response, service_id, CRC_INITIAL, extent, 0, vtable);
+           rx_subscribe(self, subscription, canard_kind_response, service_id, CRC_INITIAL, extent, 0, vtable);
 }
 
-bool canard_0v1_subscribe(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            data_type_id,
-                          const uint16_t                            crc_seed,
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable)
+bool canard_v0_subscribe(canard_t* const                           self,
+                         canard_subscription_t* const              subscription,
+                         const uint16_t                            data_type_id,
+                         const uint16_t                            crc_seed,
+                         const size_t                              extent,
+                         const canard_us_t                         transfer_id_timeout,
+                         const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(self,
                         subscription,
-                        canard_kind_0v1_message,
+                        canard_kind_v0_message,
                         data_type_id,
                         crc_seed,
                         extent + CRC_BYTES,
@@ -1783,17 +1787,17 @@ bool canard_0v1_subscribe(canard_t* const                           self,
                         vtable);
 }
 
-bool canard_0v1_subscribe_request(canard_t* const                           self,
-                                  canard_subscription_t* const              subscription,
-                                  const uint_least8_t                       data_type_id,
-                                  const uint16_t                            crc_seed,
-                                  const size_t                              extent,
-                                  const canard_us_t                         transfer_id_timeout,
-                                  const canard_subscription_vtable_t* const vtable)
+bool canard_v0_subscribe_request(canard_t* const                           self,
+                                 canard_subscription_t* const              subscription,
+                                 const uint_least8_t                       data_type_id,
+                                 const uint16_t                            crc_seed,
+                                 const size_t                              extent,
+                                 const canard_us_t                         transfer_id_timeout,
+                                 const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(self,
                         subscription,
-                        canard_kind_0v1_request,
+                        canard_kind_v0_request,
                         (uint16_t)data_type_id,
                         crc_seed,
                         extent + CRC_BYTES,
@@ -1801,16 +1805,16 @@ bool canard_0v1_subscribe_request(canard_t* const                           self
                         vtable);
 }
 
-bool canard_0v1_subscribe_response(canard_t* const                           self,
-                                   canard_subscription_t* const              subscription,
-                                   const uint_least8_t                       data_type_id,
-                                   const uint16_t                            crc_seed,
-                                   const size_t                              extent,
-                                   const canard_subscription_vtable_t* const vtable)
+bool canard_v0_subscribe_response(canard_t* const                           self,
+                                  canard_subscription_t* const              subscription,
+                                  const uint_least8_t                       data_type_id,
+                                  const uint16_t                            crc_seed,
+                                  const size_t                              extent,
+                                  const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(self, //
                         subscription,
-                        canard_kind_0v1_response,
+                        canard_kind_v0_response,
                         (uint16_t)data_type_id,
                         crc_seed,
                         extent + CRC_BYTES,
@@ -2020,7 +2024,7 @@ bool canard_ingest_frame(canard_t* const      self,
     return ok;
 }
 
-uint16_t canard_0v1_crc_seed_from_data_type_signature(const uint64_t data_type_signature)
+uint16_t canard_v0_crc_seed_from_data_type_signature(const uint64_t data_type_signature)
 {
     uint16_t crc = CRC_INITIAL;
     uint64_t sig = data_type_signature;

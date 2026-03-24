@@ -604,7 +604,7 @@ static void test_tx_oom_transfer_allocation()
 
 // =====================================================================================================================
 // Test 15: test_tx_v0_always_classic_can
-//   Set self.tx.fd = true. Publish via canard_0v1_publish(). Poll. Frame must have fd=false.
+//   Set self.tx.fd = true. Publish via canard_v0_publish(). Poll. Frame must have fd=false.
 // =====================================================================================================================
 static void test_tx_v0_always_classic_can()
 {
@@ -615,9 +615,9 @@ static void test_tx_v0_always_classic_can()
     self.tx.fd = true; // FD mode enabled globally.
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    // canard_0v1_publish signature:
+    // canard_v0_publish signature:
     //   (self, deadline, iface_bitmap, priority, data_type_id, crc_seed, transfer_id, payload, user_context)
-    TEST_ASSERT_TRUE(canard_0v1_publish(&self, 10000, 1U, canard_prio_nominal, 100U, 0U, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_v0_publish(&self, 10000, 1U, canard_prio_nominal, 100U, 0U, 0U, payload, nullptr));
 
     canard_poll(&self, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, cap.count);
