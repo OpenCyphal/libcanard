@@ -91,9 +91,6 @@ function(gen_test_single name files) # When the full matrix is not needed, to ke
     gen_test("${name}" "${files}" "" "-m32" "-m32" "11")
 endfunction()
 
-# XXX TODO FIXME REMOVE THIS WHEN IMPLEMENTATION COMPLETE
-add_compile_options(-Wno-unused-function)
-
 # Add the test targets.
 # Intrusive tests directly #include <canard.c> to access the internals.
 gen_test_matrix(test_helpers "src/test_helpers.c")

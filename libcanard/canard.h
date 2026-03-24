@@ -104,7 +104,10 @@ typedef enum canard_kind_t
 } canard_kind_t;
 #define CANARD_KIND_COUNT 7
 
-static uint_least8_t canard_kind_version(const canard_kind_t kind) { return (kind < canard_kind_v0_message) ? 1 : 0; }
+static inline uint_least8_t canard_kind_version(const canard_kind_t kind)
+{
+    return (kind < canard_kind_v0_message) ? 1 : 0;
+}
 
 typedef struct canard_t canard_t;
 
