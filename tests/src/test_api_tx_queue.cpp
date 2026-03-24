@@ -246,8 +246,7 @@ static void test_tx_queue_sacrifice_multiple_rounds()
 
     const canard_bytes_chain_t single_payload = make_empty_payload();
     for (uint_least8_t tid = 0; tid < 4U; tid++) {
-        TEST_ASSERT_TRUE(
-          canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 300U, tid, single_payload, nullptr));
+        TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 300U, tid, single_payload, nullptr));
     }
     TEST_ASSERT_EQUAL_size_t(4U, self.tx.queue_size);
 

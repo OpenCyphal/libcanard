@@ -483,8 +483,7 @@ static void test_roundtrip_v1v0_single_frame()
 
     const uint_least8_t        payload_data[5] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
     const canard_bytes_chain_t payload         = { .bytes = { .size = 5, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(
-      canard_publish_13b(&tx_inst, DEADLINE, 1U, canard_prio_high, 4000U, 10U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_13b(&tx_inst, DEADLINE, 1U, canard_prio_high, 4000U, 10U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // Single frame (5+1=6 < 8).
@@ -741,13 +740,13 @@ static void test_roundtrip_all_transfer_ids()
         const uint_least8_t        payload_data[1] = { static_cast<uint_least8_t>(tid & 0xFFU) };
         const canard_bytes_chain_t payload         = { .bytes = { .size = 1, .data = payload_data }, .next = nullptr };
         TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst,
-                                        DEADLINE + rx_ctx.now_val,
-                                        1U,
-                                        canard_prio_nominal,
-                                        700U,
-                                        static_cast<uint_least8_t>(tid),
-                                        payload,
-                                        nullptr));
+                                            DEADLINE + rx_ctx.now_val,
+                                            1U,
+                                            canard_prio_nominal,
+                                            700U,
+                                            static_cast<uint_least8_t>(tid),
+                                            payload,
+                                            nullptr));
 
         canard_poll(&tx_inst, 1U);
         feed_captured_frames(&rx_inst, tx_cap, rx_ctx.now_val);
