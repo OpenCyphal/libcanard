@@ -1727,6 +1727,166 @@ static void test_tx_push_refcount_multi_iface(void)
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
+// =============================================
+// Group D: additional branch coverage tests
+// =============================================
+
+// OOM cleanup loop in tx_spool_v0 when failure occurs after the first frame was already allocated (lines 662-668).
+static void test_canard_v0_spool_oom_mid_chain(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id = 1U;
+    // Payload of 10 bytes => multiframe in v0 (10 >= 8). size_total = 10+2(CRC) = 12, ceil(12/7) = 2 frames.
+    // tx_transfer_new uses 1 fragment, then tx_spool_v0 allocates frames.
+    // Allow transfer + 1 frame = 2 fragments total, so the 2nd frame alloc fails.
+    alloc.limit_fragments               = 2U;
+    const byte_t               data[10] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+    const canard_bytes_chain_t payload  = { .bytes = { .size = 10U, .data = data }, .next = NULL };
+    TEST_ASSERT_FALSE(canard_v0_publish(&self, 1000, 1U, canard_prio_nominal, 11U, 0xFFFFU, 3U, payload, NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// tx_ensure_queue_space sacrifice returns NULL when agewise list is empty but queue_size >= capacity.
+static void test_tx_ensure_queue_sacrifice_null(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 1U);
+    // Artificially make queue appear full with no transfers in agewise list.
+    self.tx.queue_size                 = 1U;
+    const byte_t               data[]  = { 0x55U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 1U, canard_prio_nominal, 10U, 0U, payload, NULL));
+    TEST_ASSERT_TRUE(self.err.tx_capacity > 0U);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// canard_pending_ifaces(NULL) returns 0.
+static void test_canard_pending_ifaces_null(void) { TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(NULL)); }
+
+// Validation branches for canard_publish_16b.
+static void test_publish_16b_validation_branches(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    const canard_bytes_chain_t ok_pay  = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    const canard_bytes_chain_t bad_pay = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
+    // NULL self.
+    TEST_ASSERT_FALSE(canard_publish_16b(NULL, 1000, 1U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
+    // Priority out of range.
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 1U, (canard_prio_t)CANARD_PRIO_COUNT, 10U, 0U, ok_pay, NULL));
+    // Invalid bytes_chain (size>0, data=NULL).
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 1U, canard_prio_nominal, 10U, 0U, bad_pay, NULL));
+    // iface_bitmap = 0.
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 0U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
+    // iface_bitmap with invalid bits.
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 0x80U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validation branches for canard_publish_13b.
+static void test_publish_13b_validation_branches(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    const canard_bytes_chain_t ok_pay  = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    const canard_bytes_chain_t bad_pay = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
+    // NULL self.
+    TEST_ASSERT_FALSE(canard_publish_13b(NULL, 1000, 1U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
+    // Priority out of range.
+    TEST_ASSERT_FALSE(canard_publish_13b(&self, 1000, 1U, (canard_prio_t)CANARD_PRIO_COUNT, 10U, 0U, ok_pay, NULL));
+    // Invalid bytes_chain.
+    TEST_ASSERT_FALSE(canard_publish_13b(&self, 1000, 1U, canard_prio_nominal, 10U, 0U, bad_pay, NULL));
+    // iface_bitmap = 0.
+    TEST_ASSERT_FALSE(canard_publish_13b(&self, 1000, 0U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
+    // iface_bitmap with invalid bits.
+    TEST_ASSERT_FALSE(canard_publish_13b(&self, 1000, 0x80U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
+    // subject_id > CANARD_SUBJECT_ID_MAX_13b.
+    TEST_ASSERT_FALSE(
+      canard_publish_13b(&self, 1000, 1U, canard_prio_nominal, CANARD_SUBJECT_ID_MAX_13b + 1U, 0U, ok_pay, NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validation branches for canard_v0_publish.
+static void test_v0_publish_validation_branches(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id                      = 1U;
+    const canard_bytes_chain_t ok_pay = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    // iface_bitmap = 0.
+    TEST_ASSERT_FALSE(canard_v0_publish(&self, 1000, 0U, canard_prio_nominal, 11U, 0xFFFFU, 0U, ok_pay, NULL));
+    // iface_bitmap with bits outside CANARD_IFACE_BITMAP_ALL.
+    TEST_ASSERT_FALSE(canard_v0_publish(&self, 1000, 0x80U, canard_prio_nominal, 11U, 0xFFFFU, 0U, ok_pay, NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// Validation branches for v0 service functions.
+static void test_v0_service_validation_branches(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.node_id                      = 1U;
+    const canard_bytes_chain_t ok_pay = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
+    // destination_node_id = 0.
+    TEST_ASSERT_FALSE(canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, ok_pay, NULL));
+    // destination_node_id > CANARD_NODE_ID_MAX.
+    TEST_ASSERT_FALSE(
+      canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, CANARD_NODE_ID_MAX + 1U, 0U, ok_pay, NULL));
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// canard_refcount_inc and canard_refcount_dec with NULL data are no-ops.
+static void test_refcount_null_data(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    const canard_bytes_t null_obj = { .data = NULL, .size = 0U };
+    canard_refcount_inc(null_obj);
+    canard_refcount_dec(&self, null_obj);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// TX comparator equality fallthrough: two transfers with the same CAN ID but different seqno.
+static void test_tx_comparator_equal_can_id(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 16U);
+    const byte_t               d1[] = { 0xAAU };
+    const byte_t               d2[] = { 0xBBU };
+    const canard_bytes_chain_t pay1 = { .bytes = { .size = 1U, .data = d1 }, .next = NULL };
+    const canard_bytes_chain_t pay2 = { .bytes = { .size = 1U, .data = d2 }, .next = NULL };
+    // Same priority and subject => same can_id_msb. Different transfer_id/seqno.
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 1000, 1U, canard_prio_nominal, 100U, 0U, pay1, NULL));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 1000, 1U, canard_prio_nominal, 100U, 1U, pay2, NULL));
+    TEST_ASSERT_EQUAL_size_t(2U, count_enqueued_transfers(&self));
+    // Both should be in the pending tree for iface 0; the equal can_id_msb path was exercised.
+    const tx_transfer_t* const tr1 = LIST_HEAD(self.tx.agewise, tx_transfer_t, list_agewise);
+    const tx_transfer_t* const tr2 = LIST_NEXT(tr1, tx_transfer_t, list_agewise);
+    TEST_ASSERT_NOT_NULL(tr1);
+    TEST_ASSERT_NOT_NULL(tr2);
+    TEST_ASSERT_EQUAL_UINT32(tr1->can_id_msb, tr2->can_id_msb);
+    TEST_ASSERT_TRUE(tr1->seqno != tr2->seqno);
+    free_all_transfers(&self);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
 void setUp(void) {}
 
 void tearDown(void) {}
@@ -1796,6 +1956,17 @@ int main(void)
     RUN_TEST(test_tx_expire_boundary);
     RUN_TEST(test_tx_predict_frame_count_exhaustive);
     RUN_TEST(test_tx_push_refcount_multi_iface);
+
+    // Group D: additional branch coverage.
+    RUN_TEST(test_canard_v0_spool_oom_mid_chain);
+    RUN_TEST(test_tx_ensure_queue_sacrifice_null);
+    RUN_TEST(test_canard_pending_ifaces_null);
+    RUN_TEST(test_publish_16b_validation_branches);
+    RUN_TEST(test_publish_13b_validation_branches);
+    RUN_TEST(test_v0_publish_validation_branches);
+    RUN_TEST(test_v0_service_validation_branches);
+    RUN_TEST(test_refcount_null_data);
+    RUN_TEST(test_tx_comparator_equal_can_id);
 
     return UNITY_END();
 }

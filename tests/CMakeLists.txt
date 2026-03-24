@@ -124,20 +124,20 @@ if (ENABLE_COVERAGE)
     add_custom_target(coverage-reset
             COMMAND ${LCOV_PATH} --zerocounters --directory .
             COMMAND ${LCOV_PATH} --capture --initial --directory . --output-file coverage-base.info
-            --rc branch_coverage=1
+            --rc lcov_branch_coverage=1
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             COMMENT "Resetting coverage counters"
     )
 
     # Generate coverage report.
     add_custom_target(coverage
-            COMMAND ${LCOV_PATH} --capture --directory . --output-file coverage-total.info --rc branch_coverage=1
+            COMMAND ${LCOV_PATH} --capture --directory . --output-file coverage-total.info --rc lcov_branch_coverage=1
             COMMAND ${LCOV_PATH} --extract coverage-total.info '*/libcanard/canard.c' --output-file coverage-canard.info
-            --rc branch_coverage=1
+            --rc lcov_branch_coverage=1
 
             COMMAND ${CMAKE_COMMAND} -E echo ""
             COMMAND ${CMAKE_COMMAND} -E echo "=== COVERAGE SUMMARY ==="
-            COMMAND ${LCOV_PATH} --list coverage-canard.info --rc branch_coverage=1
+            COMMAND ${LCOV_PATH} --list coverage-canard.info --rc lcov_branch_coverage=1
             COMMAND ${CMAKE_COMMAND} -E echo "========================"
             COMMAND ${CMAKE_COMMAND} -E echo ""
 

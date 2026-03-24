@@ -803,6 +803,137 @@ static void test_coalesce_greedy_multistep_degradation(void)
 }
 
 // =====================================================================================================================
+// Group 13: rx_filter_configure() integration
+
+static void* oom_alloc(const canard_mem_t mem, const size_t size)
+{
+    (void)mem;
+    (void)size;
+    return NULL;
+}
+static void oom_free(const canard_mem_t mem, const size_t size, void* const pointer)
+{
+    (void)mem;
+    (void)size;
+    (void)pointer;
+}
+static const canard_mem_vtable_t oom_mem_vtable = { .free = oom_free, .alloc = oom_alloc };
+
+static void* real_alloc(const canard_mem_t mem, const size_t size)
+{
+    (void)mem;
+    return malloc(size);
+}
+static void real_free(const canard_mem_t mem, const size_t size, void* const pointer)
+{
+    (void)mem;
+    (void)size;
+    free(pointer);
+}
+static const canard_mem_vtable_t real_mem_vtable = { .free = real_free, .alloc = real_alloc };
+
+static bool test_filter_cb(canard_t* const self, const size_t filter_count, const canard_filter_t* filters)
+{
+    (void)self;
+    (void)filter_count;
+    (void)filters;
+    return true;
+}
+
+static canard_us_t test_now_cb(const canard_t* const self)
+{
+    (void)self;
+    return 0;
+}
+
+static bool test_tx_cb(canard_t* const      self,
+                       void* const          origin,
+                       const canard_us_t    deadline,
+                       const uint_least8_t  iface_index,
+                       const bool           fd,
+                       const uint32_t       extended_can_id,
+                       const canard_bytes_t can_data)
+{
+    (void)self;
+    (void)origin;
+    (void)deadline;
+    (void)iface_index;
+    (void)fd;
+    (void)extended_can_id;
+    (void)can_data;
+    return true;
+}
+
+static const canard_vtable_t test_vtable_with_filter = { .now    = test_now_cb,
+                                                         .tx     = test_tx_cb,
+                                                         .filter = test_filter_cb };
+
+static void dummy_on_message(canard_subscription_t* const self,
+                             const canard_us_t            timestamp,
+                             const canard_prio_t          priority,
+                             const uint_least8_t          source_node_id,
+                             const uint_least8_t          transfer_id,
+                             const canard_payload_t       payload)
+{
+    (void)self;
+    (void)timestamp;
+    (void)priority;
+    (void)source_node_id;
+    (void)transfer_id;
+    (void)payload;
+}
+
+static const canard_subscription_vtable_t dummy_sub_vtable = { .on_message = dummy_on_message };
+
+static void test_rx_filter_configure_oom(void)
+{
+    // rx_filter_configure() should return false and increment err.oom when allocation fails.
+    const canard_mem_t oom_mem  = { .vtable = &oom_mem_vtable, .context = NULL };
+    const canard_mem_t real_mem = { .vtable = &real_mem_vtable, .context = NULL };
+    canard_t           self;
+    memset(&self, 0, sizeof(self));
+    const canard_mem_set_t mem = { .tx_transfer = real_mem,
+                                   .tx_frame    = real_mem,
+                                   .rx_session  = real_mem,
+                                   .rx_payload  = real_mem,
+                                   .rx_filters  = oom_mem };
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 4U));
+    // Add a subscription so filtering has work to do.
+    canard_subscription_t sub;
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_UINT64(0U, self.err.oom);
+    // Call rx_filter_configure directly — allocation fails → returns false, err.oom incremented.
+    TEST_ASSERT_FALSE(rx_filter_configure(&self));
+    TEST_ASSERT_EQUAL_UINT64(1U, self.err.oom);
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_coalescence_overflow(void)
+{
+    // When subscriptions exceed filter capacity, the overflow path calls rx_filter_coalesce_into().
+    const canard_mem_t real_mem = { .vtable = &real_mem_vtable, .context = NULL };
+    canard_t           self;
+    memset(&self, 0, sizeof(self));
+    const canard_mem_set_t mem = { .tx_transfer = real_mem,
+                                   .tx_frame    = real_mem,
+                                   .rx_session  = real_mem,
+                                   .rx_payload  = real_mem,
+                                   .rx_filters  = real_mem };
+    // Only 1 hardware filter slot but 2 subscriptions → overflow into coalescence.
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 1U));
+    canard_subscription_t sub1;
+    canard_subscription_t sub2;
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
+    // Should succeed — the filter callback returns true.
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    canard_unsubscribe(&self, &sub1);
+    canard_unsubscribe(&self, &sub2);
+    canard_destroy(&self);
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -856,6 +987,9 @@ int main(void)
     RUN_TEST(test_coalesce_adversarial_bit_pattern);
     RUN_TEST(test_coalesce_best_i_zero_best_j_one);
     RUN_TEST(test_coalesce_greedy_multistep_degradation);
+
+    RUN_TEST(test_rx_filter_configure_oom);
+    RUN_TEST(test_rx_filter_configure_coalescence_overflow);
 
     return UNITY_END();
 }

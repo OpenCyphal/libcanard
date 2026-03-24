@@ -896,6 +896,171 @@ static void test_rx_parse_non_last_short_frame(void)
 }
 
 // =====================================================================================================================
+// Test 27: v1 service with self-addressing — both src and dst equal. Verify v1 is rejected (line 1134).
+// Uses a non-SOT tail so both versions are attempted, confirming v1 rejection independently.
+static void test_rx_parse_v1_svc_self_addr_dual(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1 service request: prio=0, svc_id=1, dst=42, src=42. CAN ID = 0x0300552A.
+    // Non-SOT tail (SOT=0, EOT=1, toggle=0, tid=0) = 0x40. Both versions attempted.
+    // 8 bytes needed to satisfy payload_ok for non-last... but EOT=1 so only need payload>0 if multi.
+    // Actually EOT=1 means last frame. payload_ok = (true || ...) && ((false&&true) || (size>0)) = true && true.
+    {
+        const byte_t         d[] = { 0xAA, 0x40 }; // EOT=1, SOT=0, toggle=0, tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x0300552AUL, pl, &v0, &v1);
+        // is_v1: !(SOT&&!toggle) = !(0) = true. Enters v1 block. src==dst=42 → is_v1=false.
+        // is_v0: !(SOT&&toggle) = !(0) = true. bit7=0x2A&0x80>>7... CAN ID & (1<<7) = 0x0300552A & 0x80 = 0.
+        // Wait: v0 svc check uses bit7 of CAN ID. 0x0300552A & 0x80 = 0 → v0 sees message, not service.
+        // v0 message: src=42, dst=0xFF, port_id=(0x0300552A>>8)&0xFFFF = 0x030055 & 0xFFFF = 0x0055.
+        // v0 accepted. Return = 1 (v0 only).
+        TEST_ASSERT_EQUAL_UINT8(1, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 28: v1.1 message (16-bit subject) with bit 24 set — rejected (line 1140).
+static void test_rx_parse_v1_1_msg_bit24_reject(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1.1 message: bit7=1, bit25=0, bit24=1 (reserved, must be 0). prio=0, subject=0, src=1.
+    // CAN ID = (0<<26) | (1<<24) | (0<<8) | (1<<7) | 1 = 0x01000081.
+    {
+        const byte_t         d[] = { 0xE0 }; // v1 single: SOT=1, EOT=1, toggle=1, tid=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x01000081UL, pl, &v0, &v1);
+        // is_v1=true (start+toggle). bit24=1 → is_v1=false. is_v0=false (start+toggle). Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+    // Same but with non-SOT tail so v0 also enters. Tail: SOT=0, EOT=1, toggle=1, tid=0 = 0x60.
+    {
+        const byte_t         d[] = { 0xBB, 0x60 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x01000081UL, pl, &v0, &v1);
+        // is_v1: enters, bit24=1 → rejected. is_v0: bit7 of CAN ID = (0x01000081>>7)&1 = 1 → v0 service.
+        // v0 svc: dst=(0x01000081>>8)&0x7F = 0x000001 & 0x7F = 0x01. src=1. dst==src → v0 rejected too.
+        // Actually src = CAN_ID & 0x7F = 0x01. dst = (CAN_ID>>8)&0x7F = 0x00. Wait:
+        // 0x01000081 >> 8 = 0x010000. & 0x7F = 0x00. dst=0 → v0 rejected (dst!=0 fails).
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 29: v1.0 13-bit message with bit 23 set — rejected (line 1144).
+static void test_rx_parse_v1_0_msg_bit23_reject(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1.0 message: bit7=0, bits[22:21]=11, bit23=1, bit25=0, bit24=0. prio=0, subject=42, src=1.
+    // CAN ID = (0<<26) | (0<<25) | (0<<24) | (1<<23) | (3<<21) | (42<<8) | 1 = 0x00E02A01.
+    {
+        const byte_t         d[] = { 0xE0 }; // v1 single: SOT=1, EOT=1, toggle=1
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x00E02A01UL, pl, &v0, &v1);
+        // is_v1: enters. svc=false, is_1v1 = bit7 = 0 → v1.0 branch. bit23=1 → is_v1=false.
+        // is_v0 = false (SOT+toggle). Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 30: v1.0 anonymous multi-frame — rejected (line 1149).
+static void test_rx_parse_v1_0_anon_multiframe_reject(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v1.0 anonymous: bit24=1, bit7=0, bits[22:21]=11, bit23=0. prio=2, subject=100, pseudo-src=0x55.
+    // CAN ID = 0x09606455 (same as in test 3).
+    // Multi-frame: SOT=1, EOT=0 → not single-frame. 8 bytes for payload_ok.
+    {
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0xA0 }; // SOT=1, EOT=0, toggle=1 → v1 first
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x09606455UL, pl, &v0, &v1);
+        // is_v1: enters. bit24=1 → anon. !(start && end) = !(1&&0) = true → is_v1=false.
+        // is_v0 = false (SOT+toggle). Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+    // Also test EOT=1, SOT=0 (last frame of multi, non-anonymous-allowed path).
+    {
+        const byte_t         d[] = { 0xAA, 0x60 }; // SOT=0, EOT=1, toggle=1
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x09606455UL, pl, &v0, &v1);
+        // is_v1: enters. anon. !(0&&1) = true → is_v1=false. Return: check v0.
+        // is_v0: !(0&&1) = true. bit7=0 → v0 msg. src=0x55 → not anon. v0 accepted.
+        TEST_ASSERT_EQUAL_UINT8(1, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 31: v0 service with dst==0, src==0, or src==dst — v0 rejected (line 1170). Dual-version tail.
+// Non-SOT tail (SOT=0, EOT=1, toggle=0) makes both versions attempt parsing.
+// These v0 service CAN IDs have bit25=1, so v1 sees a valid service with different dst/src → v1 accepted.
+static void test_rx_parse_v0_svc_node_id_reject_dual(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // src==dst: prio=4, type_id=0x37, dst=11, src=11. CAN ID = 0x13378B8B.
+    // v0: svc, dst=11, src=11 → rejected (self-addr). v1: svc, dst=23, src=11 → accepted.
+    {
+        const byte_t         d[] = { 0xAA, 0x40 }; // SOT=0, EOT=1, toggle=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13378B8BUL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(2, ret); // v0 rejected, v1 accepted
+    }
+    // dst=0: prio=4, type_id=0x37, dst=0, src=11. CAN ID = 0x1337808B.
+    // v0: svc, dst=0 → rejected. v1: svc, dst=1, src=11 → accepted.
+    {
+        const byte_t         d[] = { 0xAA, 0x40 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x1337808BUL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(2, ret);
+    }
+    // src=0: prio=4, type_id=0x37, dst=24, src=0. CAN ID = 0x13379880.
+    // v0: svc, src=0 → rejected. v1: svc, dst=49, src=0 → accepted.
+    {
+        const byte_t         d[] = { 0xAA, 0x40 };
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13379880UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(2, ret);
+    }
+}
+
+// =====================================================================================================================
+// Test 32: v0 anonymous multi-frame message — rejected (line 1177).
+static void test_rx_parse_v0_anon_multiframe_reject(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // v0 message, src=0 (anonymous). CAN ID = 0x13040A00. Multi-frame tail.
+    // SOT=1, EOT=0, toggle=0 → v0 first frame, 8 bytes needed.
+    {
+        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x80 }; // SOT=1, EOT=0, toggle=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
+        // is_v0: enters. src=0 → anon. !(start&&end) → rejected.
+        // is_v1 = false (SOT+!toggle). Return=0.
+        TEST_ASSERT_EQUAL_UINT8(0, ret);
+    }
+    // SOT=0, EOT=1, toggle=0: last frame of multi-frame, non-SOT.
+    // v0: src=0 → anon, !(SOT&&EOT) → rejected. v1: bit25=1 → svc, dst=20, src=0 → accepted.
+    {
+        const byte_t         d[] = { 0xBB, 0x40 }; // SOT=0, EOT=1, toggle=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(2, ret); // v0 rejected, v1 accepted
+    }
+    // Sanity: same CAN ID but single-frame → accepted.
+    {
+        const byte_t         d[] = { 0xC0 }; // SOT=1, EOT=1, toggle=0
+        const canard_bytes_t pl  = { sizeof(d), d };
+        const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
+        TEST_ASSERT_EQUAL_UINT8(1, ret); // v0 accepted
+    }
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -927,5 +1092,11 @@ int main(void)
     RUN_TEST(test_rx_parse_v0_service_zero_dst);
     RUN_TEST(test_rx_parse_non_start_non_end_empty);
     RUN_TEST(test_rx_parse_non_last_short_frame);
+    RUN_TEST(test_rx_parse_v1_svc_self_addr_dual);
+    RUN_TEST(test_rx_parse_v1_1_msg_bit24_reject);
+    RUN_TEST(test_rx_parse_v1_0_msg_bit23_reject);
+    RUN_TEST(test_rx_parse_v1_0_anon_multiframe_reject);
+    RUN_TEST(test_rx_parse_v0_svc_node_id_reject_dual);
+    RUN_TEST(test_rx_parse_v0_anon_multiframe_reject);
     return UNITY_END();
 }

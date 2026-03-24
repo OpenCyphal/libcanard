@@ -849,6 +849,103 @@ static void test_redundant_rx_dedup_multiframe()
 }
 
 // =====================================================================================================================
+//                                       Validation Branch Tests
+// =====================================================================================================================
+
+static bool                  mock_filter_cb(canard_t* const, const size_t, const canard_filter_t*) { return true; }
+static const canard_vtable_t vtable_with_filter = { .now = mock_now, .tx = mock_tx, .filter = mock_filter_cb };
+
+static void test_canard_new_validation_branches()
+{
+    canard_t               self = {};
+    const canard_mem_set_t mem  = make_std_memory();
+
+    // filter_count > 0 with vtable->filter == NULL.
+    TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, mem, 16U, 0U, 4U));
+
+    // filter_count > 0 with invalid memory.rx_filters (NULL vtable).
+    {
+        canard_mem_set_t bad_mem  = mem;
+        bad_mem.rx_filters.vtable = nullptr;
+        TEST_ASSERT_FALSE(canard_new(&self, &vtable_with_filter, bad_mem, 16U, 0U, 4U));
+    }
+
+    // NULL vtable.
+    TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, 16U, 0U, 0U));
+
+    // vtable->now == NULL.
+    {
+        canard_vtable_t bad = { .now = nullptr, .tx = mock_tx, .filter = nullptr };
+        TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, 16U, 0U, 0U));
+    }
+
+    // vtable->tx == NULL.
+    {
+        canard_vtable_t bad = { .now = mock_now, .tx = nullptr, .filter = nullptr };
+        TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, 16U, 0U, 0U));
+    }
+
+    // Invalid memory.tx_transfer (NULL vtable).
+    {
+        canard_mem_set_t bad_mem   = mem;
+        bad_mem.tx_transfer.vtable = nullptr;
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+    }
+
+    // Invalid memory.tx_frame.
+    {
+        canard_mem_set_t bad_mem = mem;
+        bad_mem.tx_frame.vtable  = nullptr;
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+    }
+
+    // Invalid memory.rx_session.
+    {
+        canard_mem_set_t bad_mem  = mem;
+        bad_mem.rx_session.vtable = nullptr;
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+    }
+
+    // Invalid memory.rx_payload.
+    {
+        canard_mem_set_t bad_mem  = mem;
+        bad_mem.rx_payload.vtable = nullptr;
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+    }
+}
+
+static void test_canard_set_node_id_null() { TEST_ASSERT_FALSE(canard_set_node_id(nullptr, 0)); }
+
+static void test_canard_poll_null()
+{
+    canard_poll(nullptr, 0); // Must not crash.
+}
+
+static void test_canard_ingest_frame_validation()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_with_capture(&self, &cap);
+    const uint_least8_t  data[] = { 0xE0 };
+    const canard_bytes_t cd     = { .size = 1, .data = data };
+
+    // NULL self.
+    TEST_ASSERT_FALSE(canard_ingest_frame(nullptr, 0, 0, 0, cd));
+
+    // iface_index >= CANARD_IFACE_COUNT.
+    TEST_ASSERT_FALSE(canard_ingest_frame(&self, 0, 3, 0, cd));
+
+    // extended_can_id > 0x1FFFFFFF.
+    TEST_ASSERT_FALSE(canard_ingest_frame(&self, 0, 0, 0x20000000UL, cd));
+
+    // can_data with size > 0 but data == nullptr.
+    const canard_bytes_t bad_cd = { .size = 1, .data = nullptr };
+    TEST_ASSERT_FALSE(canard_ingest_frame(&self, 0, 0, 0, bad_cd));
+
+    canard_destroy(&self);
+}
+
+// =====================================================================================================================
 //                                              Test Runner
 // =====================================================================================================================
 
@@ -890,6 +987,12 @@ int main()
     RUN_TEST(test_redundant_tx_both_interfaces);
     RUN_TEST(test_redundant_rx_dedup);
     RUN_TEST(test_redundant_rx_dedup_multiframe);
+
+    // Validation branches.
+    RUN_TEST(test_canard_new_validation_branches);
+    RUN_TEST(test_canard_set_node_id_null);
+    RUN_TEST(test_canard_poll_null);
+    RUN_TEST(test_canard_ingest_frame_validation);
 
     return UNITY_END();
 }
