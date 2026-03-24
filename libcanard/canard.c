@@ -45,17 +45,11 @@
 
 typedef unsigned char byte_t;
 
-#define BYTE_MAX 0xFFU
-
-#define BIG_BANG   INT64_MIN
-#define HEAT_DEATH INT64_MAX
-
-#define CAN_EXT_ID_MASK ((UINT32_C(1) << 29U) - 1U)
-
+#define BYTE_MAX           0xFFU
+#define BIG_BANG           INT64_MIN
+#define CAN_EXT_ID_MASK    ((UINT32_C(1) << 29U) - 1U)
 #define PADDING_BYTE_VALUE 0U
-
-#define PRIO_SHIFT 26U
-#define PRIO_MASK  7U
+#define PRIO_SHIFT         26U
 
 #define TAIL_SOT    128U
 #define TAIL_EOT    64U
