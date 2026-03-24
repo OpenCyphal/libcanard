@@ -201,7 +201,7 @@ static void test_rx_v1_multiframe_2frame_classic()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1000U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     // Construct 2-frame v1.1 multiframe. Payload: 8 bytes {0x10..0x17}.
@@ -280,7 +280,7 @@ static void test_rx_v1_multiframe_3frame()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 2000U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     // 15 bytes of payload. Classic CAN, MTU=8, 7 data bytes per frame.
@@ -353,7 +353,7 @@ static void test_rx_v1_multiframe_fd()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 3000U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 3000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     // CAN FD: MTU=64, payload per frame=63. A 70-byte payload needs 2 frames.
@@ -443,7 +443,7 @@ static void test_rx_multiframe_crc_error()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1100U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1100U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22 };
@@ -496,7 +496,7 @@ static void test_rx_multiframe_single_bit_flip()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1200U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1200U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 };
@@ -550,7 +550,7 @@ static void test_rx_extent_truncation_single_frame()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     // Subscribe with extent=4; payload will be 6 bytes.
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1300U, false, 4U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1300U, 4U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 1300U, 10U);
@@ -584,7 +584,7 @@ static void test_rx_extent_truncation_multiframe()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     // Subscribe with extent=5. Payload will be 8 bytes. Expect truncation to 5.
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1400U, false, 5U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1400U, 5U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
@@ -639,7 +639,7 @@ static void test_rx_transfer_id_duplicate_rejected()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1500U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1500U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 1500U, 10U);
@@ -671,7 +671,7 @@ static void test_rx_transfer_id_timeout_boundary()
     rx_capture_t          cap         = {};
     canard_subscription_t sub         = {};
     const canard_us_t     tid_timeout = 2000000; // 2 seconds
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1600U, false, 256U, tid_timeout, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1600U, 256U, tid_timeout, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 1600U, 10U);
@@ -703,7 +703,7 @@ static void test_rx_transfer_id_timeout_within()
     rx_capture_t          cap         = {};
     canard_subscription_t sub         = {};
     const canard_us_t     tid_timeout = 2000000;
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1700U, false, 256U, tid_timeout, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1700U, 256U, tid_timeout, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 1700U, 10U);
@@ -738,7 +738,7 @@ static void test_rx_duplicate_cross_interface()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1800U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1800U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 1800U, 10U);
@@ -769,7 +769,7 @@ static void test_rx_priority_preemption()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 1900U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1900U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload_lo[8] = { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
@@ -840,7 +840,7 @@ static void test_rx_priority_preemption_interleaved()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 2100U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2100U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload_lo[8] = { 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7 };
@@ -906,7 +906,7 @@ static void test_rx_anonymous_single_frame_accepted()
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
     // Subscribe to v1.0 subject 100 (anonymous nodes use v1.0 format with bit24=1 and src field as discriminator).
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 100U, true, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub, 100U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     // v1.0 anonymous message: prio[28:26] | 0 | 1(bit24=anon) | subject_id[20:8] | bit7=0 | discriminator[6:0]
@@ -942,7 +942,7 @@ static void test_rx_anonymous_multiframe_rejected()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 200U, true, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub, 200U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     // Construct a v1.0 anonymous frame that looks like SOT but not EOT (attempting multiframe).
@@ -981,7 +981,7 @@ static void test_rx_malformed_empty_frame()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 2200U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2200U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 2200U, 10U);
@@ -1007,7 +1007,7 @@ static void test_rx_wrong_toggle_rejected()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 2300U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2300U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
@@ -1056,7 +1056,7 @@ static void test_rx_interface_affinity()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 2400U, false, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2400U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
@@ -1103,7 +1103,7 @@ static void test_rx_stale_session_cleanup()
     rx_capture_t          cap         = {};
     canard_subscription_t sub         = {};
     const canard_us_t     tid_timeout = 2000000;
-    TEST_ASSERT_TRUE(canard_subscribe(&self, &sub, 2500U, false, 256U, tid_timeout, &capture_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2500U, 256U, tid_timeout, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 2500U, 10U);
@@ -1150,9 +1150,8 @@ static void test_rx_v0_multiframe_roundtrip()
     const uint64_t data_type_signature = 0xEE468A8121C46A9EULL;
     const uint16_t crc_seed            = canard_v0_crc_seed_from_data_type_signature(data_type_signature);
 
-    // For v0, the extent must include 2 extra bytes for the prepended CRC.
-    // We have 8 bytes of user payload; extent = 8 + 2 = 10.
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 1000U, crc_seed, 10U, 2000000, &capture_sub_vtable));
+    // The extent represents user payload size; the library adds CRC overhead internally.
+    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 1000U, crc_seed, 8U, 2000000, &capture_sub_vtable));
     sub.user_context = &cap;
 
     const uint_least8_t payload[8] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 };
@@ -1214,6 +1213,117 @@ static void test_rx_v0_multiframe_roundtrip()
     canard_destroy(&self);
 }
 
+// Regression test: v0 extent represents user payload size; CRC overhead is added by the library internally.
+// Before the fix, the user had to pass extent+2 manually. Now extent=N means N bytes of user data are accepted.
+// This test uses a tight extent equal to the payload size. With the old (buggy) behavior, extent=5 would mean
+// only 3 bytes of user payload after subtracting CRC, causing truncation. With the fix, all 5 bytes arrive.
+static void test_rx_v0_extent_excludes_crc()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+
+    const uint64_t data_type_signature = 0xEE468A8121C46A9EULL;
+    const uint16_t crc_seed            = canard_v0_crc_seed_from_data_type_signature(data_type_signature);
+
+    // extent=10 means we want up to 10 bytes of user payload (CRC handled internally).
+    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 2000U, crc_seed, 10U, 2000000, &capture_sub_vtable));
+    sub.user_context = &cap;
+
+    // 10-byte user payload, which requires 3 classic CAN frames with v0 framing:
+    // Total stream: [crc_lo, crc_hi, payload[0..9]] = 12 bytes, 7 data bytes per frame + tail.
+    // Frame 1 (SOT): [crc_lo, crc_hi, payload[0..4]] + tail  = 8 bytes
+    // Frame 2 (MID): [payload[5..9]]                 + padding*2 + tail = 8 bytes
+    //   Wait -- actually padding only in the last frame. Let me recompute.
+    //   Frame 2 is not the last frame if we need more data. 12 bytes total, 7 per frame = ceil(12/7) = 2 frames.
+    //   Frame 1: 7 bytes of data + tail = [crc_lo, crc_hi, p0, p1, p2, p3, p4, tail]
+    //   Frame 2: 5 bytes of data + padding + CRC? No -- v0 prepends CRC, no CRC at end.
+    //   Frame 2 (EOT): [p5, p6, p7, p8, p9, tail] = 6 bytes (last frame can be short).
+    const uint_least8_t payload[10] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A };
+    const uint32_t      can_id      = make_v0_msg_can_id(canard_prio_nominal, 2000U, 10U);
+    const uint16_t      v0crc       = crc16_ccitt(crc_seed, payload, 10U);
+
+    uint_least8_t frame1[8];
+    frame1[0] = static_cast<uint_least8_t>(v0crc & 0xFFU);
+    frame1[1] = static_cast<uint_least8_t>((static_cast<unsigned>(v0crc) >> 8U) & 0xFFU);
+    std::memcpy(&frame1[2], payload, 5U);
+    frame1[7] = make_v0_tail(true, false, false, 5U);
+
+    uint_least8_t frame2[6];
+    std::memcpy(frame2, &payload[5], 5U);
+    frame2[5] = make_v0_tail(false, true, true, 5U);
+
+    now_val = 100;
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 100, 0U, can_id, canard_bytes_t{ .size = sizeof(frame1), .data = frame1 }));
+    TEST_ASSERT_EQUAL_size_t(0U, cap.count);
+
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 200, 0U, can_id, canard_bytes_t{ .size = sizeof(frame2), .data = frame2 }));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    // All 10 bytes must be delivered -- extent=10 means 10 bytes of user payload.
+    TEST_ASSERT_EQUAL_size_t(10U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, cap.payload_buf, 10U);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// Regression: v0 extent truncation works correctly at the user-payload level.
+// Subscribe with extent=4, send 10 bytes -- only 4 user bytes should be delivered.
+static void test_rx_v0_extent_truncation()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+
+    const uint64_t data_type_signature = 0xEE468A8121C46A9EULL;
+    const uint16_t crc_seed            = canard_v0_crc_seed_from_data_type_signature(data_type_signature);
+
+    // extent=4 means at most 4 bytes of user payload. CRC overhead handled internally.
+    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 3000U, crc_seed, 4U, 2000000, &capture_sub_vtable));
+    sub.user_context = &cap;
+
+    // 8-byte user payload → after truncation only 4 bytes should be delivered.
+    const uint_least8_t payload[8] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8 };
+    const uint32_t      can_id     = make_v0_msg_can_id(canard_prio_nominal, 3000U, 10U);
+    // CRC is over the full payload (not truncated).
+    const uint16_t v0crc = crc16_ccitt(crc_seed, payload, 8U);
+
+    // Stream: [crc_lo, crc_hi, payload[0..7]] = 10 bytes → 2 frames.
+    uint_least8_t frame1[8];
+    frame1[0] = static_cast<uint_least8_t>(v0crc & 0xFFU);
+    frame1[1] = static_cast<uint_least8_t>((static_cast<unsigned>(v0crc) >> 8U) & 0xFFU);
+    std::memcpy(&frame1[2], payload, 5U);
+    frame1[7] = make_v0_tail(true, false, false, 7U);
+
+    uint_least8_t frame2[4];
+    std::memcpy(frame2, &payload[5], 3U);
+    frame2[3] = make_v0_tail(false, true, true, 7U);
+
+    now_val = 100;
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 100, 0U, can_id, canard_bytes_t{ .size = sizeof(frame1), .data = frame1 }));
+    TEST_ASSERT_EQUAL_size_t(0U, cap.count);
+
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 200, 0U, can_id, canard_bytes_t{ .size = sizeof(frame2), .data = frame2 }));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    // Only 4 bytes of user data delivered due to extent truncation.
+    TEST_ASSERT_EQUAL_size_t(4U, cap.payload_size);
+    const uint_least8_t expected[4] = { 0xA1, 0xA2, 0xA3, 0xA4 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, cap.payload_buf, 4U);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
 // -------------------------------------------  Harness  ---------------------------------------------------------------
 
 extern "C" void setUp() {}
@@ -1264,6 +1374,8 @@ int main()
 
     // Legacy v0.
     RUN_TEST(test_rx_v0_multiframe_roundtrip);
+    RUN_TEST(test_rx_v0_extent_excludes_crc);
+    RUN_TEST(test_rx_v0_extent_truncation);
 
     return UNITY_END();
 }
