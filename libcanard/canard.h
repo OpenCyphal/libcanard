@@ -311,7 +311,7 @@ struct canard_t
         bool fd;
 
         /// Queue size and capacity are measured in CAN frames for convenience, but the TX pipeline actually operates
-        /// on whole transfers for efficiency. The number if enqueued frames is a pretty much synthetic metric for
+        /// on whole transfers for efficiency. The number of enqueued frames is a pretty much synthetic metric for
         /// convenience, that is derived from the number of enqueued transfers and their sizes.
         size_t queue_capacity;
         size_t queue_size;

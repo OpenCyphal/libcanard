@@ -46,7 +46,7 @@ static void* app_alloc(const canard_mem_t memory, const size_t size) { return ma
 static void app_free(const canard_mem_t memory, const size_t size, void* const pointer) { free(pointer); }
 
 // Transmit a CAN frame non-blockingly; return true if submitted, false if would block (will try again later).
-// Frame transmission may be aborted of it doesn't hit the bus before the deadline.
+// Frame transmission may be aborted if it doesn't hit the bus before the deadline.
 static bool app_tx(canard_t* const      self,
                    void* const          user_context,
                    const canard_us_t    deadline,
