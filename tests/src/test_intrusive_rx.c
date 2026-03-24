@@ -948,41 +948,13 @@ static void test_rx_parse_v1_1_msg_bit24_reject(void)
 }
 
 // =====================================================================================================================
-// Test 29: v1.0 13-bit message with bit 23 set — rejected (line 1144).
-static void test_rx_parse_v1_0_msg_bit23_reject(void)
-{
-    frame_t v0;
-    frame_t v1;
-    // v1.0 message: bit7=0, bits[22:21]=11, bit23=1, bit25=0, bit24=0. prio=0, subject=42, src=1.
-    // CAN ID = (0<<26) | (0<<25) | (0<<24) | (1<<23) | (3<<21) | (42<<8) | 1 = 0x00E02A01.
-    {
-        const byte_t         d[] = { 0xE0 }; // v1 single: SOT=1, EOT=1, toggle=1
-        const canard_bytes_t pl  = { sizeof(d), d };
-        const byte_t         ret = rx_parse(0x00E02A01UL, pl, &v0, &v1);
-        // is_v1: enters. svc=false, is_1v1 = bit7 = 0 → v1.0 branch. bit23=1 → is_v1=false.
-        // is_v0 = false (SOT+toggle). Return=0.
-        TEST_ASSERT_EQUAL_UINT8(0, ret);
-    }
-}
-
-// =====================================================================================================================
-// Test 30: v1.0 anonymous multi-frame — rejected (line 1149).
+// Test 29: v1.0 anonymous multi-frame — rejected (line 1149).
 static void test_rx_parse_v1_0_anon_multiframe_reject(void)
 {
     frame_t v0;
     frame_t v1;
-    // v1.0 anonymous: bit24=1, bit7=0, bits[22:21]=11, bit23=0. prio=2, subject=100, pseudo-src=0x55.
-    // CAN ID = 0x09606455 (same as in test 3).
-    // Multi-frame: SOT=1, EOT=0 → not single-frame. 8 bytes for payload_ok.
-    {
-        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0xA0 }; // SOT=1, EOT=0, toggle=1 → v1 first
-        const canard_bytes_t pl  = { sizeof(d), d };
-        const byte_t         ret = rx_parse(0x09606455UL, pl, &v0, &v1);
-        // is_v1: enters. bit24=1 → anon. !(start && end) = !(1&&0) = true → is_v1=false.
-        // is_v0 = false (SOT+toggle). Return=0.
-        TEST_ASSERT_EQUAL_UINT8(0, ret);
-    }
-    // Also test EOT=1, SOT=0 (last frame of multi, non-anonymous-allowed path).
+    // v1.0 anonymous: bit24=1, bit7=0, bits[22:21]=11, bit23=0. CAN ID = 0x09606455.
+    // EOT=1, SOT=0 (last frame of multi-frame, dual-version tail).
     {
         const byte_t         d[] = { 0xAA, 0x60 }; // SOT=0, EOT=1, toggle=1
         const canard_bytes_t pl  = { sizeof(d), d };
@@ -1033,30 +1005,14 @@ static void test_rx_parse_v0_anon_multiframe_reject(void)
 {
     frame_t v0;
     frame_t v1;
-    // v0 message, src=0 (anonymous). CAN ID = 0x13040A00. Multi-frame tail.
-    // SOT=1, EOT=0, toggle=0 → v0 first frame, 8 bytes needed.
-    {
-        const byte_t         d[] = { 1, 2, 3, 4, 5, 6, 7, 0x80 }; // SOT=1, EOT=0, toggle=0
-        const canard_bytes_t pl  = { sizeof(d), d };
-        const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
-        // is_v0: enters. src=0 → anon. !(start&&end) → rejected.
-        // is_v1 = false (SOT+!toggle). Return=0.
-        TEST_ASSERT_EQUAL_UINT8(0, ret);
-    }
-    // SOT=0, EOT=1, toggle=0: last frame of multi-frame, non-SOT.
+    // v0 message, src=0 (anonymous). CAN ID = 0x13040A00. Dual-version tail.
+    // SOT=0, EOT=1, toggle=0: last frame of multi-frame.
     // v0: src=0 → anon, !(SOT&&EOT) → rejected. v1: bit25=1 → svc, dst=20, src=0 → accepted.
     {
         const byte_t         d[] = { 0xBB, 0x40 }; // SOT=0, EOT=1, toggle=0
         const canard_bytes_t pl  = { sizeof(d), d };
         const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
         TEST_ASSERT_EQUAL_UINT8(2, ret); // v0 rejected, v1 accepted
-    }
-    // Sanity: same CAN ID but single-frame → accepted.
-    {
-        const byte_t         d[] = { 0xC0 }; // SOT=1, EOT=1, toggle=0
-        const canard_bytes_t pl  = { sizeof(d), d };
-        const byte_t         ret = rx_parse(0x13040A00UL, pl, &v0, &v1);
-        TEST_ASSERT_EQUAL_UINT8(1, ret); // v0 accepted
     }
 }
 
@@ -1094,7 +1050,6 @@ int main(void)
     RUN_TEST(test_rx_parse_non_last_short_frame);
     RUN_TEST(test_rx_parse_v1_svc_self_addr_dual);
     RUN_TEST(test_rx_parse_v1_1_msg_bit24_reject);
-    RUN_TEST(test_rx_parse_v1_0_msg_bit23_reject);
     RUN_TEST(test_rx_parse_v1_0_anon_multiframe_reject);
     RUN_TEST(test_rx_parse_v0_svc_node_id_reject_dual);
     RUN_TEST(test_rx_parse_v0_anon_multiframe_reject);

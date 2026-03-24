@@ -803,7 +803,7 @@ static void test_coalesce_greedy_multistep_degradation(void)
 }
 
 // =====================================================================================================================
-// Group 13: rx_filter_configure() integration
+// rx_filter_configure() integration
 
 static void* oom_alloc(const canard_mem_t mem, const size_t size)
 {

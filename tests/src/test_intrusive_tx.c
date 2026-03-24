@@ -87,6 +87,16 @@ static size_t count_frames(const tx_frame_t* head)
     return count;
 }
 
+// Release all frames in a chain via refcount decrement.
+static void free_frame_chain(canard_t* const self, tx_frame_t* head)
+{
+    while (head != NULL) {
+        tx_frame_t* const next = head->next;
+        canard_refcount_dec(self, tx_frame_view(head));
+        head = next;
+    }
+}
+
 // Reconstructs the CAN-ID template from an enqueued transfer.
 static uint32_t can_id_from_transfer(const tx_transfer_t* const tr)
 {
@@ -160,13 +170,7 @@ static void test_tx_spool_multi_frame(void)
     TEST_ASSERT_NOT_NULL(head->next);
     TEST_ASSERT_EQUAL_HEX8(0x43, head->next->data[5]);
 
-    // Drop the whole frame chain.
-    tx_frame_t* f = head;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self, tx_frame_view(f));
-        f = next;
-    }
+    free_frame_chain(&self, head);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -448,18 +452,6 @@ static void test_canard_set_node_id_same_value_keeps_queue(void)
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
-// Validate publish argument checking.
-static void test_canard_publish_validation(void)
-{
-    canard_t                 self;
-    test_context_t           ctx;
-    instrumented_allocator_t alloc;
-    init_canard(&self, &ctx, &alloc, 8U);
-
-    const canard_bytes_chain_t empty_payload = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 0U, canard_prio_nominal, 10U, 0U, empty_payload, NULL));
-}
-
 // Validate publish CAN-ID composition.
 static void test_canard_publish_basic(void)
 {
@@ -682,6 +674,7 @@ static void test_canard_v0_service_validation(void)
     self.node_id = 0U;
     TEST_ASSERT_FALSE(canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 24U, 0U, payload, NULL));
     self.node_id = 1U;
+    TEST_ASSERT_FALSE(canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, payload, NULL));
     TEST_ASSERT_FALSE(canard_v0_respond(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, payload, NULL));
     TEST_ASSERT_FALSE(
       canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, CANARD_NODE_ID_MAX + 1U, 0U, payload, NULL));
@@ -1055,13 +1048,7 @@ static void test_tx_spool_boundary_single_multi_classic(void)
         const byte_t tail_last = last->data[canard_dlc_to_len[last->dlc] - 1U];
         TEST_ASSERT_NOT_EQUAL(0U, tail_last & TAIL_EOT);
         TEST_ASSERT_EQUAL_HEX8(0U, tail_last & TAIL_SOT);
-        // Cleanup.
-        tx_frame_t* f = head;
-        while (f != NULL) {
-            tx_frame_t* const next = f->next;
-            canard_refcount_dec(&self, tx_frame_view(f));
-            f = next;
-        }
+        free_frame_chain(&self, head);
         TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
     }
 }
@@ -1108,13 +1095,7 @@ static void test_tx_spool_boundary_single_multi_fd(void)
         const byte_t tail0 = head->data[canard_dlc_to_len[head->dlc] - 1U];
         TEST_ASSERT_NOT_EQUAL(0U, tail0 & TAIL_SOT);
         TEST_ASSERT_EQUAL_HEX8(0U, tail0 & TAIL_EOT);
-        // Cleanup.
-        tx_frame_t* f = head;
-        while (f != NULL) {
-            tx_frame_t* const next = f->next;
-            canard_refcount_dec(&self, tx_frame_view(f));
-            f = next;
-        }
+        free_frame_chain(&self, head);
         TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
     }
 }
@@ -1169,13 +1150,7 @@ static void test_tx_spool_crc_split_across_frames(void)
     TEST_ASSERT_EQUAL_HEX8((byte_t)((unsigned)crc & 0xFFU), f3->data[0]);     // CRC low byte
     TEST_ASSERT_EQUAL_HEX8(TAIL_EOT | TAIL_TOGGLE | 2U, f3->data[1] & 0xFFU); // EOT, toggle=1 (third frame)
 
-    // Cleanup.
-    tx_frame_t* f = head;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self, tx_frame_view(f));
-        f = next;
-    }
+    free_frame_chain(&self, head);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -1247,19 +1222,8 @@ static void test_tx_spool_scattered_many_fragments(void)
         fc = fc->next;
     }
 
-    // Cleanup.
-    tx_frame_t* f = scattered;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self, tx_frame_view(f));
-        f = next;
-    }
-    f = contiguous;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self2, tx_frame_view(f));
-        f = next;
-    }
+    free_frame_chain(&self, scattered);
+    free_frame_chain(&self2, contiguous);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
     TEST_ASSERT_EQUAL_size_t(0U, alloc2.allocated_fragments);
 }
@@ -1371,13 +1335,7 @@ static void test_tx_spool_large_payload_fd(void)
     }
     TEST_ASSERT_EQUAL_size_t(5U, idx);
 
-    // Cleanup.
-    f = head;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self, tx_frame_view(f));
-        f = next;
-    }
+    free_frame_chain(&self, head);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -1443,13 +1401,7 @@ static void test_tx_spool_v0_boundary(void)
         const byte_t tail0 = head->data[canard_dlc_to_len[head->dlc] - 1U];
         TEST_ASSERT_NOT_EQUAL(0U, tail0 & TAIL_SOT);
         TEST_ASSERT_EQUAL_HEX8(0U, tail0 & TAIL_TOGGLE); // v0 toggle starts at 0
-        // Cleanup.
-        tx_frame_t* f = head;
-        while (f != NULL) {
-            tx_frame_t* const next = f->next;
-            canard_refcount_dec(&self, tx_frame_view(f));
-            f = next;
-        }
+        free_frame_chain(&self, head);
         TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
     }
 }
@@ -1474,13 +1426,7 @@ static void test_tx_spool_v0_crc_byte_order(void)
     TEST_ASSERT_EQUAL_HEX8((byte_t)((unsigned)crc & 0xFFU), head->data[0]);
     TEST_ASSERT_EQUAL_HEX8((byte_t)(((unsigned)crc >> 8U) & 0xFFU), head->data[1]);
 
-    // Cleanup.
-    tx_frame_t* f = head;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self, tx_frame_view(f));
-        f = next;
-    }
+    free_frame_chain(&self, head);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -1524,13 +1470,7 @@ static void test_tx_spool_v0_toggle_alternation(void)
     TEST_ASSERT_EQUAL_HEX8(0U, tail3 & TAIL_SOT);
     TEST_ASSERT_NOT_EQUAL(0U, tail3 & TAIL_EOT);
 
-    // Cleanup.
-    tx_frame_t* f = head;
-    while (f != NULL) {
-        tx_frame_t* const next = f->next;
-        canard_refcount_dec(&self, tx_frame_view(f));
-        f = next;
-    }
+    free_frame_chain(&self, head);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -1727,10 +1667,6 @@ static void test_tx_push_refcount_multi_iface(void)
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
-// =============================================
-// Group D: additional branch coverage tests
-// =============================================
-
 // OOM cleanup loop in tx_spool_v0 when failure occurs after the first frame was already allocated (lines 662-668).
 static void test_canard_v0_spool_oom_mid_chain(void)
 {
@@ -1769,7 +1705,7 @@ static void test_tx_ensure_queue_sacrifice_null(void)
 static void test_canard_pending_ifaces_null(void) { TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(NULL)); }
 
 // Validation branches for canard_publish_16b.
-static void test_publish_16b_validation_branches(void)
+static void test_canard_publish_16b_validation(void)
 {
     canard_t                 self;
     test_context_t           ctx;
@@ -1789,7 +1725,7 @@ static void test_publish_16b_validation_branches(void)
 }
 
 // Validation branches for canard_publish_13b.
-static void test_publish_13b_validation_branches(void)
+static void test_canard_publish_13b_validation(void)
 {
     canard_t                 self;
     test_context_t           ctx;
@@ -1812,7 +1748,7 @@ static void test_publish_13b_validation_branches(void)
 }
 
 // Validation branches for canard_v0_publish.
-static void test_v0_publish_validation_branches(void)
+static void test_canard_v0_publish_validation(void)
 {
     canard_t                 self;
     test_context_t           ctx;
@@ -1824,23 +1760,6 @@ static void test_v0_publish_validation_branches(void)
     TEST_ASSERT_FALSE(canard_v0_publish(&self, 1000, 0U, canard_prio_nominal, 11U, 0xFFFFU, 0U, ok_pay, NULL));
     // iface_bitmap with bits outside CANARD_IFACE_BITMAP_ALL.
     TEST_ASSERT_FALSE(canard_v0_publish(&self, 1000, 0x80U, canard_prio_nominal, 11U, 0xFFFFU, 0U, ok_pay, NULL));
-    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
-}
-
-// Validation branches for v0 service functions.
-static void test_v0_service_validation_branches(void)
-{
-    canard_t                 self;
-    test_context_t           ctx;
-    instrumented_allocator_t alloc;
-    init_canard(&self, &ctx, &alloc, 8U);
-    self.node_id                      = 1U;
-    const canard_bytes_chain_t ok_pay = { .bytes = { .size = 0U, .data = NULL }, .next = NULL };
-    // destination_node_id = 0.
-    TEST_ASSERT_FALSE(canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, 0U, 0U, ok_pay, NULL));
-    // destination_node_id > CANARD_NODE_ID_MAX.
-    TEST_ASSERT_FALSE(
-      canard_v0_request(&self, 1000, canard_prio_nominal, 1U, 0xFFFFU, CANARD_NODE_ID_MAX + 1U, 0U, ok_pay, NULL));
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
@@ -1894,11 +1813,13 @@ int main(void)
     // TX frame builder.
     RUN_TEST(test_tx_spool_single_frame);
     RUN_TEST(test_tx_spool_multi_frame);
+    RUN_TEST(test_refcount_null_data);
 
     // TX queue internals.
     RUN_TEST(test_tx_push_basic);
     RUN_TEST(test_tx_push_capacity_reject);
     RUN_TEST(test_tx_push_oom);
+    RUN_TEST(test_tx_comparator_equal_can_id);
     RUN_TEST(test_tx_first_frame_departure_flag);
     RUN_TEST(test_tx_purge_continuations_keeps_unstarted_multi_frame);
     RUN_TEST(test_tx_purge_continuations_removes_started_multi_frame);
@@ -1908,11 +1829,14 @@ int main(void)
     RUN_TEST(test_canard_set_node_id_same_value_keeps_queue);
 
     // API-level TX paths.
-    RUN_TEST(test_canard_publish_validation);
     RUN_TEST(test_canard_publish_basic);
+    RUN_TEST(test_canard_publish_16b_validation);
+    RUN_TEST(test_canard_publish_13b_validation);
     RUN_TEST(test_canard_publish_max_subject_encoding);
+    RUN_TEST(test_canard_pending_ifaces_null);
     RUN_TEST(test_canard_1v0_publish_basic);
     RUN_TEST(test_canard_v0_publish_basic);
+    RUN_TEST(test_canard_v0_publish_validation);
     RUN_TEST(test_canard_1v0_service_basic);
     RUN_TEST(test_canard_1v0_service_validation);
     RUN_TEST(test_canard_1v0_service_oom);
@@ -1930,7 +1854,7 @@ int main(void)
     RUN_TEST(test_v0_request_can_id_compliance);
     RUN_TEST(test_v0_respond_can_id_compliance);
 
-    // Group A: tx_spool boundary/CRC tests.
+    // tx_spool boundary/CRC tests.
     RUN_TEST(test_tx_spool_boundary_single_multi_classic);
     RUN_TEST(test_tx_spool_boundary_single_multi_fd);
     RUN_TEST(test_tx_spool_crc_split_across_frames);
@@ -1940,29 +1864,20 @@ int main(void)
     RUN_TEST(test_tx_spool_oom_midway);
     RUN_TEST(test_tx_spool_large_payload_fd);
 
-    // Group B: tx_spool_v0 tests.
+    // tx_spool_v0 tests.
     RUN_TEST(test_tx_spool_v0_single_frame);
     RUN_TEST(test_tx_spool_v0_boundary);
     RUN_TEST(test_tx_spool_v0_crc_byte_order);
     RUN_TEST(test_tx_spool_v0_toggle_alternation);
+    RUN_TEST(test_canard_v0_spool_oom_mid_chain);
 
-    // Group C: tx_push/sacrifice/expire tests.
+    // tx_push/sacrifice/expire tests.
     RUN_TEST(test_tx_sacrifice_oldest_first);
     RUN_TEST(test_tx_sacrifice_multiframe_all_frames);
+    RUN_TEST(test_tx_ensure_queue_sacrifice_null);
     RUN_TEST(test_tx_expire_boundary);
     RUN_TEST(test_tx_predict_frame_count_exhaustive);
     RUN_TEST(test_tx_push_refcount_multi_iface);
-
-    // Group D: additional branch coverage.
-    RUN_TEST(test_canard_v0_spool_oom_mid_chain);
-    RUN_TEST(test_tx_ensure_queue_sacrifice_null);
-    RUN_TEST(test_canard_pending_ifaces_null);
-    RUN_TEST(test_publish_16b_validation_branches);
-    RUN_TEST(test_publish_13b_validation_branches);
-    RUN_TEST(test_v0_publish_validation_branches);
-    RUN_TEST(test_v0_service_validation_branches);
-    RUN_TEST(test_refcount_null_data);
-    RUN_TEST(test_tx_comparator_equal_can_id);
 
     return UNITY_END();
 }
