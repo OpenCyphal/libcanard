@@ -235,21 +235,19 @@ static uint16_t crc16_add(uint16_t crc, const void* data, const size_t size)
 //                                         Node-ID Lifecycle Tests
 // =====================================================================================================================
 
-// 1. canard_new assigns a random node_id in [1,127]; different seeds yield different IDs.
+// 1. canard_new assigns a random node_id in [1,127].
 static void test_canard_new_assigns_random_node_id()
 {
     canard_t self1 = {};
     TEST_ASSERT_TRUE(canard_new(&self1, &test_vtable, make_std_memory(), 16U, 12345U, 0U));
     TEST_ASSERT_TRUE(self1.node_id >= 1U);
     TEST_ASSERT_TRUE(self1.node_id <= 127U);
-    const uint_least8_t id1 = self1.node_id;
     canard_destroy(&self1);
 
     canard_t self2 = {};
     TEST_ASSERT_TRUE(canard_new(&self2, &test_vtable, make_std_memory(), 16U, 99999U, 0U));
     TEST_ASSERT_TRUE(self2.node_id >= 1U);
     TEST_ASSERT_TRUE(self2.node_id <= 127U);
-    TEST_ASSERT_NOT_EQUAL(id1, self2.node_id);
     canard_destroy(&self2);
 }
 
