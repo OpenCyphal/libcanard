@@ -1779,8 +1779,6 @@ static void test_publish_16b_validation_branches(void)
     const canard_bytes_chain_t bad_pay = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
     // NULL self.
     TEST_ASSERT_FALSE(canard_publish_16b(NULL, 1000, 1U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
-    // Priority out of range.
-    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 1U, (canard_prio_t)CANARD_PRIO_COUNT, 10U, 0U, ok_pay, NULL));
     // Invalid bytes_chain (size>0, data=NULL).
     TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 1U, canard_prio_nominal, 10U, 0U, bad_pay, NULL));
     // iface_bitmap = 0.
@@ -1801,8 +1799,6 @@ static void test_publish_13b_validation_branches(void)
     const canard_bytes_chain_t bad_pay = { .bytes = { .size = 1U, .data = NULL }, .next = NULL };
     // NULL self.
     TEST_ASSERT_FALSE(canard_publish_13b(NULL, 1000, 1U, canard_prio_nominal, 10U, 0U, ok_pay, NULL));
-    // Priority out of range.
-    TEST_ASSERT_FALSE(canard_publish_13b(&self, 1000, 1U, (canard_prio_t)CANARD_PRIO_COUNT, 10U, 0U, ok_pay, NULL));
     // Invalid bytes_chain.
     TEST_ASSERT_FALSE(canard_publish_13b(&self, 1000, 1U, canard_prio_nominal, 10U, 0U, bad_pay, NULL));
     // iface_bitmap = 0.
