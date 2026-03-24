@@ -631,7 +631,7 @@ static void test_crc_residue_property(void)
     const uint8_t  data[] = { 'H', 'e', 'l', 'l', 'o' };
     const uint16_t crc    = crc_add(CRC_INITIAL, sizeof(data), data);
     // Append CRC in big-endian order.
-    uint8_t augmented[sizeof(data) + CRC_SIZE_BYTES];
+    uint8_t augmented[sizeof(data) + CRC_BYTES];
     memcpy(augmented, data, sizeof(data));
     augmented[sizeof(data)]     = (uint8_t)((unsigned)crc >> 8U);   // high byte
     augmented[sizeof(data) + 1] = (uint8_t)((unsigned)crc & 0xFFU); // low byte
@@ -642,7 +642,7 @@ static void test_crc_residue_property(void)
     const uint8_t  vec[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
     const uint16_t crc2  = crc_add(CRC_INITIAL, sizeof(vec), vec);
     TEST_ASSERT_EQUAL_HEX16(0x29B1, crc2);
-    uint8_t aug2[sizeof(vec) + CRC_SIZE_BYTES];
+    uint8_t aug2[sizeof(vec) + CRC_BYTES];
     memcpy(aug2, vec, sizeof(vec));
     aug2[sizeof(vec)]     = (uint8_t)(crc2 >> 8U);
     aug2[sizeof(vec) + 1] = (uint8_t)(crc2 & 0xFFU);

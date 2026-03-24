@@ -1684,7 +1684,7 @@ static void test_tx_predict_frame_count_exhaustive(void)
                 expected = 1U;
             } else {
                 // ceil((sz + 2) / (mtu - 1))
-                expected = (sz + CRC_SIZE_BYTES + (mtu - 1U) - 1U) / (mtu - 1U);
+                expected = (sz + CRC_BYTES + (mtu - 1U) - 1U) / (mtu - 1U);
             }
             const size_t actual = tx_predict_frame_count(sz, mtu);
             TEST_ASSERT_EQUAL_size_t(expected, actual);

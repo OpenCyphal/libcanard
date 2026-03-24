@@ -462,6 +462,7 @@ bool canard_subscribe_request(canard_t* const                           self,
                               const canard_us_t                         transfer_id_timeout,
                               const canard_subscription_vtable_t* const vtable);
 
+/// Response transfers necessarily have a zero transfer-ID timeout: https://github.com/OpenCyphal/libcanard/issues/247.
 bool canard_subscribe_response(canard_t* const                           self,
                                canard_subscription_t* const              subscription,
                                const uint16_t                            service_id,
