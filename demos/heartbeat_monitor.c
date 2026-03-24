@@ -6,8 +6,7 @@
 // Subscribes to Cyphal v1 heartbeats (subject 7509) and DroneCAN NodeStatus (DTID 341) simultaneously,
 // and prints a refreshing table of all detected nodes with their uptime.
 //
-// Usage: heartbeat_monitor [can_interface]
-//        Default interface: can0
+// Usage: heartbeat_monitor <can_interface>
 //
 // Quick test with virtual CAN:
 //   sudo modprobe vcan && sudo ip link add vcan0 type vcan && sudo ip link set up vcan0
@@ -29,10 +28,10 @@
 #include <linux/can/raw.h>
 
 #define CYPHAL_HEARTBEAT_SUBJECT_ID    7509U
-#define CYPHAL_HEARTBEAT_EXTENT        7U // 6 bytes serialized + margin
+#define CYPHAL_HEARTBEAT_EXTENT        7U
 #define DRONECAN_NODE_STATUS_DTID      341U
 #define DRONECAN_NODE_STATUS_SIGNATURE 0x0F0868D0C1A7C6F1ULL
-#define DRONECAN_NODE_STATUS_EXTENT    7U        // 7 bytes serialized
+#define DRONECAN_NODE_STATUS_EXTENT    7U
 #define NODE_OFFLINE_TIMEOUT_US        5000000LL // 5 seconds
 
 // ----------------------------------------  Node table  ----------------------------------------
@@ -55,9 +54,12 @@ enum
 
 static node_entry_t g_nodes[PROTO_COUNT][CANARD_NODE_ID_MAX + 1U];
 
-static const char* const g_health_str[] = { "NOMINAL", "ADVISORY", "CAUTION", "WARNING" };
-static const char* const g_mode_str[]   = { "OPERATIONAL", "INITIALIZATION", "MAINTENANCE", "SOFTWARE_UPDATE" };
-static const char* const g_proto_str[]  = { "Cyphal", "DroneCAN" };
+static const char* const g_cyphal_health_str[]   = { "NOMINAL", "ADVISORY", "CAUTION", "WARNING" };
+static const char* const g_dronecan_health_str[] = { "OK", "WARNING", "ERROR", "CRITICAL" };
+static const char* const g_mode_str[]            = {
+    [0] = "OPERATIONAL", [1] = "INITIALIZATION", [2] = "MAINTENANCE", [3] = "SOFTWARE_UPDATE", [7] = "OFFLINE",
+};
+static const char* const g_proto_str[] = { "Cyphal", "DroneCAN" };
 
 // ----------------------------------------  Platform  ----------------------------------------
 
@@ -109,23 +111,50 @@ static const canard_vtable_t g_canard_vtable = { .now = vtable_now, .tx = vtable
 
 // ----------------------------------------  Subscription callbacks  ----------------------------------------
 
-static void update_node(const int proto, const uint_least8_t node_id, const canard_payload_t payload)
+static uint32_t read_u32_le(const void* const data)
 {
-    const size_t min_size = (proto == PROTO_CYPHAL) ? 6U : 7U;
-    if ((payload.view.size < min_size) || (node_id > CANARD_NODE_ID_MAX)) {
-        goto cleanup;
-    }
-    const uint_least8_t* const d = (const uint_least8_t*)payload.view.data;
-    node_entry_t* const        n = &g_nodes[proto][node_id];
-    n->uptime       = (uint32_t)d[0] | ((uint32_t)d[1] << 8U) | ((uint32_t)d[2] << 16U) | ((uint32_t)d[3] << 24U);
-    n->health       = d[4] & 0x03U;
-    n->mode         = (d[4] >> 2U) & 0x07U;
-    n->last_seen_us = get_monotonic_us();
-    n->seen         = true;
-cleanup:
+    const uint8_t* const d = (const uint8_t*)data;
+    return (uint32_t)d[0] | ((uint32_t)d[1] << 8U) | ((uint32_t)d[2] << 16U) | ((uint32_t)d[3] << 24U);
+}
+
+static void update_node(const int           proto,
+                        const uint_least8_t node_id,
+                        const uint32_t      uptime,
+                        const uint8_t       health,
+                        const uint8_t       mode)
+{
+    node_entry_t* const n = &g_nodes[proto][node_id];
+    n->uptime             = uptime;
+    n->health             = health;
+    n->mode               = mode;
+    n->last_seen_us       = get_monotonic_us();
+    n->seen               = true;
+}
+
+static void release_payload(const canard_payload_t payload)
+{
     if (payload.origin.data != NULL) {
         free(payload.origin.data);
     }
+}
+
+static void decode_cyphal_heartbeat(const uint_least8_t node_id, const canard_payload_t payload)
+{
+    if ((node_id <= CANARD_NODE_ID_MAX) && (payload.view.size >= CYPHAL_HEARTBEAT_EXTENT)) {
+        const uint8_t* const d = (const uint8_t*)payload.view.data;
+        update_node(PROTO_CYPHAL, node_id, read_u32_le(d), d[4] & 0x03U, d[5] & 0x07U);
+    }
+    release_payload(payload);
+}
+
+static void decode_dronecan_node_status(const uint_least8_t node_id, const canard_payload_t payload)
+{
+    if ((node_id <= CANARD_NODE_ID_MAX) && (payload.view.size >= DRONECAN_NODE_STATUS_EXTENT)) {
+        const uint8_t* const d      = (const uint8_t*)payload.view.data;
+        const uint8_t        status = d[4];
+        update_node(PROTO_DRONECAN, node_id, read_u32_le(d), status & 0x03U, (status >> 2U) & 0x07U);
+    }
+    release_payload(payload);
 }
 
 static void on_cyphal_heartbeat(canard_subscription_t* const self,
@@ -139,7 +168,7 @@ static void on_cyphal_heartbeat(canard_subscription_t* const self,
     (void)timestamp;
     (void)priority;
     (void)transfer_id;
-    update_node(PROTO_CYPHAL, source_node_id, payload);
+    decode_cyphal_heartbeat(source_node_id, payload);
 }
 
 static void on_dronecan_heartbeat(canard_subscription_t* const self,
@@ -153,7 +182,7 @@ static void on_dronecan_heartbeat(canard_subscription_t* const self,
     (void)timestamp;
     (void)priority;
     (void)transfer_id;
-    update_node(PROTO_DRONECAN, source_node_id, payload);
+    decode_dronecan_node_status(source_node_id, payload);
 }
 
 static const canard_subscription_vtable_t g_sub_vtable_cyphal   = { .on_message = on_cyphal_heartbeat };
@@ -166,31 +195,19 @@ static void print_table(const char* const iface_name)
     const int64_t now = get_monotonic_us();
     // Move cursor home and clear screen.
     (void)fputs("\033[H\033[2J", stdout);
-    (void)printf("Heartbeat Monitor \xe2\x80\x94 %s\n\n", iface_name);
-    (void)puts(" Protocol  \xe2\x94\x82 Node \xe2\x94\x82   Uptime \xe2\x94\x82 Health    \xe2\x94\x82 Mode");
-    (void)puts(
-      "\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2"
-      "\x94\x80"
-      "\xe2\x94\x80\xe2\x94\xbc\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80"
-      "\xe2\x94\xbc\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80"
-      "\xe2\x94\xbc\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2"
-      "\x94\x80\xe2\x94\x80\xe2\x94\x80"
-      "\xe2\x94\xbc\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2"
-      "\x94\x80\xe2\x94\x80"
-      "\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80");
+    (void)printf("Heartbeat Monitor - %s\n\n", iface_name);
+    (void)puts("Protocol | Node |   Uptime | Health   | Mode");
+    (void)puts("---------+------+----------+----------+----------------");
     size_t count = 0;
     for (int proto = 0; proto < PROTO_COUNT; proto++) {
         for (size_t nid = 0; nid <= CANARD_NODE_ID_MAX; nid++) {
             const node_entry_t* const n = &g_nodes[proto][nid];
             if (n->seen && ((now - n->last_seen_us) < NODE_OFFLINE_TIMEOUT_US)) {
-                const char* const health = (n->health < 4U) ? g_health_str[n->health] : "?";
-                const char* const mode   = (n->mode < 4U) ? g_mode_str[n->mode] : "?";
-                (void)printf(" %-9s \xe2\x94\x82 %4zu \xe2\x94\x82 %6us \xe2\x94\x82 %-9s \xe2\x94\x82 %s\n",
-                             g_proto_str[proto],
-                             nid,
-                             n->uptime,
-                             health,
-                             mode);
+                const char* const* const health_table =
+                  (proto == PROTO_CYPHAL) ? g_cyphal_health_str : g_dronecan_health_str;
+                const char* const health = (n->health < 4U) ? health_table[n->health] : "?";
+                const char* const mode   = (n->mode < 8U) && (g_mode_str[n->mode] != NULL) ? g_mode_str[n->mode] : "?";
+                (void)printf("%-8s | %4zu | %8us | %-8s | %s\n", g_proto_str[proto], nid, n->uptime, health, mode);
                 count++;
             }
         }
@@ -209,6 +226,12 @@ static int open_can_socket(const char* const iface_name)
     const int fd = socket(AF_CAN, SOCK_RAW, CAN_RAW);
     if (fd < 0) {
         perror("socket");
+        return -1;
+    }
+    const int enable_can_fd = 1;
+    if (setsockopt(fd, SOL_CAN_RAW, CAN_RAW_FD_FRAMES, &enable_can_fd, sizeof(enable_can_fd)) < 0) {
+        perror("setsockopt(CAN_RAW_FD_FRAMES)");
+        (void)close(fd);
         return -1;
     }
     struct ifreq ifr;
@@ -240,9 +263,18 @@ static void                  on_sigint(const int sig)
     g_running = 0;
 }
 
+static void print_usage(const char* const program_name)
+{
+    (void)fprintf(stderr, "Usage: %s <can_interface>\n", program_name);
+}
+
 int main(const int argc, const char* const argv[])
 {
-    const char* const iface_name = (argc > 1) ? argv[1] : "can0";
+    if (argc != 2) {
+        print_usage(argv[0]);
+        return 1;
+    }
+    const char* const iface_name = argv[1];
 
     // Open SocketCAN.
     const int sock = open_can_socket(iface_name);
@@ -311,12 +343,12 @@ int main(const int argc, const char* const argv[])
         struct pollfd pfd = { .fd = sock, .events = POLLIN, .revents = 0 };
         const int     pr  = poll(&pfd, 1, 100); // 100 ms timeout
         if (pr > 0 && (pfd.revents & POLLIN)) {
-            struct can_frame frame;
-            const ssize_t    nbytes = read(sock, &frame, sizeof(frame));
-            if (nbytes == (ssize_t)sizeof(frame)) {
+            struct canfd_frame frame;
+            const ssize_t      nbytes = read(sock, &frame, sizeof(frame));
+            if ((nbytes == CAN_MTU) || (nbytes == CANFD_MTU)) {
                 // Only process extended data frames (both Cyphal and DroneCAN use 29-bit IDs).
                 if ((frame.can_id & CAN_EFF_FLAG) && !(frame.can_id & (CAN_RTR_FLAG | CAN_ERR_FLAG))) {
-                    const canard_bytes_t data = { .size = frame.can_dlc, .data = frame.data };
+                    const canard_bytes_t data = { .size = frame.len, .data = frame.data };
                     (void)canard_ingest_frame(&ins, get_monotonic_us(), 0, frame.can_id & CAN_EFF_MASK, data);
                 }
             }
