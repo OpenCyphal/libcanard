@@ -875,13 +875,13 @@ static void test_canard_new_validation_branches()
 
     // vtable->now == NULL.
     {
-        canard_vtable_t bad = { .now = nullptr, .tx = mock_tx, .filter = nullptr };
+        const canard_vtable_t bad = { .now = nullptr, .tx = mock_tx, .filter = nullptr };
         TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, 16U, 0U, 0U));
     }
 
     // vtable->tx == NULL.
     {
-        canard_vtable_t bad = { .now = mock_now, .tx = nullptr, .filter = nullptr };
+        const canard_vtable_t bad = { .now = mock_now, .tx = nullptr, .filter = nullptr };
         TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, 16U, 0U, 0U));
     }
 
