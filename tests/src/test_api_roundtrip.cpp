@@ -260,7 +260,7 @@ static void test_roundtrip_v1v1_single_frame_classic()
 
     const uint_least8_t        payload_data[4] = { 0xDE, 0xAD, 0xBE, 0xEF };
     const canard_bytes_chain_t payload         = { .bytes = { .size = 4, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 100U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 100U, 0U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // Single frame.
@@ -306,7 +306,7 @@ static void test_roundtrip_v1v1_single_frame_fd()
         payload_data[i] = static_cast<uint_least8_t>(i + 1U);
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = 30, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_fast, 200U, false, 5U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_fast, 200U, 5U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // Single frame (30+1=31 < 64).
@@ -352,7 +352,7 @@ static void test_roundtrip_v1v1_multiframe_classic_2frames()
 
     const uint_least8_t        payload_data[8] = { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
     const canard_bytes_chain_t payload         = { .bytes = { .size = 8, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 300U, false, 3U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 300U, 3U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 2U); // At least 2 frames for multiframe.
@@ -398,7 +398,7 @@ static void test_roundtrip_v1v1_multiframe_classic_many()
         payload_data[i] = static_cast<uint_least8_t>(0xA0U + i);
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = 20, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 400U, false, 7U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 400U, 7U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 3U); // 20 bytes over classic CAN => at least 4 frames.
@@ -442,7 +442,7 @@ static void test_roundtrip_v1v1_multiframe_fd()
         payload_data[i] = static_cast<uint_least8_t>(i & 0xFFU);
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = 70, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 500U, false, 1U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 500U, 1U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 2U); // 70 bytes over FD => 2 frames.
@@ -484,7 +484,7 @@ static void test_roundtrip_v1v0_single_frame()
     const uint_least8_t        payload_data[5] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
     const canard_bytes_chain_t payload         = { .bytes = { .size = 5, .data = payload_data }, .next = nullptr };
     TEST_ASSERT_TRUE(
-      canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_high, 4000U, true /*rev_1v0*/, 10U, payload, nullptr));
+      canard_publish_13b(&tx_inst, DEADLINE, 1U, canard_prio_high, 4000U, 10U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // Single frame (5+1=6 < 8).
@@ -532,7 +532,7 @@ static void test_roundtrip_v1v0_multiframe()
         payload_data[i] = static_cast<uint_least8_t>(0x50U + i);
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = 15, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 5000U, true, 2U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_13b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 5000U, 2U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 3U); // 15 bytes classic CAN => 3+ frames.
@@ -698,7 +698,7 @@ static void test_roundtrip_all_priorities()
         const uint_least8_t        payload_data[2] = { 0x11, 0x22 };
         const canard_bytes_chain_t payload         = { .bytes = { .size = 2, .data = payload_data }, .next = nullptr };
         TEST_ASSERT_TRUE(
-          canard_publish(&tx_inst, DEADLINE, 1U, static_cast<canard_prio_t>(prio), 600U, false, 0U, payload, nullptr));
+          canard_publish_16b(&tx_inst, DEADLINE, 1U, static_cast<canard_prio_t>(prio), 600U, 0U, payload, nullptr));
 
         canard_poll(&tx_inst, 1U);
         feed_captured_frames(&rx_inst, tx_cap, TIMESTAMP);
@@ -740,12 +740,11 @@ static void test_roundtrip_all_transfer_ids()
 
         const uint_least8_t        payload_data[1] = { static_cast<uint_least8_t>(tid & 0xFFU) };
         const canard_bytes_chain_t payload         = { .bytes = { .size = 1, .data = payload_data }, .next = nullptr };
-        TEST_ASSERT_TRUE(canard_publish(&tx_inst,
+        TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst,
                                         DEADLINE + rx_ctx.now_val,
                                         1U,
                                         canard_prio_nominal,
                                         700U,
-                                        false,
                                         static_cast<uint_least8_t>(tid),
                                         payload,
                                         nullptr));
@@ -785,7 +784,7 @@ static void test_roundtrip_empty_payload()
     sub.user_context = &rx_cap;
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 800U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 800U, 0U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // Single frame with just the tail byte.
@@ -825,7 +824,7 @@ static void test_roundtrip_boundary_7_bytes_classic()
 
     const uint_least8_t        payload_data[7] = { 1, 2, 3, 4, 5, 6, 7 };
     const canard_bytes_chain_t payload         = { .bytes = { .size = 7, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 900U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 900U, 0U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // 7+1 = 8 = MTU, still single frame.
@@ -864,7 +863,7 @@ static void test_roundtrip_boundary_8_bytes_classic()
 
     const uint_least8_t        payload_data[8] = { 10, 20, 30, 40, 50, 60, 70, 80 };
     const canard_bytes_chain_t payload         = { .bytes = { .size = 8, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1000U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1000U, 0U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 2U); // 8+1 > 8 => multiframe.
@@ -906,7 +905,7 @@ static void test_roundtrip_boundary_63_bytes_fd()
         payload_data[i] = static_cast<uint_least8_t>(i ^ 0x55U);
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = 63, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1100U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1100U, 0U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_EQUAL_size_t(1U, tx_cap.count); // 63+1 = 64 = MTU, single frame.
@@ -948,7 +947,7 @@ static void test_roundtrip_boundary_64_bytes_fd()
         payload_data[i] = static_cast<uint_least8_t>(i);
     }
     const canard_bytes_chain_t payload = { .bytes = { .size = 64, .data = payload_data }, .next = nullptr };
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1200U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1200U, 0U, payload, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 2U); // 64+1 > 64 => multiframe.
@@ -994,7 +993,7 @@ static void test_roundtrip_scattered_payload()
     const canard_bytes_chain_t chain1 = { .bytes = { .size = 4, .data = frag1 }, .next = &chain2 };
     const canard_bytes_chain_t chain0 = { .bytes = { .size = 3, .data = frag0 }, .next = &chain1 };
 
-    TEST_ASSERT_TRUE(canard_publish(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1300U, false, 0U, chain0, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&tx_inst, DEADLINE, 1U, canard_prio_nominal, 1300U, 0U, chain0, nullptr));
 
     canard_poll(&tx_inst, 1U);
     TEST_ASSERT_TRUE(tx_cap.count >= 1U);

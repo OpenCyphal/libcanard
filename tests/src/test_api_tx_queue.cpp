@@ -168,14 +168,14 @@ static void test_tx_queue_sacrifice_oldest()
 
     const canard_bytes_chain_t payload = make_empty_payload();
     // Enqueue 3 single-frame transfers on iface 0 only.
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 100U, false, 0U, payload, nullptr));
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 100U, false, 1U, payload, nullptr));
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 100U, false, 2U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 100U, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 100U, 1U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 100U, 2U, payload, nullptr));
     TEST_ASSERT_EQUAL_size_t(3U, self.tx.queue_size);
     TEST_ASSERT_EQUAL_UINT64(0U, self.err.tx_sacrifice);
 
     // Fourth publish triggers sacrifice of oldest (TID 0).
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 100U, false, 3U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 100U, 3U, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_sacrifice);
     TEST_ASSERT_EQUAL_size_t(3U, self.tx.queue_size);
 
@@ -212,17 +212,17 @@ static void test_tx_queue_sacrifice_multiframe_reclaims_all()
     // ceil((N + 2 + 6) / 7) = 3 -> N+8 <= 21 -> N <= 13. At N=13: ceil((13+2+6)/7) = ceil(21/7) = 3.
     const uint_least8_t        multi_data[13] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 };
     const canard_bytes_chain_t multi_payload  = make_payload(multi_data, sizeof(multi_data));
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 200U, false, 0U, multi_payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 200U, 0U, multi_payload, nullptr));
     TEST_ASSERT_EQUAL_size_t(3U, self.tx.queue_size);
 
     // Single-frame transfer (empty payload = 1 frame).
     const canard_bytes_chain_t single_payload = make_empty_payload();
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 201U, false, 1U, single_payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 201U, 1U, single_payload, nullptr));
     TEST_ASSERT_EQUAL_size_t(4U, self.tx.queue_size);
     TEST_ASSERT_EQUAL_UINT64(0U, self.err.tx_sacrifice);
 
     // Publish another single-frame -> oldest (the 3-frame multiframe) sacrificed.
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 202U, false, 2U, single_payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 202U, 2U, single_payload, nullptr));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_sacrifice);
     // 4 - 3 (sacrificed) + 1 (new) = 2.
     TEST_ASSERT_EQUAL_size_t(2U, self.tx.queue_size);
@@ -247,14 +247,14 @@ static void test_tx_queue_sacrifice_multiple_rounds()
     const canard_bytes_chain_t single_payload = make_empty_payload();
     for (uint_least8_t tid = 0; tid < 4U; tid++) {
         TEST_ASSERT_TRUE(
-          canard_publish(&self, 10000, 1U, canard_prio_nominal, 300U, false, tid, single_payload, nullptr));
+          canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 300U, tid, single_payload, nullptr));
     }
     TEST_ASSERT_EQUAL_size_t(4U, self.tx.queue_size);
 
     // Multiframe needing 3 frames (13-byte payload on Classic CAN: ceil((13+2+6)/7)=3).
     const uint_least8_t        multi_data[13] = {};
     const canard_bytes_chain_t multi_payload  = make_payload(multi_data, sizeof(multi_data));
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 301U, false, 10U, multi_payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 301U, 10U, multi_payload, nullptr));
     // Must sacrifice 3 transfers to fit the 3-frame multiframe transfer.
     TEST_ASSERT_TRUE(self.err.tx_sacrifice >= 3U);
     // 4 - 3 sacrificed + 3 new multiframe frames = 4. But wait, the remaining 1 single-frame + 3 multiframe = 4.
@@ -280,7 +280,7 @@ static void test_tx_queue_capacity_exceeded()
     // 25-byte payload on classic CAN: ceil((25+2+6)/7) = ceil(33/7) = 5 frames. Way over capacity=2.
     const uint_least8_t        big_data[25] = {};
     const canard_bytes_chain_t big_payload  = make_payload(big_data, sizeof(big_data));
-    TEST_ASSERT_FALSE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 400U, false, 0U, big_payload, nullptr));
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 400U, 0U, big_payload, nullptr));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
 
@@ -303,7 +303,7 @@ static void test_tx_queue_capacity_boundary()
 
     const uint_least8_t        data[13] = {};
     const canard_bytes_chain_t payload  = make_payload(data, sizeof(data));
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 500U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 500U, 0U, payload, nullptr));
     TEST_ASSERT_EQUAL_size_t(3U, self.tx.queue_size);
     TEST_ASSERT_EQUAL_UINT64(0U, self.err.tx_capacity);
     TEST_ASSERT_EQUAL_UINT64(0U, self.err.tx_sacrifice);
@@ -326,16 +326,16 @@ static void test_tx_queue_deadline_expiration()
 
     const canard_bytes_chain_t payload = make_empty_payload();
     // Transfer 1: short deadline.
-    TEST_ASSERT_TRUE(canard_publish(&self, 100, 1U, canard_prio_nominal, 600U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 100, 1U, canard_prio_nominal, 600U, 0U, payload, nullptr));
     // Transfer 2: long deadline.
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 601U, false, 1U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 601U, 1U, payload, nullptr));
     TEST_ASSERT_EQUAL_size_t(2U, self.tx.queue_size);
 
     // Advance time past the first transfer's deadline.
     cap.now = 200;
 
     // Publish a third transfer; the expired one is purged during tx_push -> tx_expire.
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 602U, false, 2U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 602U, 2U, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT64(1U, self.err.tx_expiration);
     // 2 original - 1 expired + 1 new = 2.
     TEST_ASSERT_EQUAL_size_t(2U, self.tx.queue_size);
@@ -363,9 +363,9 @@ static void test_tx_queue_ordering_priority()
 
     const canard_bytes_chain_t payload = make_empty_payload();
     // Low priority (5) first.
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_low, 700U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_low, 700U, 0U, payload, nullptr));
     // Fast priority (2) second.
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_fast, 700U, false, 1U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_fast, 700U, 1U, payload, nullptr));
 
     canard_poll(&self, 1U);
     TEST_ASSERT_EQUAL_size_t(2U, cap.count);
@@ -393,8 +393,8 @@ static void test_tx_queue_ordering_fifo_same_priority()
     init_node(&self, &cap, &pool, 16U, 42U);
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 800U, false, 0U, payload, nullptr));
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 801U, false, 1U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 800U, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 801U, 1U, payload, nullptr));
 
     canard_poll(&self, 1U);
     TEST_ASSERT_EQUAL_size_t(2U, cap.count);
@@ -421,7 +421,7 @@ static void test_tx_iface_bitmap_single()
     init_node(&self, &cap, &pool, 16U, 42U);
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 900U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 900U, 0U, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT8(1U, canard_pending_ifaces(&self));
 
     // Poll iface 0 -> ejected.
@@ -451,7 +451,7 @@ static void test_tx_iface_bitmap_both()
     init_node(&self, &cap, &pool, 16U, 42U);
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 3U, canard_prio_nominal, 1000U, false, 5U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 3U, canard_prio_nominal, 1000U, 5U, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT8(3U, canard_pending_ifaces(&self));
 
     // Poll iface 0.
@@ -489,7 +489,7 @@ static void test_tx_refcount_lifecycle()
     init_node(&self, &cap, &pool, 16U, 42U);
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 3U, canard_prio_nominal, 1100U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 3U, canard_prio_nominal, 1100U, 0U, payload, nullptr));
     // Only 1 frame allocated even though 2 interfaces will use it.
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
 
@@ -533,7 +533,7 @@ static void test_tx_scattered_gather_3_fragments()
     const canard_bytes_chain_t chain2 = { .bytes = { .size = sizeof(frag2), .data = frag2 }, .next = &chain3 };
     const canard_bytes_chain_t chain1 = { .bytes = { .size = sizeof(frag1), .data = frag1 }, .next = &chain2 };
 
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 1200U, false, 7U, chain1, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 1200U, 7U, chain1, nullptr));
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
 
     canard_poll(&self, 1U);
@@ -571,7 +571,7 @@ static void test_tx_oom_frame_allocation()
 
     const canard_bytes_chain_t payload = make_empty_payload();
     // The transfer object is allocated (from tx_transfer), but frame allocation fails inside tx_spool.
-    TEST_ASSERT_FALSE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 1300U, false, 0U, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 1300U, 0U, payload, nullptr));
     TEST_ASSERT_TRUE(self.err.oom > 0U);
     TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
 
@@ -594,7 +594,7 @@ static void test_tx_oom_transfer_allocation()
     pool.tx_transfer.limit_fragments = 0U;
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    TEST_ASSERT_FALSE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 1400U, false, 0U, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 1400U, 0U, payload, nullptr));
     TEST_ASSERT_TRUE(self.err.oom > 0U);
     TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
 
@@ -641,7 +641,7 @@ static void test_tx_backpressure_resumes()
     init_node(&self, &cap, &pool, 16U, 42U);
 
     const canard_bytes_chain_t payload = make_empty_payload();
-    TEST_ASSERT_TRUE(canard_publish(&self, 10000, 1U, canard_prio_nominal, 1600U, false, 0U, payload, nullptr));
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 10000, 1U, canard_prio_nominal, 1600U, 0U, payload, nullptr));
     TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
 
     // Simulate backpressure: TX callback rejects the frame.
