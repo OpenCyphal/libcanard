@@ -54,21 +54,6 @@ static uint64_t find_seed_dense(const uint64_t zc, const bool want_purge, const 
     return UINT64_MAX; // should never happen for small zc
 }
 
-// For sparse bitmaps (pc <= 64), chance is NOT called. Only random(self, zc) is consumed.
-static uint64_t find_seed_sparse(const uint64_t zc, const uint64_t want_z)
-{
-    for (uint64_t seed = 0; seed < 10000000ULL; seed++) {
-        canard_t probe;
-        memset(&probe, 0, sizeof(probe));
-        probe.prng_state = seed;
-        const uint64_t r = random(&probe, zc);
-        if (r == want_z) {
-            return seed;
-        }
-    }
-    return UINT64_MAX;
-}
-
 // Find a seed where chance(&self, p_reciprocal) returns the desired outcome (single call, no collision).
 static uint64_t find_seed_chance(const uint64_t p_reciprocal, const bool want)
 {

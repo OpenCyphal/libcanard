@@ -271,22 +271,18 @@ static void test_list(void)
     // Empty list.
     TEST_ASSERT_NULL(list.head);
     TEST_ASSERT_NULL(list.tail);
-    TEST_ASSERT_FALSE(is_listed(&list, &node1.member));
 
     // Delist on empty list is a no-op.
     delist(&list, &node1.member);
     TEST_ASSERT_NULL(list.head);
 
-    // is_listed returns true when member is the sole element (next=NULL, prev=NULL, but head==member).
     list.head = list.tail = &node1.member;
-    TEST_ASSERT_TRUE(is_listed(&list, &node1.member));
     list.head = list.tail = NULL;
 
     // Add single element.
     enlist_head(&list, &node1.member);
     TEST_ASSERT_EQUAL_PTR(&node1.member, list.head);
     TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
-    TEST_ASSERT_TRUE(is_listed(&list, &node1.member));
     TEST_ASSERT_NULL(node1.member.next);
     TEST_ASSERT_NULL(node1.member.prev);
 
@@ -308,7 +304,6 @@ static void test_list(void)
     TEST_ASSERT_EQUAL_PTR(&node1.member, list.tail);
     TEST_ASSERT_EQUAL_PTR(&node1.member, node3.member.next);
     TEST_ASSERT_EQUAL_PTR(&node3.member, node1.member.prev);
-    TEST_ASSERT_FALSE(is_listed(&list, &node2.member));
 
     // Re-add node2, then delist head.
     enlist_head(&list, &node2.member); // Order: node2 -> node3 -> node1.

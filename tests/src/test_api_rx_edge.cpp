@@ -138,30 +138,11 @@ static const canard_subscription_vtable_t capture_sub_vtable = { .on_message = c
 
 // -------------------------------------------  CAN Frame Construction Helpers  ----------------------------------------
 
-// v1.1 message: priority[28:26] | subject_id[25:8] | bit7=1(v1.1) | src[6:0]
+// v1 16-bit subject-ID message: priority[28:26] | subject_id[25:8] | bit7=1(v1.1) | src[6:0]
 static uint32_t make_v1v1_msg_can_id(const canard_prio_t prio, const uint16_t subject_id, const uint_least8_t src)
 {
     return (static_cast<uint32_t>(prio) << 26U) | (static_cast<uint32_t>(subject_id) << 8U) | (UINT32_C(1) << 7U) |
            (static_cast<uint32_t>(src) & 0x7FU);
-}
-
-// v1.0 message: priority[28:26] | 00 | subject_id[20:8] | bit7=0 | src[6:0]
-static uint32_t make_v1v0_msg_can_id(const canard_prio_t prio, const uint16_t subject_id, const uint_least8_t src)
-{
-    return (static_cast<uint32_t>(prio) << 26U) | (static_cast<uint32_t>(subject_id) << 8U) |
-           (static_cast<uint32_t>(src) & 0x7FU);
-}
-
-// v1 service: priority[28:26] | bit25=1(svc) | rnr[24] | service_id[23:14] | dst[13:7] | src[6:0]
-static uint32_t make_v1_svc_can_id(const canard_prio_t prio,
-                                   const uint16_t      service_id,
-                                   const bool          request_not_response,
-                                   const uint_least8_t dst,
-                                   const uint_least8_t src)
-{
-    return (static_cast<uint32_t>(prio) << 26U) | (UINT32_C(1) << 25U) |
-           (request_not_response ? (UINT32_C(1) << 24U) : 0U) | (static_cast<uint32_t>(service_id) << 14U) |
-           (static_cast<uint32_t>(dst) << 7U) | (static_cast<uint32_t>(src) & 0x7FU);
 }
 
 // v0 message: priority[28:26] | data_type_id[23:8] | bit7=0 | src[6:0]
@@ -182,10 +163,6 @@ static uint_least8_t make_v1_tail(const bool sot, const bool eot, const bool tog
 }
 
 // v0 tail bytes
-static uint_least8_t make_v0_single_tail(const uint_least8_t tid)
-{
-    return static_cast<uint_least8_t>(0xC0U | (tid & 0x1FU));
-}
 static uint_least8_t make_v0_tail(const bool sot, const bool eot, const bool toggle, const uint_least8_t tid)
 {
     return static_cast<uint_least8_t>((sot ? 0x80U : 0U) | (eot ? 0x40U : 0U) | (toggle ? 0x20U : 0U) | (tid & 0x1FU));

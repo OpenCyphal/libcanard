@@ -280,7 +280,6 @@ static void test_tx_purge_continuations_keeps_unstarted_multi_frame(void)
 
     tx_purge_continuations(&self);
     TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
-    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &tr->list_agewise));
 
     free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
@@ -335,7 +334,6 @@ static void test_tx_purge_continuations_keeps_started_single_frame(void)
 
     tx_purge_continuations(&self);
     TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
-    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &tr->list_agewise));
 
     free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
@@ -380,8 +378,6 @@ static void test_tx_purge_continuations_mixed_queue(void)
 
     tx_purge_continuations(&self);
     TEST_ASSERT_EQUAL_size_t(2U, count_enqueued_transfers(&self));
-    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &unstarted_multi->list_agewise));
-    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &started_single->list_agewise));
 
     free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
@@ -419,7 +415,6 @@ static void test_canard_set_node_id_purges_started_multiframe_only(void)
 
     TEST_ASSERT_TRUE(canard_set_node_id(&self, 11U));
     TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
-    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &fresh_multi->list_agewise));
 
     free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
@@ -446,7 +441,6 @@ static void test_canard_set_node_id_same_value_keeps_queue(void)
 
     TEST_ASSERT_TRUE(canard_set_node_id(&self, 10U));
     TEST_ASSERT_EQUAL_size_t(1U, count_enqueued_transfers(&self));
-    TEST_ASSERT_TRUE(is_listed(&self.tx.agewise, &tr->list_agewise));
 
     free_all_transfers(&self);
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);

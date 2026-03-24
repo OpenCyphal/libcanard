@@ -106,6 +106,7 @@ static byte_t popcount_emulated(uint64_t x)
 
 static byte_t popcount(const uint64_t x)
 {
+    (void)popcount_emulated; // Avoid unused function warning if intrinsics are available.
 #ifdef stdc_count_ones
     return (byte_t)stdc_count_ones(x); // C23 feature
 #elif defined(__GNUC__) || defined(__clang__) || defined(__CC_ARM)
@@ -213,11 +214,6 @@ static uint16_t crc_add_chain(uint16_t crc, const canard_bytes_chain_t chain) //
 }
 
 // ---------------------------------------------      LIST CONTAINER       ---------------------------------------------
-
-static bool is_listed(const canard_list_t* const list, const canard_listed_t* const member)
-{
-    return (member->next != NULL) || (member->prev != NULL) || (list->head == member);
-}
 
 // No effect if not in the list.
 static void delist(canard_list_t* const list, canard_listed_t* const member)
@@ -1315,7 +1311,6 @@ static void rx_session_destroy(rx_session_t* const ses)
     }
     CANARD_ASSERT(cavl2_is_inserted(sub->sessions, &ses->index));
     cavl2_remove(&sub->sessions, &ses->index);
-    CANARD_ASSERT(is_listed(&sub->owner->rx.list_session_by_animation, &ses->list_animation));
     delist(&sub->owner->rx.list_session_by_animation, &ses->list_animation);
     mem_free(sub->owner->mem.rx_session, sizeof(rx_session_t), ses);
 }
