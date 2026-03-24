@@ -18,6 +18,7 @@
       <w>popcount</w>
       <w>seqno</w>
       <w>seqnos</w>
+      <w>siocgifindex</w>
       <w>splitmix</w>
       <w>stdatomic</w>
       <w>suppr</w>

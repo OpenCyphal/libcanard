@@ -30,6 +30,8 @@ communication in aerospace and robotic applications via CAN bus, Ethernet, and o
 
 ## Quick start
 
+📚 Find runnable examples under `demos/`.
+
 ```c++
 #include <assert.h>
 #include <stdlib.h>

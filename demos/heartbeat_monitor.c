@@ -28,8 +28,6 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-// ----------------------------------------  Protocol constants  ----------------------------------------
-
 #define CYPHAL_HEARTBEAT_SUBJECT_ID    7509U
 #define CYPHAL_HEARTBEAT_EXTENT        7U // 6 bytes serialized + margin
 #define DRONECAN_NODE_STATUS_DTID      341U
@@ -61,7 +59,7 @@ static const char* const g_health_str[] = { "NOMINAL", "ADVISORY", "CAUTION", "W
 static const char* const g_mode_str[]   = { "OPERATIONAL", "INITIALIZATION", "MAINTENANCE", "SOFTWARE_UPDATE" };
 static const char* const g_proto_str[]  = { "Cyphal", "DroneCAN" };
 
-// ----------------------------------------  Time  ----------------------------------------
+// ----------------------------------------  Platform  ----------------------------------------
 
 static int64_t get_monotonic_us(void)
 {
@@ -69,8 +67,6 @@ static int64_t get_monotonic_us(void)
     (void)clock_gettime(CLOCK_MONOTONIC, &ts);
     return (int64_t)ts.tv_sec * 1000000LL + (int64_t)ts.tv_nsec / 1000LL;
 }
-
-// ----------------------------------------  Memory  ----------------------------------------
 
 static void mem_free(const canard_mem_t mem, const size_t size, void* const ptr)
 {
