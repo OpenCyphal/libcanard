@@ -28,6 +28,96 @@ communication in aerospace and robotic applications via CAN bus, Ethernet, and o
 
 **Read the docs in [`libcanard/canard.h`](libcanard/canard.h).**
 
+## Quick start
+
+```c++
+#include <assert.h>
+#include <stdlib.h>
+#include "canard.h"
+
+// Return the current monotonic time in microseconds starting from some arbitrary instant in the past (e.g., boot).
+static canard_us_t app_now(const canard_t* const self); 
+
+// Embedded systems may prefer https://github.com/pavel-kirienko/o1heap.
+static void* app_alloc(const canard_mem_t memory, const size_t size) { return malloc(size); }
+static void app_free(const canard_mem_t memory, const size_t size, void* const pointer) { free(pointer); }
+
+// Transmit a CAN frame non-blockingly; return true if submitted, false if would block (will try again later).
+// Frame transmission may be aborted of it doesn't hit the bus before the deadline.
+static bool app_tx(canard_t* const      self,
+                   void* const          user_context,
+                   const canard_us_t    deadline,
+                   const uint_least8_t  iface_index,
+                   const bool           fd,
+                   const uint32_t       extended_can_id,
+                   const canard_bytes_t can_data);
+
+// Process a received message. The user may attach arbitrary context to the subscription via the user context pointer.
+static void app_on_message(canard_subscription_t* const self,
+                           const canard_us_t            timestamp,
+                           const canard_prio_t          priority,
+                           const uint_least8_t          source_node_id,
+                           const uint_least8_t          transfer_id,
+                           const canard_payload_t       payload)
+{
+    // payload.view contains the useful payload bytes.
+    if (payload.origin.data != NULL) { // The application may keep the payload if necessary; eventually must release.
+        free(payload.origin.data); 
+    }
+}
+
+int main(void)
+{
+    static const canard_mem_vtable_t mem_vtable = { .free  = app_free, .alloc = app_alloc };
+    const canard_mem_t mem = { .vtable  = &mem_vtable, .context = NULL };
+    const canard_mem_set_t mem_set = { .tx_transfer = mem, .tx_frame = mem, .rx_session = mem, .rx_payload = mem };
+    const canard_vtable_t vtable = { .now = app_now, .tx = app_tx };
+    static const canard_subscription_vtable_t sub_vtable = { .on_message = app_on_message };
+    
+    // Set up the local node. The node-ID will be allocated automatically.
+    canard_t              node;
+    if (!canard_new(&node, &vtable, mem_set, 100, UID_OR_TRUE_RANDOM_NUMBER, 0U)) {
+        return -1;
+    }
+    if (!canard_set_node_id(&node, 42U)) {
+        canard_destroy(&node);
+        return -1;
+    }
+    
+    // Subscribe for messages.
+    canard_subscription_t sub;
+    if (!canard_subscribe_13b(&node, &sub, 7509U, 63U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &sub_vtable)) {
+        canard_destroy(&node);
+        return -1;
+    }
+
+    // Publish a message.
+    const canard_bytes_chain_t payload = { .bytes = {.size = 12, .data = "Hello world!"} };
+    assert(canard_publish_13b(&node,
+                              app_now(&node) + 1000000,
+                              CANARD_IFACE_BITMAP_ALL,
+                              canard_prio_nominal,
+                              7509U,
+                              0U,
+                              payload,
+                              NULL));
+
+    canard_poll(&node, CANARD_IFACE_BITMAP_ALL); // Call again whenever one or more ifaces become writable.
+
+    // Later, when a CAN frame is received:
+    // static const uint8_t rx_frame_bytes[8] = { ... };
+    // (void)canard_ingest_frame(&node,
+    //                           app_now(&node),
+    //                           0U,
+    //                           rx_extended_can_id,
+    //                           (canard_bytes_t){.size = sizeof(rx_frame_bytes), .data = rx_frame_bytes});
+
+    canard_unsubscribe(&node, &sub);
+    canard_destroy(&node);
+    return 0;
+}
+```
+
 ## Revisions
 
 To release a new version, simply publish a new release on GitHub.
