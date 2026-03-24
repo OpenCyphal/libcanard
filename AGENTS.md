@@ -42,3 +42,5 @@ cmake --build build -j$(nproc)
 cd build && ctest && make coverage
 xdg-open coverage-html/index.html
 ```
+
+Coverage should focus on `canard.c` only. Coverage of other components is irrelevant.
