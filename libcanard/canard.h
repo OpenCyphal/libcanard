@@ -186,13 +186,6 @@ struct canard_mem_t
 };
 
 /// Represents received transfer payload.
-/// The actual useful data may be smaller than the allocated memory block, hence the application should use
-/// the view to access the useful transfer payload, while using the origin to free the memory when done.
-///
-/// For multi-frame transfers, the view is pointing into a dynamically allocated storage from the rx_payload resource,
-/// and the view is guaranteed to be inside the origin. The application must eventually deallocate the storage to
-/// reclaim the memory.
-///
 /// For single-frame transfers, the view is pointing into the CAN frame data buffer passed by the application via
 /// canard_ingest_frame(), and the storage is NULL/empty. The lifetime of the view ends upon return from the callback.
 /// The application must manually copy the data if it needs to outlive the callback.
@@ -211,7 +204,7 @@ typedef struct canard_filter_t
 
 /// Each resource is used for allocating memory for a specific purpose.
 /// This enables fine-tuning in memory-conscious applications.
-/// Ordinary applications can use the same resource for everything.
+/// Ordinary applications can use the same resource for everything; alloc/free are assumed O(1) [e.g., use o1heap].
 typedef struct canard_mem_set_t
 {
     canard_mem_t tx_transfer; ///< TX transfer objects, fixed-size, one per enqueued transfer.
@@ -284,6 +277,9 @@ typedef struct canard_vtable_t
     bool (*filter)(canard_t*, size_t filter_count, const canard_filter_t* filters);
 } canard_vtable_t;
 
+/// Main instance object. Usage: new -> subscribe/publish/ingest/poll -> unsubscribe/destroy.
+/// Dominant costs are log-time tree operations plus work linear in the number of CAN frames in a transfer.
+/// Heap use scales with queued TX transfers/frames and active RX sessions/reassembly slots, not bus history.
 /// None of the fields should be mutated by the application, unless explicitly allowed.
 struct canard_t
 {
@@ -372,6 +368,10 @@ struct canard_t
 /// or small enough in the single digits where the coalescence load remains low. The filter configuration is
 /// recomputed and applied on every poll() following a change in the subscription set or local node-ID.
 ///
+/// Steady-state heap use is O(queued TX transfers + queued TX frames + active RX sessions + RX slots). Each RX slot
+/// is bounded by the subscription extent; filter recomputation becomes expensive only if coalescence is needed
+/// and the number of filters is large.
+///
 /// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///
 /// Returns true on success, false if any of the parameters are invalid.
@@ -388,13 +388,15 @@ void canard_destroy(canard_t* const self);
 
 /// This can be invoked after initialization to manually assign the desired node-ID.
 /// This does not disable the occupancy/collision monitoring; the assigned ID will be changed if a collision is found.
-/// Returns false if any of the arguments are invalid. Anonymous node-ID is not allowed.
+/// Anonymous node-ID is not allowed. Zero is fine only if compatibility with legacy protocols is not needed.
+/// Returns false if any of the arguments are invalid.
 bool canard_set_node_id(canard_t* const self, const uint_least8_t node_id);
 
 /// This must be invoked periodically to ensure liveliness.
 /// The function must be called asap once any of the interfaces for which there are pending outgoing transfers
 /// become writable, and not less frequently than once in a few milliseconds. The invocation rate defines the
 /// resolution of deadline handling.
+/// Work is proportional to expired/pending TX work; dirty RX filters may add subscription-dependent one-time cost.
 void canard_poll(canard_t* const self, const uint_least8_t tx_ready_iface_bitmap);
 
 /// Returns a bitmap of interfaces that have pending transmissions. This is useful for IO multiplexing.
@@ -404,6 +406,8 @@ uint_least8_t canard_pending_ifaces(const canard_t* const self);
 /// Other failures are reported via the counters.
 /// This function should not be invoked from the callbacks.
 /// The lifetime of can_data can end after this function returns.
+/// Dominant steady-state cost is log-time subscription/session lookup;
+/// RX memory is allocated only when new state is needed.
 bool canard_ingest_frame(canard_t* const      self,
                          const canard_us_t    timestamp,
                          const uint_least8_t  iface_index,
@@ -414,11 +418,12 @@ void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 
 /// Enqueue a message transfer on the specified interfaces. Use CANARD_IFACE_BITMAP_ALL to send on all interfaces.
-///
 /// Message ordering observed on the bus is guaranteed per subject as long as the priority of later messages is
 /// not higher (numerically not lower) than that of earlier messages.
-///
 /// The context is passed into the tx() vtable function.
+///
+/// Cost is roughly linear in the number of emitted CAN frames plus log-time queue indexing.
+/// Memory use is one TX transfer object plus one shared TX frame object per emitted CAN frame.
 ///
 /// Returns zero on success, false on OOM (error counters updated) or if any of the arguments are invalid.
 bool canard_publish(canard_t* const            self,
@@ -431,6 +436,7 @@ bool canard_publish(canard_t* const            self,
                     const canard_bytes_chain_t payload,
                     void* const                context);
 
+/// Enqueue a service request; usage, complexity, and memory model match canard_publish().
 bool canard_request(canard_t* const            self,
                     const canard_us_t          deadline,
                     const canard_prio_t        priority,
@@ -440,6 +446,7 @@ bool canard_request(canard_t* const            self,
                     const canard_bytes_chain_t payload,
                     void* const                context);
 
+/// Enqueue a service response; usage, complexity, and memory model match canard_publish().
 bool canard_respond(canard_t* const            self,
                     const canard_us_t          deadline,
                     const canard_prio_t        priority,
@@ -455,6 +462,7 @@ bool canard_respond(canard_t* const            self,
 ///
 /// The extent specifies the maximum message size that can be received from the subject; longer messages will be
 /// truncated per the implicit truncation rule (see the Spec).
+/// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
 ///
 /// Returns true on success, false if any of the arguments are invalid or if there is already a subscription for the
 /// given subject-ID.
@@ -474,6 +482,7 @@ bool canard_subscribe_13b(canard_t* const                           self,
 /// Unicast transfers in Cyphal/CAN v1.1 are supposed to be modeled as requests to service-ID 511, with a 128-element
 /// array of transfer-ID counters, one per remote. Some large nonzero transfer-ID timeout is required to satisfy the
 /// deduplication requirement. This is outside of the scope of this library so it's not implemented here.
+/// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
 bool canard_subscribe_request(canard_t* const                           self,
                               canard_subscription_t* const              subscription,
                               const uint16_t                            service_id,
@@ -489,6 +498,7 @@ bool canard_subscribe_response(canard_t* const                           self,
                                const canard_subscription_vtable_t* const vtable);
 
 /// This can be used to undo all kinds of subscriptions, incl. v0.
+/// Complexity is log-time in the subscription set plus linear in the number of remote sessions owned by it.
 void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subscription);
 
 // ---------------------------------   UAVCAN v0 & DroneCAN legacy compatibility API   ---------------------------------
