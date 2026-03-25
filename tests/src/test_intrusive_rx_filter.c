@@ -10,14 +10,10 @@ void tearDown(void) {}
 
 static canard_filter_t make_filter(const canard_kind_t kind, const uint16_t port_id, const byte_t node_id)
 {
-    canard_t              self;
-    canard_subscription_t sub;
+    canard_t self;
     memset(&self, 0, sizeof(self));
-    memset(&sub, 0, sizeof(sub));
     self.node_id = node_id;
-    sub.kind     = kind;
-    sub.port_id  = port_id;
-    return rx_filter_for_subscription(&self, &sub);
+    return rx_filter_for_subscription(&self, kind, port_id);
 }
 
 static bool filter_accepts(const canard_filter_t filter, const uint32_t can_id)
@@ -934,6 +930,237 @@ static void test_rx_filter_configure_coalescence_overflow(void)
 }
 
 // =====================================================================================================================
+// rx_filter_match()
+
+static void test_rx_filter_match_empty(void)
+{
+    TEST_ASSERT_FALSE(rx_filter_match(0, NULL, 0x12345678U));
+    TEST_ASSERT_FALSE(rx_filter_match(0, NULL, 0U));
+}
+
+static void test_rx_filter_match_single_hit(void)
+{
+    const canard_filter_t f = make_filter(canard_kind_message_13b, 7509U, 42);
+    TEST_ASSERT_TRUE(rx_filter_match(1, &f, f.extended_can_id));
+    // Also matches with different source node-ID (bits 6:0 are not masked).
+    TEST_ASSERT_TRUE(rx_filter_match(1, &f, f.extended_can_id | 1U));
+    TEST_ASSERT_TRUE(rx_filter_match(1, &f, f.extended_can_id | 0x7FU));
+}
+
+static void test_rx_filter_match_single_miss(void)
+{
+    const canard_filter_t f = make_filter(canard_kind_message_13b, 7509U, 42);
+    // A completely different subject-ID should not match.
+    const canard_filter_t other = make_filter(canard_kind_message_13b, 100U, 42);
+    TEST_ASSERT_FALSE(rx_filter_match(1, &f, other.extended_can_id));
+    // v0 message with same numeric ID should also not match (different mask/bits).
+    const canard_filter_t v0 = make_filter(canard_kind_v0_message, 341U, 42);
+    TEST_ASSERT_FALSE(rx_filter_match(1, &f, v0.extended_can_id));
+}
+
+static void test_rx_filter_match_multiple(void)
+{
+    const canard_filter_t arr[] = {
+        make_filter(canard_kind_message_16b, 100U, 42),
+        make_filter(canard_kind_message_13b, 200U, 42),
+        make_filter(canard_kind_v0_message, 300U, 42),
+    };
+    // Each filter's own CAN ID should be matched.
+    TEST_ASSERT_TRUE(rx_filter_match(3, arr, arr[0].extended_can_id));
+    TEST_ASSERT_TRUE(rx_filter_match(3, arr, arr[1].extended_can_id));
+    TEST_ASSERT_TRUE(rx_filter_match(3, arr, arr[2].extended_can_id));
+    // Unrelated CAN ID should not match any.
+    const canard_filter_t unrelated = make_filter(canard_kind_message_13b, 999U, 42);
+    TEST_ASSERT_FALSE(rx_filter_match(3, arr, unrelated.extended_can_id));
+}
+
+// =====================================================================================================================
+// rx_filter_configure() forced Heartbeat/NodeStatus filters
+
+#define HEARTBEAT_SUBJECT_ID 7509U
+#define NODESTATUS_DTYPE_ID  341U
+
+static size_t          g_cap_count;
+static canard_filter_t g_cap_filters[32];
+
+static bool capturing_filter_cb(canard_t* const self, const size_t filter_count, const canard_filter_t* const filters)
+{
+    (void)self;
+    g_cap_count = filter_count;
+    for (size_t i = 0; i < filter_count && i < 32U; i++) {
+        g_cap_filters[i] = filters[i];
+    }
+    return true;
+}
+
+static const canard_vtable_t capturing_vtable = { .now = test_now_cb, .tx = test_tx_cb, .filter = capturing_filter_cb };
+
+// Checks whether any of the captured filters accepts a given CAN ID.
+static bool captured_accepts(const uint32_t can_id)
+{
+    for (size_t i = 0; i < g_cap_count; i++) {
+        if (filter_accepts(g_cap_filters[i], can_id)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Build a representative CAN ID for the forced message from an arbitrary source node.
+static uint32_t heartbeat_can_id(const byte_t source)
+{
+    return (HEARTBEAT_SUBJECT_ID << 8U) | (source & CANARD_NODE_ID_MAX);
+}
+static uint32_t nodestatus_can_id(const byte_t source)
+{
+    return (NODESTATUS_DTYPE_ID << 8U) | (source & CANARD_NODE_ID_MAX);
+}
+
+static canard_t make_instance(const size_t filter_count)
+{
+    const canard_mem_t     real_mem = { .vtable = &real_mem_vtable, .context = NULL };
+    const canard_mem_set_t mem      = { .tx_transfer = real_mem,
+                                        .tx_frame    = real_mem,
+                                        .rx_session  = real_mem,
+                                        .rx_payload  = real_mem,
+                                        .rx_filters  = real_mem };
+    canard_t               self;
+    memset(&self, 0, sizeof(self));
+    (void)canard_new(&self, &capturing_vtable, mem, 16U, 1234U, filter_count);
+    g_cap_count = 0;
+    memset(g_cap_filters, 0, sizeof(g_cap_filters));
+    return self;
+}
+
+static void test_rx_filter_configure_forced_no_subs(void)
+{
+    canard_t self = make_instance(4);
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    TEST_ASSERT_EQUAL_size_t(2U, g_cap_count); // Heartbeat + NodeStatus
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(0)));
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(42)));
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(127)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(0)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(42)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(127)));
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_heartbeat_subscribed(void)
+{
+    canard_t              self = make_instance(4);
+    canard_subscription_t sub;
+    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub, HEARTBEAT_SUBJECT_ID, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // 1 subscription filter + 1 forced NodeStatus = 2
+    TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_nodestatus_subscribed(void)
+{
+    canard_t              self = make_instance(4);
+    canard_subscription_t sub;
+    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, NODESTATUS_DTYPE_ID, 0, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // 1 subscription filter + 1 forced Heartbeat = 2
+    TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_both_subscribed(void)
+{
+    canard_t              self = make_instance(4);
+    canard_subscription_t sub_hb;
+    canard_subscription_t sub_ns;
+    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub_hb, HEARTBEAT_SUBJECT_ID, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub_ns, NODESTATUS_DTYPE_ID, 0, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // Both already covered by subscriptions, no extras.
+    TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    canard_unsubscribe(&self, &sub_hb);
+    canard_unsubscribe(&self, &sub_ns);
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_capacity_1(void)
+{
+    canard_t self = make_instance(1);
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // Heartbeat fills the slot, NodeStatus is coalesced into it.
+    TEST_ASSERT_EQUAL_size_t(1U, g_cap_count);
+    // The coalesced filter must still accept both.
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_capacity_2_no_subs(void)
+{
+    canard_t self = make_instance(2);
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
+    // Each forced filter gets its own slot.
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_with_unrelated_subs(void)
+{
+    canard_t              self = make_instance(10);
+    canard_subscription_t sub1, sub2, sub3;
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub3, 300U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // 3 subs + 2 forced = 5
+    TEST_ASSERT_EQUAL_size_t(5U, g_cap_count);
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    // Subscriptions still work.
+    const canard_filter_t f1 = make_filter(canard_kind_message_16b, 100U, 0);
+    const canard_filter_t f2 = make_filter(canard_kind_message_16b, 200U, 0);
+    const canard_filter_t f3 = make_filter(canard_kind_message_16b, 300U, 0);
+    TEST_ASSERT_TRUE(captured_accepts(f1.extended_can_id));
+    TEST_ASSERT_TRUE(captured_accepts(f2.extended_can_id));
+    TEST_ASSERT_TRUE(captured_accepts(f3.extended_can_id));
+    canard_unsubscribe(&self, &sub1);
+    canard_unsubscribe(&self, &sub2);
+    canard_unsubscribe(&self, &sub3);
+    canard_destroy(&self);
+}
+
+static void test_rx_filter_configure_forced_overflow(void)
+{
+    // capacity=1 with 2 unrelated subs: subs fill+coalesce, then forced filters also coalesce in.
+    canard_t              self = make_instance(1);
+    canard_subscription_t sub1, sub2;
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    TEST_ASSERT_EQUAL_size_t(1U, g_cap_count);
+    // After heavy coalescence the single filter should still accept all four CAN IDs.
+    const canard_filter_t f1 = make_filter(canard_kind_message_16b, 100U, 0);
+    const canard_filter_t f2 = make_filter(canard_kind_message_16b, 200U, 0);
+    TEST_ASSERT_TRUE(captured_accepts(f1.extended_can_id));
+    TEST_ASSERT_TRUE(captured_accepts(f2.extended_can_id));
+    TEST_ASSERT_TRUE(captured_accepts(heartbeat_can_id(1)));
+    TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
+    canard_unsubscribe(&self, &sub1);
+    canard_unsubscribe(&self, &sub2);
+    canard_destroy(&self);
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -990,6 +1217,20 @@ int main(void)
 
     RUN_TEST(test_rx_filter_configure_oom);
     RUN_TEST(test_rx_filter_configure_coalescence_overflow);
+
+    RUN_TEST(test_rx_filter_match_empty);
+    RUN_TEST(test_rx_filter_match_single_hit);
+    RUN_TEST(test_rx_filter_match_single_miss);
+    RUN_TEST(test_rx_filter_match_multiple);
+
+    RUN_TEST(test_rx_filter_configure_forced_no_subs);
+    RUN_TEST(test_rx_filter_configure_forced_heartbeat_subscribed);
+    RUN_TEST(test_rx_filter_configure_forced_nodestatus_subscribed);
+    RUN_TEST(test_rx_filter_configure_forced_both_subscribed);
+    RUN_TEST(test_rx_filter_configure_forced_capacity_1);
+    RUN_TEST(test_rx_filter_configure_forced_capacity_2_no_subs);
+    RUN_TEST(test_rx_filter_configure_forced_with_unrelated_subs);
+    RUN_TEST(test_rx_filter_configure_forced_overflow);
 
     return UNITY_END();
 }

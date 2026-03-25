@@ -1566,39 +1566,41 @@ static canard_subscription_t* rx_route(const canard_t* const self, const frame_t
       self->rx.subscriptions[fr->kind], &fr->port_id, rx_subscription_cavl_compare);
 }
 
-// Builds an acceptance filter that only admits frames that match the subscription.
-static canard_filter_t rx_filter_for_subscription(const canard_t* const self, const canard_subscription_t* const sub)
+// Builds an acceptance filter that only admits frames matching the given kind and port-ID.
+static canard_filter_t rx_filter_for_subscription(const canard_t* const self,
+                                                  const canard_kind_t   kind,
+                                                  const uint16_t        port_id)
 {
-    CANARD_ASSERT((self != NULL) && (sub != NULL));
+    CANARD_ASSERT(self != NULL);
     canard_filter_t f  = { 0 };
     const uint32_t  id = self->node_id & CANARD_NODE_ID_MAX;
-    switch (sub->kind) {
+    switch (kind) {
         case canard_kind_message_16b:
-            f.extended_can_id = ((uint32_t)sub->port_id << 8U) | (UINT32_C(1) << 7U);
+            f.extended_can_id = ((uint32_t)port_id << 8U) | (UINT32_C(1) << 7U);
             f.extended_mask   = 0x03FFFF80U;
             break;
         case canard_kind_message_13b:
-            CANARD_ASSERT(sub->port_id <= CANARD_SUBJECT_ID_MAX_13b);
-            f.extended_can_id = (uint32_t)sub->port_id << 8U;
+            CANARD_ASSERT(port_id <= CANARD_SUBJECT_ID_MAX_13b);
+            f.extended_can_id = (uint32_t)port_id << 8U;
             f.extended_mask   = 0x029fff80U;
             break;
         case canard_kind_response:
         case canard_kind_request: {
-            CANARD_ASSERT(sub->port_id <= CANARD_SERVICE_ID_MAX);
-            const uint32_t rnr = (sub->kind == canard_kind_request) ? (UINT32_C(1) << 24U) : 0U;
-            f.extended_can_id  = (UINT32_C(1) << 25U) | rnr | ((uint32_t)sub->port_id << 14U) | (id << 7U);
+            CANARD_ASSERT(port_id <= CANARD_SERVICE_ID_MAX);
+            const uint32_t rnr = (kind == canard_kind_request) ? (UINT32_C(1) << 24U) : 0U;
+            f.extended_can_id  = (UINT32_C(1) << 25U) | rnr | ((uint32_t)port_id << 14U) | (id << 7U);
             f.extended_mask    = 0x03FFFF80U;
             break;
         }
         case canard_kind_v0_message:
-            f.extended_can_id = (uint32_t)sub->port_id << 8U;
+            f.extended_can_id = (uint32_t)port_id << 8U;
             f.extended_mask   = 0x00FFFF80;
             break;
         case canard_kind_v0_response:
         case canard_kind_v0_request: {
-            CANARD_ASSERT(sub->port_id <= 0xFFU);
-            const uint32_t rnr = (sub->kind == canard_kind_v0_request) ? (UINT32_C(1) << 15U) : 0;
-            f.extended_can_id  = ((sub->port_id & 0xFFU) << 16U) | rnr | (id << 8U) | (UINT32_C(1) << 7U);
+            CANARD_ASSERT(port_id <= 0xFFU);
+            const uint32_t rnr = (kind == canard_kind_v0_request) ? (UINT32_C(1) << 15U) : 0;
+            f.extended_can_id  = ((port_id & 0xFFU) << 16U) | rnr | (id << 8U) | (UINT32_C(1) << 7U);
             f.extended_mask    = 0x00FFFF80U;
             break;
         }
@@ -1617,6 +1619,17 @@ static canard_filter_t rx_filter_fuse(const canard_filter_t a, const canard_filt
 
 // Filter selectivity metric; see the Cyphal/CAN specification. Greater values ==> stronger filter.
 static byte_t rx_filter_rank(const canard_filter_t a) { return popcount(a.extended_mask); }
+
+// Returns true if any filter in the array accepts the given extended CAN ID.
+static bool rx_filter_match(const size_t count, const canard_filter_t* const filters, const uint32_t extended_can_id)
+{
+    for (size_t i = 0; i < count; i++) {
+        if ((extended_can_id & filters[i].extended_mask) == (filters[i].extended_can_id & filters[i].extended_mask)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Modifies the filter array such that the new filter is accepted. See Cyphal/CAN Spec. Requires count>0.
 static void rx_filter_coalesce_into(const size_t count, canard_filter_t* const into, const canard_filter_t new)
@@ -1674,7 +1687,29 @@ static bool rx_filter_configure(canard_t* const self)
         for (const canard_subscription_t* sub = (canard_subscription_t*)(void*)cavl2_min(self->rx.subscriptions[kind]);
              sub != NULL;
              sub = (canard_subscription_t*)(void*)cavl2_next_greater((canard_tree_t*)sub)) {
-            const canard_filter_t f = rx_filter_for_subscription(self, sub);
+            const canard_filter_t f = rx_filter_for_subscription(self, sub->kind, sub->port_id);
+            if (n < capacity) {
+                filters[n++] = f;
+            } else {
+                rx_filter_coalesce_into(n, filters, f);
+            }
+        }
+    }
+    CANARD_ASSERT(n <= capacity);
+
+    // Force-admit Heartbeat/NodeStatus for node-ID occupancy tracking.
+    // This may be made optional at some point if the arrival load becomes a problem for small nodes.
+    static const struct
+    {
+        canard_kind_t kind;
+        uint16_t      port_id;
+    } forced[] = {
+        { canard_kind_message_13b, 7509U }, // Cyphal v1.0 Heartbeat
+        { canard_kind_v0_message, 341U },   // DroneCAN NodeStatus
+    };
+    for (size_t i = 0; i < sizeof(forced) / sizeof(forced[0]); i++) {
+        const canard_filter_t f = rx_filter_for_subscription(self, forced[i].kind, forced[i].port_id);
+        if (!rx_filter_match(n, filters, f.extended_can_id)) {
             if (n < capacity) {
                 filters[n++] = f;
             } else {
