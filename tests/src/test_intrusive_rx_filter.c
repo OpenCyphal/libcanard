@@ -980,8 +980,8 @@ static void test_rx_filter_match_multiple(void)
 #define HEARTBEAT_SUBJECT_ID 7509U
 #define NODESTATUS_DTYPE_ID  341U
 
-static size_t          g_cap_count;
-static canard_filter_t g_cap_filters[32];
+static size_t          g_cap_count;       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static canard_filter_t g_cap_filters[32]; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 static bool capturing_filter_cb(canard_t* const self, const size_t filter_count, const canard_filter_t* const filters)
 {
@@ -1117,7 +1117,9 @@ static void test_rx_filter_configure_forced_capacity_2_no_subs(void)
 static void test_rx_filter_configure_forced_with_unrelated_subs(void)
 {
     canard_t              self = make_instance(10);
-    canard_subscription_t sub1, sub2, sub3;
+    canard_subscription_t sub1;
+    canard_subscription_t sub2;
+    canard_subscription_t sub3;
     TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub3, 300U, 64U, 1000000, &dummy_sub_vtable));
@@ -1143,7 +1145,8 @@ static void test_rx_filter_configure_forced_overflow(void)
 {
     // capacity=1 with 2 unrelated subs: subs fill+coalesce, then forced filters also coalesce in.
     canard_t              self = make_instance(1);
-    canard_subscription_t sub1, sub2;
+    canard_subscription_t sub1;
+    canard_subscription_t sub2;
     TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
