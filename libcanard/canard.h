@@ -216,7 +216,7 @@ typedef struct canard_mem_set_t
     canard_mem_t tx_transfer; ///< TX transfer objects, fixed-size, one per enqueued transfer.
     canard_mem_t tx_frame;    ///< One per enqueued frame, at least one per TX transfer, size MTU+overhead.
     canard_mem_t rx_session;  ///< Remote-associated sessions per subscriber, fixed-size.
-    canard_mem_t rx_payload;  ///< Variable-size, max size extent+sizeof(rx_slot_t).
+    canard_mem_t rx_payload;  ///< Variable-size, max size approx. extent+sizeof(rx_slot_t).
     canard_mem_t rx_filters;  ///< For canard_filter_t[filter_count] temporary storage. Not needed if filters not used.
 } canard_mem_set_t;
 
