@@ -263,12 +263,12 @@ static void test_slot_advance_and_truncation(void)
 
     const byte_t data0[7] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
     const byte_t data1[7] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
-    rx_slot_advance(slot, 10, (canard_bytes_t){ .size = 7, .data = data0 });
+    rx_slot_advance(slot, (canard_bytes_t){ .size = 7, .data = data0 });
     TEST_ASSERT_EQUAL_UINT32(7, slot->total_size);
     // Toggle flipped: 1 -> 0.
     TEST_ASSERT_EQUAL_UINT8(0, slot->expected_toggle);
 
-    rx_slot_advance(slot, 10, (canard_bytes_t){ .size = 7, .data = data1 });
+    rx_slot_advance(slot, (canard_bytes_t){ .size = 7, .data = data1 });
     TEST_ASSERT_EQUAL_UINT32(14, slot->total_size);    // Total tracks original size.
     TEST_ASSERT_EQUAL_UINT8(1, slot->expected_toggle); // Toggle flipped: 0 -> 1.
 
@@ -291,9 +291,9 @@ static void test_slot_advance_zero_extent(void)
     TEST_ASSERT_NOT_NULL(slot);
 
     const byte_t data[7] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
-    rx_slot_advance(slot, 0, (canard_bytes_t){ .size = 7, .data = data });
+    rx_slot_advance(slot, (canard_bytes_t){ .size = 7, .data = data });
     TEST_ASSERT_EQUAL_UINT32(7, slot->total_size);
-    rx_slot_advance(slot, 0, (canard_bytes_t){ .size = 7, .data = data });
+    rx_slot_advance(slot, (canard_bytes_t){ .size = 7, .data = data });
     TEST_ASSERT_EQUAL_UINT32(14, slot->total_size);
 
     rx_slot_destroy(&fx.sub, slot);
@@ -2311,6 +2311,187 @@ static void test_v0_single_frame_no_crc(void)
 }
 
 // =====================================================================================================================
+// Group 11: Dynamic Extent
+// Verify that canard_subscription_t::extent can be changed at any time without corrupting in-flight slots.
+
+/// Verify that rx_slot_new captures the subscription extent into the slot.
+static void test_slot_captures_extent(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 64);
+    rx_slot_t* const slot = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
+    TEST_ASSERT_NOT_NULL(slot);
+    TEST_ASSERT_EQUAL_size_t(64, slot->extent);
+    rx_slot_destroy(&fx.sub, slot);
+    fixture_check_alloc_balance(&fx);
+
+    // Zero extent.
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 0);
+    rx_slot_t* const slot0 = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
+    TEST_ASSERT_NOT_NULL(slot0);
+    TEST_ASSERT_EQUAL_size_t(0, slot0->extent);
+    rx_slot_destroy(&fx.sub, slot0);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Destroy a slot after the subscription extent has changed.
+/// The instrumented allocator verifies that the freed size matches the allocated size; a mismatch would abort.
+static void test_slot_destroy_uses_captured_extent(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 64);
+    rx_slot_t* const slot = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
+    TEST_ASSERT_NOT_NULL(slot);
+    TEST_ASSERT_EQUAL_size_t(64, slot->extent);
+    // Mutate the subscription extent; the slot must still free correctly.
+    fx.sub.extent = 128;
+    rx_slot_destroy(&fx.sub, slot);
+    // Restore extent for the balance check (no outstanding allocs).
+    fx.sub.extent = 64; // not needed for balance, but keeps fixture consistent
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Shrink extent mid-multiframe. The in-flight slot must use the original extent for truncation and deallocation.
+static void test_extent_shrink_during_multiframe(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
+
+    // 3-frame transfer: {1..14}, CRC=0x32F8. Same golden vector as test_golden_v1_seq14_3_frames.
+    const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+    const byte_t f1[] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
+    const byte_t f2[] = { 0x32, 0xF8 }; // CRC big-endian
+
+    frame_t fr0 = make_start_frame(
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, f0, sizeof(f0));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
+
+    // Shrink extent after the first frame. The slot was created with extent=64.
+    fx.sub.extent = 8;
+
+    frame_t fr1 = make_cont_frame(
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, false, false, f1, sizeof(f1));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
+
+    frame_t fr2 = make_cont_frame(
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, true, true, f2, sizeof(f2));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr2, 0));
+
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    // Truncation uses the captured extent=64, so all 14 bytes fit.
+    TEST_ASSERT_EQUAL_size_t(14, fx.capture.payload.view.size);
+    const byte_t expected[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 };
+    TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, expected, 14));
+    // origin.size must use the captured extent (64), not the current (8).
+    TEST_ASSERT_EQUAL_size_t(RX_SLOT_OVERHEAD + 64, fx.capture.payload.origin.size);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Grow extent mid-multiframe. The in-flight slot must still truncate at the original (smaller) extent.
+static void test_extent_grow_during_multiframe(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 8);
+
+    // Same 3-frame transfer: {1..14}, CRC=0x32F8. With extent=8, payload will be truncated to 8.
+    const byte_t f0[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07 };
+    const byte_t f1[] = { 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E };
+    const byte_t f2[] = { 0x32, 0xF8 };
+
+    frame_t fr0 = make_start_frame(
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, f0, sizeof(f0));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
+
+    // Grow extent after the first frame. The slot was created with extent=8.
+    fx.sub.extent = 256;
+
+    frame_t fr1 = make_cont_frame(
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, false, false, f1, sizeof(f1));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
+
+    frame_t fr2 = make_cont_frame(
+      canard_prio_slow, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 2, true, true, f2, sizeof(f2));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr2, 0));
+
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    // Truncation uses the captured extent=8.
+    TEST_ASSERT_EQUAL_size_t(8, fx.capture.payload.view.size);
+    const byte_t expected[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, expected, 8));
+    TEST_ASSERT_EQUAL_size_t(RX_SLOT_OVERHEAD + 8, fx.capture.payload.origin.size);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// Verify that a new slot created after an extent change picks up the new value.
+static void test_new_slot_uses_current_extent(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_message_16b, 2222, 64);
+    rx_slot_t* const a = rx_slot_new(&fx.sub, 1 * MEGA, 0, 0);
+    TEST_ASSERT_NOT_NULL(a);
+    TEST_ASSERT_EQUAL_size_t(64, a->extent);
+
+    fx.sub.extent      = 32;
+    rx_slot_t* const b = rx_slot_new(&fx.sub, 2 * MEGA, 1, 0);
+    TEST_ASSERT_NOT_NULL(b);
+    TEST_ASSERT_EQUAL_size_t(32, b->extent);
+
+    // Both must be destroyable without allocator errors.
+    rx_slot_destroy(&fx.sub, a); // slot uses captured 64
+    rx_slot_destroy(&fx.sub, b); // slot uses captured 32
+    fixture_check_alloc_balance(&fx);
+}
+
+/// v0 extent change mid-multiframe: CRC handling must use the captured extent.
+static void test_v0_extent_change_during_multiframe(void)
+{
+    const uint64_t    dts      = 0xABCDEF0123456789ULL;
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(dts);
+    session_fixture_t fx;
+    // v0 extent includes CRC_BYTES, so user payload up to 62 bytes with extent=64.
+    fixture_init(&fx, canard_kind_v0_message, 999, 64, 2 * MEGA, crc_seed);
+
+    const byte_t   user_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
+    const uint16_t crc          = crc_add(crc_seed, 8, user_data);
+    const byte_t   crc_lo       = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    const byte_t   crc_hi       = (byte_t)(crc >> 8);   // NOLINT(hicpp-signed-bitwise)
+
+    byte_t f0[7];
+    f0[0]              = crc_lo;
+    f0[1]              = crc_hi;
+    f0[2]              = 0x11;
+    f0[3]              = 0x22;
+    f0[4]              = 0x33;
+    f0[5]              = 0x44;
+    f0[6]              = 0x55;
+    const byte_t f1[3] = { 0x66, 0x77, 0x88 };
+
+    frame_t fr0 = make_start_frame(
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, f0, sizeof(f0));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
+
+    // Shrink extent after first frame. The slot was created with extent=64.
+    fx.sub.extent = 4; // Would be too small for CRC_BYTES if used for a new slot, but in-flight slot is fine.
+
+    frame_t fr1 = make_cont_frame(
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, true, true, f1, sizeof(f1));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
+
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    // total_size = 10, captured extent = 64. size = min(10-2, 64-2) = min(8, 62) = 8.
+    TEST_ASSERT_EQUAL_size_t(8, fx.capture.payload.view.size);
+    TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, user_data, 8));
+    TEST_ASSERT_EQUAL_size_t(RX_SLOT_OVERHEAD + 64, fx.capture.payload.origin.size);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+// =====================================================================================================================
 
 int main(void)
 {
@@ -2391,6 +2572,14 @@ int main(void)
     RUN_TEST(test_session_animation_ordering_move_to_tail);
     RUN_TEST(test_v0_multiframe_crc_validation);
     RUN_TEST(test_v0_single_frame_no_crc);
+
+    // Group 11: Dynamic Extent
+    RUN_TEST(test_slot_captures_extent);
+    RUN_TEST(test_slot_destroy_uses_captured_extent);
+    RUN_TEST(test_extent_shrink_during_multiframe);
+    RUN_TEST(test_extent_grow_during_multiframe);
+    RUN_TEST(test_new_slot_uses_current_extent);
+    RUN_TEST(test_v0_extent_change_during_multiframe);
 
     return UNITY_END();
 }

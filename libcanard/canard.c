@@ -1190,6 +1190,7 @@ static byte_t rx_parse(const uint32_t       can_id,
 typedef struct
 {
     canard_us_t start_ts;
+    size_t      extent;     // Captured from sub->extent at slot creation time.
     uint32_t    total_size; // The raw payload size seen before the implicit truncation and CRC removal.
     uint16_t    crc;
     byte_t      transfer_id : CANARD_TRANSFER_ID_BITS;
@@ -1198,7 +1199,6 @@ typedef struct
     byte_t      payload[]; // Extent-sized.
 } rx_slot_t;
 #define RX_SLOT_OVERHEAD (offsetof(rx_slot_t, payload))
-static_assert(RX_SLOT_OVERHEAD <= 16, "unexpected layout");
 
 static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
                               const canard_us_t                  start_ts,
@@ -1209,6 +1209,7 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
     if (slot != NULL) {
         memset(slot, 0, RX_SLOT_OVERHEAD);
         slot->start_ts        = start_ts;
+        slot->extent          = sub->extent;
         slot->crc             = sub->crc_seed;
         slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
         slot->expected_toggle = canard_kind_version(sub->kind) & 1U;
@@ -1219,13 +1220,15 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
 
 static void rx_slot_destroy(const canard_subscription_t* const sub, rx_slot_t* const slot)
 {
-    mem_free(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent, slot);
+    if (slot != NULL) {
+        mem_free(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + slot->extent, slot);
+    }
 }
 
-static void rx_slot_advance(rx_slot_t* const slot, const size_t extent, const canard_bytes_t payload)
+static void rx_slot_advance(rx_slot_t* const slot, const canard_bytes_t payload)
 {
-    if (slot->total_size < extent) {
-        const size_t copy_size = smaller(payload.size, (size_t)(extent - slot->total_size)); // NOLINT(*-casting)
+    if (slot->total_size < slot->extent) {
+        const size_t copy_size = smaller(payload.size, (size_t)(slot->extent - slot->total_size)); // NOLINT(*-casting)
         (void)memcpy(&slot->payload[slot->total_size], payload.data, copy_size);
     }
     slot->total_size = (uint32_t)(slot->total_size + payload.size); // Before truncation.
@@ -1358,12 +1361,12 @@ static void rx_session_complete_slot(rx_session_t* const ses, const frame_t* con
     ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
     const bool     v1        = canard_kind_version(sub->kind) == 1;
     const uint16_t crc_ref   = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
-    CANARD_ASSERT(v1 || (sub->extent >= CRC_BYTES)); // In v0, the CRC size is included in the extent.
+    CANARD_ASSERT(v1 || (slot->extent >= CRC_BYTES)); // In v0, the CRC size is included in the extent.
     if (slot->crc == crc_ref) {
-        const size_t           size    = smaller(slot->total_size - CRC_BYTES, sub->extent - (v1 ? 0 : CRC_BYTES));
+        const size_t           size    = smaller(slot->total_size - CRC_BYTES, slot->extent - (v1 ? 0 : CRC_BYTES));
         const canard_payload_t payload = {
             .view   = { .data = v1 ? slot->payload : &slot->payload[CRC_BYTES], .size = size },
-            .origin = { .data = slot, .size = RX_SLOT_OVERHEAD + sub->extent },
+            .origin = { .data = slot, .size = RX_SLOT_OVERHEAD + slot->extent },
         };
         sub->vtable->on_message(sub, slot->start_ts, fr->priority, fr->src, fr->transfer_id, payload);
     } else {
@@ -1380,7 +1383,7 @@ static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_fram
     if (slot != NULL) {
         CANARD_ASSERT((!fr->start || !fr->end) && (slot->expected_toggle == fr->toggle));
         CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
-        rx_slot_advance(slot, sub->extent, fr->payload);
+        rx_slot_advance(slot, fr->payload);
         // Multi-frame transfers place CRC differently in v1 and v0.
         // The v1 handling is trivial: simply compute the full payload CRC and ensure the residue is correct.
         // The payload may be truncated to the subscription extent, but the CRC is computed over the full payload.

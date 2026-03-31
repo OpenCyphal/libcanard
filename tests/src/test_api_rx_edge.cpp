@@ -1301,6 +1301,192 @@ static void test_rx_v0_extent_truncation()
     canard_destroy(&self);
 }
 
+// -------------------------------------------  Dynamic extent
+// ----------------------------------------------------------
+
+/// Change extent between two complete multiframe transfers. The second transfer must use the new extent.
+static void test_rx_extent_change_between_transfers()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1500U, 5U, 2000000, &capture_sub_vtable));
+    sub.user_context = &cap;
+
+    const uint_least8_t payload[8] = { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7 };
+    const uint32_t      can_id     = make_v1v1_msg_can_id(canard_prio_nominal, 1500U, 10U);
+
+    // First transfer with extent=5. CRC over 8 payload + 4 padding.
+    const uint_least8_t pad[4] = {};
+    uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
+    crc                        = crc16_ccitt(crc, pad, 4U);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
+
+    uint_least8_t frame1[8];
+    std::memcpy(frame1, payload, 7U);
+    frame1[7] = make_v1_tail(true, false, true, 2U);
+
+    uint_least8_t frame2[8];
+    frame2[0] = payload[7];
+    frame2[1] = 0x00;
+    frame2[2] = 0x00;
+    frame2[3] = 0x00;
+    frame2[4] = 0x00;
+    frame2[5] = crc_hi;
+    frame2[6] = crc_lo;
+    frame2[7] = make_v1_tail(false, true, false, 2U);
+
+    now_val = 100;
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 100, 0U, can_id, canard_bytes_t{ .size = sizeof(frame1), .data = frame1 }));
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 200, 0U, can_id, canard_bytes_t{ .size = sizeof(frame2), .data = frame2 }));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_EQUAL_size_t(5U, cap.payload_size); // Truncated to extent=5.
+
+    // Change extent to 100 and send a second transfer (TID=3).
+    sub.extent = 100;
+    cap        = {};
+
+    uint_least8_t frame3[8];
+    std::memcpy(frame3, payload, 7U);
+    frame3[7] = make_v1_tail(true, false, true, 3U);
+
+    uint_least8_t frame4[8];
+    frame4[0] = payload[7];
+    frame4[1] = 0x00;
+    frame4[2] = 0x00;
+    frame4[3] = 0x00;
+    frame4[4] = 0x00;
+    frame4[5] = crc_hi; // Same CRC: same payload+padding.
+    frame4[6] = crc_lo;
+    frame4[7] = make_v1_tail(false, true, false, 3U);
+
+    now_val = 1000;
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 1000, 0U, can_id, canard_bytes_t{ .size = sizeof(frame3), .data = frame3 }));
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 1100, 0U, can_id, canard_bytes_t{ .size = sizeof(frame4), .data = frame4 }));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    // With extent=100, all 12 bytes (8 payload + 4 padding) are delivered: min(14-2, 100) = 12.
+    TEST_ASSERT_EQUAL_size_t(12U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, cap.payload_buf, 8U);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+/// Shrink extent while a multiframe transfer is in flight. The in-flight slot must use the original extent.
+static void test_rx_extent_shrink_during_inflight()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1600U, 100U, 2000000, &capture_sub_vtable));
+    sub.user_context = &cap;
+
+    const uint_least8_t payload[8] = { 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7 };
+    const uint32_t      can_id     = make_v1v1_msg_can_id(canard_prio_nominal, 1600U, 10U);
+
+    const uint_least8_t pad[4] = {};
+    uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
+    crc                        = crc16_ccitt(crc, pad, 4U);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
+
+    uint_least8_t frame1[8];
+    std::memcpy(frame1, payload, 7U);
+    frame1[7] = make_v1_tail(true, false, true, 4U);
+
+    // Feed frame 1, then shrink extent.
+    now_val = 100;
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 100, 0U, can_id, canard_bytes_t{ .size = sizeof(frame1), .data = frame1 }));
+
+    sub.extent = 4; // Shrink from 100 to 4.
+
+    uint_least8_t frame2[8];
+    frame2[0] = payload[7];
+    frame2[1] = 0x00;
+    frame2[2] = 0x00;
+    frame2[3] = 0x00;
+    frame2[4] = 0x00;
+    frame2[5] = crc_hi;
+    frame2[6] = crc_lo;
+    frame2[7] = make_v1_tail(false, true, false, 4U);
+
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 200, 0U, can_id, canard_bytes_t{ .size = sizeof(frame2), .data = frame2 }));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    // The slot was allocated with extent=100. Truncation: min(14-2, 100) = 12.
+    TEST_ASSERT_EQUAL_size_t(12U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, cap.payload_buf, 8U);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+/// Grow extent while a multiframe transfer is in flight. The in-flight slot must use the original (smaller) extent.
+static void test_rx_extent_grow_during_inflight()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1700U, 5U, 2000000, &capture_sub_vtable));
+    sub.user_context = &cap;
+
+    const uint_least8_t payload[8] = { 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7 };
+    const uint32_t      can_id     = make_v1v1_msg_can_id(canard_prio_nominal, 1700U, 10U);
+
+    const uint_least8_t pad[4] = {};
+    uint16_t            crc    = crc16_ccitt(0xFFFFU, payload, 8U);
+    crc                        = crc16_ccitt(crc, pad, 4U);
+    const auto crc_hi          = static_cast<uint_least8_t>((static_cast<unsigned>(crc) >> 8U) & 0xFFU);
+    const auto crc_lo          = static_cast<uint_least8_t>(crc & 0xFFU);
+
+    uint_least8_t frame1[8];
+    std::memcpy(frame1, payload, 7U);
+    frame1[7] = make_v1_tail(true, false, true, 5U);
+
+    // Feed frame 1, then grow extent.
+    now_val = 100;
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 100, 0U, can_id, canard_bytes_t{ .size = sizeof(frame1), .data = frame1 }));
+
+    sub.extent = 256; // Grow from 5 to 256.
+
+    uint_least8_t frame2[8];
+    frame2[0] = payload[7];
+    frame2[1] = 0x00;
+    frame2[2] = 0x00;
+    frame2[3] = 0x00;
+    frame2[4] = 0x00;
+    frame2[5] = crc_hi;
+    frame2[6] = crc_lo;
+    frame2[7] = make_v1_tail(false, true, false, 5U);
+
+    TEST_ASSERT_TRUE(
+      canard_ingest_frame(&self, 200, 0U, can_id, canard_bytes_t{ .size = sizeof(frame2), .data = frame2 }));
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    // The slot was allocated with extent=5. Truncation: min(14-2, 5) = 5.
+    TEST_ASSERT_EQUAL_size_t(5U, cap.payload_size);
+    TEST_ASSERT_EQUAL_UINT8(0xC0, cap.payload_buf[0]);
+    TEST_ASSERT_EQUAL_UINT8(0xC4, cap.payload_buf[4]);
+
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
 // -------------------------------------------  Harness  ---------------------------------------------------------------
 
 extern "C" void setUp() {}
@@ -1353,6 +1539,11 @@ int main()
     RUN_TEST(test_rx_v0_multiframe_roundtrip);
     RUN_TEST(test_rx_v0_extent_excludes_crc);
     RUN_TEST(test_rx_v0_extent_truncation);
+
+    // Dynamic extent.
+    RUN_TEST(test_rx_extent_change_between_transfers);
+    RUN_TEST(test_rx_extent_shrink_during_inflight);
+    RUN_TEST(test_rx_extent_grow_during_inflight);
 
     return UNITY_END();
 }

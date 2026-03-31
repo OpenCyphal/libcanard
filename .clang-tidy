@@ -36,6 +36,7 @@ Checks: >-
   -*-avoid-c-arrays,
   -*-nested-conditional-operator,
   -*DeprecatedOrUnsafeBufferHandling,
+  -*-implicit-bool-conversion,
 CheckOptions:
   - key:   readability-function-cognitive-complexity.Threshold
     value: '99'

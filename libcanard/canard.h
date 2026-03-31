@@ -238,13 +238,13 @@ struct canard_subscription_vtable_t
 /// Subscription instances must not be moved while in use.
 /// Each subscription is indexed by its port-ID inside the canard instance, and in turn contains a tree of sessions
 /// indexed by remote node-ID. Two log-time lookups are thus required to handle an incoming frame.
-/// None of the fields may be mutated by the application after initialization except for the user context.
+/// None of the fields may be mutated by the application after initialization except for the user context and extent.
 struct canard_subscription_t
 {
     canard_tree_t index_port_id; ///< Must be the first member.
 
     canard_us_t   transfer_id_timeout;
-    size_t        extent;   ///< Must not be altered after initialization! In v0 includes the CRC.
+    size_t        extent;   ///< May be changed at any time, takes effect with next transfer. In v0 must include CRC!
     uint16_t      port_id;  ///< Represents subjects, services, and legacy message- and service data type IDs.
     uint16_t      crc_seed; ///< For v0 this is set at subscription time, for v1 this is always 0xFFFF.
     canard_kind_t kind;
