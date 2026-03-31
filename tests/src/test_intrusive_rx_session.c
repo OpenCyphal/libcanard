@@ -832,7 +832,7 @@ static void test_golden_v0_screenshot_magfield(void)
 {
     const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(0xe2a7d4a9460bc2f2ULL);
     session_fixture_t fx;
-    // v0 multi-frame: extent must include 2 bytes for CRC that are stored at the beginning.
+    // v0 multi-frame: CRC overhead is added internally by rx_slot_new.
     fixture_init(&fx, canard_kind_v0_message, 1001, 64, 2 * MEGA, crc_seed);
 
     // Frame 0: 7 payload bytes (no tail).
@@ -944,9 +944,8 @@ static void test_golden_v0_screenshot_gnss_fix(void)
     TEST_ASSERT_EQUAL_UINT8(125, fx.capture.source_node_id);
     TEST_ASSERT_EQUAL_UINT8(10, fx.capture.transfer_id);
 
-    // Total raw = 7*7 + 3 = 52. CRC = 2 bytes (LE in first 2 stored bytes). User data = 52-2-2 = ...
-    // Actually: total_size = 52. size = min(52-2, extent-2) = min(50, 254) = 50.
-    // The first 2 stored bytes are the CRC (LE), the view starts at payload[2].
+    // Total raw = 7*7 + 3 = 52. Slot extent = 256+CRC_BYTES = 258.
+    // size = min(52-2, 258-2) = min(50, 256) = 50. The view starts at payload[2] (after the LE CRC).
     TEST_ASSERT_EQUAL_size_t(50, fx.capture.payload.view.size);
 
     // Verify first few bytes of the reassembled user data.
@@ -1018,7 +1017,7 @@ static void test_golden_v0_synthetic_multi_frame(void)
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
     TEST_ASSERT_EQUAL_UINT8(10, fx.capture.source_node_id);
     TEST_ASSERT_EQUAL_UINT8(5, fx.capture.transfer_id);
-    // total_size = 10. size = min(10-2, 64-2) = min(8, 62) = 8.
+    // total_size = 10, slot extent = 64+CRC_BYTES = 66. size = min(10-2, 66-2) = min(8, 64) = 8.
     TEST_ASSERT_EQUAL_size_t(8, fx.capture.payload.view.size);
     TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, user_data, 8));
 
@@ -2452,7 +2451,7 @@ static void test_v0_extent_change_during_multiframe(void)
     const uint64_t    dts      = 0xABCDEF0123456789ULL;
     const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(dts);
     session_fixture_t fx;
-    // v0 extent includes CRC_BYTES, so user payload up to 62 bytes with extent=64.
+    // v0: extent=64 is user payload size; rx_slot_new adds CRC_BYTES internally.
     fixture_init(&fx, canard_kind_v0_message, 999, 64, 2 * MEGA, crc_seed);
 
     const byte_t   user_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
@@ -2482,10 +2481,52 @@ static void test_v0_extent_change_during_multiframe(void)
     TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
 
     TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
-    // total_size = 10, captured extent = 64. size = min(10-2, 64-2) = min(8, 62) = 8.
+    // total_size = 10, slot extent = 64 + CRC_BYTES = 66. size = min(10-2, 66-2) = min(8, 64) = 8.
     TEST_ASSERT_EQUAL_size_t(8, fx.capture.payload.view.size);
     TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, user_data, 8));
-    TEST_ASSERT_EQUAL_size_t(RX_SLOT_OVERHEAD + 64, fx.capture.payload.origin.size);
+    TEST_ASSERT_EQUAL_size_t(RX_SLOT_OVERHEAD + 64 + CRC_BYTES, fx.capture.payload.origin.size);
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
+/// v0 with extent=0: slot still gets CRC_BYTES of buffer space for the prepended CRC.
+/// Reuses the golden vector from test_golden_v0_synthetic_multi_frame with extent=0.
+static void test_v0_extent_zero_multiframe(void)
+{
+    const uint64_t    dts      = 0xABCDEF0123456789ULL;
+    const uint16_t    crc_seed = canard_v0_crc_seed_from_data_type_signature(dts);
+    session_fixture_t fx;
+    // extent=0 means user wants no payload, but the slot must still hold the CRC prefix.
+    fixture_init(&fx, canard_kind_v0_message, 999, 0, 2 * MEGA, crc_seed);
+
+    // Same golden vector as test_golden_v0_synthetic_multi_frame: 8-byte user payload.
+    const byte_t   user_data[8] = { 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88 };
+    const uint16_t crc          = crc_add(crc_seed, 8, user_data);
+    const byte_t   crc_lo       = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    const byte_t   crc_hi       = (byte_t)(crc >> 8);   // NOLINT(hicpp-signed-bitwise)
+
+    byte_t f0[7];
+    f0[0]              = crc_lo;
+    f0[1]              = crc_hi;
+    f0[2]              = 0x11;
+    f0[3]              = 0x22;
+    f0[4]              = 0x33;
+    f0[5]              = 0x44;
+    f0[6]              = 0x55;
+    const byte_t f1[3] = { 0x66, 0x77, 0x88 };
+
+    frame_t fr0 = make_start_frame(
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, f0, sizeof(f0));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr0, 0));
+
+    frame_t fr1 = make_cont_frame(
+      canard_prio_nominal, canard_kind_v0_message, 999, CANARD_NODE_ID_ANONYMOUS, 10, 5, true, true, f1, sizeof(f1));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr1, 0));
+
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    // slot extent = 0 + CRC_BYTES = 2. total_size = 10. size = min(10-2, 2-2) = min(8, 0) = 0.
+    TEST_ASSERT_EQUAL_size_t(0, fx.capture.payload.view.size);
 
     fixture_destroy_all_sessions(&fx);
     fixture_check_alloc_balance(&fx);
@@ -2580,6 +2621,7 @@ int main(void)
     RUN_TEST(test_extent_grow_during_multiframe);
     RUN_TEST(test_new_slot_uses_current_extent);
     RUN_TEST(test_v0_extent_change_during_multiframe);
+    RUN_TEST(test_v0_extent_zero_multiframe);
 
     return UNITY_END();
 }

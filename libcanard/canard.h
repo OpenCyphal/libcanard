@@ -244,7 +244,7 @@ struct canard_subscription_t
     canard_tree_t index_port_id; ///< Must be the first member.
 
     canard_us_t   transfer_id_timeout;
-    size_t        extent;   ///< May be changed at any time, takes effect with next transfer. In v0 must include CRC!
+    size_t        extent;   ///< May be changed at any time; in-flight slots retain the old value.
     uint16_t      port_id;  ///< Represents subjects, services, and legacy message- and service data type IDs.
     uint16_t      crc_seed; ///< For v0 this is set at subscription time, for v1 this is always 0xFFFF.
     canard_kind_t kind;

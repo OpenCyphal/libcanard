@@ -1190,7 +1190,7 @@ static byte_t rx_parse(const uint32_t       can_id,
 typedef struct
 {
     canard_us_t start_ts;
-    size_t      extent;     // Captured from sub->extent at slot creation time.
+    size_t      extent;     // Captured from sub->extent at slot creation; for v0, includes CRC_BYTES.
     uint32_t    total_size; // The raw payload size seen before the implicit truncation and CRC removal.
     uint16_t    crc;
     byte_t      transfer_id : CANARD_TRANSFER_ID_BITS;
@@ -1205,11 +1205,12 @@ static rx_slot_t* rx_slot_new(const canard_subscription_t* const sub,
                               const byte_t                       transfer_id,
                               const byte_t                       iface_index)
 {
-    rx_slot_t* const slot = mem_alloc(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + sub->extent);
+    const size_t     extent_full = sub->extent + ((canard_kind_version(sub->kind) == 0) ? CRC_BYTES : 0);
+    rx_slot_t* const slot        = mem_alloc(sub->owner->mem.rx_payload, RX_SLOT_OVERHEAD + extent_full);
     if (slot != NULL) {
         memset(slot, 0, RX_SLOT_OVERHEAD);
         slot->start_ts        = start_ts;
-        slot->extent          = sub->extent;
+        slot->extent          = extent_full;
         slot->crc             = sub->crc_seed;
         slot->transfer_id     = transfer_id & CANARD_TRANSFER_ID_MAX;
         slot->expected_toggle = canard_kind_version(sub->kind) & 1U;
@@ -1361,7 +1362,7 @@ static void rx_session_complete_slot(rx_session_t* const ses, const frame_t* con
     ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
     const bool     v1        = canard_kind_version(sub->kind) == 1;
     const uint16_t crc_ref   = v1 ? CRC_RESIDUE : (uint16_t)(slot->payload[0] | (((unsigned)slot->payload[1]) << 8U));
-    CANARD_ASSERT(v1 || (slot->extent >= CRC_BYTES)); // In v0, the CRC size is included in the extent.
+    CANARD_ASSERT(v1 || (slot->extent >= CRC_BYTES)); // Guaranteed by rx_slot_new adding CRC_BYTES for v0.
     if (slot->crc == crc_ref) {
         const size_t           size    = smaller(slot->total_size - CRC_BYTES, slot->extent - (v1 ? 0 : CRC_BYTES));
         const canard_payload_t payload = {
@@ -1386,7 +1387,7 @@ static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_fram
         rx_slot_advance(slot, fr->payload);
         // Multi-frame transfers place CRC differently in v1 and v0.
         // The v1 handling is trivial: simply compute the full payload CRC and ensure the residue is correct.
-        // The payload may be truncated to the subscription extent, but the CRC is computed over the full payload.
+        // The payload may be truncated to the slot extent, but the CRC is computed over the full payload.
         // Legacy v0 is messy because the CRC is in the beginning, which we need to handle specially.
         // The CRC initial state is constant for v1, data-type-dependent for v0; this is managed outside of this scope.
         const canard_bytes_t crc_input =
@@ -1488,7 +1489,6 @@ static void rx_session_update(canard_subscription_t* const sub,
     CANARD_ASSERT(frame->end || (frame->payload.size >= 7));
     CANARD_ASSERT(!frame->start || (frame->toggle == canard_kind_version(sub->kind)));
     CANARD_ASSERT((frame->dst == CANARD_NODE_ID_ANONYMOUS) || (frame->dst == sub->owner->node_id));
-    CANARD_ASSERT((canard_kind_version(sub->kind) != 0) || (sub->extent >= CRC_BYTES)); // v0 CRC reservation
 
     // Anonymous frames are stateless and require special treatment.
     // They are scheduled to be deprecated in Cyphal v1.1.
@@ -1817,14 +1817,8 @@ bool canard_v0_subscribe(canard_t* const                           self,
                          const canard_us_t                         transfer_id_timeout,
                          const canard_subscription_vtable_t* const vtable)
 {
-    return rx_subscribe(self,
-                        subscription,
-                        canard_kind_v0_message,
-                        data_type_id,
-                        crc_seed,
-                        extent + CRC_BYTES,
-                        transfer_id_timeout,
-                        vtable);
+    return rx_subscribe(
+      self, subscription, canard_kind_v0_message, data_type_id, crc_seed, extent, transfer_id_timeout, vtable);
 }
 
 bool canard_v0_subscribe_request(canard_t* const                           self,
@@ -1840,7 +1834,7 @@ bool canard_v0_subscribe_request(canard_t* const                           self,
                         canard_kind_v0_request,
                         (uint16_t)data_type_id,
                         crc_seed,
-                        extent + CRC_BYTES,
+                        extent,
                         transfer_id_timeout,
                         vtable);
 }
@@ -1852,14 +1846,8 @@ bool canard_v0_subscribe_response(canard_t* const                           self
                                   const size_t                              extent,
                                   const canard_subscription_vtable_t* const vtable)
 {
-    return rx_subscribe(self, //
-                        subscription,
-                        canard_kind_v0_response,
-                        (uint16_t)data_type_id,
-                        crc_seed,
-                        extent + CRC_BYTES,
-                        0,
-                        vtable);
+    return rx_subscribe(
+      self, subscription, canard_kind_v0_response, (uint16_t)data_type_id, crc_seed, extent, 0, vtable);
 }
 
 void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subscription)

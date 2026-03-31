@@ -1190,10 +1190,8 @@ static void test_rx_v0_multiframe_roundtrip()
     canard_destroy(&self);
 }
 
-// Regression test: v0 extent represents user payload size; CRC overhead is added by the library internally.
-// Before the fix, the user had to pass extent+2 manually. Now extent=N means N bytes of user data are accepted.
-// This test uses a tight extent equal to the payload size. With the old (buggy) behavior, extent=5 would mean
-// only 3 bytes of user payload after subtracting CRC, causing truncation. With the fix, all 5 bytes arrive.
+// v0 extent represents user payload size; CRC overhead is added internally in rx_slot_new.
+// extent=N means N bytes of user data are accepted.
 static void test_rx_v0_extent_excludes_crc()
 {
     canard_t    self    = {};
