@@ -358,7 +358,7 @@ static void test_collision_on_ingest()
     // Must have a subscription so that the frame can be matched and processed.
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 1000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     // Ingest a single-frame (SOT=1, EOT=1) from source_node_id=42 (our own).
@@ -389,7 +389,7 @@ static void test_collision_filters_dirty()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 2000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 2000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     // Clear the dirty flag by polling once (subscription triggers dirty).
@@ -426,7 +426,7 @@ static void test_poll_filter_reconfiguration()
     // Subscribe sets filters_dirty.
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 3000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 3000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     // Poll invokes filter callback.
@@ -447,7 +447,7 @@ static void test_poll_filter_after_unsubscribe()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 4000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 4000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     // First poll configures filters.
@@ -475,7 +475,7 @@ static void test_poll_session_cleanup()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 5000U, 256U, tid_timeout, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 5000U, 256U, tid_timeout, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     // Ingest a single-frame transfer from node 10, TID=5.
@@ -642,7 +642,7 @@ static void test_err_rx_transfer_bad_crc()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 7000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 7000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint32_t can_id = make_v1v1_msg_can_id(canard_prio_nominal, 7000U, 10U);
@@ -695,7 +695,7 @@ static void test_err_collision_counter()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 8000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 8000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     TEST_ASSERT_EQUAL_UINT64(0U, self.err.collision);
@@ -771,7 +771,7 @@ static void test_redundant_rx_dedup()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 11000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 11000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 11000U, 10U);
@@ -800,7 +800,7 @@ static void test_redundant_rx_dedup_multiframe()
 
     rx_capture_t          rx_cap = {};
     canard_subscription_t sub    = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 12000U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 12000U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint32_t can_id = make_v1v1_msg_can_id(canard_prio_nominal, 12000U, 10U);

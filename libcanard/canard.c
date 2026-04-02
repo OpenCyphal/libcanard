@@ -1558,6 +1558,15 @@ static int32_t rx_subscription_cavl_compare(const void* const user, const canard
     return ((int32_t)(*(const uint16_t*)user)) - ((int32_t)((const canard_subscription_t*)(const void*)node)->port_id);
 }
 
+static canard_subscription_t* rx_find_subscription(const canard_t* const self,
+                                                   const canard_kind_t   kind,
+                                                   const uint16_t        port_id)
+{
+    CANARD_ASSERT((self != NULL) && ((size_t)kind < CANARD_KIND_COUNT));
+    return (canard_subscription_t*)(void*)cavl2_find(
+      self->rx.subscriptions[kind], &port_id, rx_subscription_cavl_compare);
+}
+
 // Locates the appropriate subscription if the destination is matching and there is a subscription.
 static canard_subscription_t* rx_route(const canard_t* const self, const frame_t* const fr)
 {
@@ -1565,8 +1574,7 @@ static canard_subscription_t* rx_route(const canard_t* const self, const frame_t
     if ((fr->dst != CANARD_NODE_ID_ANONYMOUS) && (fr->dst != self->node_id)) {
         return NULL; // misfiltered
     }
-    return (canard_subscription_t*)(void*)cavl2_find(
-      self->rx.subscriptions[fr->kind], &fr->port_id, rx_subscription_cavl_compare);
+    return rx_find_subscription(self, fr->kind, fr->port_id);
 }
 
 // Builds an acceptance filter that only admits frames matching the given kind and port-ID.
@@ -1729,18 +1737,18 @@ static bool rx_filter_configure(canard_t* const self)
 }
 
 // Common subscribe logic: validate, initialize, insert into tree, mark filters dirty.
-static bool rx_subscribe(canard_t* const                           self,
-                         canard_subscription_t* const              subscription,
-                         const canard_kind_t                       kind,
-                         const uint16_t                            port_id,
-                         const uint16_t                            crc_seed,
-                         const size_t                              extent,
-                         const canard_us_t                         transfer_id_timeout,
-                         const canard_subscription_vtable_t* const vtable)
+static canard_subscription_t* rx_subscribe(canard_t* const                           self,
+                                           canard_subscription_t* const              subscription,
+                                           const canard_kind_t                       kind,
+                                           const uint16_t                            port_id,
+                                           const uint16_t                            crc_seed,
+                                           const size_t                              extent,
+                                           const canard_us_t                         transfer_id_timeout,
+                                           const canard_subscription_vtable_t* const vtable)
 {
-    bool ok = (self != NULL) && (subscription != NULL) && (vtable != NULL) && (vtable->on_message != NULL) &&
-              (transfer_id_timeout >= 0);
-    if (ok) {
+    canard_subscription_t* out = NULL;
+    if ((self != NULL) && (subscription != NULL) && (vtable != NULL) && (vtable->on_message != NULL) &&
+        (transfer_id_timeout >= 0)) {
         (void)memset(subscription, 0, sizeof(*subscription));
         subscription->transfer_id_timeout   = transfer_id_timeout;
         subscription->extent                = extent;
@@ -1748,86 +1756,99 @@ static bool rx_subscribe(canard_t* const                           self,
         subscription->crc_seed              = crc_seed;
         subscription->kind                  = kind;
         subscription->owner                 = self;
+        subscription->sessions              = NULL;
         subscription->vtable                = vtable;
+        subscription->user_context          = NULL;
         const canard_tree_t* const existing = cavl2_find_or_insert(&self->rx.subscriptions[kind],
                                                                    &subscription->port_id,
                                                                    rx_subscription_cavl_compare,
                                                                    &subscription->index_port_id,
                                                                    cavl2_trivial_factory);
-        if (existing != &subscription->index_port_id) {
-            (void)memset(subscription, 0, sizeof(*subscription)); // Undo partial init on duplicate.
-            ok = false;
-        } else {
-            self->rx.filters_dirty = true;
-        }
+        out                                 = (canard_subscription_t*)(void*)existing;
+        self->rx.filters_dirty              = (existing == &subscription->index_port_id);
     }
-    return ok;
+    return out;
 }
 
-bool canard_subscribe_16b(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            subject_id,
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_subscribe_16b(canard_t* const                           self,
+                                            canard_subscription_t* const              subscription,
+                                            const uint16_t                            subject_id,
+                                            const size_t                              extent,
+                                            const canard_us_t                         transfer_id_timeout,
+                                            const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(
       self, subscription, canard_kind_message_16b, subject_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
 }
 
-bool canard_subscribe_13b(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            subject_id,
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_subscribe_13b(canard_t* const                           self,
+                                            canard_subscription_t* const              subscription,
+                                            const uint16_t                            subject_id,
+                                            const size_t                              extent,
+                                            const canard_us_t                         transfer_id_timeout,
+                                            const canard_subscription_vtable_t* const vtable)
 {
-    return (subject_id <= CANARD_SUBJECT_ID_MAX_13b) &&
-           rx_subscribe(
-             self, subscription, canard_kind_message_13b, subject_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
+    return (subject_id <= CANARD_SUBJECT_ID_MAX_13b) ? rx_subscribe(self,
+                                                                    subscription,
+                                                                    canard_kind_message_13b,
+                                                                    subject_id,
+                                                                    CRC_INITIAL,
+                                                                    extent,
+                                                                    transfer_id_timeout,
+                                                                    vtable)
+                                                     : NULL;
 }
 
-bool canard_subscribe_request(canard_t* const                           self,
-                              canard_subscription_t* const              subscription,
-                              const uint16_t                            service_id,
-                              const size_t                              extent,
-                              const canard_us_t                         transfer_id_timeout,
-                              const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_subscribe_request(canard_t* const                           self,
+                                                canard_subscription_t* const              subscription,
+                                                const uint16_t                            service_id,
+                                                const size_t                              extent,
+                                                const canard_us_t                         transfer_id_timeout,
+                                                const canard_subscription_vtable_t* const vtable)
 {
-    return (service_id <= CANARD_SERVICE_ID_MAX) &&
-           rx_subscribe(
-             self, subscription, canard_kind_request, service_id, CRC_INITIAL, extent, transfer_id_timeout, vtable);
+    return (service_id <= CANARD_SERVICE_ID_MAX)
+             ? rx_subscribe(
+                 self, subscription, canard_kind_request, service_id, CRC_INITIAL, extent, transfer_id_timeout, vtable)
+             : NULL;
 }
 
-bool canard_subscribe_response(canard_t* const                           self,
-                               canard_subscription_t* const              subscription,
-                               const uint16_t                            service_id,
-                               const size_t                              extent,
-                               const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_subscribe_response(canard_t* const                           self,
+                                                 canard_subscription_t* const              subscription,
+                                                 const uint16_t                            service_id,
+                                                 const size_t                              extent,
+                                                 const canard_subscription_vtable_t* const vtable)
 {
-    return (service_id <= CANARD_SERVICE_ID_MAX) &&
-           rx_subscribe(self, subscription, canard_kind_response, service_id, CRC_INITIAL, extent, 0, vtable);
+    return (service_id <= CANARD_SERVICE_ID_MAX)
+             ? rx_subscribe(self, subscription, canard_kind_response, service_id, CRC_INITIAL, extent, 0, vtable)
+             : NULL;
 }
 
-bool canard_v0_subscribe(canard_t* const                           self,
-                         canard_subscription_t* const              subscription,
-                         const uint16_t                            data_type_id,
-                         const uint16_t                            crc_seed,
-                         const size_t                              extent,
-                         const canard_us_t                         transfer_id_timeout,
-                         const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_find_subscription(const canard_t* const self,
+                                                const canard_kind_t   kind,
+                                                const uint16_t        port_id)
+{
+    return ((self != NULL) && ((size_t)kind < CANARD_KIND_COUNT)) ? rx_find_subscription(self, kind, port_id) : NULL;
+}
+
+canard_subscription_t* canard_v0_subscribe(canard_t* const                           self,
+                                           canard_subscription_t* const              subscription,
+                                           const uint16_t                            data_type_id,
+                                           const uint16_t                            crc_seed,
+                                           const size_t                              extent,
+                                           const canard_us_t                         transfer_id_timeout,
+                                           const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(
       self, subscription, canard_kind_v0_message, data_type_id, crc_seed, extent, transfer_id_timeout, vtable);
 }
 
-bool canard_v0_subscribe_request(canard_t* const                           self,
-                                 canard_subscription_t* const              subscription,
-                                 const uint_least8_t                       data_type_id,
-                                 const uint16_t                            crc_seed,
-                                 const size_t                              extent,
-                                 const canard_us_t                         transfer_id_timeout,
-                                 const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_v0_subscribe_request(canard_t* const                           self,
+                                                   canard_subscription_t* const              subscription,
+                                                   const uint_least8_t                       data_type_id,
+                                                   const uint16_t                            crc_seed,
+                                                   const size_t                              extent,
+                                                   const canard_us_t                         transfer_id_timeout,
+                                                   const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(self,
                         subscription,
@@ -1839,12 +1860,12 @@ bool canard_v0_subscribe_request(canard_t* const                           self,
                         vtable);
 }
 
-bool canard_v0_subscribe_response(canard_t* const                           self,
-                                  canard_subscription_t* const              subscription,
-                                  const uint_least8_t                       data_type_id,
-                                  const uint16_t                            crc_seed,
-                                  const size_t                              extent,
-                                  const canard_subscription_vtable_t* const vtable)
+canard_subscription_t* canard_v0_subscribe_response(canard_t* const                           self,
+                                                    canard_subscription_t* const              subscription,
+                                                    const uint_least8_t                       data_type_id,
+                                                    const uint16_t                            crc_seed,
+                                                    const size_t                              extent,
+                                                    const canard_subscription_vtable_t* const vtable)
 {
     return rx_subscribe(
       self, subscription, canard_kind_v0_response, (uint16_t)data_type_id, crc_seed, extent, 0, vtable);

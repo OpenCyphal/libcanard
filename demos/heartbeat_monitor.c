@@ -305,12 +305,12 @@ int main(const int argc, const char* const argv[])
 
     // Subscribe to Cyphal heartbeat (subject 7509, 13-bit subject-ID space).
     canard_subscription_t sub_cyphal;
-    if (!canard_subscribe_13b(&ins,
-                              &sub_cyphal,
-                              CYPHAL_HEARTBEAT_SUBJECT_ID,
-                              CYPHAL_HEARTBEAT_EXTENT,
-                              CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
-                              &g_sub_vtable_cyphal)) {
+    if (canard_subscribe_13b(&ins,
+                             &sub_cyphal,
+                             CYPHAL_HEARTBEAT_SUBJECT_ID,
+                             CYPHAL_HEARTBEAT_EXTENT,
+                             CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
+                             &g_sub_vtable_cyphal) != &sub_cyphal) {
         (void)fputs("canard_subscribe_13b failed\n", stderr);
         canard_destroy(&ins);
         (void)close(sock);
@@ -320,13 +320,13 @@ int main(const int argc, const char* const argv[])
     // Subscribe to DroneCAN NodeStatus (DTID 341).
     canard_subscription_t sub_dronecan;
     const uint16_t dronecan_crc_seed = canard_v0_crc_seed_from_data_type_signature(DRONECAN_NODE_STATUS_SIGNATURE);
-    if (!canard_v0_subscribe(&ins,
-                             &sub_dronecan,
-                             DRONECAN_NODE_STATUS_DTID,
-                             dronecan_crc_seed,
-                             DRONECAN_NODE_STATUS_EXTENT,
-                             CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
-                             &g_sub_vtable_dronecan)) {
+    if (canard_v0_subscribe(&ins,
+                            &sub_dronecan,
+                            DRONECAN_NODE_STATUS_DTID,
+                            dronecan_crc_seed,
+                            DRONECAN_NODE_STATUS_EXTENT,
+                            CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us,
+                            &g_sub_vtable_dronecan) != &sub_dronecan) {
         (void)fputs("canard_v0_subscribe failed\n", stderr);
         canard_unsubscribe(&ins, &sub_cyphal);
         canard_destroy(&ins);

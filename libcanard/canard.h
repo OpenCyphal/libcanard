@@ -487,41 +487,49 @@ bool canard_respond(canard_t* const            self,
 /// truncated per the implicit truncation rule (see the Spec).
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
 ///
-/// Returns true on success, false if any of the arguments are invalid or if there is already a subscription for the
-/// given subject-ID.
-bool canard_subscribe_16b(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            subject_id,
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable);
-bool canard_subscribe_13b(canard_t* const                           self,
-                          canard_subscription_t* const              subscription,
-                          const uint16_t                            subject_id, // [0,8191]
-                          const size_t                              extent,
-                          const canard_us_t                         transfer_id_timeout,
-                          const canard_subscription_vtable_t* const vtable);
+/// Returns the passed subscription on success, the incumbent if there is already a subscription for the same subject,
+/// or NULL if any of the arguments are invalid. Clobbers the passed subscription on failure.
+canard_subscription_t* canard_subscribe_16b(canard_t* const                           self,
+                                            canard_subscription_t* const              subscription,
+                                            const uint16_t                            subject_id,
+                                            const size_t                              extent,
+                                            const canard_us_t                         transfer_id_timeout,
+                                            const canard_subscription_vtable_t* const vtable);
+canard_subscription_t* canard_subscribe_13b(canard_t* const                           self,
+                                            canard_subscription_t* const              subscription,
+                                            const uint16_t                            subject_id, // [0,8191]
+                                            const size_t                              extent,
+                                            const canard_us_t                         transfer_id_timeout,
+                                            const canard_subscription_vtable_t* const vtable);
 
 /// Unicast transfers in Cyphal/CAN v1.1 are supposed to be modeled as requests to service-ID 511, with a 128-element
 /// array of transfer-ID counters, one per remote. Some large nonzero transfer-ID timeout is required to satisfy the
 /// deduplication requirement. This is outside of the scope of this library so it's not implemented here.
 /// There may be at most one request subscription per service-ID.
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
-bool canard_subscribe_request(canard_t* const                           self,
-                              canard_subscription_t* const              subscription,
-                              const uint16_t                            service_id,
-                              const size_t                              extent,
-                              const canard_us_t                         transfer_id_timeout,
-                              const canard_subscription_vtable_t* const vtable);
+/// Return semantics match canard_subscribe_16b().
+canard_subscription_t* canard_subscribe_request(canard_t* const                           self,
+                                                canard_subscription_t* const              subscription,
+                                                const uint16_t                            service_id,
+                                                const size_t                              extent,
+                                                const canard_us_t                         transfer_id_timeout,
+                                                const canard_subscription_vtable_t* const vtable);
 
 /// There may be at most one response subscription per service-ID.
 /// Response transfers necessarily have a zero transfer-ID timeout: https://github.com/OpenCyphal/libcanard/issues/247.
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
-bool canard_subscribe_response(canard_t* const                           self,
-                               canard_subscription_t* const              subscription,
-                               const uint16_t                            service_id,
-                               const size_t                              extent,
-                               const canard_subscription_vtable_t* const vtable);
+/// Return semantics match canard_subscribe_16b().
+canard_subscription_t* canard_subscribe_response(canard_t* const                           self,
+                                                 canard_subscription_t* const              subscription,
+                                                 const uint16_t                            service_id,
+                                                 const size_t                              extent,
+                                                 const canard_subscription_vtable_t* const vtable);
+
+/// Returns the installed subscription if found, otherwise NULL. Invalid kind values also return NULL.
+/// Complexity is log-time in the subscription set of the requested kind.
+canard_subscription_t* canard_find_subscription(const canard_t* const self,
+                                                const canard_kind_t   kind,
+                                                const uint16_t        port_id);
 
 /// This can be used to undo all kinds of subscriptions, incl. v0.
 /// Complexity is log-time in the subscription set plus linear in the number of remote sessions owned by it.
@@ -599,33 +607,36 @@ bool canard_v0_respond(canard_t* const            self,
 
 /// Register a legacy v0 message subscription.
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
-bool canard_v0_subscribe(canard_t* const                           self,
-                         canard_subscription_t* const              subscription,
-                         const uint16_t                            data_type_id,
-                         const uint16_t                            crc_seed,
-                         const size_t                              extent,
-                         const canard_us_t                         transfer_id_timeout,
-                         const canard_subscription_vtable_t* const vtable);
+/// Return semantics match canard_subscribe_16b().
+canard_subscription_t* canard_v0_subscribe(canard_t* const                           self,
+                                           canard_subscription_t* const              subscription,
+                                           const uint16_t                            data_type_id,
+                                           const uint16_t                            crc_seed,
+                                           const size_t                              extent,
+                                           const canard_us_t                         transfer_id_timeout,
+                                           const canard_subscription_vtable_t* const vtable);
 
 /// Register a legacy v0 request subscription.
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
-bool canard_v0_subscribe_request(canard_t* const                           self,
-                                 canard_subscription_t* const              subscription,
-                                 const uint_least8_t                       data_type_id,
-                                 const uint16_t                            crc_seed,
-                                 const size_t                              extent,
-                                 const canard_us_t                         transfer_id_timeout,
-                                 const canard_subscription_vtable_t* const vtable);
+/// Return semantics match canard_subscribe_16b().
+canard_subscription_t* canard_v0_subscribe_request(canard_t* const                           self,
+                                                   canard_subscription_t* const              subscription,
+                                                   const uint_least8_t                       data_type_id,
+                                                   const uint16_t                            crc_seed,
+                                                   const size_t                              extent,
+                                                   const canard_us_t                         transfer_id_timeout,
+                                                   const canard_subscription_vtable_t* const vtable);
 
 /// Register a legacy v0 response subscription.
 /// Response transfers necessarily have a zero transfer-ID timeout.
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
-bool canard_v0_subscribe_response(canard_t* const                           self,
-                                  canard_subscription_t* const              subscription,
-                                  const uint_least8_t                       data_type_id,
-                                  const uint16_t                            crc_seed,
-                                  const size_t                              extent,
-                                  const canard_subscription_vtable_t* const vtable);
+/// Return semantics match canard_subscribe_16b().
+canard_subscription_t* canard_v0_subscribe_response(canard_t* const                           self,
+                                                    canard_subscription_t* const              subscription,
+                                                    const uint_least8_t                       data_type_id,
+                                                    const uint16_t                            crc_seed,
+                                                    const size_t                              extent,
+                                                    const canard_subscription_vtable_t* const vtable);
 
 /// Computes the CRC-16/CCITT-FALSE checksum of the data type signature in the little-endian byte order.
 /// This value is then used to seed the transfer CRC for UAVCAN v0 and DroneCAN transfers.

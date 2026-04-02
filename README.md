@@ -89,7 +89,9 @@ int main(void)
     
     // Subscribe for messages.
     canard_subscription_t sub;
-    if (!canard_subscribe_13b(&node, &sub, 7509U, 63U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &sub_vtable)) {
+    const canard_subscription_t* const installed =
+      canard_subscribe_13b(&node, &sub, 7509U, 63U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &sub_vtable);
+    if (installed != &sub) { // NULL on invalid args, otherwise points to the incumbent subscription.
         canard_destroy(&node);
         return -1;
     }

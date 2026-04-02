@@ -896,7 +896,7 @@ static void test_rx_filter_configure_oom(void)
     TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 4U));
     // Add a subscription so filtering has work to do.
     canard_subscription_t sub;
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 100U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_EQUAL_UINT64(0U, self.err.oom);
     // Call rx_filter_configure directly — allocation fails → returns false, err.oom incremented.
     TEST_ASSERT_FALSE(rx_filter_configure(&self));
@@ -920,8 +920,8 @@ static void test_rx_filter_configure_coalescence_overflow(void)
     TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 1U));
     canard_subscription_t sub1;
     canard_subscription_t sub2;
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub2, canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
     // Should succeed — the filter callback returns true.
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
     canard_unsubscribe(&self, &sub1);
@@ -1050,7 +1050,8 @@ static void test_rx_filter_configure_forced_heartbeat_subscribed(void)
 {
     canard_t              self = make_instance(4);
     canard_subscription_t sub;
-    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub, HEARTBEAT_SUBJECT_ID, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_subscribe_13b(&self, &sub, HEARTBEAT_SUBJECT_ID, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
     // 1 subscription filter + 1 forced NodeStatus = 2
     TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
@@ -1064,7 +1065,8 @@ static void test_rx_filter_configure_forced_nodestatus_subscribed(void)
 {
     canard_t              self = make_instance(4);
     canard_subscription_t sub;
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, NODESTATUS_DTYPE_ID, 0, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_v0_subscribe(&self, &sub, NODESTATUS_DTYPE_ID, 0, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
     // 1 subscription filter + 1 forced Heartbeat = 2
     TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
@@ -1079,8 +1081,10 @@ static void test_rx_filter_configure_forced_both_subscribed(void)
     canard_t              self = make_instance(4);
     canard_subscription_t sub_hb;
     canard_subscription_t sub_ns;
-    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub_hb, HEARTBEAT_SUBJECT_ID, 64U, 1000000, &dummy_sub_vtable));
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub_ns, NODESTATUS_DTYPE_ID, 0, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_hb,
+                          canard_subscribe_13b(&self, &sub_hb, HEARTBEAT_SUBJECT_ID, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_ns,
+                          canard_v0_subscribe(&self, &sub_ns, NODESTATUS_DTYPE_ID, 0, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
     // Both already covered by subscriptions, no extras.
     TEST_ASSERT_EQUAL_size_t(2U, g_cap_count);
@@ -1120,9 +1124,9 @@ static void test_rx_filter_configure_forced_with_unrelated_subs(void)
     canard_subscription_t sub1;
     canard_subscription_t sub2;
     canard_subscription_t sub3;
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub3, 300U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub2, canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub3, canard_subscribe_16b(&self, &sub3, 300U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
     // 3 subs + 2 forced = 5
     TEST_ASSERT_EQUAL_size_t(5U, g_cap_count);
@@ -1147,8 +1151,8 @@ static void test_rx_filter_configure_forced_overflow(void)
     canard_t              self = make_instance(1);
     canard_subscription_t sub1;
     canard_subscription_t sub2;
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub2, canard_subscribe_16b(&self, &sub2, 200U, 64U, 1000000, &dummy_sub_vtable));
     TEST_ASSERT_TRUE(rx_filter_configure(&self));
     TEST_ASSERT_EQUAL_size_t(1U, g_cap_count);
     // After heavy coalescence the single filter should still accept all four CAN IDs.

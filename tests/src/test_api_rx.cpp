@@ -132,42 +132,42 @@ static void test_subscribe_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_subscribe_16b(nullptr, &sub, 100U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_16b(&self, nullptr, 100U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_16b(&self, &sub, 100U, 64U, 2000000, nullptr));
+    TEST_ASSERT_NULL(canard_subscribe_16b(nullptr, &sub, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_16b(&self, nullptr, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_16b(&self, &sub, 100U, 64U, 2000000, nullptr));
 
     const canard_subscription_vtable_t bad_vtable = { .on_message = nullptr };
-    TEST_ASSERT_FALSE(canard_subscribe_16b(&self, &sub, 100U, 64U, 2000000, &bad_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_16b(&self, &sub, 100U, 64U, 2000000, &bad_vtable));
 }
 
 static void test_subscribe_13b_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_subscribe_13b(nullptr, &sub, 100U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_13b(&self, nullptr, 100U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_13b(&self, &sub, 100U, 64U, 2000000, nullptr));
+    TEST_ASSERT_NULL(canard_subscribe_13b(nullptr, &sub, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_13b(&self, nullptr, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_13b(&self, &sub, 100U, 64U, 2000000, nullptr));
 
     const canard_subscription_vtable_t bad_vtable = { .on_message = nullptr };
-    TEST_ASSERT_FALSE(canard_subscribe_13b(&self, &sub, 100U, 64U, 2000000, &bad_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_13b(&self, &sub, 100U, 64U, 2000000, &bad_vtable));
 }
 
 static void test_subscribe_request_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_subscribe_request(nullptr, &sub, 10U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_request(&self, nullptr, 10U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_request(&self, &sub, 10U, 64U, 2000000, nullptr));
+    TEST_ASSERT_NULL(canard_subscribe_request(nullptr, &sub, 10U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_request(&self, nullptr, 10U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_request(&self, &sub, 10U, 64U, 2000000, nullptr));
 }
 
 static void test_subscribe_response_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_subscribe_response(nullptr, &sub, 10U, 64U, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_response(&self, nullptr, 10U, 64U, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_subscribe_response(&self, &sub, 10U, 64U, nullptr));
+    TEST_ASSERT_NULL(canard_subscribe_response(nullptr, &sub, 10U, 64U, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_response(&self, nullptr, 10U, 64U, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_response(&self, &sub, 10U, 64U, nullptr));
 }
 
 static void test_subscribe_port_id_range()
@@ -178,24 +178,24 @@ static void test_subscribe_port_id_range()
     canard_subscription_t sub = {};
 
     // v1.0 subject must be <= 8191.
-    TEST_ASSERT_FALSE(canard_subscribe_13b(&self, &sub, 8192U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_13b(&self, &sub, 8191U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_13b(&self, &sub, 8192U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_13b(&self, &sub, 8191U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub);
 
     // v1.1 subject: full 16-bit range is valid.
     canard_subscription_t sub2 = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub2, 0xFFFFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub2, canard_subscribe_16b(&self, &sub2, 0xFFFFU, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub2);
 
     // Service ID must be <= 511.
     canard_subscription_t sub3 = {};
-    TEST_ASSERT_FALSE(canard_subscribe_request(&self, &sub3, 512U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_request(&self, &sub3, 511U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_request(&self, &sub3, 512U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub3, canard_subscribe_request(&self, &sub3, 511U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub3);
 
     canard_subscription_t sub4 = {};
-    TEST_ASSERT_FALSE(canard_subscribe_response(&self, &sub4, 512U, 64U, &capture_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_response(&self, &sub4, 511U, 64U, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_subscribe_response(&self, &sub4, 512U, 64U, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub4, canard_subscribe_response(&self, &sub4, 511U, 64U, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub4);
 
     canard_destroy(&self);
@@ -211,19 +211,53 @@ static void test_subscribe_duplicate_rejection()
 
     canard_subscription_t sub1 = {};
     canard_subscription_t sub2 = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub1, 100U, 64U, 2000000, &capture_sub_vtable));
-    // Same subject-ID, same kind: must fail.
-    TEST_ASSERT_FALSE(canard_subscribe_16b(&self, &sub2, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub1, 100U, 64U, 2000000, &capture_sub_vtable));
+    // Same subject-ID, same kind: must return the incumbent.
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub2, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_find_subscription(&self, canard_kind_message_16b, 100U));
     canard_unsubscribe(&self, &sub1);
 
     // Same port-ID but different kind: must succeed (message vs request use separate trees).
     canard_subscription_t sub_msg = {};
     canard_subscription_t sub_req = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub_msg, 100U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_request(&self, &sub_req, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_msg, canard_subscribe_16b(&self, &sub_msg, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_req, canard_subscribe_request(&self, &sub_req, 100U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub_req);
     canard_unsubscribe(&self, &sub_msg);
 
+    canard_destroy(&self);
+}
+
+static void test_find_subscription()
+{
+    canard_t    self    = {};
+    canard_us_t now_val = 0;
+    init_canard(&self, &now_val, 42U);
+
+    TEST_ASSERT_NULL(canard_find_subscription(nullptr, canard_kind_message_16b, 100U));
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_message_13b, 8192U));
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_request, 512U));
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_v0_request, 256U));
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_message_16b, 100U));
+
+    canard_subscription_t sub_msg = {};
+    canard_subscription_t sub_req = {};
+    canard_subscription_t sub_v0  = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_msg, canard_subscribe_16b(&self, &sub_msg, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_req, canard_subscribe_request(&self, &sub_req, 100U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_v0,
+                          canard_v0_subscribe(&self, &sub_v0, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+
+    TEST_ASSERT_EQUAL_PTR(&sub_msg, canard_find_subscription(&self, canard_kind_message_16b, 100U));
+    TEST_ASSERT_EQUAL_PTR(&sub_req, canard_find_subscription(&self, canard_kind_request, 100U));
+    TEST_ASSERT_EQUAL_PTR(&sub_v0, canard_find_subscription(&self, canard_kind_v0_message, 100U));
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_response, 100U));
+
+    canard_unsubscribe(&self, &sub_v0);
+    canard_unsubscribe(&self, &sub_req);
+    canard_unsubscribe(&self, &sub_msg);
+
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_message_16b, 100U));
     canard_destroy(&self);
 }
 
@@ -236,10 +270,10 @@ static void test_subscribe_unsubscribe_resubscribe()
     init_canard(&self, &now_val, 42U);
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 200U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 200U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub);
     // Re-subscribe to the same subject must succeed.
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 200U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 200U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub);
 
     canard_destroy(&self);
@@ -255,7 +289,7 @@ static void test_v1v1_message_reception()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 1234U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 1234U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // Construct a single-frame v1.1 message from node 10, priority nominal, transfer-ID 7.
@@ -290,7 +324,7 @@ static void test_service_request_reception()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_request(&self, &sub, 100U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_request(&self, &sub, 100U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // Service request from node 10 to node 42 (us), service-ID 100, transfer-ID 3.
@@ -322,7 +356,7 @@ static void test_service_response_reception()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_response(&self, &sub, 200U, 256U, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_response(&self, &sub, 200U, 256U, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // Service response from node 99 to node 42 (us), service-ID 200, transfer-ID 5.
@@ -354,7 +388,7 @@ static void test_unsubscribe_stops_delivery()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 500U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 500U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // First frame: should be delivered.
@@ -404,9 +438,9 @@ static void test_multiple_subscriptions_routing()
 
     canard_subscription_t sub_a = {};
     canard_subscription_t sub_b = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub_a, 300U, 256U, 2000000, &simple_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_a, canard_subscribe_16b(&self, &sub_a, 300U, 256U, 2000000, &simple_sub_vtable));
     sub_a.user_context = (&cap_a);
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub_b, 400U, 256U, 2000000, &simple_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_b, canard_subscribe_16b(&self, &sub_b, 400U, 256U, 2000000, &simple_sub_vtable));
     sub_b.user_context = (&cap_b);
 
     // Message for subject 300.
@@ -449,7 +483,7 @@ static void test_unsubscribe_cleans_up_sessions()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub, 600U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 600U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // Receive messages from two different remote nodes to create two sessions.
@@ -475,30 +509,30 @@ static void test_v0_subscribe_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_v0_subscribe(nullptr, &sub, 100U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_v0_subscribe(&self, nullptr, 100U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_v0_subscribe(&self, &sub, 100U, 0xBEEFU, 64U, 2000000, nullptr));
+    TEST_ASSERT_NULL(canard_v0_subscribe(nullptr, &sub, 100U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe(&self, nullptr, 100U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe(&self, &sub, 100U, 0xBEEFU, 64U, 2000000, nullptr));
 
     const canard_subscription_vtable_t bad_vtable = { .on_message = nullptr };
-    TEST_ASSERT_FALSE(canard_v0_subscribe(&self, &sub, 100U, 0xBEEFU, 64U, 2000000, &bad_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe(&self, &sub, 100U, 0xBEEFU, 64U, 2000000, &bad_vtable));
 }
 
 static void test_v0_subscribe_request_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_v0_subscribe_request(nullptr, &sub, 10U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_v0_subscribe_request(&self, nullptr, 10U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_v0_subscribe_request(&self, &sub, 10U, 0xBEEFU, 64U, 2000000, nullptr));
+    TEST_ASSERT_NULL(canard_v0_subscribe_request(nullptr, &sub, 10U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe_request(&self, nullptr, 10U, 0xBEEFU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe_request(&self, &sub, 10U, 0xBEEFU, 64U, 2000000, nullptr));
 }
 
 static void test_v0_subscribe_response_null_args()
 {
     canard_t              self = {};
     canard_subscription_t sub  = {};
-    TEST_ASSERT_FALSE(canard_v0_subscribe_response(nullptr, &sub, 10U, 0xBEEFU, 64U, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_v0_subscribe_response(&self, nullptr, 10U, 0xBEEFU, 64U, &capture_sub_vtable));
-    TEST_ASSERT_FALSE(canard_v0_subscribe_response(&self, &sub, 10U, 0xBEEFU, 64U, nullptr));
+    TEST_ASSERT_NULL(canard_v0_subscribe_response(nullptr, &sub, 10U, 0xBEEFU, 64U, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe_response(&self, nullptr, 10U, 0xBEEFU, 64U, &capture_sub_vtable));
+    TEST_ASSERT_NULL(canard_v0_subscribe_response(&self, &sub, 10U, 0xBEEFU, 64U, nullptr));
 }
 
 // -------------------------------------------  v0 Port-ID Range  ------------------------------------------------------
@@ -511,16 +545,18 @@ static void test_v0_subscribe_port_id_range()
 
     // v0 message data_type_id: full uint16 range is valid.
     canard_subscription_t sub1 = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub1, 0xFFFFU, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1,
+                          canard_v0_subscribe(&self, &sub1, 0xFFFFU, 0x1234U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub1);
 
     // v0 service data_type_id: 0xFF is valid.
     canard_subscription_t sub2 = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe_request(&self, &sub2, 0xFFU, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub2,
+                          canard_v0_subscribe_request(&self, &sub2, 0xFFU, 0x1234U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub2);
 
     canard_subscription_t sub3 = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe_response(&self, &sub3, 0xFFU, 0x1234U, 64U, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub3, canard_v0_subscribe_response(&self, &sub3, 0xFFU, 0x1234U, 64U, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub3);
 
     canard_destroy(&self);
@@ -536,24 +572,28 @@ static void test_v0_subscribe_duplicate_rejection()
 
     canard_subscription_t sub1 = {};
     canard_subscription_t sub2 = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub1, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
-    // Same data_type_id, same kind: must fail.
-    TEST_ASSERT_FALSE(canard_v0_subscribe(&self, &sub2, 100U, 0x5678U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_v0_subscribe(&self, &sub1, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    // Same data_type_id, same kind: must return the incumbent.
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_v0_subscribe(&self, &sub2, 100U, 0x5678U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub1, canard_find_subscription(&self, canard_kind_v0_message, 100U));
     canard_unsubscribe(&self, &sub1);
 
     // Different kinds (v0 message vs v0 request) with same numeric ID: must succeed.
     canard_subscription_t sub_msg = {};
     canard_subscription_t sub_req = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub_msg, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_TRUE(canard_v0_subscribe_request(&self, &sub_req, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_msg,
+                          canard_v0_subscribe(&self, &sub_msg, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub_req, canard_v0_subscribe_request(&self, &sub_req, 100U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub_req);
     canard_unsubscribe(&self, &sub_msg);
 
     // v0 and v1 subscriptions with the same numeric port_id coexist (separate kind trees).
     canard_subscription_t sub_v0 = {};
     canard_subscription_t sub_v1 = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub_v0, 200U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
-    TEST_ASSERT_TRUE(canard_subscribe_16b(&self, &sub_v1, 200U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_v0,
+                          canard_v0_subscribe(&self, &sub_v0, 200U, 0x1234U, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub_v1, canard_subscribe_16b(&self, &sub_v1, 200U, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub_v1);
     canard_unsubscribe(&self, &sub_v0);
 
@@ -569,10 +609,10 @@ static void test_v0_subscribe_unsubscribe_resubscribe()
     init_canard(&self, &now_val, 42U);
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 300U, 0xAAAAU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_v0_subscribe(&self, &sub, 300U, 0xAAAAU, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub);
     // Re-subscribe to the same data_type_id must succeed.
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 300U, 0xAAAAU, 64U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_v0_subscribe(&self, &sub, 300U, 0xAAAAU, 64U, 2000000, &capture_sub_vtable));
     canard_unsubscribe(&self, &sub);
 
     canard_destroy(&self);
@@ -588,7 +628,7 @@ static void test_v0_message_reception()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 1000U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_v0_subscribe(&self, &sub, 1000U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // Single-frame v0 message from node 10, priority nominal, transfer-ID 3.
@@ -622,7 +662,8 @@ static void test_v0_service_request_reception()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe_request(&self, &sub, 0x37U, 0xBEEFU, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_v0_subscribe_request(&self, &sub, 0x37U, 0xBEEFU, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // v0 service request from node 10 to node 42 (us), data_type_id 0x37, transfer-ID 5.
@@ -654,7 +695,7 @@ static void test_v0_service_response_reception()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe_response(&self, &sub, 0x55U, 0xFACEU, 256U, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_v0_subscribe_response(&self, &sub, 0x55U, 0xFACEU, 256U, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // v0 service response from node 99 to node 42 (us), data_type_id 0x55, transfer-ID 7.
@@ -686,7 +727,7 @@ static void test_v0_unsubscribe_stops_delivery()
 
     rx_capture_t          cap = {};
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_v0_subscribe(&self, &sub, 500U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_v0_subscribe(&self, &sub, 500U, 0x1234U, 256U, 2000000, &capture_sub_vtable));
     sub.user_context = (&cap);
 
     // First frame: should be delivered.
@@ -724,6 +765,7 @@ int main()
 
     // Subscription management.
     RUN_TEST(test_subscribe_duplicate_rejection);
+    RUN_TEST(test_find_subscription);
     RUN_TEST(test_subscribe_unsubscribe_resubscribe);
 
     // End-to-end message reception.

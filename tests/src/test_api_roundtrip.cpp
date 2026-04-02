@@ -204,7 +204,8 @@ static void test_roundtrip_v1v1_single_frame_classic()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 100U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -247,7 +248,8 @@ static void test_roundtrip_v1v1_single_frame_fd()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 200U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -296,7 +298,8 @@ static void test_roundtrip_v1v1_multiframe_classic_2frames()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 300U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -339,7 +342,8 @@ static void test_roundtrip_v1v1_multiframe_classic_many()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 400U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -383,7 +387,8 @@ static void test_roundtrip_v1v1_multiframe_fd()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 500U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -427,8 +432,10 @@ static void test_roundtrip_v1v0_single_frame()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_13b(
-      &rx_inst, &sub, 4000U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
+      canard_subscribe_13b(
+        &rx_inst, &sub, 4000U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint_least8_t        payload_data[5] = { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE };
@@ -472,8 +479,10 @@ static void test_roundtrip_v1v0_multiframe()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_13b(
-      &rx_inst, &sub, 5000U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
+      canard_subscribe_13b(
+        &rx_inst, &sub, 5000U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     uint_least8_t payload_data[15];
@@ -515,8 +524,9 @@ static void test_roundtrip_v1_service_request()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_request(
-      &rx_inst, &sub, 50U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_subscribe_request(
+                            &rx_inst, &sub, 50U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint_least8_t        payload_data[3] = { 0xCA, 0xFE, 0x42 };
@@ -556,7 +566,7 @@ static void test_roundtrip_v1_service_response()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_response(&rx_inst, &sub, 60U, EXTENT, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_response(&rx_inst, &sub, 60U, EXTENT, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint_least8_t        payload_data[4] = { 0xBE, 0xEF, 0x00, 0xFF };
@@ -596,8 +606,9 @@ static void test_roundtrip_v1_service_multiframe()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_request(
-      &rx_inst, &sub, 70U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_subscribe_request(
+                            &rx_inst, &sub, 70U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     uint_least8_t payload_data[20];
@@ -640,8 +651,10 @@ static void test_roundtrip_all_priorities()
         rx_ctx.now_val = TIMESTAMP;
 
         canard_subscription_t sub = {};
-        TEST_ASSERT_TRUE(canard_subscribe_16b(
-          &rx_inst, &sub, 600U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+        TEST_ASSERT_EQUAL_PTR(
+          &sub,
+          canard_subscribe_16b(
+            &rx_inst, &sub, 600U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
         sub.user_context = &rx_cap;
 
         const uint_least8_t        payload_data[2] = { 0x11, 0x22 };
@@ -677,7 +690,8 @@ static void test_roundtrip_all_transfer_ids()
     init_rx(&rx_inst, &rx_ctx, RX_NODE_ID);
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 700U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -728,7 +742,8 @@ static void test_roundtrip_empty_payload()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 800U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -767,7 +782,8 @@ static void test_roundtrip_boundary_7_bytes_classic()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
       canard_subscribe_16b(&rx_inst, &sub, 900U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
@@ -806,8 +822,10 @@ static void test_roundtrip_boundary_8_bytes_classic()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(
-      &rx_inst, &sub, 1000U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
+      canard_subscribe_16b(
+        &rx_inst, &sub, 1000U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     const uint_least8_t        payload_data[8] = { 10, 20, 30, 40, 50, 60, 70, 80 };
@@ -845,8 +863,10 @@ static void test_roundtrip_boundary_63_bytes_fd()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(
-      &rx_inst, &sub, 1100U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
+      canard_subscribe_16b(
+        &rx_inst, &sub, 1100U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     uint_least8_t payload_data[63];
@@ -887,8 +907,10 @@ static void test_roundtrip_boundary_64_bytes_fd()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(
-      &rx_inst, &sub, 1200U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
+      canard_subscribe_16b(
+        &rx_inst, &sub, 1200U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     uint_least8_t payload_data[64];
@@ -928,8 +950,10 @@ static void test_roundtrip_scattered_payload()
     rx_ctx.now_val = TIMESTAMP;
 
     canard_subscription_t sub = {};
-    TEST_ASSERT_TRUE(canard_subscribe_16b(
-      &rx_inst, &sub, 1300U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
+    TEST_ASSERT_EQUAL_PTR(
+      &sub,
+      canard_subscribe_16b(
+        &rx_inst, &sub, 1300U, EXTENT, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &roundtrip_sub_vtable));
     sub.user_context = &rx_cap;
 
     // Three payload fragments: 3, 4, 5 bytes = 12 total.
