@@ -2,11 +2,8 @@
 
 # Cyphal/CAN transport in C
 
-[![Main Workflow](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=alert_status)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=coverage)](https://sonarcloud.io/dashboard?id=libcanard)
-[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=libcanard&metric=ncloc)](https://sonarcloud.io/dashboard?id=libcanard)
+[![CI](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml/badge.svg)](https://github.com/OpenCyphal/libcanard/actions/workflows/main.yml)
+[![Coverage](https://coveralls.io/repos/github/OpenCyphal/libcanard/badge.svg)](https://coveralls.io/github/OpenCyphal/libcanard)
 [![Forum](https://img.shields.io/discourse/users.svg?server=https%3A%2F%2Fforum.opencyphal.org&color=1700b3)](https://forum.opencyphal.org)
 
 </div>
@@ -14,239 +11,155 @@
 -----
 
 Libcanard is a robust implementation of the Cyphal/CAN transport layer in C for high-integrity real-time embedded systems.
+Supports Cyphal v1.1, v1.0, and legacy UAVCAN v0 aka DroneCAN.
 
-[Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
-communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
+The library supports both Classic CAN and CAN FD, in redundant and non-redundant configurations.
 
-**Read the docs in [`libcanard/canard.h`](/libcanard/canard.h).**
+The library is compatible with 8/16/32/64-bit platforms, including extremely resource-constrained
+baremetal MCU platforms starting from 32K ROM and 32K RAM.
 
-Find examples, starters, tutorials on the
-[Cyphal forum](https://forum.opencyphal.org/t/libcanard-examples-starters-tutorials/935).
-
-If you want to contribute, please read [`CONTRIBUTING.md`](/CONTRIBUTING.md).
-
-## Features
-
-- Full test coverage and extensive static analysis.
-- Compliance with automatically enforceable MISRA C rules (reach out to <https://forum.opencyphal.org> for details).
-- Detailed time complexity and memory requirement models for the benefit of real-time high-integrity applications.
-- Purely reactive API without the need for background servicing.
-- Support for the Classic CAN and CAN FD.
-- Support for redundant network interfaces.
-- Compatibility with 8/16/32/64-bit platforms.
-- Compatibility with extremely resource-constrained baremetal environments starting from 32K ROM and 32K RAM.
-- Implemented in ≈1000 SLoC.
-
-## Platforms
-
-The library is designed to be usable out of the box with any conventional 8/16/32/64-bit platform,
-including deeply embedded baremetal platforms, as long as there is a standard-compliant compiler available.
-The platform-specific media IO layer (driver) is supposed to be provided by the application:
-
-    +---------------------------------+
-    |           Application           |
-    +-------+-----------------+-------+
-            |                 |
-    +-------+-------+ +-------+-------+
-    |   Libcanard   | |   CAN driver  |
-    +---------------+ +-------+-------+
-                              |
-                      +-------+-------+
-                      | CAN controller|
-                      +---------------+
-
+The interface with the underlying platform is very clean and minimal, enabling quick adaptation to any CAN-enabled MCU.
 The OpenCyphal Development Team maintains a collection of various platform-specific components in a separate repository
 at <https://github.com/OpenCyphal/platform_specific_components>.
 Users are encouraged to search through that repository for drivers, examples, and other pieces that may be
 reused in the target application to speed up the design of the media IO layer (driver) for the application.
 
-## Example
+[Cyphal](https://opencyphal.org) is an open lightweight data bus standard designed for reliable intravehicular
+communication in aerospace and robotic applications via CAN bus, Ethernet, and other robust transports.
 
-The example augments the documentation but does not replace it.
+**Read the docs in [`libcanard/canard.h`](libcanard/canard.h).**
 
-The library requires a constant-complexity deterministic dynamic memory allocator.
-We could use the standard C heap, but most implementations are not constant-complexity,
-so let's suppose that we're using [O1Heap](https://github.com/pavel-kirienko/o1heap) instead.
-We are going to need basic wrappers:
+## Quick start
 
-```c
-static void* memAllocate(void* const user_reference, const size_t size)
+📚 Find runnable examples under `demos/`.
+
+```c++
+#include <assert.h>
+#include <stdlib.h>
+#include "canard.h"
+
+// Return the current monotonic time in microseconds starting from some arbitrary instant in the past (e.g., boot).
+static canard_us_t app_now(const canard_t* const self); 
+
+// Embedded systems may prefer https://github.com/pavel-kirienko/o1heap.
+static void* app_alloc(const canard_mem_t memory, const size_t size) { return malloc(size); }
+static void app_free(const canard_mem_t memory, const size_t size, void* const pointer) { free(pointer); }
+
+// Transmit a CAN frame non-blockingly; return true if submitted, false if would block (will try again later).
+// Frame transmission may be aborted if it doesn't hit the bus before the deadline.
+static bool app_tx(canard_t* const      self,
+                   void* const          user_context,
+                   const canard_us_t    deadline,
+                   const uint_least8_t  iface_index,
+                   const bool           fd,
+                   const uint32_t       extended_can_id,
+                   const canard_bytes_t can_data);
+
+// Process a received message. The user may attach arbitrary context to the subscription via the user context pointer.
+static void app_on_message(canard_subscription_t* const self,
+                           const canard_us_t            timestamp,
+                           const canard_prio_t          priority,
+                           const uint_least8_t          source_node_id,
+                           const uint_least8_t          transfer_id,
+                           const canard_payload_t       payload)
 {
-    (void) user_reference;
-    return o1heapAllocate(my_allocator, size);
-}
-
-static void memFree(void* const user_reference, const size_t size, void* const pointer)
-{
-    (void) user_reference;
-    (void) size;
-    o1heapFree(my_allocator, pointer);
-}
-```
-
-Init a library instance:
-
-```c
-const struct CanardMemoryResource memory = {NULL, memFree, memAllocate};
-struct CanardInstance canard = canardInit(memory);
-canard.node_id = 42;                        // Defaults to anonymous; can be set up later at any point.
-```
-
-In order to be able to send transfers over the network, we will need one transmission queue per redundant CAN interface:
-
-```c
-const struct CanardMemoryResource tx_memory = {NULL, memFree, memAllocate};
-struct CanardTxQueue queue = canardTxInit(
-    100,                // Limit the size of the queue at 100 frames.
-    CANARD_MTU_CAN_FD,  // Set MTU = 64 bytes. There is also CANARD_MTU_CAN_CLASSIC.
-    tx_memory);
-```
-
-Publish a message (message serialization not shown):
-
-```c
-static uint8_t my_message_transfer_id;  // Must be static or heap-allocated to retain state between calls.
-const struct CanardTransferMetadata transfer_metadata = {
-    .priority       = CanardPriorityNominal,
-    .transfer_kind  = CanardTransferKindMessage,
-    .port_id        = 1234,                       // This is the subject-ID.
-    .remote_node_id = CANARD_NODE_ID_UNSET,       // Messages cannot be unicast, so use UNSET.
-    .transfer_id    = my_message_transfer_id,
-};
-++my_message_transfer_id;  // The transfer-ID shall be incremented after every transmission on this subject.
-int32_t result = canardTxPush(&queue,               // Call this once per redundant CAN interface (queue).
-                              &canard,
-                              tx_deadline_usec,     // Transmission deadline (absolute monotonic time in usec).
-                              &transfer_metadata,
-                              47,                   // Size of the message payload (see Nunavut transpiler).
-                              "\x2D\x00" "Sancho, it strikes me thou art in great fear.",
-                              NULL);
-if (result < 0)
-{
-    // An error has occurred: either an argument is invalid, the TX queue is full, or we've run out of memory.
-    // It is possible to statically prove that an out-of-memory will never occur for a given application if the
-    // heap is sized correctly; for background, refer to the Robson's Proof and the documentation for O1Heap.
-}
-```
-
-Use [Nunavut](https://github.com/OpenCyphal/nunavut) to automatically generate
-(de)serialization code from DSDL definitions.
-
-The CAN frames generated from the message transfer are now stored in the `queue`.
-We need to pick them out one by one and have them transmitted.
-Normally, the following fragment should be invoked periodically to unload the CAN frames from the
-prioritized transmission queue (or several, if redundant network interfaces are used) into the CAN driver:
-
-```c
-for (struct CanardTxQueueItem* ti = NULL; (ti = canardTxPeek(&queue)) != NULL;)  // Peek at the top of the queue.
-{
-    if ((0U == ti->tx_deadline_usec) || (ti->tx_deadline_usec > getCurrentMicroseconds()))  // Check the deadline.
-    {
-        if (!pleaseTransmit(ti))               // Send the frame over this redundant CAN iface.
-        {
-            break;                             // If the driver is busy, break and retry later.
-        }
+    // payload.view contains the useful payload bytes.
+    if (payload.origin.data != NULL) { // The application may keep the payload if necessary; eventually must release.
+        free(payload.origin.data); 
     }
-    // After the frame is transmitted or if it has timed out while waiting, pop it from the queue and deallocate:
-    canardTxFree(&queue, &canard, canardTxPop(&queue, ti));
 }
-```
 
-💡 New in v4.0: optionally, you can now use `canardTxPoll()` that automates the above for you.
-
-Transfer reception is done by feeding frames into the transfer reassembly state machine
-from any of the redundant interfaces.
-But first, we need to subscribe:
-
-```c
-struct CanardRxSubscription heartbeat_subscription;
-(void) canardRxSubscribe(&canard,   // Subscribe to messages uavcan.node.Heartbeat.
-                         CanardTransferKindMessage,
-                         7509,      // The fixed Subject-ID of the Heartbeat message type (see DSDL definition).
-                         16,        // The extent (the maximum possible payload size) provided by Nunavut.
-                         CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
-                         &heartbeat_subscription);
-
-struct CanardRxSubscription my_service_subscription;
-(void) canardRxSubscribe(&canard,   // Subscribe to an arbitrary service response.
-                         CanardTransferKindResponse,  // Specify that we want service responses, not requests.
-                         123,       // The Service-ID whose responses we will receive.
-                         1024,      // The extent (see above).
-                         CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_USEC,
-                         &my_service_subscription);
-```
-
-The "extent" refers to the minimum amount of memory required to hold any serialized representation of any compatible
-version of the data type; or, in other words, it is the maximum possible size of received objects.
-This parameter is determined by the data type author at the data type definition time.
-It is typically larger than the maximum object size in order to allow the data type author to introduce more
-fields in the future versions of the type;
-for example, `MyMessage.1.0` may have the maximum size of 100 bytes and the extent 200 bytes;
-a revised version `MyMessage.1.1` may have the maximum size anywhere between 0 and 200 bytes.
-Extent values are provided per data type by DSDL transcompilers such as Nunavut.
-
-In Libcanard we use the term "subscription" not only for subjects (messages), but also for RPC services.
-
-We can subscribe and unsubscribe at runtime as many times as we want.
-Normally, however, an embedded application would subscribe once and roll with it.
-Okay, this is how we receive transfers:
-
-```c
-struct CanardRxTransfer transfer;
-const int8_t result = canardRxAccept(&canard,
-                                     rx_timestamp_usec,          // When the frame was received, in microseconds.
-                                     &received_frame,            // The CAN frame received from the bus.
-                                     redundant_interface_index,  // If the transport is not redundant, use 0.
-                                     &transfer,
-                                     NULL);
-if (result < 0)
+int main(void)
 {
-    // An error has occurred: either an argument is invalid or we've ran out of memory.
-    // It is possible to statically prove that an out-of-memory will never occur for a given application if
-    // the heap is sized correctly; for background, refer to the Robson's Proof and the documentation for O1Heap.
-    // Reception of an invalid frame is NOT an error.
-}
-else if (result == 1)
-{
-    processReceivedTransfer(redundant_interface_index, &transfer);  // A transfer has been received, process it.
-    canard.memory_free(&canard, transfer.payload);                  // Deallocate the dynamic memory afterwards.
-}
-else
-{
-    // Nothing to do.
-    // The received frame is either invalid or it's a non-last frame of a multi-frame transfer.
-    // Reception of an invalid frame is NOT reported as an error because it is not an error.
+    static const canard_mem_vtable_t mem_vtable = { .free  = app_free, .alloc = app_alloc };
+    const canard_mem_t mem = { .vtable  = &mem_vtable, .context = NULL };
+    const canard_mem_set_t mem_set = { .tx_transfer = mem, .tx_frame = mem, .rx_session = mem, .rx_payload = mem };
+    const canard_vtable_t vtable = { .now = app_now, .tx = app_tx };
+    static const canard_subscription_vtable_t sub_vtable = { .on_message = app_on_message };
+    
+    // Set up the local node. The node-ID will be allocated automatically.
+    canard_t              node;
+    if (!canard_new(&node, &vtable, mem_set, 100, UID_OR_TRUE_RANDOM_NUMBER, 0U)) {
+        return -1;
+    }
+    if (!canard_set_node_id(&node, 42U)) {
+        canard_destroy(&node);
+        return -1;
+    }
+    
+    // Subscribe for messages.
+    canard_subscription_t sub;
+    const canard_subscription_t* const installed =
+      canard_subscribe_13b(&node, &sub, 7509U, 63U, CANARD_DEFAULT_TRANSFER_ID_TIMEOUT_us, &sub_vtable);
+    if (installed != &sub) { // NULL on invalid args, otherwise points to the incumbent subscription.
+        canard_destroy(&node);
+        return -1;
+    }
+
+    // Publish a message.
+    const canard_bytes_chain_t payload = { .bytes = {.size = 12, .data = "Hello world!"} };
+    assert(canard_publish_13b(&node,
+                              app_now(&node) + 1000000,
+                              CANARD_IFACE_BITMAP_ALL,
+                              canard_prio_nominal,
+                              7509U,
+                              0U,
+                              payload,
+                              NULL));
+
+    canard_poll(&node, CANARD_IFACE_BITMAP_ALL); // Call again whenever one or more ifaces become writable.
+
+    // Later, when a CAN frame is received:
+    // static const uint8_t rx_frame_bytes[8] = { ... };
+    // (void)canard_ingest_frame(&node,
+    //                           app_now(&node),
+    //                           0U,
+    //                           rx_extended_can_id,
+    //                           (canard_bytes_t){.size = sizeof(rx_frame_bytes), .data = rx_frame_bytes});
+
+    canard_unsubscribe(&node, &sub);
+    canard_destroy(&node);
+    return 0;
 }
 ```
-
-A simple API for generating CAN hardware acceptance filter configurations is also provided.
-Acceptance filters are generated in an extended 29-bit ID + mask scheme and can be used to minimize
-the number of irrelevant transfers processed in software.
-
-```c
-// Generate an acceptance filter to receive only uavcan.node.Heartbeat.1.0 messages (fixed port-ID 7509):
-struct CanardFilter heartbeat_config = canardMakeFilterForSubject(7509);
-// And to receive only uavcan.register.Access.1.0 service transfers (fixed port-ID 384):
-struct CanardFilter register_access_config = canardMakeFilterForService(384, ins.node_id);
-
-// You can also combine the two filter configurations into one (may also accept irrelevant messages).
-// This allows consolidating a large set of configurations to fit the number of hardware filters.
-// For more information on the optimal subset of configurations to consolidate to minimize wasted CPU,
-// see the Cyphal specification.
-struct CanardFilter combined_config =
-        canardConsolidateFilters(&heartbeat_config, &register_access_config);
-configureHardwareFilters(combined_config.extended_can_id, combined_config.extended_mask);
-```
-
-Full API specification is available in the documentation.
-If you find the examples to be unclear or incorrect, please, open a ticket.
 
 ## Revisions
+
+To release a new version, simply publish a new release on GitHub.
+
+### v5.0 [WORK IN PROGRESS]
+
+v5 is a major rework based on the experience gained from extensive production use of the previous revisions.
+The API has been redesigned from scratch and as such there is no migration guide available;
+please read the new `canard.h` to see how to use the library -- the new API is simpler than the old one.
+
+Main changes:
+
+- Support for new protocols alongside Cyphal v1.0:
+  - Cyphal/CAN v1.1, which adds support for 16-bit subject-IDs (like in UAVCAN v0) via a new CAN ID layout format.
+  - UAVCAN v0 aka DroneCAN, a legacy predecessor to Cyphal v1.0 that is still widely used.
+
+- Anonymous messages can no longer be transmitted, but they can still be received.
+
+- A new passive node-ID autoconfiguration based on a simple occupancy observer.
+  This method is decentralized and is compatible with old nodes.
+  A node-ID can still be assigned manually if needed.
+
+- Automatic CAN acceptance filter configuration based on the current subscription set.
+  The configuration is refreshed whenever the subscription set is modified or the local node-ID is changed.
+
+- New TX pipeline using per-transfer queue granularity with efficient CAN frame deduplication across redundant
+  interfaces, which resulted in a major reduction of heap memory footprint (typ. x2+ reduction).
+
+- New RX pipeline supporting priority level preemption without transfer loss and reduced memory consumption.
+  The old revision was susceptible to transfer loss when the remote initiated a higher-priority multi-frame
+  transfer while a lower-priority multi-frame transfer was in flight. The v5 revision maintains concurrent
+  reassemblers per priority level, enabling arbitrary priority nesting.
 
 ### v4.0
 
 Updating from Libcanard v3 to v4 involves several changes in memory management and TX frame expiration.
-Please follow the [MIGRATION_v3.x_to_v4.0](MIGRATION_v3.x_to_v4.0.md) guide and carefully update your code.
+Please follow the `MIGRATION_v3.x_to_v4.0.md` guide available in the v4 codebase.
 
 ### v3.2
 

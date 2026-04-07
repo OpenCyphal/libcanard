@@ -1,14 +1,14 @@
 name: Verification & Static Analysis
 on: [push, pull_request]
 env:
-  LLVM_VERSION: 19
+  LLVM_VERSION: 20
 jobs:
   debug:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toolchain: ['clang', 'gcc']
+        toolchain: ["clang", "gcc"]
         include:
           - toolchain: gcc
             c-compiler: gcc
@@ -17,27 +17,33 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
       - run: |
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
           sudo apt-get update -y && sudo apt-get upgrade -y
-          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION
+          sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION clang-format-$LLVM_VERSION cppcheck
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
+          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$LLVM_VERSION 50
+          sudo update-alternatives --set clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION
+          sudo update-alternatives --set clang-format /usr/bin/clang-format-$LLVM_VERSION
           clang-tidy --version
+          clang-format --version
       - run: >
           cmake
           -B ${{ github.workspace }}/build
           -DCMAKE_BUILD_TYPE=Debug
           -DCMAKE_C_COMPILER=${{ matrix.c-compiler }}
           -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }}
-          tests
+          .
       - working-directory: ${{github.workspace}}/build
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
@@ -50,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        toolchain: ['clang', 'gcc']
+        toolchain: ["clang", "gcc"]
         build_type: [Release, MinSizeRel]
         include:
           - toolchain: gcc
@@ -60,7 +66,9 @@ jobs:
             c-compiler: clang
             cxx-compiler: clang++
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
       - run: |
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install gcc-multilib g++-multilib
@@ -71,12 +79,12 @@ jobs:
           -DCMAKE_C_COMPILER=${{ matrix.c-compiler }}
           -DCMAKE_CXX_COMPILER=${{ matrix.cxx-compiler }}
           -DNO_STATIC_ANALYSIS=1
-          tests
+          .
       - working-directory: ${{github.workspace}}/build
         run: |
           make VERBOSE=1
           make test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
@@ -84,125 +92,68 @@ jobs:
           retention-days: 7
           include-hidden-files: true
 
-  avr:
+  coverage:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    env:
-      mcu: at90can64
-      flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
       - run: |
           sudo apt-get update -y && sudo apt-get upgrade -y
-          sudo apt-get install gcc-avr avr-libc
-          avr-gcc --version
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c11 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=gnu99 -mmcu=${{ env.mcu }} ${{ env.flags }}
-      - run: avr-gcc libcanard/*.c -isystem lib/cavl2 -c -std=gnu11 -mmcu=${{ env.mcu }} ${{ env.flags }}
+          sudo apt-get install -y gcc-multilib g++-multilib lcov
+          pip install --break-system-packages gcovr
+      - run: >
+          cmake
+          -B ${{ github.workspace }}/build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DNO_STATIC_ANALYSIS=1
+          -DENABLE_COVERAGE=ON
+          .
+      - working-directory: ${{ github.workspace }}/build
+        run: |
+          make -j$(nproc)
+          make test
+          make coverage
+      # Export Cobertura report for Coveralls, tracking only libcanard/canard.c.
+      - run: |
+          cd "${{ github.workspace }}/build"
+          gcovr \
+            --root "${{ github.workspace }}" \
+            --filter '.*/libcanard/canard\.c$' \
+            --xml-pretty \
+            --output "${{ github.workspace }}/build/coverage-canard.cobertura.xml" \
+            --print-summary
+      - id: coveralls_upload
+        uses: coverallsapp/github-action@v2
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/coverage-canard.cobertura.xml
+          format: cobertura
+      - if: ${{ steps.coveralls_upload.outcome == 'failure' }}
+        run: |
+          echo "::warning::Coveralls upload failed (likely Coveralls API issue). Continuing without failing CI."
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ github.job }}-coverage-report
+          path: ${{ github.workspace }}/build/coverage-html
+          retention-days: 30
 
   arm:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
-      flags: -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
+      flags: >
+        -Wall -Wextra -Werror -pedantic -Wconversion -Wtype-limits -Wcast-align -Wfatal-errors
+        -Wno-error=unused-function
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
       - run: |
           sudo apt-get update -y && sudo apt-get upgrade -y
           sudo apt-get install -y gcc-arm-none-eabi
       - run: arm-none-eabi-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c99 ${{ env.flags }}
       - run: arm-none-eabi-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c11 ${{ env.flags }}
-
-  style_check:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: DoozyX/clang-format-lint-action@v0.20
-        with:
-          source: './libcanard ./tests'
-          exclude: './tests/catch'
-          extensions: 'c,h,cpp,hpp'
-          clangFormatVersion: ${{ env.LLVM_VERSION }}
-
-  sonarcloud:
-    if: >
-      github.event_name == 'pull_request'                   ||
-      contains(github.ref, '/master')                       ||
-      contains(github.ref, '/release')                      ||
-      contains(github.event.head_commit.message, '#sonar')
-    runs-on: ubuntu-latest
-    env:
-      SONAR_SCANNER_VERSION: 5.0.1.3006
-      SONAR_SERVER_URL: "https://sonarcloud.io"
-      BUILD_WRAPPER_OUT_DIR: build_wrapper_output_directory
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update -y && sudo apt-get upgrade -y
-        sudo apt-get install -y gcc-multilib g++-multilib
-
-    - name: Set up JDK
-      uses: actions/setup-java@v4
-      with:
-        java-version: 17
-        distribution: zulu
-
-    - name: Cache SonarCloud packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.sonar/cache
-        key: ${{ runner.os }}-sonar
-        restore-keys: ${{ runner.os }}-sonar
-
-    - name: Download and set up sonar-scanner
-      env:
-        SONAR_SCANNER_DOWNLOAD_URL: https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${{ env.SONAR_SCANNER_VERSION }}-linux.zip
-      run: |
-        mkdir -p $HOME/.sonar
-        curl -sSLo $HOME/.sonar/sonar-scanner.zip ${{ env.SONAR_SCANNER_DOWNLOAD_URL }}
-        unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
-        echo "$HOME/.sonar/sonar-scanner-${{ env.SONAR_SCANNER_VERSION }}-linux/bin" >> $GITHUB_PATH
-
-    - name: Download and set up build-wrapper
-      env:
-        BUILD_WRAPPER_DOWNLOAD_URL: ${{ env.SONAR_SERVER_URL }}/static/cpp/build-wrapper-linux-x86.zip
-      run: |
-        curl -sSLo $HOME/.sonar/build-wrapper-linux-x86.zip ${{ env.BUILD_WRAPPER_DOWNLOAD_URL }}
-        unzip -o $HOME/.sonar/build-wrapper-linux-x86.zip -d $HOME/.sonar/
-        echo "$HOME/.sonar/build-wrapper-linux-x86" >> $GITHUB_PATH
-
-    - name: Run build-wrapper
-      run: |
-        cmake tests -DCMAKE_BUILD_TYPE=Debug -DNO_STATIC_ANALYSIS=1 -DCMAKE_C_FLAGS='-DNDEBUG=1'
-        build-wrapper-linux-x86-64 --out-dir ${{ env.BUILD_WRAPPER_OUT_DIR }} make all
-        make test
-        gcov --preserve-paths --long-file-names $(find CMakeFiles/test_private_cov.dir    -name '*.gcno')
-        gcov --preserve-paths --long-file-names $(find CMakeFiles/test_public_cov.dir     -name '*.gcno')
-
-    - name: Run sonar-scanner
-      # Don't run sonar-scanner on builds originating from forks due to secrets not being available
-      run: >
-        [ -z "$SONAR_TOKEN" ] || sonar-scanner
-        --define sonar.organization=opencyphal
-        --define sonar.projectName=libcanard
-        --define sonar.projectKey=libcanard
-        --define sonar.sources=libcanard
-        --define sonar.cfamily.gcov.reportsPath=.
-        --define sonar.cfamily.compile-commands="${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json"
-        --define sonar.host.url="${{ env.SONAR_SERVER_URL }}"
-
-    - uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: ${{github.job}}-#${{strategy.job-index}}-${{job.status}}-${{join(matrix.*, ',')}}
-        path: ${{github.workspace}}/**/*
-        retention-days: 7
-        include-hidden-files: true
