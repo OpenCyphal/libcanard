@@ -127,11 +127,10 @@ int main(void)
 
 To release a new version, simply publish a new release on GitHub.
 
-### v5.0 [WORK IN PROGRESS]
+### v5.0.alpha
 
 v5 is a major rework based on the experience gained from extensive production use of the previous revisions.
-The API has been redesigned from scratch and as such there is no migration guide available;
-please read the new `canard.h` to see how to use the library -- the new API is simpler than the old one.
+The main intended use case is with [**Cy**](https://github.com/OpenCyphal-Garage/cy) rather than standalone.
 
 Main changes:
 
