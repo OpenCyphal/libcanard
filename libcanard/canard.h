@@ -298,6 +298,9 @@ struct canard_t
     /// The node-ID can be set manually via the corresponding function.
     uint_least8_t node_id;
 
+    /// Bitmap of interfaces available on this node; the enqueue interface bitmap is ANDed with it. Zero is listen-only.
+    uint_least8_t iface_bitmap;
+
     struct
     {
         /// By default, CAN FD mode is used; this flag can be used to change the mode to Classic CAN if needed;
@@ -380,10 +383,15 @@ struct canard_t
 ///
 /// CAN FD mode is selected by default for outgoing frames; override the fd flag to change the mode if needed.
 ///
+/// iface_bitmap is the set of interfaces available on this node; every enqueue interface bitmap is ANDed with it,
+/// so a transfer targeting only unavailable interfaces is enqueued nowhere. Zero makes the node listen-only (no TX).
+/// It may use only the CANARD_IFACE_COUNT least significant bits.
+///
 /// Returns true on success, false if any of the parameters are invalid.
 bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
+                const uint_least8_t          iface_bitmap,
                 const size_t                 tx_queue_capacity,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count);
@@ -434,6 +442,8 @@ void canard_refcount_inc(const canard_bytes_t obj);
 void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 
 /// Enqueue a message transfer on the specified interfaces. Use CANARD_IFACE_BITMAP_ALL to send on all interfaces.
+/// The bitmap is ANDed with the node's available interfaces set at init; a transfer targeting no available interface
+/// is enqueued nowhere and false is returned.
 /// Message ordering observed on the bus is guaranteed per subject as long as the priority of later messages is
 /// not higher (numerically not lower) than that of earlier messages.
 /// The context is passed into the tx() vtable function.
@@ -441,8 +451,9 @@ void canard_refcount_dec(canard_t* const self, const canard_bytes_t obj);
 /// Cost is roughly linear in the number of emitted CAN frames plus log-time queue indexing.
 /// Memory use is one TX transfer object plus one shared TX frame object per emitted CAN frame.
 ///
-/// Returns true on success; false on invalid arguments, OOM, or TX queue exhaustion.
-/// See err.oom and err.tx_capacity for the enqueue failure cause.
+/// Returns true on success; false on invalid arguments, OOM, TX queue exhaustion, or no available interface.
+/// See err.oom and err.tx_capacity for OOM/capacity failures; a drop because no requested interface is available
+/// increments no counter.
 bool canard_publish_16b(canard_t* const            self,
                         const canard_us_t          deadline,
                         const uint_least8_t        iface_bitmap,
@@ -570,7 +581,8 @@ void canard_unsubscribe(canard_t* const self, canard_subscription_t* const subsc
 ///
 /// To obtain the CRC seed, use canard_v0_crc_seed_from_data_type_signature(); if the payload does not exceed 7 bytes,
 /// the CRC seed can be arbitrary since it is not needed for single-frame transfers.
-/// Returns true on success; false on invalid arguments, OOM, or TX queue exhaustion.
+/// The interface bitmap is ANDed with the node's available interfaces set at init, as in canard_publish().
+/// Returns true on success; false on invalid arguments, OOM, TX queue exhaustion, or no available interface.
 /// A nonzero local node-ID is required.
 bool canard_v0_publish(canard_t* const            self,
                        const canard_us_t          deadline,

@@ -294,6 +294,7 @@ int main(const int argc, const char* const argv[])
                       .rx_payload  = mem,
                       .rx_filters  = mem,
                     },
+                    0,  // iface_bitmap: no TX interfaces => listen-only
                     0,  // tx_queue_capacity: receive-only
                     0,  // prng_seed: irrelevant for receive-only
                     0)) // filter_count: no HW filters

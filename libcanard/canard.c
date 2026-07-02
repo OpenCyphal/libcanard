@@ -744,6 +744,12 @@ static bool tx_push(canard_t* const            self,
     CANARD_ASSERT((!tr->fd) || !v0); // The caller must ensure this.
     CANARD_ASSERT(iface_bitmap != 0);
 
+    const byte_t effective = iface_bitmap & (byte_t)self->iface_bitmap;
+    if (effective == 0) {
+        mem_free(self->mem.tx_transfer, sizeof(tx_transfer_t), tr);
+        return false;
+    }
+
     const canard_us_t now = self->vtable->now(self);
 
     // Expire old transfers first to free up queue space.
@@ -775,7 +781,7 @@ static bool tx_push(canard_t* const            self,
     (void)queue_size_before;
 
     // Adjust the spooled frame refcounts to avoid premature deallocation.
-    const byte_t frame_refcount_inc = (byte_t)(popcount(iface_bitmap) - 1U);
+    const byte_t frame_refcount_inc = (byte_t)(popcount(effective) - 1U);
     CANARD_ASSERT(frame_refcount_inc < CANARD_IFACE_COUNT);
     if (frame_refcount_inc > 0) {
         tx_frame_t* frame = spool;
@@ -787,7 +793,7 @@ static bool tx_push(canard_t* const            self,
 
     // Attach the spool.
     FOREACH_IFACE (i) {
-        if ((iface_bitmap & (1U << i)) != 0) {
+        if ((effective & (1U << i)) != 0) {
             tr->cursor[i] = spool;
         }
     }
@@ -1958,19 +1964,22 @@ static void node_id_occupancy_update(canard_t* const self, const byte_t src)
 bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
+                const uint_least8_t          iface_bitmap,
                 const size_t                 tx_queue_capacity,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count)
 {
     const bool filter_ok = (filter_count == 0) || //
                            ((vtable != NULL) && (vtable->filter != NULL) && mem_valid(memory.rx_filters));
-    const bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
+    const bool iface_ok = (iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap; // 0 => listen-only
+    const bool ok       = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
                     mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) && mem_valid(memory.rx_session) &&
-                    mem_valid(memory.rx_payload) && filter_ok;
+                    mem_valid(memory.rx_payload) && filter_ok && iface_ok;
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
         self->tx.fd             = true;
         self->tx.queue_capacity = tx_queue_capacity;
+        self->iface_bitmap      = iface_bitmap;
         self->rx.filter_count   = filter_count;
         self->rx.filters_dirty  = filter_count > 0; // Program occupancy filters even before the first subscription.
         self->mem               = memory;

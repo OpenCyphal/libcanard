@@ -904,7 +904,7 @@ static void test_rx_filter_configure_oom(void)
                                    .rx_session  = real_mem,
                                    .rx_payload  = real_mem,
                                    .rx_filters  = oom_mem };
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 4U));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 4U));
     // Add a subscription so filtering has work to do.
     canard_subscription_t sub;
     TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 100U, 64U, 1000000, &dummy_sub_vtable));
@@ -928,7 +928,7 @@ static void test_rx_filter_configure_coalescence_overflow(void)
                                    .rx_payload  = real_mem,
                                    .rx_filters  = real_mem };
     // Only 1 hardware filter slot but 2 subscriptions → overflow into coalescence.
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 1U));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 1U));
     canard_subscription_t sub1;
     canard_subscription_t sub2;
     TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
@@ -1035,7 +1035,7 @@ static canard_t make_instance(const size_t filter_count)
                                         .rx_filters  = real_mem };
     canard_t               self;
     memset(&self, 0, sizeof(self));
-    (void)canard_new(&self, &capturing_vtable, mem, 16U, 1234U, filter_count);
+    (void)canard_new(&self, &capturing_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, filter_count);
     g_cap_count = 0;
     memset(g_cap_filters, 0, sizeof(g_cap_filters));
     return self;

@@ -60,6 +60,7 @@ static void init_canard(canard_t* const                 self,
     memset(ctx, 0, sizeof(*ctx));
     self->user_context      = ctx;
     self->vtable            = &test_vtable;
+    self->iface_bitmap      = CANARD_IFACE_BITMAP_ALL;
     self->tx.queue_capacity = queue_capacity;
     self->mem.tx_transfer   = instrumented_allocator_make_resource(alloc);
     self->mem.tx_frame      = instrumented_allocator_make_resource(alloc);
@@ -1661,6 +1662,52 @@ static void test_tx_push_refcount_multi_iface(void)
     TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
 }
 
+// Availability masking must keep refcount and cursors consistent: requesting both ifaces when only iface 0 is
+// available yields a single-iface refcount and no cursor on iface 1 (a leak if popcount and the cursor loop diverge).
+static void test_tx_push_iface_availability_partial_refcount(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.iface_bitmap = 1U; // Only iface 0 available.
+
+    const byte_t               data[]  = { 0x42U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+    tx_transfer_t* const tr = tx_transfer_new(&self, 5000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_TRUE(tx_push(&self, tr, false, 3U, 0U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(1U, self.tx.queue_size);
+
+    const tx_frame_t* const frame = tr->cursor[0];
+    TEST_ASSERT_NOT_NULL(frame);
+    TEST_ASSERT_EQUAL_size_t(1U, frame->refcount);
+    TEST_ASSERT_NULL(tr->cursor[1]);
+
+    ctx.tx_budget[0] = 1U;
+    tx_eject_pending(&self, 0U);
+    TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
+// A transfer whose requested ifaces are all unavailable is freed, not leaked, and nothing is spooled.
+static void test_tx_push_iface_availability_disjoint_frees_transfer(void)
+{
+    canard_t                 self;
+    test_context_t           ctx;
+    instrumented_allocator_t alloc;
+    init_canard(&self, &ctx, &alloc, 8U);
+    self.iface_bitmap = 2U; // Only iface 1 available.
+
+    const byte_t               data[]  = { 0x42U };
+    const canard_bytes_chain_t payload = { .bytes = { .size = 1U, .data = data }, .next = NULL };
+    tx_transfer_t* const tr = tx_transfer_new(&self, 5000, ((uint32_t)canard_prio_nominal) << PRIO_SHIFT, false, NULL);
+    TEST_ASSERT_NOT_NULL(tr);
+    TEST_ASSERT_FALSE(tx_push(&self, tr, false, 1U, 0U, payload, CRC_INITIAL));
+    TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
+    TEST_ASSERT_EQUAL_size_t(0U, alloc.allocated_fragments);
+}
+
 // OOM cleanup loop in tx_spool_v0 when failure occurs after the first frame was already allocated (lines 662-668).
 static void test_canard_v0_spool_oom_mid_chain(void)
 {
@@ -1872,6 +1919,8 @@ int main(void)
     RUN_TEST(test_tx_expire_boundary);
     RUN_TEST(test_tx_predict_frame_count_exhaustive);
     RUN_TEST(test_tx_push_refcount_multi_iface);
+    RUN_TEST(test_tx_push_iface_availability_partial_refcount);
+    RUN_TEST(test_tx_push_iface_availability_disjoint_frees_transfer);
 
     return UNITY_END();
 }
