@@ -160,7 +160,7 @@ static void init_tx(canard_t* const tx, full_tx_capture_t* const cap, const uint
     *cap       = full_tx_capture_t{};
     cap->now   = 0;
     cap->count = 0;
-    TEST_ASSERT_TRUE(canard_new(tx, &tx_vtable, make_std_memory(), 64U, 0xCAFEU, 0U));
+    TEST_ASSERT_TRUE(canard_new(tx, &tx_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 64U, 0xCAFEU, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(tx, node_id));
     tx->user_context = cap;
 }
@@ -171,7 +171,7 @@ static void init_rx(canard_t* const rx, rx_context_t* const ctx, const uint_leas
     *ctx         = rx_context_t{};
     ctx->now_val = 0;
     ctx->capture = nullptr;
-    TEST_ASSERT_TRUE(canard_new(rx, &rx_vtable, make_std_memory(), 16U, 0xBEEFU, 0U));
+    TEST_ASSERT_TRUE(canard_new(rx, &rx_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 0xBEEFU, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(rx, node_id));
     rx->user_context = ctx;
 }

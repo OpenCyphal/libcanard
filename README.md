@@ -79,7 +79,7 @@ int main(void)
     
     // Set up the local node. The node-ID will be allocated automatically.
     canard_t              node;
-    if (!canard_new(&node, &vtable, mem_set, 100, UID_OR_TRUE_RANDOM_NUMBER, 0U)) {
+    if (!canard_new(&node, &vtable, mem_set, /*iface_bitmap=*/1, /*txq_cap=*/100, UID_OR_TRUE_RANDOM_NUMBER, 0U)) {
         return -1;
     }
     if (!canard_set_node_id(&node, 42U)) {

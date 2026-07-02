@@ -118,7 +118,8 @@ static void init_capture(canard_t* const        self,
     cap->now       = 0;
     cap->accept_tx = true;
     cap->count     = 0;
-    TEST_ASSERT_TRUE(canard_new(self, vtable, make_std_memory(), queue_capacity, 1234U, filter_count));
+    TEST_ASSERT_TRUE(
+      canard_new(self, vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, queue_capacity, 1234U, filter_count));
     TEST_ASSERT_TRUE(canard_set_node_id(self, node_id));
     self->user_context = cap;
 }
@@ -239,13 +240,13 @@ static uint16_t crc16_add(uint16_t crc, const void* data, const size_t size)
 static void test_canard_new_assigns_random_node_id()
 {
     canard_t self1 = {};
-    TEST_ASSERT_TRUE(canard_new(&self1, &test_vtable, make_std_memory(), 16U, 12345U, 0U));
+    TEST_ASSERT_TRUE(canard_new(&self1, &test_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 12345U, 0U));
     TEST_ASSERT_TRUE(self1.node_id >= 1U);
     TEST_ASSERT_TRUE(self1.node_id <= 127U);
     canard_destroy(&self1);
 
     canard_t self2 = {};
-    TEST_ASSERT_TRUE(canard_new(&self2, &test_vtable, make_std_memory(), 16U, 99999U, 0U));
+    TEST_ASSERT_TRUE(canard_new(&self2, &test_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 99999U, 0U));
     TEST_ASSERT_TRUE(self2.node_id >= 1U);
     TEST_ASSERT_TRUE(self2.node_id <= 127U);
     canard_destroy(&self2);
@@ -258,24 +259,35 @@ static void test_canard_new_invalid_params()
     const canard_mem_set_t mem  = make_std_memory();
 
     // NULL self.
-    TEST_ASSERT_FALSE(canard_new(nullptr, &test_vtable, mem, 16U, 0U, 0U));
+    TEST_ASSERT_FALSE(canard_new(nullptr, &test_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     // NULL vtable.
-    TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, 16U, 0U, 0U));
+    TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
 
     // Null vtable->now.
     canard_vtable_t bad_vtable = { .now = nullptr, .tx = mock_tx, .filter = nullptr };
-    TEST_ASSERT_FALSE(canard_new(&self, &bad_vtable, mem, 16U, 0U, 0U));
+    TEST_ASSERT_FALSE(canard_new(&self, &bad_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
 
     // Null vtable->tx.
     bad_vtable = { .now = mock_now, .tx = nullptr, .filter = nullptr };
-    TEST_ASSERT_FALSE(canard_new(&self, &bad_vtable, mem, 16U, 0U, 0U));
+    TEST_ASSERT_FALSE(canard_new(&self, &bad_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
+
+    // Zero bitmap is valid: it declares a listen-only node.
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 0U, 16U, 0U, 0U));
+    TEST_ASSERT_EQUAL_UINT8(0U, self.iface_bitmap);
+    canard_destroy(&self);
+#if UINT_LEAST8_MAX > CANARD_IFACE_BITMAP_ALL
+    TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, mem, (uint_least8_t)(CANARD_IFACE_BITMAP_ALL + 1U), 16U, 0U, 0U));
+#endif
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
+    TEST_ASSERT_EQUAL_UINT8(CANARD_IFACE_BITMAP_ALL, self.iface_bitmap);
+    canard_destroy(&self);
 }
 
 // 3. set_node_id boundary values.
 static void test_canard_set_node_id_boundary()
 {
     canard_t self = {};
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 0U));
 
     // 0 is valid per implementation (returns true).
     TEST_ASSERT_TRUE(canard_set_node_id(&self, 0U));
@@ -464,6 +476,52 @@ static void test_poll_filter_after_unsubscribe()
     canard_destroy(&self);
 }
 
+// Regression (CN-01): a duplicate subscribe returning the incumbent must not clear a pending filter
+// reconfiguration requested by a preceding new subscribe.
+static void test_poll_filter_after_duplicate_subscribe()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_capture(&self, &cap, 42U, 16U, 4U, &capture_filter_vtable);
+
+    rx_capture_t          rx_cap = {};
+    canard_subscription_t sub_a  = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_a, canard_subscribe_16b(&self, &sub_a, 6001U, 256U, 2000000, &capture_sub_vtable));
+    sub_a.user_context = &rx_cap;
+    canard_poll(&self, 0U);
+    const size_t calls_after_a = cap.filter_rec.invocation_count;
+    TEST_ASSERT_EQUAL_UINT64(1U, calls_after_a);
+
+    // New subscription B sets dirty; a subsequent duplicate subscribe of A (returns incumbent) must keep it dirty.
+    canard_subscription_t sub_b = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_b, canard_subscribe_16b(&self, &sub_b, 6002U, 256U, 2000000, &capture_sub_vtable));
+    sub_b.user_context            = &rx_cap;
+    canard_subscription_t sub_dup = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_a, canard_subscribe_16b(&self, &sub_dup, 6001U, 256U, 2000000, &capture_sub_vtable));
+
+    canard_poll(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT64(calls_after_a + 1U, cap.filter_rec.invocation_count);
+
+    canard_unsubscribe(&self, &sub_a);
+    canard_unsubscribe(&self, &sub_b);
+    canard_destroy(&self);
+}
+
+// Regression (review): a filter-capable instance must program its occupancy filters on the first poll even
+// before any subscription or manual node-ID assignment.
+static void test_poll_filter_configured_after_new()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    cap.accept_tx     = true;
+    TEST_ASSERT_TRUE(
+      canard_new(&self, &capture_filter_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 4U));
+    self.user_context = &cap;
+    canard_poll(&self, 0U);
+    TEST_ASSERT_TRUE(cap.filter_rec.invocation_count >= 1U);
+    canard_destroy(&self);
+}
+
 // 10. Poll cleans up stale sessions; a repeat TID is accepted after session expiry.
 static void test_poll_session_cleanup()
 {
@@ -543,7 +601,7 @@ static void test_err_oom_on_publish()
     mem.tx_frame         = instrumented_allocator_make_resource(&alloc_frame);
 
     canard_t self = {};
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(&self, 42U));
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
@@ -859,56 +917,56 @@ static void test_canard_new_validation_branches()
     const canard_mem_set_t mem  = make_std_memory();
 
     // filter_count > 0 with vtable->filter == NULL.
-    TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, mem, 16U, 0U, 4U));
+    TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 4U));
 
     // filter_count > 0 with invalid memory.rx_filters (NULL vtable).
     {
         canard_mem_set_t bad_mem  = mem;
         bad_mem.rx_filters.vtable = nullptr;
-        TEST_ASSERT_FALSE(canard_new(&self, &vtable_with_filter, bad_mem, 16U, 0U, 4U));
+        TEST_ASSERT_FALSE(canard_new(&self, &vtable_with_filter, bad_mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 4U));
     }
 
     // NULL vtable.
-    TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, 16U, 0U, 0U));
+    TEST_ASSERT_FALSE(canard_new(&self, nullptr, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
 
     // vtable->now == NULL.
     {
         const canard_vtable_t bad = { .now = nullptr, .tx = mock_tx, .filter = nullptr };
-        TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, 16U, 0U, 0U));
+        TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     }
 
     // vtable->tx == NULL.
     {
         const canard_vtable_t bad = { .now = mock_now, .tx = nullptr, .filter = nullptr };
-        TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, 16U, 0U, 0U));
+        TEST_ASSERT_FALSE(canard_new(&self, &bad, mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     }
 
     // Invalid memory.tx_transfer (NULL vtable).
     {
         canard_mem_set_t bad_mem   = mem;
         bad_mem.tx_transfer.vtable = nullptr;
-        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     }
 
     // Invalid memory.tx_frame.
     {
         canard_mem_set_t bad_mem = mem;
         bad_mem.tx_frame.vtable  = nullptr;
-        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     }
 
     // Invalid memory.rx_session.
     {
         canard_mem_set_t bad_mem  = mem;
         bad_mem.rx_session.vtable = nullptr;
-        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     }
 
     // Invalid memory.rx_payload.
     {
         canard_mem_set_t bad_mem  = mem;
         bad_mem.rx_payload.vtable = nullptr;
-        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, 16U, 0U, 0U));
+        TEST_ASSERT_FALSE(canard_new(&self, &test_vtable, bad_mem, CANARD_IFACE_BITMAP_ALL, 16U, 0U, 0U));
     }
 }
 
@@ -968,6 +1026,8 @@ int main()
     // Poll behavior.
     RUN_TEST(test_poll_filter_reconfiguration);
     RUN_TEST(test_poll_filter_after_unsubscribe);
+    RUN_TEST(test_poll_filter_after_duplicate_subscribe);
+    RUN_TEST(test_poll_filter_configured_after_new);
     RUN_TEST(test_poll_session_cleanup);
     RUN_TEST(test_poll_deadline_then_tx);
 

@@ -99,7 +99,7 @@ static void init_with_capture_node_id(canard_t* const self, tx_capture_t* const 
     capture->now       = 0;
     capture->accept_tx = true;
     capture->count     = 0;
-    TEST_ASSERT_TRUE(canard_new(self, &capture_vtable, make_std_memory(), 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_new(self, &capture_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(self, node_id));
     self->user_context = capture;
 }
@@ -114,7 +114,7 @@ static void test_canard_pending_ifaces()
 {
     canard_t               self = {};
     const canard_mem_set_t mem  = make_std_memory();
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16, 1234, 0));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16, 1234, 0));
 
     const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
     TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
@@ -122,6 +122,68 @@ static void test_canard_pending_ifaces()
     TEST_ASSERT_TRUE(canard_publish_16b(&self, 1000, 2U, canard_prio_nominal, 11U, 1U, payload, nullptr));
     TEST_ASSERT_EQUAL_UINT8(3U, canard_pending_ifaces(&self));
 
+    canard_destroy(&self);
+}
+
+#if CANARD_IFACE_COUNT >= 2
+static void test_tx_iface_availability_masks_request()
+{
+    canard_t self = {};
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), 0b01U, 16U, 1234U, 0U));
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    // canard_request targets ALL ifaces internally; availability masks it down to iface 0.
+    TEST_ASSERT_TRUE(canard_request(&self, 1000, canard_prio_nominal, 5U, 7U, 0U, payload, nullptr));
+    TEST_ASSERT_EQUAL_UINT8(0b01U, canard_pending_ifaces(&self));
+    canard_destroy(&self);
+}
+
+static void test_tx_iface_availability_partial_publish()
+{
+    canard_t self = {};
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), 0b01U, 16U, 1234U, 0U));
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_TRUE(canard_publish_16b(&self, 1000, 0b11U, canard_prio_nominal, 10U, 0U, payload, nullptr));
+    TEST_ASSERT_EQUAL_UINT8(0b01U, canard_pending_ifaces(&self));
+    canard_destroy(&self);
+}
+
+static void test_tx_iface_availability_disjoint_publish()
+{
+    canard_t self = {};
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), 0b10U, 16U, 1234U, 0U));
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_FALSE(canard_publish_16b(&self, 1000, 0b01U, canard_prio_nominal, 10U, 0U, payload, nullptr));
+    TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
+    TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
+    canard_destroy(&self);
+}
+
+static void test_tx_iface_availability_masks_v0_request()
+{
+    canard_t self = {};
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), 0b01U, 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_set_node_id(&self, 42U));
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    // canard_v0_request targets ALL ifaces internally; availability masks it down to iface 0.
+    TEST_ASSERT_TRUE(canard_v0_request(&self, 1000, canard_prio_nominal, 5U, 0x1234U, 7U, 0U, payload, nullptr));
+    TEST_ASSERT_EQUAL_UINT8(0b01U, canard_pending_ifaces(&self));
+    canard_destroy(&self);
+}
+#endif
+
+// A listen-only node (iface_bitmap = 0) drops every enqueue as a clean no-op: nothing spooled, no tx_capacity error.
+static void test_tx_iface_availability_listen_only()
+{
+    canard_t self = {};
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, make_std_memory(), 0U, 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_set_node_id(&self, 42U));
+    const canard_bytes_chain_t payload = { .bytes = { .size = 0, .data = nullptr }, .next = nullptr };
+    TEST_ASSERT_FALSE(
+      canard_publish_16b(&self, 1000, CANARD_IFACE_BITMAP_ALL, canard_prio_nominal, 10U, 0U, payload, nullptr));
+    TEST_ASSERT_FALSE(canard_request(&self, 1000, canard_prio_nominal, 5U, 7U, 0U, payload, nullptr));
+    TEST_ASSERT_EQUAL_UINT8(0U, canard_pending_ifaces(&self));
+    TEST_ASSERT_EQUAL_size_t(0U, self.tx.queue_size);
+    TEST_ASSERT_EQUAL_UINT64(0U, self.err.tx_capacity);
     canard_destroy(&self);
 }
 
@@ -441,6 +503,13 @@ int main()
     // Utility API coverage.
     RUN_TEST(test_canard_pending_ifaces);
     RUN_TEST(test_canard_v0_crc_seed_from_data_type_signature_golden);
+#if CANARD_IFACE_COUNT >= 2
+    RUN_TEST(test_tx_iface_availability_masks_request);
+    RUN_TEST(test_tx_iface_availability_partial_publish);
+    RUN_TEST(test_tx_iface_availability_disjoint_publish);
+    RUN_TEST(test_tx_iface_availability_masks_v0_request);
+#endif
+    RUN_TEST(test_tx_iface_availability_listen_only);
 
     // TX API validation checks.
     RUN_TEST(test_canard_publish_validation);

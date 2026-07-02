@@ -1351,6 +1351,58 @@ static void test_preemption_independent_slots(void)
     fixture_check_alloc_balance(&fx);
 }
 
+// Regression (CN-02): a slower multi-frame transfer's continuation on its original interface must be
+// accepted after the session's interface affinity migrated elsewhere (stale&&fresh admission of an
+// unrelated transfer at a different priority). Pre-fix this aborted on a false session-affinity assert.
+static void test_preemption_iface_affinity_divergence(void)
+{
+    session_fixture_t fx;
+    fixture_init_v1(&fx, canard_kind_message_13b, 2222, 64);
+
+    const byte_t f_start[7] = { 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
+
+    // 1) Multi-frame start on iface 0, prio nominal, tid=5. Session affinity -> iface 0.
+    frame_t fr_start = make_start_frame(
+      canard_prio_nominal, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 5, f_start, sizeof(f_start));
+    TEST_ASSERT_TRUE(feed(&fx, 1 * MEGA, &fr_start, 0));
+    TEST_ASSERT_EQUAL_size_t(0, fx.capture.call_count);
+
+    // 2) After the TID timeout, a fresh single-frame transfer on iface 1 at a different priority is admitted
+    //    (stale && fresh) and migrates the session affinity to iface 1.
+    const byte_t single[] = { 0xAB };
+    frame_t      fr_other = make_single_frame(
+      canard_prio_fast, canard_kind_message_13b, 2222, CANARD_NODE_ID_ANONYMOUS, 42, 7, single, sizeof(single));
+    TEST_ASSERT_TRUE(feed(&fx, (3 * MEGA) + 1, &fr_other, 1));
+    TEST_ASSERT_EQUAL_size_t(1, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_INT(canard_prio_fast, fx.capture.priority);
+
+    // 3) The first transfer's end frame arrives on iface 0; its slot affinity (iface 0) now differs from the
+    //    session affinity (iface 1). Must be accepted and completed without aborting.
+    const uint16_t crc = crc_add(CRC_INITIAL, sizeof(f_start), f_start);
+    byte_t         f_end[2];
+    f_end[0]       = (byte_t)(crc >> 8U);
+    f_end[1]       = (byte_t)(crc & 0xFF); // NOLINT(hicpp-signed-bitwise)
+    frame_t fr_end = make_cont_frame(canard_prio_nominal,
+                                     canard_kind_message_13b,
+                                     2222,
+                                     CANARD_NODE_ID_ANONYMOUS,
+                                     42,
+                                     5,
+                                     true,
+                                     false,
+                                     f_end,
+                                     sizeof(f_end));
+    TEST_ASSERT_TRUE(feed(&fx, (3 * MEGA) + 2, &fr_end, 0));
+    TEST_ASSERT_EQUAL_size_t(2, fx.capture.call_count);
+    TEST_ASSERT_EQUAL_INT(canard_prio_nominal, fx.capture.priority);
+    TEST_ASSERT_EQUAL_UINT8(5, fx.capture.transfer_id);
+    TEST_ASSERT_EQUAL_size_t(7, fx.capture.payload.view.size);
+    TEST_ASSERT_EQUAL_INT(0, memcmp(fx.capture.payload.view.data, f_start, 7));
+
+    fixture_destroy_all_sessions(&fx);
+    fixture_check_alloc_balance(&fx);
+}
+
 /// A new start frame at the same priority replaces the old slot.
 static void test_preemption_same_priority_replaces(void)
 {
@@ -2580,6 +2632,7 @@ int main(void)
 
     // Group 6: Priority Preemption
     RUN_TEST(test_preemption_independent_slots);
+    RUN_TEST(test_preemption_iface_affinity_divergence);
     RUN_TEST(test_preemption_same_priority_replaces);
     RUN_TEST(test_all_8_priorities);
 

@@ -134,6 +134,17 @@ static void test_rx_filter_for_subscription_v0_message_semantics(void)
     TEST_ASSERT_FALSE(filter_accepts(f, 0x00123485UL)); // service flag bit (7) set
 }
 
+// A v0 message data-type-ID <= 3 can arrive anonymously (2 low DTID bits + random discriminator above); the
+// filter is deliberately weakened to admit both anonymous and addressed frames in a single entry.
+static void test_rx_filter_for_subscription_v0_message_anonymous_weak(void)
+{
+    const canard_filter_t f = make_filter(canard_kind_v0_message, 1U, 55U);
+    TEST_ASSERT_TRUE(filter_accepts(f, 0x00000105UL));  // addressed DTID=1, src=5
+    TEST_ASSERT_TRUE(filter_accepts(f, 0x106AF100UL));  // anonymous DTID=1, discriminator=0x1ABC, src=0
+    TEST_ASSERT_FALSE(filter_accepts(f, 0x00000205UL)); // DTID=2: different 2 low bits
+    TEST_ASSERT_FALSE(filter_accepts(f, 0x00000185UL)); // service flag bit (7) set
+}
+
 static void test_rx_filter_for_subscription_v0_request_semantics(void)
 {
     const canard_filter_t f = make_filter(canard_kind_v0_request, 0x5AU, 42U);
@@ -893,7 +904,7 @@ static void test_rx_filter_configure_oom(void)
                                    .rx_session  = real_mem,
                                    .rx_payload  = real_mem,
                                    .rx_filters  = oom_mem };
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 4U));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 4U));
     // Add a subscription so filtering has work to do.
     canard_subscription_t sub;
     TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 100U, 64U, 1000000, &dummy_sub_vtable));
@@ -917,7 +928,7 @@ static void test_rx_filter_configure_coalescence_overflow(void)
                                    .rx_payload  = real_mem,
                                    .rx_filters  = real_mem };
     // Only 1 hardware filter slot but 2 subscriptions → overflow into coalescence.
-    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, 16U, 1234U, 1U));
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable_with_filter, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 1U));
     canard_subscription_t sub1;
     canard_subscription_t sub2;
     TEST_ASSERT_EQUAL_PTR(&sub1, canard_subscribe_16b(&self, &sub1, 100U, 64U, 1000000, &dummy_sub_vtable));
@@ -930,48 +941,46 @@ static void test_rx_filter_configure_coalescence_overflow(void)
 }
 
 // =====================================================================================================================
-// rx_filter_match()
+// rx_filter_covered()
 
-static void test_rx_filter_match_empty(void)
+static void test_rx_filter_covered_empty(void)
 {
-    TEST_ASSERT_FALSE(rx_filter_match(0, NULL, 0x12345678U));
-    TEST_ASSERT_FALSE(rx_filter_match(0, NULL, 0U));
+    const canard_filter_t g = make_filter(canard_kind_v0_message, 341U, 42);
+    TEST_ASSERT_FALSE(rx_filter_covered(0, NULL, g));
 }
 
-static void test_rx_filter_match_single_hit(void)
+static void test_rx_filter_covered_self_and_narrower(void)
 {
     const canard_filter_t f = make_filter(canard_kind_message_13b, 7509U, 42);
-    TEST_ASSERT_TRUE(rx_filter_match(1, &f, f.extended_can_id));
-    // Also matches with different source node-ID (bits 6:0 are not masked).
-    TEST_ASSERT_TRUE(rx_filter_match(1, &f, f.extended_can_id | 1U));
-    TEST_ASSERT_TRUE(rx_filter_match(1, &f, f.extended_can_id | 0x7FU));
+    TEST_ASSERT_TRUE(rx_filter_covered(1, &f, f)); // a filter covers itself
+    // A strictly narrower inner (adds a source-node constraint) is still covered.
+    const canard_filter_t narrower = { .extended_can_id = f.extended_can_id | 1U,
+                                       .extended_mask   = f.extended_mask | 0x7FU };
+    TEST_ASSERT_TRUE(rx_filter_covered(1, &f, narrower));
 }
 
-static void test_rx_filter_match_single_miss(void)
+static void test_rx_filter_covered_broader_not(void)
 {
-    const canard_filter_t f = make_filter(canard_kind_message_13b, 7509U, 42);
-    // A completely different subject-ID should not match.
+    // The v0-DTID-7509 vs Cyphal-Heartbeat alias: the v0 filter matches a single Heartbeat representative but
+    // does not COVER the whole Heartbeat frame set (it constrains reserved bits 22:21 Heartbeat leaves free).
+    const canard_filter_t v0 = make_filter(canard_kind_v0_message, 7509U, 42);
+    const canard_filter_t hb = make_filter(canard_kind_message_13b, 7509U, 42);
+    TEST_ASSERT_FALSE(rx_filter_covered(1, &v0, hb));
+    // Different subject-ID under the same kind is likewise not covered.
     const canard_filter_t other = make_filter(canard_kind_message_13b, 100U, 42);
-    TEST_ASSERT_FALSE(rx_filter_match(1, &f, other.extended_can_id));
-    // v0 message with same numeric ID should also not match (different mask/bits).
-    const canard_filter_t v0 = make_filter(canard_kind_v0_message, 341U, 42);
-    TEST_ASSERT_FALSE(rx_filter_match(1, &f, v0.extended_can_id));
+    TEST_ASSERT_FALSE(rx_filter_covered(1, &hb, other));
 }
 
-static void test_rx_filter_match_multiple(void)
+static void test_rx_filter_covered_multiple(void)
 {
     const canard_filter_t arr[] = {
         make_filter(canard_kind_message_16b, 100U, 42),
         make_filter(canard_kind_message_13b, 200U, 42),
         make_filter(canard_kind_v0_message, 300U, 42),
     };
-    // Each filter's own CAN ID should be matched.
-    TEST_ASSERT_TRUE(rx_filter_match(3, arr, arr[0].extended_can_id));
-    TEST_ASSERT_TRUE(rx_filter_match(3, arr, arr[1].extended_can_id));
-    TEST_ASSERT_TRUE(rx_filter_match(3, arr, arr[2].extended_can_id));
-    // Unrelated CAN ID should not match any.
-    const canard_filter_t unrelated = make_filter(canard_kind_message_13b, 999U, 42);
-    TEST_ASSERT_FALSE(rx_filter_match(3, arr, unrelated.extended_can_id));
+    TEST_ASSERT_TRUE(rx_filter_covered(3, arr, arr[1]));
+    const canard_filter_t other = make_filter(canard_kind_message_13b, 999U, 42);
+    TEST_ASSERT_FALSE(rx_filter_covered(3, arr, other));
 }
 
 // =====================================================================================================================
@@ -1026,7 +1035,7 @@ static canard_t make_instance(const size_t filter_count)
                                         .rx_filters  = real_mem };
     canard_t               self;
     memset(&self, 0, sizeof(self));
-    (void)canard_new(&self, &capturing_vtable, mem, 16U, 1234U, filter_count);
+    (void)canard_new(&self, &capturing_vtable, mem, CANARD_IFACE_BITMAP_ALL, 16U, 1234U, filter_count);
     g_cap_count = 0;
     memset(g_cap_filters, 0, sizeof(g_cap_filters));
     return self;
@@ -1092,6 +1101,68 @@ static void test_rx_filter_configure_forced_both_subscribed(void)
     TEST_ASSERT_TRUE(captured_accepts(nodestatus_can_id(1)));
     canard_unsubscribe(&self, &sub_hb);
     canard_unsubscribe(&self, &sub_ns);
+    canard_destroy(&self);
+}
+
+// Regression (CN-03): a low-DTID v0 message subscription must also admit anonymous frames, whose CAN ID
+// carries only the 2 low DTID bits with a random discriminator above.
+static void test_rx_filter_configure_v0_anonymous_admitted(void)
+{
+    canard_t              self = make_instance(4);
+    canard_subscription_t sub;
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_v0_subscribe(&self, &sub, 1U, 0xF258U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // One weak filter for the subscription; it also subsumes the forced Heartbeat/NodeStatus (both DTID % 4 == 1).
+    TEST_ASSERT_EQUAL_size_t(1U, g_cap_count);
+    TEST_ASSERT_TRUE(captured_accepts(0x00000105UL));  // addressed DTID=1 from src=5
+    TEST_ASSERT_TRUE(captured_accepts(0x106AF100UL));  // anonymous DTID=1, discriminator=0x1ABC, src=0
+    TEST_ASSERT_FALSE(captured_accepts(0x106AF200UL)); // anonymous DTID=2 must not match the DTID=1 filter
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// Regression (review R2): a v0 subscription whose DTID aliases the Cyphal Heartbeat subject in the raw 16-bit
+// field must not suppress the forced Heartbeat occupancy filter; a real v1.0 Heartbeat (reserved bits 22:21=11)
+// must still be admitted.
+static void test_rx_filter_configure_forced_heartbeat_alias(void)
+{
+    canard_t              self = make_instance(4);
+    canard_subscription_t sub;
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_v0_subscribe(&self, &sub, HEARTBEAT_SUBJECT_ID, 0, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    TEST_ASSERT_TRUE(captured_accepts((UINT32_C(3) << 21U) | (HEARTBEAT_SUBJECT_ID << 8U) | 1U)); // real v1.0 Heartbeat
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// Regression (review R2): a Cyphal 13b subscription whose subject aliases the DroneCAN NodeStatus DTID masks
+// CAN-ID bit 25, which is a v0 priority bit; it must not suppress the forced NodeStatus occupancy filter.
+static void test_rx_filter_configure_forced_nodestatus_alias(void)
+{
+    canard_t              self = make_instance(4);
+    canard_subscription_t sub;
+    TEST_ASSERT_EQUAL_PTR(&sub,
+                          canard_subscribe_13b(&self, &sub, NODESTATUS_DTYPE_ID, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    // A real v0 NodeStatus whose 5-bit priority sets bit 25 (priority 2) must still be admitted.
+    TEST_ASSERT_TRUE(captured_accepts((UINT32_C(2) << 24U) | (NODESTATUS_DTYPE_ID << 8U) | 1U));
+    canard_unsubscribe(&self, &sub);
+    canard_destroy(&self);
+}
+
+// Regression (review R3): a Cyphal service-request filter can alias the raw NodeStatus probe field
+// (service_id=5, dst=42 encodes the same bits as DTID 341); coverage-based dedup must still admit real
+// v0 NodeStatus frames of any priority.
+static void test_rx_filter_configure_forced_nodestatus_service_alias(void)
+{
+    canard_t self = make_instance(4);
+    TEST_ASSERT_TRUE(canard_set_node_id(&self, 42U));
+    canard_subscription_t sub;
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_request(&self, &sub, 5U, 64U, 1000000, &dummy_sub_vtable));
+    TEST_ASSERT_TRUE(rx_filter_configure(&self));
+    TEST_ASSERT_TRUE(captured_accepts((UINT32_C(2) << 24U) | (NODESTATUS_DTYPE_ID << 8U) | 1U)); // real v0 NodeStatus
+    canard_unsubscribe(&self, &sub);
     canard_destroy(&self);
 }
 
@@ -1179,6 +1250,7 @@ int main(void)
     RUN_TEST(test_rx_filter_for_subscription_v1_0_request_semantics);
     RUN_TEST(test_rx_filter_for_subscription_v1_0_response_semantics);
     RUN_TEST(test_rx_filter_for_subscription_v0_message_semantics);
+    RUN_TEST(test_rx_filter_for_subscription_v0_message_anonymous_weak);
     RUN_TEST(test_rx_filter_for_subscription_v0_request_semantics);
     RUN_TEST(test_rx_filter_for_subscription_v0_response_semantics);
 
@@ -1225,15 +1297,19 @@ int main(void)
     RUN_TEST(test_rx_filter_configure_oom);
     RUN_TEST(test_rx_filter_configure_coalescence_overflow);
 
-    RUN_TEST(test_rx_filter_match_empty);
-    RUN_TEST(test_rx_filter_match_single_hit);
-    RUN_TEST(test_rx_filter_match_single_miss);
-    RUN_TEST(test_rx_filter_match_multiple);
+    RUN_TEST(test_rx_filter_covered_empty);
+    RUN_TEST(test_rx_filter_covered_self_and_narrower);
+    RUN_TEST(test_rx_filter_covered_broader_not);
+    RUN_TEST(test_rx_filter_covered_multiple);
 
     RUN_TEST(test_rx_filter_configure_forced_no_subs);
     RUN_TEST(test_rx_filter_configure_forced_heartbeat_subscribed);
     RUN_TEST(test_rx_filter_configure_forced_nodestatus_subscribed);
     RUN_TEST(test_rx_filter_configure_forced_both_subscribed);
+    RUN_TEST(test_rx_filter_configure_v0_anonymous_admitted);
+    RUN_TEST(test_rx_filter_configure_forced_heartbeat_alias);
+    RUN_TEST(test_rx_filter_configure_forced_nodestatus_alias);
+    RUN_TEST(test_rx_filter_configure_forced_nodestatus_service_alias);
     RUN_TEST(test_rx_filter_configure_forced_capacity_1);
     RUN_TEST(test_rx_filter_configure_forced_capacity_2_no_subs);
     RUN_TEST(test_rx_filter_configure_forced_with_unrelated_subs);

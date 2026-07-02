@@ -90,7 +90,7 @@ static canard_mem_set_t make_std_memory()
 static void init_canard(canard_t* const self, canard_us_t* const now_val, const uint_least8_t node_id)
 {
     *now_val = 0;
-    TEST_ASSERT_TRUE(canard_new(self, &test_vtable, make_std_memory(), 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_new(self, &test_vtable, make_std_memory(), CANARD_IFACE_BITMAP_ALL, 16U, 1234U, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(self, node_id));
     self->user_context = now_val;
 }

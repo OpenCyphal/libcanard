@@ -126,7 +126,8 @@ static void init_node(canard_t* const     self,
     cap->accept_tx = true;
     cap->count     = 0;
     mem_pool_new(pool);
-    TEST_ASSERT_TRUE(canard_new(self, &capture_vtable, mem_pool_make(pool), queue_capacity, 42U, 0U));
+    TEST_ASSERT_TRUE(
+      canard_new(self, &capture_vtable, mem_pool_make(pool), CANARD_IFACE_BITMAP_ALL, queue_capacity, 42U, 0U));
     TEST_ASSERT_TRUE(canard_set_node_id(self, node_id));
     self->user_context = cap;
 }

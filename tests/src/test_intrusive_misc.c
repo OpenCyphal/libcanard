@@ -121,6 +121,7 @@ static void init_tx_canard(canard_t*                 self,
     memset(ctx, 0, sizeof(*ctx));
     self->user_context      = ctx;
     self->vtable            = &tx_test_vtable;
+    self->iface_bitmap      = CANARD_IFACE_BITMAP_ALL;
     self->tx.queue_capacity = 64U;
     self->tx.fd             = true;
     self->mem.tx_transfer   = instrumented_allocator_make_resource(alloc_transfer);

@@ -20,7 +20,7 @@ Naming patterns: `canard_*` functions, `canard_*_t` types, `CANARD_*` macros. In
 
 Variables that are not mutated MUST be declared const, otherwise CI will reject the code.
 
-Keep code compact and add brief comments before non-obvious logic.
+DO NOT COMMENT THE CODE unless comments add critical information that is impossible to infer from reading the code (design rationale, gotchas, etc), in which case extremely terse comments are allowed.
 
 Treat warnings as errors and keep compatibility with strict warning flags.
 

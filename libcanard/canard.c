@@ -744,6 +744,12 @@ static bool tx_push(canard_t* const            self,
     CANARD_ASSERT((!tr->fd) || !v0); // The caller must ensure this.
     CANARD_ASSERT(iface_bitmap != 0);
 
+    const byte_t effective = iface_bitmap & (byte_t)self->iface_bitmap;
+    if (effective == 0) {
+        mem_free(self->mem.tx_transfer, sizeof(tx_transfer_t), tr);
+        return false;
+    }
+
     const canard_us_t now = self->vtable->now(self);
 
     // Expire old transfers first to free up queue space.
@@ -775,7 +781,7 @@ static bool tx_push(canard_t* const            self,
     (void)queue_size_before;
 
     // Adjust the spooled frame refcounts to avoid premature deallocation.
-    const byte_t frame_refcount_inc = (byte_t)(popcount(iface_bitmap) - 1U);
+    const byte_t frame_refcount_inc = (byte_t)(popcount(effective) - 1U);
     CANARD_ASSERT(frame_refcount_inc < CANARD_IFACE_COUNT);
     if (frame_refcount_inc > 0) {
         tx_frame_t* frame = spool;
@@ -787,7 +793,7 @@ static bool tx_push(canard_t* const            self,
 
     // Attach the spool.
     FOREACH_IFACE (i) {
-        if ((iface_bitmap & (1U << i)) != 0) {
+        if ((effective & (1U << i)) != 0) {
             tr->cursor[i] = spool;
         }
     }
@@ -1165,12 +1171,14 @@ static byte_t rx_parse(const uint32_t       can_id,
             // Node-ID 0 reserved for anonymous/broadcast, invalid for services. Self-addressing not allowed.
             is_v0 = is_v0 && (dst != 0) && (src != 0) && (src != dst);
         } else {
-            out_v0->dst     = CANARD_NODE_ID_ANONYMOUS;
-            out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
-            out_v0->kind    = canard_kind_v0_message;
+            out_v0->dst  = CANARD_NODE_ID_ANONYMOUS;
+            out_v0->kind = canard_kind_v0_message;
             if (src == 0) {
-                out_v0->src = CANARD_NODE_ID_ANONYMOUS;
-                is_v0       = is_v0 && start && end; // anonymous can only be single-frame
+                out_v0->src     = CANARD_NODE_ID_ANONYMOUS;
+                out_v0->port_id = (can_id >> 8U) & 0x3U; // anon frame carries only the 2 low DTID bits
+                is_v0           = is_v0 && start && end; // anonymous can only be single-frame
+            } else {
+                out_v0->port_id = (can_id >> 8U) & 0xFFFFU;
             }
         }
     }
@@ -1356,7 +1364,7 @@ static void rx_session_complete_slot(rx_session_t* const ses, const frame_t* con
     rx_slot_t* const             slot = ses->slots[fr->priority];
     CANARD_ASSERT(!fr->start && fr->end && (fr->port_id == sub->port_id) && (fr->kind == sub->kind));
     CANARD_ASSERT((slot != NULL) && (sub->vtable->on_message != NULL));
-    CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
+    CANARD_ASSERT(slot->transfer_id == fr->transfer_id);
     CANARD_ASSERT(fr->src != CANARD_NODE_ID_ANONYMOUS); // anons cannot be multiframe
     // Verify the CRC and dispatch the message if correct. The slot is consumed in either case.
     ses->slots[fr->priority] = NULL; // Slot memory ownership transferred to the application, or destroyed.
@@ -1383,7 +1391,7 @@ static void rx_session_accept(rx_session_t* const ses, const canard_us_t ts_fram
     rx_slot_t* const slot = ses->slots[fr->priority];
     if (slot != NULL) {
         CANARD_ASSERT((!fr->start || !fr->end) && (slot->expected_toggle == fr->toggle));
-        CANARD_ASSERT((slot->transfer_id == fr->transfer_id) && (slot->iface_index == ses->iface_index));
+        CANARD_ASSERT(slot->transfer_id == fr->transfer_id);
         rx_slot_advance(slot, fr->payload);
         // Multi-frame transfers place CRC differently in v1 and v0.
         // The v1 handling is trivial: simply compute the full payload CRC and ensure the residue is correct.
@@ -1548,9 +1556,8 @@ static void rx_session_update(canard_subscription_t* const sub,
         rx_session_record_admission(ses, frame->priority, frame->transfer_id, ts, iface_index);
     }
 
-    // Accept the frame.
+    // Accept the frame. Must be last: on_message may unsubscribe, destroying ses.
     rx_session_accept(ses, ts, frame);
-    CANARD_ASSERT(!frame->end || (ses->slots[frame->priority] == NULL));
 }
 
 static int32_t rx_subscription_cavl_compare(const void* const user, const canard_tree_t* const node)
@@ -1605,7 +1612,9 @@ static canard_filter_t rx_filter_for_subscription(const canard_t* const self,
         }
         case canard_kind_v0_message:
             f.extended_can_id = (uint32_t)port_id << 8U;
-            f.extended_mask   = 0x00FFFF80;
+            // A data-type-ID <= 3 can also arrive anonymously, carrying only its 2 low bits with a random
+            // discriminator above; a weak filter (2 low DTID bits + message flag only) admits both forms.
+            f.extended_mask = (port_id <= 3U) ? 0x00000380U : 0x00FFFF80U;
             break;
         case canard_kind_v0_response:
         case canard_kind_v0_request: {
@@ -1631,11 +1640,15 @@ static canard_filter_t rx_filter_fuse(const canard_filter_t a, const canard_filt
 // Filter selectivity metric; see the Cyphal/CAN specification. Greater values ==> stronger filter.
 static byte_t rx_filter_rank(const canard_filter_t a) { return popcount(a.extended_mask); }
 
-// Returns true if any filter in the array accepts the given extended CAN ID.
-static bool rx_filter_match(const size_t count, const canard_filter_t* const filters, const uint32_t extended_can_id)
+// Returns true if any filter in the array covers inner, i.e., accepts every frame that inner accepts.
+// A single-point test is insufficient here because forced traffic spans all priorities and sources; a
+// subscription filter that happens to match one representative may still reject other valid forced frames.
+static bool rx_filter_covered(const size_t count, const canard_filter_t* const filters, const canard_filter_t inner)
 {
     for (size_t i = 0; i < count; i++) {
-        if ((extended_can_id & filters[i].extended_mask) == (filters[i].extended_can_id & filters[i].extended_mask)) {
+        CANARD_ASSERT((filters[i].extended_can_id & ~filters[i].extended_mask) == 0U); // canonical id
+        if (((filters[i].extended_mask & ~inner.extended_mask) == 0U) &&
+            ((inner.extended_can_id & filters[i].extended_mask) == filters[i].extended_can_id)) {
             return true;
         }
     }
@@ -1675,6 +1688,19 @@ static void rx_filter_coalesce_into(const size_t count, canard_filter_t* const i
     }
 }
 
+// Append a filter, coalescing into the existing set if capacity is exhausted.
+static void rx_filter_append(canard_filter_t* const into,
+                             size_t* const          n,
+                             const size_t           capacity,
+                             const canard_filter_t  f)
+{
+    if (*n < capacity) {
+        into[(*n)++] = f;
+    } else {
+        rx_filter_coalesce_into(*n, into, f);
+    }
+}
+
 // Recompute the filter configuration and apply. Returns true on success, false on driver error.
 static bool rx_filter_configure(canard_t* const self)
 {
@@ -1698,12 +1724,7 @@ static bool rx_filter_configure(canard_t* const self)
         for (const canard_subscription_t* sub = (canard_subscription_t*)(void*)cavl2_min(self->rx.subscriptions[kind]);
              sub != NULL;
              sub = (canard_subscription_t*)(void*)cavl2_next_greater((canard_tree_t*)sub)) {
-            const canard_filter_t f = rx_filter_for_subscription(self, sub->kind, sub->port_id);
-            if (n < capacity) {
-                filters[n++] = f;
-            } else {
-                rx_filter_coalesce_into(n, filters, f);
-            }
+            rx_filter_append(filters, &n, capacity, rx_filter_for_subscription(self, sub->kind, sub->port_id));
         }
     }
     CANARD_ASSERT(n <= capacity);
@@ -1719,13 +1740,9 @@ static bool rx_filter_configure(canard_t* const self)
         { canard_kind_v0_message, 341U },   // DroneCAN NodeStatus
     };
     for (size_t i = 0; i < sizeof(forced) / sizeof(forced[0]); i++) {
-        const canard_filter_t f = rx_filter_for_subscription(self, forced[i].kind, forced[i].port_id);
-        if (!rx_filter_match(n, filters, f.extended_can_id)) {
-            if (n < capacity) {
-                filters[n++] = f;
-            } else {
-                rx_filter_coalesce_into(n, filters, f);
-            }
+        const canard_filter_t g = rx_filter_for_subscription(self, forced[i].kind, forced[i].port_id);
+        if (!rx_filter_covered(n, filters, g)) {
+            rx_filter_append(filters, &n, capacity, g);
         }
     }
     CANARD_ASSERT(n <= capacity);
@@ -1765,7 +1782,7 @@ static canard_subscription_t* rx_subscribe(canard_t* const                      
                                                                    &subscription->index_port_id,
                                                                    cavl2_trivial_factory);
         out                                 = (canard_subscription_t*)(void*)existing;
-        self->rx.filters_dirty              = (existing == &subscription->index_port_id);
+        self->rx.filters_dirty              = self->rx.filters_dirty || (existing == &subscription->index_port_id);
     }
     return out;
 }
@@ -1947,20 +1964,24 @@ static void node_id_occupancy_update(canard_t* const self, const byte_t src)
 bool canard_new(canard_t* const              self,
                 const canard_vtable_t* const vtable,
                 const canard_mem_set_t       memory,
+                const uint_least8_t          iface_bitmap,
                 const size_t                 tx_queue_capacity,
                 const uint64_t               prng_seed,
                 const size_t                 filter_count)
 {
     const bool filter_ok = (filter_count == 0) || //
                            ((vtable != NULL) && (vtable->filter != NULL) && mem_valid(memory.rx_filters));
-    const bool ok = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
+    const bool iface_ok = (iface_bitmap & CANARD_IFACE_BITMAP_ALL) == iface_bitmap; // 0 => listen-only
+    const bool ok       = (self != NULL) && (vtable != NULL) && (vtable->now != NULL) && (vtable->tx != NULL) &&
                     mem_valid(memory.tx_transfer) && mem_valid(memory.tx_frame) && mem_valid(memory.rx_session) &&
-                    mem_valid(memory.rx_payload) && filter_ok;
+                    mem_valid(memory.rx_payload) && filter_ok && iface_ok;
     if (ok) {
         (void)memset(self, 0, sizeof(*self));
         self->tx.fd             = true;
         self->tx.queue_capacity = tx_queue_capacity;
+        self->iface_bitmap      = iface_bitmap;
         self->rx.filter_count   = filter_count;
+        self->rx.filters_dirty  = filter_count > 0; // Program occupancy filters even before the first subscription.
         self->mem               = memory;
         self->prng_state        = prng_seed ^ (uintptr_t)self;
         self->vtable            = vtable;
