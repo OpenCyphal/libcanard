@@ -464,6 +464,51 @@ static void test_poll_filter_after_unsubscribe()
     canard_destroy(&self);
 }
 
+// Regression (CN-01): a duplicate subscribe returning the incumbent must not clear a pending filter
+// reconfiguration requested by a preceding new subscribe.
+static void test_poll_filter_after_duplicate_subscribe()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    init_capture(&self, &cap, 42U, 16U, 4U, &capture_filter_vtable);
+
+    rx_capture_t          rx_cap = {};
+    canard_subscription_t sub_a  = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_a, canard_subscribe_16b(&self, &sub_a, 6001U, 256U, 2000000, &capture_sub_vtable));
+    sub_a.user_context = &rx_cap;
+    canard_poll(&self, 0U);
+    const size_t calls_after_a = cap.filter_rec.invocation_count;
+    TEST_ASSERT_EQUAL_UINT64(1U, calls_after_a);
+
+    // New subscription B sets dirty; a subsequent duplicate subscribe of A (returns incumbent) must keep it dirty.
+    canard_subscription_t sub_b = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_b, canard_subscribe_16b(&self, &sub_b, 6002U, 256U, 2000000, &capture_sub_vtable));
+    sub_b.user_context            = &rx_cap;
+    canard_subscription_t sub_dup = {};
+    TEST_ASSERT_EQUAL_PTR(&sub_a, canard_subscribe_16b(&self, &sub_dup, 6001U, 256U, 2000000, &capture_sub_vtable));
+
+    canard_poll(&self, 0U);
+    TEST_ASSERT_EQUAL_UINT64(calls_after_a + 1U, cap.filter_rec.invocation_count);
+
+    canard_unsubscribe(&self, &sub_a);
+    canard_unsubscribe(&self, &sub_b);
+    canard_destroy(&self);
+}
+
+// Regression (review): a filter-capable instance must program its occupancy filters on the first poll even
+// before any subscription or manual node-ID assignment.
+static void test_poll_filter_configured_after_new()
+{
+    canard_t     self = {};
+    tx_capture_t cap  = {};
+    cap.accept_tx     = true;
+    TEST_ASSERT_TRUE(canard_new(&self, &capture_filter_vtable, make_std_memory(), 16U, 1234U, 4U));
+    self.user_context = &cap;
+    canard_poll(&self, 0U);
+    TEST_ASSERT_TRUE(cap.filter_rec.invocation_count >= 1U);
+    canard_destroy(&self);
+}
+
 // 10. Poll cleans up stale sessions; a repeat TID is accepted after session expiry.
 static void test_poll_session_cleanup()
 {
@@ -968,6 +1013,8 @@ int main()
     // Poll behavior.
     RUN_TEST(test_poll_filter_reconfiguration);
     RUN_TEST(test_poll_filter_after_unsubscribe);
+    RUN_TEST(test_poll_filter_after_duplicate_subscribe);
+    RUN_TEST(test_poll_filter_configured_after_new);
     RUN_TEST(test_poll_session_cleanup);
     RUN_TEST(test_poll_deadline_then_tx);
 

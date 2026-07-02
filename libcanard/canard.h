@@ -227,6 +227,7 @@ struct canard_subscription_vtable_t
     /// A new message is received on a subscription.
     /// For the payload ownership notes refer to canard_payload_t.
     /// The timestamp is the arrival timestamp of the first frame of the transfer.
+    /// The callback may unsubscribe self; it must not otherwise reenter the library (no ingest/publish/poll).
     void (*on_message)(canard_subscription_t* self,
                        canard_us_t            timestamp,
                        canard_prio_t          priority,
@@ -608,6 +609,7 @@ bool canard_v0_respond(canard_t* const            self,
 /// Register a legacy v0 message subscription.
 /// Subscription updates are log-time; per-remote RX session state is allocated lazily on demand.
 /// Return semantics match canard_subscribe_16b().
+/// Anonymous v0 messages carry only the 2 low data-type-ID bits, so only data_type_id in [0,3] can receive them.
 canard_subscription_t* canard_v0_subscribe(canard_t* const                           self,
                                            canard_subscription_t* const              subscription,
                                            const uint16_t                            data_type_id,

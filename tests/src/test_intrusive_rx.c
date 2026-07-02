@@ -180,13 +180,13 @@ static void test_rx_parse_v0_message_golden(void)
         TEST_ASSERT_EQUAL_HEX8(1, v0.src);
         TEST_ASSERT_EQUAL_INT(canard_prio_nominal, v0.priority);
     }
-    // Anonymous: same frame but src=0. CAN ID = 0x13040A00.
+    // Anonymous: same frame but src=0. Anon frames carry only the 2 low DTID bits: 0x040A & 0x3 = 2.
     {
         const byte_t         d[] = { 0xC0 }; // v0 single, tid=0
         const canard_bytes_t pl  = { sizeof(d), d };
         TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x13040A00UL, pl, &v0, &v1));
         TEST_ASSERT_EQUAL_INT(canard_kind_v0_message, v0.kind);
-        TEST_ASSERT_EQUAL_UINT32(0x040A, v0.port_id);
+        TEST_ASSERT_EQUAL_UINT32(2, v0.port_id);
         TEST_ASSERT_EQUAL_HEX8(0xFF, v0.src); // anonymous
     }
     // Max: prio=7, type_id=0xFFFF, src=127. CAN ID = 0x1FFFFF7F.
@@ -199,6 +199,22 @@ static void test_rx_parse_v0_message_golden(void)
         TEST_ASSERT_EQUAL_HEX8(127, v0.src);
         TEST_ASSERT_EQUAL_INT(canard_prio_optional, v0.priority);
     }
+}
+
+// =====================================================================================================================
+// Regression (CN-03): a v0 anonymous message carries only the 2 low DTID bits; the 14-bit discriminator
+// in bits [23:10] must not leak into the routed port-ID.
+static void test_rx_parse_v0_anonymous_dtid_mask(void)
+{
+    frame_t v0;
+    frame_t v1;
+    // 5-bit prio field=16, discriminator=0x1ABC, low DTID bits=01 (DTID 1), service=0, src=0. CAN ID = 0x106AF100.
+    const byte_t         d[] = { 0x77, 0xC3 }; // v0 single: SOT=1 EOT=1 toggle=0 tid=3
+    const canard_bytes_t pl  = { sizeof(d), d };
+    TEST_ASSERT_EQUAL_UINT8(1, rx_parse(0x106AF100UL, pl, &v0, &v1));
+    TEST_ASSERT_EQUAL_INT(canard_kind_v0_message, v0.kind);
+    TEST_ASSERT_EQUAL_HEX8(0xFF, v0.src); // anonymous
+    TEST_ASSERT_EQUAL_UINT32(1, v0.port_id);
 }
 
 // =====================================================================================================================
@@ -1027,6 +1043,7 @@ int main(void)
     RUN_TEST(test_rx_parse_v1_0_message_golden);
     RUN_TEST(test_rx_parse_v1_0_service_golden);
     RUN_TEST(test_rx_parse_v0_message_golden);
+    RUN_TEST(test_rx_parse_v0_anonymous_dtid_mask);
     RUN_TEST(test_rx_parse_v0_service_golden);
     RUN_TEST(test_rx_parse_v1_0_reserved_bit23_reject);
     RUN_TEST(test_rx_parse_v0_service_zero_node_reject);

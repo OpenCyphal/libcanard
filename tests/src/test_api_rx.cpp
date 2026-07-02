@@ -503,6 +503,58 @@ static void test_unsubscribe_cleans_up_sessions()
     canard_destroy(&self);
 }
 
+// Regression (CN-04): unsubscribing the receiving subscription from within on_message must be safe.
+static void unsubscribe_on_message(canard_subscription_t* const self,
+                                   const canard_us_t,
+                                   const canard_prio_t,
+                                   const uint_least8_t,
+                                   const uint_least8_t,
+                                   // cppcheck-suppress passedByValueCallback
+                                   const canard_payload_t payload)
+{
+    auto* const cap = static_cast<rx_capture_t*>(self->user_context);
+    cap->count++;
+    TEST_ASSERT_NULL(payload.origin.data); // single-frame transfer: no owned storage
+    canard_unsubscribe(self->owner, self);
+}
+static const canard_subscription_vtable_t unsubscribe_sub_vtable = { .on_message = unsubscribe_on_message };
+
+static void test_unsubscribe_within_callback()
+{
+    // Instrumented session memory: fill-on-free turns a stale post-callback read into a detectable failure.
+    instrumented_allocator_t ses_alloc;
+    instrumented_allocator_t pay_alloc;
+    instrumented_allocator_new(&ses_alloc);
+    instrumented_allocator_new(&pay_alloc);
+    const canard_mem_t     std_r   = { .vtable = &std_mem_vtable, .context = nullptr };
+    const canard_mem_set_t mem     = { .tx_transfer = std_r,
+                                       .tx_frame    = std_r,
+                                       .rx_session  = instrumented_allocator_make_resource(&ses_alloc),
+                                       .rx_payload  = instrumented_allocator_make_resource(&pay_alloc),
+                                       .rx_filters  = std_r };
+    canard_t               self    = {};
+    canard_us_t            now_val = 0;
+    TEST_ASSERT_TRUE(canard_new(&self, &test_vtable, mem, 16U, 1234U, 0U));
+    TEST_ASSERT_TRUE(canard_set_node_id(&self, 42U));
+    self.user_context = &now_val;
+
+    rx_capture_t          cap = {};
+    canard_subscription_t sub = {};
+    TEST_ASSERT_EQUAL_PTR(&sub, canard_subscribe_16b(&self, &sub, 601U, 64U, 2000000, &unsubscribe_sub_vtable));
+    sub.user_context = (&cap);
+
+    const uint32_t       can_id   = make_v1v1_msg_can_id(canard_prio_nominal, 601U, 24U);
+    const uint_least8_t  frame[]  = { 0xAAU, make_v1_single_tail(0U) };
+    const canard_bytes_t can_data = { .size = sizeof(frame), .data = frame };
+    now_val                       = 100;
+    TEST_ASSERT_TRUE(canard_ingest_frame(&self, 100, 0U, can_id, can_data));
+
+    TEST_ASSERT_EQUAL_size_t(1U, cap.count);
+    TEST_ASSERT_NULL(canard_find_subscription(&self, canard_kind_message_16b, 601U));
+    TEST_ASSERT_EQUAL_size_t(0U, ses_alloc.allocated_fragments);
+    canard_destroy(&self);
+}
+
 // -------------------------------------------  v0 Argument Validation  ------------------------------------------------
 
 static void test_v0_subscribe_null_args()
@@ -777,6 +829,7 @@ int main()
     RUN_TEST(test_unsubscribe_stops_delivery);
     RUN_TEST(test_multiple_subscriptions_routing);
     RUN_TEST(test_unsubscribe_cleans_up_sessions);
+    RUN_TEST(test_unsubscribe_within_callback);
 
     // v0 argument validation.
     RUN_TEST(test_v0_subscribe_null_args);
