@@ -6,7 +6,6 @@ set -e
 
 mkdir -p package/libcanard/include
 
-cp CONTRIBUTING.md                  package/libcanard/CONTRIBUTING.md
 cp LICENSE                          package/libcanard/LICENSE
 cp README.md                        package/libcanard/README.md
 

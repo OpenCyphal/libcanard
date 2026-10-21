@@ -24,7 +24,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh $LLVM_VERSION
-          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get update -y
           sudo apt-get -y install gcc-multilib g++-multilib clang-tidy-$LLVM_VERSION clang-format-$LLVM_VERSION cppcheck
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-$LLVM_VERSION 50
           sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-$LLVM_VERSION 50
@@ -70,7 +70,7 @@ jobs:
         with:
           submodules: true
       - run: |
-          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get update -y
           sudo apt-get install gcc-multilib g++-multilib
       - run: >
           cmake
@@ -100,7 +100,7 @@ jobs:
         with:
           submodules: true
       - run: |
-          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get update -y
           sudo apt-get install -y gcc-multilib g++-multilib lcov
           pip install --break-system-packages gcovr
       - run: >
@@ -153,7 +153,7 @@ jobs:
         with:
           submodules: true
       - run: |
-          sudo apt-get update -y && sudo apt-get upgrade -y
+          sudo apt-get update -y
           sudo apt-get install -y gcc-arm-none-eabi
       - run: arm-none-eabi-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c99 ${{ env.flags }}
       - run: arm-none-eabi-gcc libcanard/*.c -isystem lib/cavl2 -c -std=c11 ${{ env.flags }}
