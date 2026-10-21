@@ -77,13 +77,9 @@ int main(void)
     const canard_vtable_t vtable = { .now = app_now, .tx = app_tx };
     static const canard_subscription_vtable_t sub_vtable = { .on_message = app_on_message };
     
-    // Set up the local node. The node-ID will be allocated automatically.
+    // Set up the local node. The node-ID will be allocated automatically; for manual see canard_set_node_id().
     canard_t              node;
     if (!canard_new(&node, &vtable, mem_set, /*iface_bitmap=*/1, /*txq_cap=*/100, UID_OR_TRUE_RANDOM_NUMBER, 0U)) {
-        return -1;
-    }
-    if (!canard_set_node_id(&node, 42U)) {
-        canard_destroy(&node);
         return -1;
     }
     
@@ -127,7 +123,7 @@ int main(void)
 
 To release a new version, simply publish a new release on GitHub.
 
-### v5.0.alpha
+### v5.0
 
 v5 is a major rework based on the experience gained from extensive production use of the previous revisions.
 The main intended use case is with [**Cy**](https://github.com/OpenCyphal-Garage/cy) rather than standalone.
