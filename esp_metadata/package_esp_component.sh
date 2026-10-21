@@ -12,6 +12,7 @@ cp README.md                        package/libcanard/README.md
 
 cp libcanard/canard.c               package/libcanard/canard.c
 cp libcanard/canard.h               package/libcanard/include/canard.h
+cp lib/cavl2/cavl2.h                package/libcanard/include/cavl2.h
 
 cp esp_metadata/CMakeLists.txt      package/libcanard/CMakeLists.txt
 cp esp_metadata/Kconfig             package/libcanard/Kconfig
